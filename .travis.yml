@@ -1,0 +1,47 @@
+language: go
+services:
+  - docker
+
+go:
+  - "1.12"
+  - master
+
+script:
+  - docker --version
+  # dep
+  - go get -u github.com/golang/dep/cmd/dep
+
+  # build locally and run locally
+  - make clean
+  - make vendor
+
+  - make generate
+  - make manifests
+  - make build
+  - ./bin/manager --help
+
+  - make test
+  - make manifests-check
+
+jobs:
+  include:
+    - stage: "Docker"
+      name: "Build containers"
+      script:
+        - make docker-base-build
+        - make docker-build
+        - make docker-vendor-build
+    - name: "Push containers"
+      deploy:
+        - provider: script
+          script: bash docker_deploy.sh
+          skip_cleanup: true
+          on:
+            tags: true
+            condition: -n "$DOCKER_PASSWORD"
+    - stage: "Github Release"
+      deploy:
+        - provider: releases
+          skip_cleanup: true
+          on:
+            tags: true

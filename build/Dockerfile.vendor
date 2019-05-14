@@ -1,0 +1,14 @@
+ARG BUILD_IMG
+ARG SLIM_IMAGE
+FROM $BUILD_IMG as base
+
+# =============================================================================
+# Copy the controller-manager into a thin image
+# =============================================================================
+ARG SLIM_IMAGE
+FROM $SLIM_IMAGE as final
+
+ARG PROJECT_NAME=solr-operator
+ARG REPO_PATH=github.com/bloomberg/$PROJECT_NAME
+
+COPY --from=base /go/src/${REPO_PATH}/vendor /solr-operator-vendor-sources

@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solr-operator
+  namespace: default
+  labels:
+    control-plane: solr-operator
+    controller-tools.k8s.io: "1.0"
+spec:
+  selector:
+    matchLabels:
+      control-plane: solr-operator
+      controller-tools.k8s.io: "1.0"
+  template:
+    metadata:
+      labels:
+        control-plane: solr-operator
+        controller-tools.k8s.io: "1.0"
+    spec:
+      containers:
+      - args:
+        - -zookeeper-operator
+        - -etcd-operator=false
+        - -ingress-base-url=ing.local.domain
+        image: bloomberg/solr-operator:latest
+        imagePullPolicy: Always
+        name: solr-operator
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: SECRET_NAME
+            value: $(WEBHOOK_SECRET_NAME)
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        ports:
+        - containerPort: 9876
+          name: webhook-server
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /tmp/cert
+          name: cert
+          readOnly: true
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: webhook-server-secret
+---
+apiVersion: v1beta1
+kind: Secret
+metadata:
+  name: webhook-server-secret
+  namespace: default

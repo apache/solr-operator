@@ -1,0 +1,26 @@
+# Build the operator binary
+FROM golang:1.12.5-alpine3.9 as builder
+
+ARG PROJECT_NAME=solr-operator
+ARG REPO_PATH=github.com/bloomberg/$PROJECT_NAME
+
+# Install our build tools
+
+RUN apk add --update git make bash
+RUN go get -u github.com/golang/dep/cmd/dep
+
+# Copy in the go src
+WORKDIR /go/src/${REPO_PATH}
+COPY .git .git
+COPY pkg pkg
+COPY cmd cmd
+COPY build build
+COPY hack hack
+COPY Gopkg.toml Gopkg.lock Makefile ./
+
+RUN make vendor
+RUN make generate
+
+
+# Build
+RUN CGO_ENABLED=0 GOOS=linux ARCH=amd64 make build

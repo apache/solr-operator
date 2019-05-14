@@ -1,0 +1,18 @@
+ARG BUILD_IMG
+FROM $BUILD_IMG as base
+
+# =============================================================================
+# Copy the controller-manager into a thin image
+# =============================================================================
+
+FROM alpine:3.9 as final
+
+ARG PROJECT_NAME=solr-operator
+ARG REPO_PATH=github.com/bloomberg/$PROJECT_NAME
+
+COPY --from=base /go/src/${REPO_PATH}/bin/manager /usr/local/bin/${PROJECT_NAME}
+
+RUN adduser -D ${PROJECT_NAME}
+USER ${PROJECT_NAME}
+
+ENTRYPOINT ["/usr/local/bin/solr-operator"]

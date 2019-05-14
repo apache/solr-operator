@@ -1,0 +1,8 @@
+# Copy the binary and vendor for the operator
+FROM alpine3.9
+
+ARG PROJECT_NAME=solr-operator
+ARG REPO_PATH=github.com/bloomberg/$PROJECT_NAME
+
+WORKDIR /go/src/${REPO_PATH}
+COPY bin vendor ./

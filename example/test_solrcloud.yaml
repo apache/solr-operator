@@ -1,0 +1,8 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: example
+spec:
+  replicas: 4
+  solrImage:
+    tag: 8.1.1
