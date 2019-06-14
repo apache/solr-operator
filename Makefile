@@ -4,6 +4,8 @@ NAMESPACE ?= bloomberg/
 IMG = $(NAMESPACE)$(NAME)
 VERSION ?= 0.1.0
 GIT_SHA = $(shell git rev-parse --short HEAD)
+GOOS = $(shell go env GOOS)
+ARCH = $(shell go env GOARCH)
 
 all: generate
 
@@ -28,7 +30,7 @@ vendor:
 
 # Build manager binary
 build: generate vet
-	BIN=manager VERSION=${VERSION} GIT_SHA=${GIT_SHA} ./build/build.sh
+	BIN=manager VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: generate

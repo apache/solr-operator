@@ -25,7 +25,7 @@ if [ -z "${ARCH}" ]; then
     exit 1
 fi
 if [ -z "${BIN}" ]; then
-    echo "ARCH must be set"
+    echo "BIN must be set"
     exit 1
 fi
 if [ -z "${VERSION}" ]; then

@@ -9,8 +9,7 @@ go:
 script:
   - docker --version
   # dep
-  - go get -u github.com/golang/dep/cmd/dep
-  - go get sigs.k8s.io/kustomize
+  - ./hack/install_dependencies.sh
 
   # build locally and run locally
   - make clean
@@ -18,7 +17,7 @@ script:
 
   - make generate
   - make manifests
-  - CGO_ENABLED=0 GOOS=linux ARCH=amd64 make build
+  - make build
   # - ./bin/manager --help
 
   - make test
