@@ -10,6 +10,7 @@ script:
   - docker --version
   # dep
   - go get -u github.com/golang/dep/cmd/dep
+  - go get sigs.k8s.io/kustomize
 
   # build locally and run locally
   - make clean
