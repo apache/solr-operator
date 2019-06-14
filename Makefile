@@ -54,7 +54,7 @@ endif
 
 # Run tests
 test: check-format check-license vet
-	sh hack/verify-codegen.sh
+	./hack/verify-codegen.sh
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Run go vet against code
