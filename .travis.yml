@@ -19,7 +19,7 @@ script:
   - make generate
   - make manifests
   - CGO_ENABLED=0 GOOS=linux ARCH=amd64 make build
-  - ./bin/manager --help
+  # - ./bin/manager --help
 
   - make test
   - make manifests-check

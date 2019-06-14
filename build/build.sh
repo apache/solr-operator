@@ -38,6 +38,6 @@ export GOARCH="${ARCH}"
 export GOOS=${GOOS:-}
 
 go build \
-    -ldflags "-X ${REPO_PATH}/pkg/version.Version=${VERSION} -X ${REPO_PATH}/pkg/version.GitSHA=${GIT_SHA}" \
+    -ldflags "-X ./pkg/version.Version=${VERSION} -X ./pkg/version.GitSHA=${GIT_SHA}" \
     -o ./bin/${BIN} \
     ./cmd/${BIN}
