@@ -31,7 +31,7 @@ jobs:
         - make docker-base-build
         - make docker-build
         - make docker-vendor-build
-    - name: "Push containers"
+    - name: "Push containers to DockerHub if a tagged release"
       script: skip
       deploy:
         - provider: script
@@ -41,6 +41,8 @@ jobs:
             tags: true
             condition: -n "$DOCKER_PASSWORD"
     - stage: "Github Release"
+      name: "Push to github if a tagged release"
+      script: skip
       deploy:
         - provider: releases
           skip_cleanup: true
