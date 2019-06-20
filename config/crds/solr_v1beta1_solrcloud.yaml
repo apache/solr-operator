@@ -171,7 +171,8 @@ spec:
               format: int32
               type: integer
             solrNodes:
-              description: SolrNodes are the solr nodes in the cloud
+              description: SolrNodes contain the statuses of each solr node running
+                in this solr cloud.
               items:
                 properties:
                   externalAddress:

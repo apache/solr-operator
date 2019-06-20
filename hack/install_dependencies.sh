@@ -12,7 +12,7 @@ arch=$(go env GOARCH)
 go get -u github.com/golang/dep/cmd/dep
 
 # Install Kustomize
-go get sigs.k8s.io/kustomize
+go get -u sigs.k8s.io/kustomize/cmd/kustomize
 
 # Install Kubebuilder
 curl -sL https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch} | tar -xz -C /tmp/

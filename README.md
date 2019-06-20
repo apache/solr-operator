@@ -186,7 +186,7 @@ The startup parameter `etcd-operator` must be provided on startup of the solr-op
 The CRD should be updated anytime you update the API.
 
 ```bash
-$ make
+$ make manifests
 ```
 
 ### Docker

@@ -32,6 +32,7 @@ jobs:
         - make docker-build
         - make docker-vendor-build
     - name: "Push containers"
+      script: skip
       deploy:
         - provider: script
           script: bash docker_deploy.sh

@@ -207,12 +207,6 @@ func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 
 // ProvidedZookeeper defines the internal zookeeper ensemble to run
 type ProvidedZookeeper struct {
-	// Use the shared zookeeper provided by the solr operator
-	// Note: Requires
-	//   - The sharedZookeeper flag to be provided to the Solr Operator
-	//   - This option is not yet implemented
-	// +optional
-	// Shared bool `json:"shared,omitempty"`
 
 	// Create a new Zookeeper Ensemble with the following spec
 	// Note: Requires
@@ -365,10 +359,7 @@ func (s *ZetcdSpec) withDefaults() (changed bool) {
 
 // SolrCloudStatus defines the observed state of SolrCloud
 type SolrCloudStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// SolrNodes are the solr nodes in the cloud
+	// SolrNodes contain the statuses of each solr node running in this solr cloud.
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
 	// Replicas is the number of number of desired replicas in the cluster
