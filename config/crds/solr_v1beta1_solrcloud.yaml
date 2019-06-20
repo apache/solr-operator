@@ -61,6 +61,16 @@ spec:
           type: object
         spec:
           properties:
+            backupRestoreVolume:
+              description: 'Required for backups & restores to be enabled. This is
+                a volumeSource for a volume that will be mounted to all solrNodes
+                to store backups and load restores. The data within the volume will
+                be namespaces for this instance, so feel free to use the same volume
+                for multiple clouds. Since the volume will be mounted to all solrNodes,
+                it must be able to be written from multiple pods. If a PVC reference
+                is given, the PVC must have `accessModes: - ReadWriteMany`. Other
+                options are to use a NFS volume.'
+              type: object
             busyBoxImage:
               properties:
                 pullPolicy:
@@ -70,10 +80,10 @@ spec:
                 tag:
                   type: string
               type: object
-            persistentVolumeClaimSpec:
-              description: PersistentVolumeClaimSpec is the spec to describe PVC for
-                the solr container This field is optional. If no PVC spec, etcd container
-                will use emptyDir as volume
+            dataPvcSpec:
+              description: DataPvcSpec is the spec to describe PVC for the solr node
+                to store its data. This field is optional. If no PVC spec is provided,
+                each solr node will use emptyDir as the data volume
               type: object
             replicas:
               description: The number of solr nodes to run
@@ -112,9 +122,6 @@ spec:
                       description: The connection string to connect to the ensemble
                         from within the Kubernetes cluster
                       type: string
-                  required:
-                  - internalConnectionString
-                  - chroot
                   type: object
                 provided:
                   description: 'A zookeeper that is created by the solr operator Note:
@@ -151,6 +158,11 @@ spec:
           type: object
         status:
           properties:
+            backupRestoreReady:
+              description: BackupRestoreReady announces whether the solrCloud has
+                the backupRestorePVC mounted to all pods and therefore is ready for
+                backups and restores.
+              type: boolean
             externalCommonAddress:
               description: ExternalCommonAddress is the external common http address
                 for all solr nodes. Will only be provided when an ingressUrl is provided
@@ -224,9 +236,6 @@ spec:
                   description: The connection string to connect to the ensemble from
                     within the Kubernetes cluster
                   type: string
-              required:
-              - internalConnectionString
-              - chroot
               type: object
           required:
           - solrNodes
@@ -235,6 +244,7 @@ spec:
           - version
           - internalCommonAddress
           - zookeeperConnectionInfo
+          - backupRestoreReady
           type: object
   version: v1beta1
 status:

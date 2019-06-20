@@ -19,8 +19,6 @@ COPY hack hack
 COPY Gopkg.toml Gopkg.lock Makefile ./
 
 RUN make vendor
-RUN make generate
-
 
 # Build
 RUN CGO_ENABLED=0 make build

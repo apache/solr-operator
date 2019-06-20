@@ -38,15 +38,15 @@ var (
 	namespace string
 	name      string
 
-	useEtcdOperator      bool
-	useZookeeperOperator bool
+	useEtcdCRD      bool
+	useZookeeperCRD bool
 
 	ingressBaseDomain string
 )
 
 func init() {
-	flag.BoolVar(&useEtcdOperator, "etcd-operator", true, "The operator will not use the etcd-operator when this flag is set to false.")
-	flag.BoolVar(&useZookeeperOperator, "zk-operator", true, "The operator will not use the zk-operator when this flag is set to false.")
+	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
+	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&ingressBaseDomain, "ingress-base-domain", "", "The operator will use this base domain for host matching in an ingress for the cloud.")
 	flag.Parse()
 }
@@ -98,9 +98,11 @@ func main() {
 	}
 
 	solrcloud.SetIngressBaseUrl(ingressBaseDomain)
+	solrcloud.UseEtcdCRD(useEtcdCRD)
+	solrcloud.UseZkCRD(useZookeeperCRD)
 	// Setup all Controllers
 	log.Info("Setting up controller")
-	if err := controller.AddToManager(mgr, useZookeeperOperator, useEtcdOperator); err != nil {
+	if err := controller.AddToManager(mgr); err != nil {
 		log.Error(err, "unable to register controllers to the manager")
 		os.Exit(1)
 	}

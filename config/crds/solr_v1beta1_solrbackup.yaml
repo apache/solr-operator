@@ -1,0 +1,237 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: solrbackups.solr.bloomberg.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.solrCloud
+    description: Solr Cloud
+    name: Cloud
+    type: string
+  - JSONPath: .status.finished
+    description: Whether the backup has finished
+    name: Finished
+    type: boolean
+  - JSONPath: .status.successful
+    description: Whether the backup was successful
+    name: Successful
+    type: boolean
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: solr.bloomberg.com
+  names:
+    categories:
+    - all
+    kind: SolrBackup
+    plural: solrbackups
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            collections:
+              description: The list of collections to backup. If empty, all collections
+                in the cloud will be backed up.
+              items:
+                type: string
+              type: array
+            persistence:
+              description: Persistence is the specification on how to persist the
+                backup data.
+              properties:
+                S3:
+                  description: Persist to an s3 compatible endpoint
+                  properties:
+                    AWSCliImage:
+                      description: Image containing the AWS Cli
+                      properties:
+                        pullPolicy:
+                          type: string
+                        repository:
+                          type: string
+                        tag:
+                          type: string
+                      type: object
+                    bucket:
+                      description: The S3 bucket to store/find the backup data
+                      type: string
+                    endpointUrl:
+                      description: The S3 compatible endpoint URL
+                      type: string
+                    key:
+                      description: The key for the referenced tarred & zipped backup
+                        file Defaults to the name of the backup/restore + '.tgz'
+                      type: string
+                    region:
+                      description: The Default region to use with AWS. Can also be
+                        provided through a configFile in the secrets. Overridden by
+                        any endpointUrl value provided.
+                      type: string
+                    retries:
+                      description: The number of retries to communicate with S3
+                      format: int32
+                      type: integer
+                    secrets:
+                      description: The secrets to use when configuring and authenticating
+                        s3 calls
+                      properties:
+                        accessKeyId:
+                          description: The key (within the provided secret) of the
+                            Access Key ID to use
+                          type: string
+                        configFile:
+                          description: The key (within the provided secret) of an
+                            AWS Config file to use
+                          type: string
+                        credentialsFile:
+                          description: The key (within the provided secret) of an
+                            AWS Credentials file to use
+                          type: string
+                        fromSecret:
+                          description: The name of the secrets object to use
+                          type: string
+                        secretAccessKey:
+                          description: The key (within the provided secret) of the
+                            Secret Access Key to use
+                          type: string
+                      required:
+                      - fromSecret
+                      type: object
+                  required:
+                  - bucket
+                  - key
+                  - secrets
+                  type: object
+                volume:
+                  description: Persist to a volume
+                  properties:
+                    busyBoxImage:
+                      description: BusyBox image for manipulating and moving data
+                      properties:
+                        pullPolicy:
+                          type: string
+                        repository:
+                          type: string
+                        tag:
+                          type: string
+                      type: object
+                    filename:
+                      description: The filename of the tarred & zipped backup file
+                        Defaults to the name of the backup/restore + '.tgz'
+                      type: string
+                    path:
+                      description: The location of the persistence directory within
+                        the volume
+                      type: string
+                    source:
+                      description: The volume for persistence
+                      type: object
+                  required:
+                  - source
+                  - filename
+                  type: object
+              type: object
+            solrCloud:
+              description: A reference to the SolrCloud to create a backup for
+              type: string
+          required:
+          - solrCloud
+          - persistence
+          type: object
+        status:
+          properties:
+            collectionBackupStatuses:
+              description: The status of each collection's backup progress
+              items:
+                properties:
+                  asyncBackupStatus:
+                    description: The status of the asynchronous backup call to solr
+                    type: string
+                  collection:
+                    description: Solr Collection name
+                    type: string
+                  finishTimestamp:
+                    description: Time that the collection backup finished at
+                    format: date-time
+                    type: string
+                  finished:
+                    description: Whether the backup has finished
+                    type: boolean
+                  inProgress:
+                    description: Whether the collection is being backed up
+                    type: boolean
+                  startTimestamp:
+                    description: Time that the collection backup started at
+                    format: date-time
+                    type: string
+                  successful:
+                    description: Whether the backup was successful
+                    type: boolean
+                required:
+                - collection
+                type: object
+              type: array
+            finishTimestamp:
+              description: Version of the Solr being backed up
+              format: date-time
+              type: string
+            finished:
+              description: Whether the backup has finished
+              type: boolean
+            persistenceStatus:
+              description: Whether the backups are in progress of being persisted
+              properties:
+                finishTimestamp:
+                  description: Time that the collection backup finished at
+                  format: date-time
+                  type: string
+                finished:
+                  description: Whether the persistence has finished
+                  type: boolean
+                inProgress:
+                  description: Whether the collection is being backed up
+                  type: boolean
+                startTimestamp:
+                  description: Time that the collection backup started at
+                  format: date-time
+                  type: string
+                successful:
+                  description: Whether the backup was successful
+                  type: boolean
+              type: object
+            solrVersion:
+              description: Version of the Solr being backed up
+              type: string
+            successful:
+              description: Whether the backup was successful
+              type: boolean
+          required:
+          - solrVersion
+          - persistenceStatus
+          type: object
+  version: v1beta1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

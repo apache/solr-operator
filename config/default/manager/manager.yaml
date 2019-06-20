@@ -19,9 +19,9 @@ spec:
     spec:
       containers:
       - args:
-        - -zookeeper-operator
+        - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-url=ing.local.domain
+        - -ingress-base-domain=ing.local.domain
         image: bloomberg/solr-operator:latest
         imagePullPolicy: Always
         name: solr-operator
@@ -54,7 +54,7 @@ spec:
           defaultMode: 420
           secretName: webhook-server-secret
 ---
-apiVersion: v1beta1
+apiVersion: v1
 kind: Secret
 metadata:
   name: webhook-server-secret

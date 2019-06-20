@@ -1,4 +1,5 @@
-# Solr Operator [![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator)
+# Solr Operator
+[![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator) [![Go Report Card](https://goreportcard.com/badge/github.com/bloomberg/solr-operator)](https://goreportcard.com/report/github.com/bloomberg/solr-operator) ![Latest Version](https://img.shields.io/github/tag/bloomberg/solr-operator) [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 
 The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 
@@ -7,38 +8,43 @@ The project is currently in beta (`v1beta1`), and while we do not anticipate cha
 ## Menu
 
 - [Getting Started](#getting-started)
+    - [Solr Cloud](#running-a-solr-cloud)
+    - [Solr Backups](#solr-backups)
+    - [Solr Metrics](#solr-prometheus-exporter)
 - [Contributions](#contributions)
 - [License](#license)
 - [Code of Conduct](#code-of-conduct)
 - [Security Vulnerability Reporting](#security-vulnerability-reporting)
 
-## Getting Started
-
-### Running the Solr Operator
+# Getting Started
 
 Install the Zookeeper & Etcd Operators, which this operator depends on by default.
+Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
 
 ```bash
 $ kubectl apply -f example/ext_ops.yaml
 ```
 
-Install the SolrCloud CRD & Operator
+Install the Solr CRDs & Operator
 
 ```bash
 $ kubectl apply -f config/crds/solr_v1beta1_solrcloud.yaml
+$ kubectl apply -f config/crds/solr_v1beta1_solrbackup.yaml
+$ kubectl apply -f config/crds/solr_v1beta1_solrcollection.yaml
+$ kubectl apply -f config/crds/solr_v1beta1_solrprometheusexporter.yaml
 $ kubectl apply -f config/operators/solr_operator.yaml
 ```
                         
-### Lifecyle of a Solr Cloud
+## Running a Solr Cloud
 
-#### Creating
+### Creating
 
 Make sure that the solr-operator and a zookeeper-operator are running.
 
 Create an example Solr cloud, with the following configuration.
 
 ```bash
-$ cat example/test-solrcloud.yaml
+$ cat example/test_solrcloud.yaml
 
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCloud
@@ -53,7 +59,7 @@ spec:
 Apply it to your Kubernetes cluster.
 
 ```bash
-$ kubectl apply -f example/test-solrcloud.yaml
+$ kubectl apply -f example/test_solrcloud.yaml
 $ kubectl get solrclouds
 
 NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
@@ -65,7 +71,7 @@ NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
 example   8.1.1     4              4       4            8m
 ```
 
-#### Scaling
+### Scaling
 
 Increase the number of Solr nodes in your cluster.
 
@@ -73,7 +79,7 @@ Increase the number of Solr nodes in your cluster.
 $ kubectl scale --replicas=5 solrcloud/example
 ```
 
-#### Deleting
+### Deleting
 
 Decrease the number of Solr nodes in your cluster.
 
@@ -81,7 +87,7 @@ Decrease the number of Solr nodes in your cluster.
 $ kubectl delete solrcloud example
 ```
 
-#### Dependent Kubernetes Resources
+### Dependent Kubernetes Resources
 
 What actually gets created when the Solr Cloud is spun up?
 
@@ -130,39 +136,151 @@ NAME                                       VERSION   DESIREDNODES   NODES   READ
 solrcloud.solr.bloomberg.com/example       8.1.1     4              4       4            47h
 ```
 
+### Solr Backups
+
+Solr backups require 3 things:
+- A solr cloud running in kubernetes to backup
+- The list of collections to backup
+- A shared volume reference that can be written to from many clouds
+    - This could be a NFS volume, a persistent volume claim (that has `ReadWriteMany` access), etc.
+    - The same volume can be used for many solr clouds in the same namespace, as the data stored within the volume is namespaced.
+- A way to persist the data. The currently supported persistence methods are:
+    - A volume reference (this does not have to be `ReadWriteMany`)
+    - An S3 endpoint.
+    
+Backups will be tarred before they are persisted.
+
+There is no current way to restore these backups, but that is in the roadmap to implement.
+
+### Solr Collections
+
+Solr-operator can manage the creation, deletion and modification of Solr collections. 
+
+Collection creation requires a Solr Cloud to apply against. Presently, SolrCollection supports both implicit and compositeId router types, with some of the basic configuration options including `autoAddReplicas`. 
+
+Create an example set of collections against on the "example" solr cloud
+
+```bash
+$ cat example/test_solrcollection.yaml
+
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-1
+spec:
+  solrCloud: example
+  collection: example-collection
+  routerName: compositeId
+  autoAddReplicas: false
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-2-compositeid-autoadd
+spec:
+  solrCloud: example
+  collection: example-collection-2
+  routerName: compositeId
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-3-implicit
+spec:
+  solrCloud: example
+  collection: example-collection-3-implicit
+  routerName: implicit
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+  shards: "fooshard1,fooshard2"
+```
+
+```bash
+$ kubectl apply -f examples/test_solrcollections.yaml
+```
+
+  
+  
 ## Solr Images
 
 The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
 
 ## Zookeeper
+### Zookeeper Reference
 
 Solr Clouds require an Apache Zookeeper to connect to.
 
 The Solr operator gives a few options.
 
-### ZK Connection Info
+#### ZK Connection Info
 
 This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
 If you provide an external connection string, you do not _have_ to provide an internal one as well.
 
-### Provided Instance
+#### Provided Instance
 
 If you do not require the Solr cloud to run cross-kube cluster, and do not want to manage your own Zookeeper ensemble,
 the solr-operator can manage Zookeeper ensemble(s) for you.
 
-#### Zookeeper
+##### Zookeeper
 
 Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a new Zookeeper ensemble can be spun up for 
 each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
 
-#### Zetcd
+##### Zetcd
 
 Using [etcd-operator](https://github.com/coreos/etcd-operator), a new Etcd ensemble can be spun up for each solrCloud that has this option specified.
 A [Zetcd](https://github.com/etcd-io/zetcd) deployment is also created so that Solr can interact with Etcd as if it were a Zookeeper ensemble.
 
 The startup parameter `etcd-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+## Solr Backups
+
+Solr backups require 3 things:
+- A solr cloud running in kubernetes to backup
+- The list of collections to backup
+- A shared volume reference that can be written to from many clouds
+    - This could be a NFS volume, a persistent volume claim (that has `ReadWriteMany` access), etc.
+    - The same volume can be used for many solr clouds in the same namespace, as the data stored within the volume is namespaced.
+- A way to persist the data. The currently supported persistence methods are:
+    - A volume reference (this does not have to be `ReadWriteMany`)
+    - An S3 endpoint.
+    
+Backups will be tarred before they are persisted.
+
+There is no current way to restore these backups, but that is in the roadmap to implement.
+
+
+## Solr Prometheus Exporter
+
+Solr metrics can be collected from solr clouds/standalone solr both residing within the kubernetes cluster and outside.
+To use the Prometheus exporter, the easiest thing to do is just provide a reference to a Solr instance. That can be any of the following:
+- The name and namespace of the Solr Cloud CRD
+- The Zookeeper connection information of the Solr Cloud
+- The address of the standalone Solr instance
+
+You can also provide a custom Prometheus Exporter config, Solr version, and exporter options as described in the
+[Solr ref-guide](https://lucene.apache.org/solr/guide/monitoring-solr-with-prometheus-and-grafana.html#command-line-parameters).
+
+Note that a few of the official Solr docker images do not enable the Prometheus Exporter.
+Versions `6.6` - `7.x` and `8.2` - `master` should have the exporter available. 
+  
+  
+## Solr Images
+
+The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
+
 
 ## Solr Operator
 
@@ -193,7 +311,7 @@ $ make manifests
 
 #### Docker Images
 
-Two Docker images are published to [Docker Hub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
+Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
 
 - [Base Image](build/Dockerfile.build.dynamic) - Downloads vendor directories, builds operator executable (This is not published, only used to build the following images)
 - [Slim Image](build/Dockerfile.slim) - Contains only the operator executable
@@ -206,6 +324,21 @@ Building and releasing a test operator image with a custom namespace.
 ```bash
 $ NAMESPACE=your-namespace make docker-base-build docker-build docker-push
 ```
+
+## Version Compatability
+
+### Backwards Incompatible CRD Changes
+
+#### v0.1.1
+- `SolrCloud.Spec.persistentVolumeClaim` was renamed to `SolrCloud.Spec.dataPvcSpec`
+
+### Compatibility with Kubernetes Versions
+
+#### Fully Compatible - v1.12+
+
+#### Feature Gates required for older versions
+
+- *v1.10* - CustomResourceSubresources
 
 ## Contributions
 
