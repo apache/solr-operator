@@ -48,6 +48,8 @@ const timeout = time.Second * 5
 
 func TestReconcile(t *testing.T) {
 	SetIngressBaseUrl("")
+	UseEtcdCRD(false)
+	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
@@ -67,7 +69,7 @@ func TestReconcile(t *testing.T) {
 	c = mgr.GetClient()
 
 	recFn, requests := SetupTestReconcile(newReconciler(mgr))
-	g.Expect(add(mgr, recFn, true, false)).NotTo(gomega.HaveOccurred())
+	g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
 
 	stopMgr, mgrStopped := StartTestManager(mgr, g)
 
@@ -103,6 +105,8 @@ func TestReconcile(t *testing.T) {
 
 func TestReconcileWithIngress(t *testing.T) {
 	SetIngressBaseUrl("ing.base.domain")
+	UseEtcdCRD(false)
+	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
@@ -122,7 +126,7 @@ func TestReconcileWithIngress(t *testing.T) {
 	c = mgr.GetClient()
 
 	recFn, requests := SetupTestReconcile(newReconciler(mgr))
-	g.Expect(add(mgr, recFn, true, false)).NotTo(gomega.HaveOccurred())
+	g.Expect(add(mgr, recFn)).NotTo(gomega.HaveOccurred())
 
 	stopMgr, mgrStopped := StartTestManager(mgr, g)
 

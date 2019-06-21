@@ -17,6 +17,14 @@ limitations under the License.
 
 package v1beta1
 
+// SolrBackupListerExpansion allows custom methods to be added to
+// SolrBackupLister.
+type SolrBackupListerExpansion interface{}
+
+// SolrBackupNamespaceListerExpansion allows custom methods to be added to
+// SolrBackupNamespaceLister.
+type SolrBackupNamespaceListerExpansion interface{}
+
 // SolrCloudListerExpansion allows custom methods to be added to
 // SolrCloudLister.
 type SolrCloudListerExpansion interface{}

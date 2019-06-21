@@ -23,6 +23,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// SolrBackups returns a SolrBackupInformer.
+	SolrBackups() SolrBackupInformer
 	// SolrClouds returns a SolrCloudInformer.
 	SolrClouds() SolrCloudInformer
 }
@@ -36,6 +38,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// SolrBackups returns a SolrBackupInformer.
+func (v *version) SolrBackups() SolrBackupInformer {
+	return &solrBackupInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // SolrClouds returns a SolrCloudInformer.

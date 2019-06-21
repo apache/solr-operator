@@ -26,12 +26,17 @@ import (
 
 type SolrV1beta1Interface interface {
 	RESTClient() rest.Interface
+	SolrBackupsGetter
 	SolrCloudsGetter
 }
 
 // SolrV1beta1Client is used to interact with features provided by the solr.bloomberg.com group.
 type SolrV1beta1Client struct {
 	restClient rest.Interface
+}
+
+func (c *SolrV1beta1Client) SolrBackups(namespace string) SolrBackupInterface {
+	return newSolrBackups(c, namespace)
 }
 
 func (c *SolrV1beta1Client) SolrClouds(namespace string) SolrCloudInterface {

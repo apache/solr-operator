@@ -52,6 +52,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=solr.bloomberg.com, Version=v1beta1
+	case v1beta1.SchemeGroupVersion.WithResource("solrbackups"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Solr().V1beta1().SolrBackups().Informer()}, nil
 	case v1beta1.SchemeGroupVersion.WithResource("solrclouds"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Solr().V1beta1().SolrClouds().Informer()}, nil
 

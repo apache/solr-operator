@@ -27,6 +27,10 @@ type FakeSolrV1beta1 struct {
 	*testing.Fake
 }
 
+func (c *FakeSolrV1beta1) SolrBackups(namespace string) v1beta1.SolrBackupInterface {
+	return &FakeSolrBackups{c, namespace}
+}
+
 func (c *FakeSolrV1beta1) SolrClouds(namespace string) v1beta1.SolrCloudInterface {
 	return &FakeSolrClouds{c, namespace}
 }

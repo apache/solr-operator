@@ -44,6 +44,8 @@ import (
 
 var log = logf.Log.WithName("controller")
 
+var useZkCRD bool
+var useEtcdCRD bool
 var IngressBaseUrl string
 
 /**
@@ -51,14 +53,22 @@ var IngressBaseUrl string
 * business logic.  Delete these comments after modifying this file.*
  */
 
+func UseZkCRD(useCRD bool) {
+	useZkCRD = useCRD
+}
+
+func UseEtcdCRD(useCRD bool) {
+	useEtcdCRD = useCRD
+}
+
 func SetIngressBaseUrl(ingressBaseUrl string) {
 	IngressBaseUrl = ingressBaseUrl
 }
 
 // Add creates a new SolrCloud Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
-func Add(mgr manager.Manager, includezkerator bool, includeetcderator bool) error {
-	return add(mgr, newReconciler(mgr), includezkerator, includeetcderator)
+func Add(mgr manager.Manager) error {
+	return add(mgr, newReconciler(mgr))
 }
 
 // newReconciler returns a new reconcile.Reconciler
@@ -67,7 +77,7 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
-func add(mgr manager.Manager, r reconcile.Reconciler, includezkerator bool, includeetcderator bool) error {
+func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	// Create a new controller
 	c, err := controller.New("solrcloud-controller", mgr, controller.Options{Reconciler: r})
 	if err != nil {
@@ -125,7 +135,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler, includezkerator bool, incl
 		return err
 	}
 
-	if includezkerator {
+	if useZkCRD {
 		// Watch a ZookeeperCluster created by SolrCloud
 		err = c.Watch(&source.Kind{Type: &zk.ZookeeperCluster{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
@@ -136,7 +146,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler, includezkerator bool, incl
 		}
 	}
 
-	if includeetcderator {
+	if useEtcdCRD {
 		// Watch an EtcdCluster created by SolrCloud
 		err = c.Watch(&source.Kind{Type: &etcd.EtcdCluster{}}, &handler.EnqueueRequestForOwner{
 			IsController: true,
@@ -436,6 +446,9 @@ func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *sol
 			return errors.NewBadRequest("No Zookeeper reference information provided.")
 		}
 		if pzk.Zetcd != nil {
+			if !useEtcdCRD {
+				return errors.NewBadRequest("Cannot create an Etcd Cluster, as the Solr Operator is not configured to use the Etcd CRD")
+			}
 			// Generate EtcdCluster
 			etcdCluster := util.GenerateEtcdCluster(instance, *pzk.Zetcd.EtcdSpec, busyBoxImage)
 			if err := controllerutil.SetControllerReference(instance, etcdCluster, r.scheme); err != nil {
@@ -510,6 +523,9 @@ func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *sol
 
 		} else if pzk.Zookeeper != nil {
 			// Generate ZookeeperCluster
+			if !useZkCRD {
+				return errors.NewBadRequest("Cannot create a Zookeeper Cluster, as the Solr Operator is not configured to use the Zookeeper CRD")
+			}
 			zkCluster := util.GenerateZookeeperCluster(instance, *pzk.Zookeeper)
 			if err := controllerutil.SetControllerReference(instance, zkCluster, r.scheme); err != nil {
 				return err
