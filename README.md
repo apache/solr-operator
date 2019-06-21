@@ -1,4 +1,4 @@
-# Solr Operator [![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator)
+# Solr Operator [![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator) [![Go Report Card](https://goreportcard.com/badge/github.com/bloomberg/solr-operator)](https://goreportcard.com/report/github.com/bloomberg/solr-operator)
 
 The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 
