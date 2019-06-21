@@ -193,7 +193,7 @@ $ make manifests
 
 #### Docker Images
 
-Two Docker images are published to [Docker Hub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
+Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
 
 - [Base Image](build/Dockerfile.build.dynamic) - Downloads vendor directories, builds operator executable (This is not published, only used to build the following images)
 - [Slim Image](build/Dockerfile.slim) - Contains only the operator executable
