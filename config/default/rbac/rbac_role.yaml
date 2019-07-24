@@ -7,6 +7,66 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - get
@@ -140,6 +200,26 @@ rules:
   - solr.bloomberg.com
   resources:
   - solrclouds/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups/status
   verbs:
   - get
   - update

@@ -151,6 +151,12 @@ spec:
           type: object
         status:
           properties:
+            backupsConnected:
+              description: BackupsConnected is the list of backups currently connected
+                to the cloud
+              items:
+                type: string
+              type: array
             externalCommonAddress:
               description: ExternalCommonAddress is the external common http address
                 for all solr nodes. Will only be provided when an ingressUrl is provided

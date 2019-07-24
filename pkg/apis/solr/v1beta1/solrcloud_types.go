@@ -24,9 +24,6 @@ import (
 	"strings"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 const (
 	DefaultPullPolicy = corev1.PullIfNotPresent
 
@@ -71,6 +68,7 @@ type SolrCloudSpec struct {
 
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the solr container
 	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
+	// +optional
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
 
 	// +optional
@@ -386,6 +384,10 @@ type SolrCloudStatus struct {
 
 	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
 	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
+
+	// BackupsConnected is the list of backups currently connected to the cloud
+	// +optional
+	BackupsConnected []string `json:"backupsConnected,omitempty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
@@ -451,6 +453,15 @@ type SolrCloud struct {
 // WithDefaults set default values when not defined in the spec.
 func (sc *SolrCloud) WithDefaults() bool {
 	return sc.Spec.withDefaults()
+}
+
+func (sc *SolrCloud) GetAllSolrNodeNames() []string {
+	nodeNames := make([]string, *sc.Spec.Replicas)
+	statefulSetName := sc.StatefulSetName()
+	for i := range nodeNames {
+		nodeNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
+	}
+	return nodeNames
 }
 
 // ConfigMapName returns the name of the cloud config-map

@@ -22,6 +22,7 @@ import (
 	"github.com/bloomberg/solr-operator/pkg/controller/util"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/labels"
+	"reflect"
 	"strings"
 
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
@@ -86,6 +87,12 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 
 	// Watch for changes to SolrCloud
 	err = c.Watch(&source.Kind{Type: &solr.SolrCloud{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	// Watch for changes to SolrBackup
+	err = c.Watch(&source.Kind{Type: &solr.SolrBackup{}}, &handler.EnqueueRequestForObject{})
 	if err != nil {
 		return err
 	}
@@ -184,6 +191,8 @@ type ReconcileSolrCloud struct {
 // +kubebuilder:rbac:groups=,resources=configmaps/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters,verbs=get;list;watch;create;update;patch;delete
@@ -211,9 +220,16 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	newStatus := solr.SolrCloudStatus{}
+
 	busyBoxImage := *instance.Spec.BusyBoxImage
 
-	if err := reconcileZk(r, request, instance, busyBoxImage); err != nil {
+	if err := reconcileZk(r, request, instance, busyBoxImage, &newStatus); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	err, backupPvcMap := getBackupPVCs(r, instance)
+	if err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -235,9 +251,23 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 			log.Info("Updating Service", "namespace", service.Namespace, "name", service.Name)
 			err = r.Update(context.TODO(), foundService)
 		}
-		instance.Status.InternalCommonAddress = "http://" + foundService.Name + "." + foundService.Namespace
+		newStatus.InternalCommonAddress = "http://" + foundService.Name + "." + foundService.Namespace
 	} else {
 		return reconcile.Result{}, err
+	}
+
+	solrNodeNames := instance.GetAllSolrNodeNames()
+
+	hostNameIpMap := make(map[string]string)
+	// Generate a service for every Node
+	for _, nodeName := range solrNodeNames {
+		err, ip := reconcileNodeService(r, instance, nodeName)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if IngressBaseUrl != "" && ip != "" {
+			hostNameIpMap[instance.NodeIngressUrl(nodeName, IngressBaseUrl)] = ip
+		}
 	}
 
 	// Generate HeadlessService
@@ -285,7 +315,7 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
 	if strings.Contains(instance.ZkConnectionString(), ":") {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl)
+		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl, hostNameIpMap, backupPvcMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -302,28 +332,21 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 				log.Info("Updating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
 				err = r.Update(context.TODO(), foundStatefulSet)
 			}
-			instance.Status.Replicas = foundStatefulSet.Status.Replicas
-			instance.Status.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
+			newStatus.Replicas = foundStatefulSet.Status.Replicas
+			newStatus.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
 		} else {
 			return reconcile.Result{}, err
 		}
 	}
 
-	err = reconcileCloudStatus(r, instance)
+	err = reconcileCloudStatus(r, instance, &newStatus)
 	if err != nil {
 		return reconcile.Result{}, err
 	}
 
 	if IngressBaseUrl != "" {
-		for _, nodeStatus := range instance.Status.SolrNodes {
-			err = reconcileNodeService(r, instance, nodeStatus)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-		}
-
 		// Generate Ingress
-		ingress := util.GenerateCommonIngress(instance, instance.Status.SolrNodes, IngressBaseUrl)
+		ingress := util.GenerateCommonIngress(instance, solrNodeNames, IngressBaseUrl)
 		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -343,20 +366,23 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 			return reconcile.Result{}, err
 		} else {
 			address := "http://" + instance.CommonIngressUrl(IngressBaseUrl)
-			instance.Status.ExternalCommonAddress = &address
+			newStatus.ExternalCommonAddress = &address
 		}
 	}
 
-	log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name)
-	err = r.Status().Update(context.Background(), instance)
-	if err != nil {
-		return reconcile.Result{}, err
+	if !reflect.DeepEqual(instance.Status, newStatus) {
+		instance.Status = newStatus
+		log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name)
+		err = r.Status().Update(context.Background(), instance)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud) (err error) {
+func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus) (err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -372,14 +398,16 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud) (err
 		return err
 	}
 
-	solrCloud.Status.Version = solrCloud.Spec.SolrImage.Tag
-
 	otherVersions := []string{}
 	nodeStatuses := []solr.SolrNodeStatus{}
+	backupPVCs := map[string]int{}
 	for _, p := range foundPods.Items {
 		nodeStatus := solr.SolrNodeStatus{}
-		nodeStatus.InternalAddress = fmt.Sprintf("http://%s.%s.svc.cluster.local", p.Name, p.Namespace)
 		nodeStatus.NodeName = p.Name
+		nodeStatus.InternalAddress = fmt.Sprintf("http://%s.%s.svc.cluster.local", p.Name, p.Namespace)
+		if IngressBaseUrl != "" {
+			nodeStatus.ExternalAddress = "http://" + solrCloud.NodeIngressUrl(nodeStatus.NodeName, IngressBaseUrl)
+		}
 		ready := false
 		if len(p.Status.ContainerStatuses) > 0 {
 			ready = true
@@ -389,32 +417,48 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud) (err
 
 			// The first container should always be running solr
 			nodeStatus.Version = solr.ImageVersion(p.Spec.Containers[0].Image)
-			if nodeStatus.Version != solrCloud.Status.Version {
+			if nodeStatus.Version != solrCloud.Spec.SolrImage.Tag {
 				otherVersions = append(otherVersions, nodeStatus.Version)
 			}
 		}
 		nodeStatus.Ready = ready
 
 		nodeStatuses = append(nodeStatuses, nodeStatus)
+
+		// Get Volumes for backup/restore
+		for _, volume := range p.Spec.Volumes {
+			if strings.HasPrefix(volume.Name, util.BackupPVCPrefix) {
+				backupName := strings.TrimPrefix(volume.Name, util.BackupPVCPrefix)
+				backupPVCs[backupName] += 1
+			}
+		}
 	}
-	solrCloud.Status.SolrNodes = nodeStatuses
+	newStatus.SolrNodes = nodeStatuses
+
+	for name, readyPods := range backupPVCs {
+		if readyPods == len(foundPods.Items) {
+			newStatus.BackupsConnected = append(newStatus.BackupsConnected, name)
+		}
+	}
+
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
 	if len(otherVersions) > 0 {
-		solrCloud.Status.TargetVersion = solrCloud.Status.Version
-		solrCloud.Status.Version = otherVersions[0]
+		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Tag
+		newStatus.Version = otherVersions[0]
 	} else {
-		solrCloud.Status.TargetVersion = ""
+		newStatus.TargetVersion = ""
+		newStatus.Version = solrCloud.Spec.SolrImage.Tag
 	}
 
 	return nil
 }
 
-func reconcileNodeService(r *ReconcileSolrCloud, instance *solr.SolrCloud, nodeStatus solr.SolrNodeStatus) (err error) {
+func reconcileNodeService(r *ReconcileSolrCloud, instance *solr.SolrCloud, nodeName string) (err error, ip string) {
 	// Generate Node Service
-	service := util.GenerateNodeService(instance, nodeStatus.NodeName)
+	service := util.GenerateNodeService(instance, nodeName)
 	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		return err
+		return err, ip
 	}
 
 	// Check if the Ingress already exists
@@ -423,23 +467,48 @@ func reconcileNodeService(r *ReconcileSolrCloud, instance *solr.SolrCloud, nodeS
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("Creating Node Service", "namespace", service.Namespace, "name", service.Name)
 		err = r.Create(context.TODO(), service)
-	} else if err == nil && util.CopyServiceFields(service, foundService) {
-		// Update the found Ingress and write the result back if there are any changes
-		log.Info("Updating Node Service", "namespace", service.Namespace, "name", service.Name)
-		err = r.Update(context.TODO(), foundService)
+	} else if err == nil {
+		if (util.CopyServiceFields(service, foundService)) {
+			// Update the found Ingress and write the result back if there are any changes
+			log.Info("Updating Node Service", "namespace", service.Namespace, "name", service.Name)
+			err = r.Update(context.TODO(), foundService)
+		}
+		ip = foundService.Spec.ClusterIP
 	}
 	if err != nil {
-		return err
+		return err, ip
 	}
 
-	return nil
+	return nil, ip
 }
 
-func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *solr.SolrCloud, busyBoxImage solr.ContainerImage) error {
+func getBackupPVCs(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud) (err error, pvcMap map[string]string) {
+	// Get list of backups for the given cloud
+	backups := &solr.SolrBackupList{}
+	err = r.List(context.TODO(), &client.ListOptions{}, backups)
+
+	pvcMap = make(map[string]string)
+
+	if err != nil {
+		return err, pvcMap
+	}
+	if len(backups.Items) > 0 {
+		for _, backup := range backups.Items {
+			pvc := backup.Status.PVC
+			if pvc != "" && backup.Spec.SolrCloud == solrCloud.Name && backup.Status.Finished == false && backup.Status.PVCPhase == corev1.ClaimBound {
+				pvcMap[backup.GetName()] = pvc
+			}
+		}
+	}
+
+	return nil, pvcMap
+}
+
+func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *solr.SolrCloud, busyBoxImage solr.ContainerImage, newStatus *solr.SolrCloudStatus) error {
 	zkRef := instance.Spec.ZookeeperRef
 
 	if zkRef.ConnectionInfo != nil {
-		instance.Status.ZookeeperConnectionInfo = *zkRef.ConnectionInfo
+		newStatus.ZookeeperConnectionInfo = *zkRef.ConnectionInfo
 	} else {
 		pzk := zkRef.ProvidedZookeeper
 		if pzk == nil {
@@ -503,7 +572,7 @@ func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *sol
 			if err != nil && errors.IsNotFound(err) {
 				log.Info("Creating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
 				err = r.Create(context.TODO(), service)
-				instance.Status.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
 					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
 					ChRoot:                   "/",
 				}
@@ -513,7 +582,7 @@ func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *sol
 					log.Info("Updating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
 					err = r.Update(context.TODO(), foundService)
 				}
-				instance.Status.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
 					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
 					ChRoot:                   "/",
 				}
@@ -547,7 +616,7 @@ func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *sol
 				if "" == *external {
 					external = nil
 				}
-				instance.Status.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
 					InternalConnectionString: foundZkCluster.Status.InternalClientEndpoint,
 					ExternalConnectionString: external,
 					ChRoot:                   "/",

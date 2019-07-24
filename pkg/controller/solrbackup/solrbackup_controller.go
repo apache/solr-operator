@@ -18,10 +18,7 @@ package solrbackup
 
 import (
 	"context"
-	"reflect"
-
 	solrv1beta1 "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,9 +66,13 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// TODO(user): Modify this to be the types you create
-	// Uncomment watch a Deployment created by SolrBackup - change this for objects you create
-	err = c.Watch(&source.Kind{Type: &appsv1.Deployment{}}, &handler.EnqueueRequestForOwner{
+	// Watch for changes to SolrCloud
+	err = c.Watch(&source.Kind{Type: &solrv1beta1.SolrCloud{}}, &handler.EnqueueRequestForObject{})
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{Type: &corev1.PersistentVolumeClaim{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
 		OwnerType:    &solrv1beta1.SolrBackup{},
 	})
@@ -95,14 +96,16 @@ type ReconcileSolrBackup struct {
 // TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
 // a Deployment as an example
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments
+// +kubebuilder:rbac:groups=,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=,resources=persistentvolumeclaims/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
 func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the SolrBackup instance
-	instance := &solrv1beta1.SolrBackup{}
-	err := r.Get(context.TODO(), request.NamespacedName, instance)
+	backup := &solrv1beta1.SolrBackup{}
+	err := r.Get(context.TODO(), request.NamespacedName, backup)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
@@ -113,55 +116,90 @@ func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Re
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this to be the object type created by your controller
-	// Define the desired Deployment object
-	deploy := &appsv1.Deployment{
+	// Define the desired PVC object
+	pvc := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      instance.Name + "-deployment",
-			Namespace: instance.Namespace,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Selector: &metav1.LabelSelector{
-				MatchLabels: map[string]string{"deployment": instance.Name + "-deployment"},
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"deployment": instance.Name + "-deployment"}},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "nginx",
-						},
-					},
-				},
-			},
+			Name:      backup.Name + "-backup-pvc",
+			Namespace: backup.Namespace,
 		},
 	}
-	if err := controllerutil.SetControllerReference(instance, deploy, r.scheme); err != nil {
+	pvc.Spec = backup.Spec.PersistentVolumeClaimSpec
+	if err := controllerutil.SetControllerReference(backup, pvc, r.scheme); err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this for the object type created by your controller
-	// Check if the Deployment already exists
-	found := &appsv1.Deployment{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, found)
+	// Check if the PVC already exists
+	foundPVC := &corev1.PersistentVolumeClaim{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, foundPVC)
 	if err != nil && errors.IsNotFound(err) {
-		log.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Create(context.TODO(), deploy)
+		log.Info("Creating PVC for backup data", "namespace", pvc.Namespace, "name", pvc.Name)
+		err = r.Create(context.TODO(), pvc)
 		return reconcile.Result{}, err
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
 
-	// TODO(user): Change this for the object type created by your controller
-	// Update the found object and write the result back if there are any changes
-	if !reflect.DeepEqual(deploy.Spec, found.Spec) {
-		found.Spec = deploy.Spec
-		log.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
-		err = r.Update(context.TODO(), found)
-		if err != nil {
-			return reconcile.Result{}, err
+	started := true
+	// Start the backup
+	if !backup.Status.Started {
+		started = false
+		if backup.Spec.SolrCloud != "" {
+			started, err = reconcileSolrCloudBackup(r, backup)
+			if err != nil {
+				return reconcile.Result{}, err
+			}
 		}
 	}
-	return reconcile.Result{}, nil
+
+
+	err = reconcileSolrBackupStatus(r, backup, foundPVC, started)
+
+	return reconcile.Result{}, err
+}
+
+
+func reconcileSolrBackupStatus(r *ReconcileSolrBackup, backup *solrv1beta1.SolrBackup, pvc *corev1.PersistentVolumeClaim, started bool) (err error) {
+	update := false
+
+	if backup.Status.PVC == "" {
+		backup.Status.PVC = pvc.Name
+		update = true
+	}
+
+	if backup.Status.PVCPhase != pvc.Status.Phase {
+		backup.Status.PVCPhase = pvc.Status.Phase
+		update = true
+	}
+
+	if backup.Status.Started != started {
+		backup.Status.Started = started
+		update = true
+	}
+
+	if update {
+		err = r.Status().Update(context.Background(), backup)
+	}
+
+	return err
+}
+
+func reconcileSolrCloudBackup(r *ReconcileSolrBackup, backup *solrv1beta1.SolrBackup) (started bool, err error) {
+	// Get list of backups for the given cloud
+	solrCloud := &solrv1beta1.SolrCloud{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.SolrCloud}, solrCloud)
+	if err != nil && errors.IsNotFound(err) {
+		log.Error(err, "Could not find cloud to backup", "namespace", backup.Namespace, "backupName", backup.Name, "solrCloudName", backup.Spec.SolrCloud)
+		return false, err
+	} else if err != nil {
+		return false, err
+	}
+
+	canStart := false
+	for _, b := range solrCloud.Status.BackupsConnected {
+		if b == backup.Name {
+			canStart = true
+		}
+	}
+
+	return canStart, nil
 }

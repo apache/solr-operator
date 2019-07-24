@@ -32,6 +32,8 @@ const (
 	SolrClientPortName    = "solr-client"
 	ExtSolrClientPort     = 80
 	ExtSolrClientPortName = "ext-solr-client"
+
+	BackupPVCPrefix       = "backup-"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -39,7 +41,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, hostNameIPs map[string]string, backupPvcMap map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	fsGroup := int64(SolrClientPort)
 
@@ -69,10 +71,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *a
 	}
 
 	solrDataVolumeName := "solrcloud-storage"
+	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 	pvcs := []corev1.PersistentVolumeClaim(nil)
 	if solrCloud.Spec.PersistentVolumeClaimSpec != nil {
-		solrDataVolumeName = "solrcloud-persistent-storage"
-
 		pvcs = []corev1.PersistentVolumeClaim{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: solrDataVolumeName},
@@ -86,6 +87,31 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *a
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		})
+	}
+	// Add backup volumes
+	for name, claim := range backupPvcMap {
+		solrVolumes = append(solrVolumes, corev1.Volume{
+			Name: BackupPVCPrefix + name,
+			VolumeSource: corev1.VolumeSource{
+				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+					ClaimName: claim,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupPVCPrefix + name, MountPath: PathForBackup(name)})
+	}
+
+	hostAliases := make([]corev1.HostAlias, len(hostNameIPs))
+	index := 0
+	for hostName, ip := range hostNameIPs {
+		hostAliases[index] = corev1.HostAlias{
+			IP: ip,
+			Hostnames: []string{hostName},
+		}
+		index++
+	}
+	if len(hostAliases) == 0 {
+		hostAliases = nil
 	}
 
 	// if an ingressBaseDomain is provided, the node should be addressable outside of the cluster
@@ -133,6 +159,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *a
 							},
 						},
 					},
+					HostAliases: hostAliases,
 					Containers: []corev1.Container{
 						{
 							Name:            "solrcloud-node",
@@ -141,7 +168,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *a
 							Ports: []corev1.ContainerPort{
 								{ContainerPort: SolrClientPort, Name: SolrClientPortName},
 							},
-							VolumeMounts: []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/opt/solr/server/home"}},
+							VolumeMounts: volumeMounts,
 							Env: []corev1.EnvVar{
 								{
 									Name:  "SOLR_JAVA_MEM",
@@ -149,7 +176,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string) *a
 								},
 								{
 									Name:  "SOLR_HOME",
-									Value: "/opt/solr/server/home",
+									Value: "/var/solr/data",
 								},
 								{
 									Name:  "SOLR_PORT",
@@ -247,9 +274,24 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec, from.Spec.Template.Spec) {
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
-		to.Spec.Template.Spec = from.Spec.Template.Spec
+		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
+		requireUpdate = true
+		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
+		requireUpdate = true
+		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
+		requireUpdate = true
+		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
 	}
 
 	return requireUpdate
@@ -446,7 +488,7 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 // solrCloud: SolrCloud instance
 // nodeStatuses: []SolrNodeStatus the nodeStatuses
 // ingressBaseDomain: string baseDomain of the ingress
-func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeStatuses []solr.SolrNodeStatus, ingressBaseDomain string) *extv1.Ingress {
+func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 
 	rules := []extv1.IngressRule{
@@ -467,11 +509,12 @@ func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeStatuses []solr.SolrNo
 		},
 	}
 
-	for idx, _ := range nodeStatuses {
-		rules = append(rules, CreateNodeIngressRule(solrCloud, &nodeStatuses[idx], ingressBaseDomain))
+	for _, nodeName := range nodeNames {
+		ingressRule := CreateNodeIngressRule(solrCloud, nodeName, ingressBaseDomain)
+		rules = append(rules, ingressRule)
 	}
 
-	ingress := &extv1.Ingress{
+	ingress = &extv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrCloud.CommonIngressName(),
 			Namespace: solrCloud.GetNamespace(),
@@ -488,17 +531,15 @@ func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeStatuses []solr.SolrNo
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
 // ingressBaseDomain: string base domain for the ingress controller
-func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeStatus *solr.SolrNodeStatus, ingressBaseDomain string) extv1.IngressRule {
-	externalAddress := solrCloud.NodeIngressUrl(nodeStatus.NodeName, ingressBaseDomain)
-	nodeStatus.ExternalAddress = "http://" + externalAddress
-	return extv1.IngressRule{
-		Host: externalAddress,
+func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, ingressBaseDomain string) (ingressRule extv1.IngressRule) {
+	ingressRule = extv1.IngressRule{
+		Host: solrCloud.NodeIngressUrl(nodeName, ingressBaseDomain),
 		IngressRuleValue: extv1.IngressRuleValue{
 			HTTP: &extv1.HTTPIngressRuleValue{
 				Paths: []extv1.HTTPIngressPath{
 					{
 						Backend: extv1.IngressBackend{
-							ServiceName: nodeStatus.NodeName,
+							ServiceName: nodeName,
 							ServicePort: intstr.FromInt(ExtSolrClientPort),
 						},
 					},
@@ -506,6 +547,7 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeStatus *solr.SolrNodeS
 			},
 		},
 	}
+	return ingressRule
 }
 
 // CopyIngressFields copies the owned fields from one Ingress to another
