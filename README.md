@@ -38,7 +38,7 @@ Make sure that the solr-operator and a zookeeper-operator are running.
 Create an example Solr cloud, with the following configuration.
 
 ```bash
-$ cat example/test-solrcloud.yaml
+$ cat example/test_solrcloud.yaml
 
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCloud
@@ -53,7 +53,7 @@ spec:
 Apply it to your Kubernetes cluster.
 
 ```bash
-$ kubectl apply -f example/test-solrcloud.yaml
+$ kubectl apply -f example/test_solrcloud.yaml
 $ kubectl get solrclouds
 
 NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
