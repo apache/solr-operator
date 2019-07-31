@@ -25,6 +25,32 @@ rules:
   - update
   - patch
 - apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -40,6 +66,26 @@ rules:
   - apps
   resources:
   - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - batch
+  resources:
+  - jobs/status
   verbs:
   - get
   - update
@@ -200,26 +246,6 @@ rules:
   - solr.bloomberg.com
   resources:
   - solrclouds/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrbackups
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrbackups/status
   verbs:
   - get
   - update

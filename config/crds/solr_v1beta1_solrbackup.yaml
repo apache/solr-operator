@@ -48,56 +48,121 @@ spec:
           type: object
         spec:
           properties:
-            backupPath:
-              description: The path to backup the data to within the PersistentVolume
-                Defaults to '/'
-              type: string
             collections:
               description: The list of collections to backup. If empty, all collections
                 in the cloud will be backed up.
               items:
                 type: string
               type: array
-            pvcSpec:
-              description: 'PersistentVolumeClaimSpec is the spec to describe PVC
-                to store the backup in. This must have `accessModes: - ReadWriteMany`,
-                as the PV will be shared across solr nodes.'
+            persistence:
+              description: Persistence is the specification on how to persist the
+                backup data.
+              properties:
+                volume:
+                  description: Persist to a volume
+                  properties:
+                    busyBoxImage:
+                      description: BusyBox image for manipulating and moving data
+                      properties:
+                        pullPolicy:
+                          type: string
+                        repository:
+                          type: string
+                        tag:
+                          type: string
+                      type: object
+                    path:
+                      description: The location of the persistence directory within
+                        the volume
+                      type: string
+                    source:
+                      description: The volume for persistence
+                      type: object
+                  required:
+                  - source
+                  type: object
               type: object
             solrCloud:
               description: A reference to the SolrCloud to create a backup for
               type: string
           required:
           - solrCloud
-          - pvcSpec
+          - persistence
           type: object
         status:
           properties:
-            finished:
-              description: Whether the backup has finished
+            backupsFinished:
+              description: Whether the backup process has completed
               type: boolean
-            finishedTimestamp:
+            collectionBackupStatuses:
+              description: The status of each collection's backup progress
+              items:
+                properties:
+                  asyncBackupStatus:
+                    description: The status of the asynchronous backup call to solr
+                    type: string
+                  collection:
+                    description: Solr Collection name
+                    type: string
+                  finishTimestamp:
+                    description: Time that the collection backup finished at
+                    format: date-time
+                    type: string
+                  finished:
+                    description: Whether the backup has finished
+                    type: boolean
+                  inProgress:
+                    description: Whether the collection is being backed up
+                    type: boolean
+                  startTimestamp:
+                    description: Time that the collection backup started at
+                    format: date-time
+                    type: string
+                  successful:
+                    description: Whether the backup was successful
+                    type: boolean
+                required:
+                - collection
+                type: object
+              type: array
+            finishTimestamp:
               description: Version of the Solr being backed up
               format: date-time
               type: string
-            pvc:
-              description: The name of the PVC
-              type: string
-            pvcPhase:
-              description: Whether the PVC has been mapped to a Persistent Volume
-              type: string
+            finished:
+              description: Whether the backup has finished
+              type: boolean
+            persistenceStatus:
+              description: Whether the backups are in progress of being persisted
+              properties:
+                finishTimestamp:
+                  description: Time that the collection backup finished at
+                  format: date-time
+                  type: string
+                finished:
+                  description: Whether the persistence has finished
+                  type: boolean
+                inProgress:
+                  description: Whether the collection is being backed up
+                  type: boolean
+                startTimestamp:
+                  description: Time that the collection backup started at
+                  format: date-time
+                  type: string
+                successful:
+                  description: Whether the backup was successful
+                  type: boolean
+              type: object
             solrVersion:
               description: Version of the Solr being backed up
               type: string
-            started:
-              description: Whether the backup has started
-              type: boolean
             successful:
               description: Whether the backup was successful
               type: boolean
           required:
           - solrVersion
-          - started
-          - finished
+          - backupsFinished
+          - persistenceStatus
           type: object
   version: v1beta1
 status:

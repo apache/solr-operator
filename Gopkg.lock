@@ -45,6 +45,17 @@
   version = "v1.1.1"
 
 [[projects]]
+  branch = "master"
+  digest = "1:0d4540d92fd82f9957e1f718e2b1e5f2d301ed8169e2923bba23558fbbbd08a1"
+  name = "github.com/docker/spdystream"
+  packages = [
+    ".",
+    "spdy",
+  ]
+  pruneopts = "T"
+  revision = "6480d4af844c189cf5dd913db24ddd339d3a4f85"
+
+[[projects]]
   digest = "1:7f98547edaaa86eeaba758dd915cb2ee9264568257febdaad73c6b697e19b561"
   name = "github.com/emicklei/go-restful"
   packages = [
@@ -758,11 +769,14 @@
     "pkg/util/diff",
     "pkg/util/errors",
     "pkg/util/framer",
+    "pkg/util/httpstream",
+    "pkg/util/httpstream/spdy",
     "pkg/util/intstr",
     "pkg/util/json",
     "pkg/util/mergepatch",
     "pkg/util/naming",
     "pkg/util/net",
+    "pkg/util/remotecommand",
     "pkg/util/runtime",
     "pkg/util/sets",
     "pkg/util/strategicpatch",
@@ -774,6 +788,7 @@
     "pkg/version",
     "pkg/watch",
     "third_party/forked/golang/json",
+    "third_party/forked/golang/netutil",
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "T"
@@ -844,10 +859,13 @@
     "tools/pager",
     "tools/record",
     "tools/reference",
+    "tools/remotecommand",
     "transport",
+    "transport/spdy",
     "util/buffer",
     "util/cert",
     "util/connrotation",
+    "util/exec",
     "util/flowcontrol",
     "util/homedir",
     "util/integer",
@@ -860,8 +878,7 @@
   version = "kubernetes-1.13.1"
 
 [[projects]]
-  version = "kubernetes-1.13.1"
-  digest = "1:fc390edca2f6cddfadca53db5c196e8d8e2122e641bd2bf77e5505e735537b77"
+  digest = "1:f41480fd8c5f54b13326ee0f2ee398d5734789b790dbc4db57f9b08a0d63139a"
   name = "k8s.io/code-generator"
   packages = [
     ".",
@@ -898,7 +915,8 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "T"
-  revision = "c2090bec4d9b1fb25de3812f868accc2bc9ecbae"
+  revision = "18da4a14b22b17d2fa761e50037fabfbacec225b"
+  version = "kubernetes-1.15.1"
 
 [[projects]]
   branch = "master"
@@ -1026,13 +1044,13 @@
     "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2",
     "github.com/coreos/etcd-operator/pkg/util/constants",
     "github.com/emicklei/go-restful",
-    "github.com/evanphx/json-patch",
     "github.com/onsi/ginkgo",
     "github.com/onsi/gomega",
     "github.com/pravega/zookeeper-operator/pkg/apis",
     "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1",
     "golang.org/x/net/context",
     "k8s.io/api/apps/v1",
+    "k8s.io/api/batch/v1",
     "k8s.io/api/core/v1",
     "k8s.io/api/extensions/v1beta1",
     "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1",
@@ -1049,11 +1067,13 @@
     "k8s.io/apimachinery/pkg/watch",
     "k8s.io/client-go/discovery",
     "k8s.io/client-go/discovery/fake",
+    "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/scheme",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/testing",
     "k8s.io/client-go/tools/cache",
+    "k8s.io/client-go/tools/remotecommand",
     "k8s.io/client-go/util/flowcontrol",
     "k8s.io/code-generator",
     "k8s.io/code-generator/cmd/client-gen",

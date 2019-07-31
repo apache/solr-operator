@@ -17,12 +17,18 @@ limitations under the License.
 package util
 
 import (
+	"encoding/json"
+	"fmt"
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
+	"io/ioutil"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"net/http"
+	"net/url"
 	"reflect"
 	"strconv"
 )
@@ -32,8 +38,7 @@ const (
 	SolrClientPortName    = "solr-client"
 	ExtSolrClientPort     = 80
 	ExtSolrClientPortName = "ext-solr-client"
-
-	BackupPVCPrefix       = "backup-"
+	BackupRestoreVolume   = "backup-restore"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -41,7 +46,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, hostNameIPs map[string]string, backupPvcMap map[string]string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, hostNameIPs map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	fsGroup := int64(SolrClientPort)
 
@@ -70,14 +75,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 		},
 	}
 
-	solrDataVolumeName := "solrcloud-storage"
+	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 	pvcs := []corev1.PersistentVolumeClaim(nil)
-	if solrCloud.Spec.PersistentVolumeClaimSpec != nil {
+	if solrCloud.Spec.DataPvcSpec != nil {
 		pvcs = []corev1.PersistentVolumeClaim{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: solrDataVolumeName},
-				Spec:       *solrCloud.Spec.PersistentVolumeClaimSpec,
+				Spec:       *solrCloud.Spec.DataPvcSpec,
 			},
 		}
 	} else {
@@ -89,16 +94,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 		})
 	}
 	// Add backup volumes
-	for name, claim := range backupPvcMap {
+	if solrCloud.Spec.BackupRestorePvcName != "" {
 		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name: BackupPVCPrefix + name,
+			Name: BackupRestoreVolume,
 			VolumeSource: corev1.VolumeSource{
 				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: claim,
+					ClaimName: solrCloud.Spec.BackupRestorePvcName,
+					ReadOnly: false,
 				},
 			},
 		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupPVCPrefix + name, MountPath: PathForBackup(name)})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupRestoreVolume, MountPath: BaseBackupRestorePath, SubPath: BackupRestoreSubPathForCloud(solrCloud.Name)})
 	}
 
 	hostAliases := make([]corev1.HostAlias, len(hostNameIPs))
@@ -243,6 +249,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 	for k, v := range from.Labels {
 		if to.Labels[k] != v {
 			requireUpdate = true
+			log.Info("Update SS", "diff", "labels", "label", k, v, to.Labels[k])
 		}
 		to.Labels[k] = v
 	}
@@ -250,6 +257,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 	for k, v := range from.Annotations {
 		if to.Annotations[k] != v {
 			requireUpdate = true
+			log.Info("Update SS", "diff", "annotations", "annotation", k, v, to.Annotations[k])
 		}
 		to.Annotations[k] = v
 	}
@@ -284,10 +292,10 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
+	/*if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
-	}
+	}*/
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
@@ -575,4 +583,33 @@ func CopyIngressFields(from, to *extv1.Ingress) bool {
 	to.Spec.Rules = from.Spec.Rules
 
 	return requireUpdate
+}
+
+func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+
+	urlParams.Set("wt", "json")
+
+	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
+
+	log.Info("Collections API call", "url", cloudUrl)
+	resp := &http.Response{}
+	if resp, err = http.Get(cloudUrl); err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if err == nil && resp.StatusCode != 200 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
+	}
+
+	if err == nil {
+		json.NewDecoder(resp.Body).Decode(&response)
+	}
+
+	log.Info("Collections API Response", "status", resp.Status, "response", resp.Body)
+
+	return err
 }

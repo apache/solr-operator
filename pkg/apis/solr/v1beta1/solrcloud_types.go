@@ -66,10 +66,18 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
-	// PersistentVolumeClaimSpec is the spec to describe PVC for the solr container
-	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
+	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
+	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
 	// +optional
-	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
+
+	// Required for backups & restores to be enabled.
+	// This is a claim for a persistent volume that will be mounted to all solrNodes to store backups and load restores.
+	// The same PVC can be used for multiple clouds.
+	// The referenced PVC must have `accessModes: - ReadWriteMany`, as the PV will be mounted on all solr nodes.
+	// The PVC must also exist in the same namespace as this cloud.
+	// +optional
+	BackupRestorePvcName string `json:"backupRestorePvcName,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -92,12 +100,12 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
-	if spec.PersistentVolumeClaimSpec != nil {
-		spec.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+	if spec.DataPvcSpec != nil {
+		spec.DataPvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
 			corev1.ReadWriteOnce,
 		}
-		if len(spec.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
-			spec.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+		if len(spec.DataPvcSpec.Resources.Requests) == 0 {
+			spec.DataPvcSpec.Resources.Requests = corev1.ResourceList{
 				corev1.ResourceStorage: resource.MustParse(DefaultSolrStorage),
 			}
 			changed = true
@@ -385,9 +393,9 @@ type SolrCloudStatus struct {
 	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
 	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
 
-	// BackupsConnected is the list of backups currently connected to the cloud
-	// +optional
-	BackupsConnected []string `json:"backupsConnected,omitempty"`
+	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
+	// and therefore is ready for backups and restores.
+	BackupRestoreReady bool `json:"backupRestoreReady"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
@@ -477,6 +485,11 @@ func (sc *SolrCloud) StatefulSetName() string {
 // CommonServiceName returns the name of the common service for the cloud
 func (sc *SolrCloud) CommonServiceName() string {
 	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// InternalURLForCloud returns the name of the common service for the cloud
+func InternalURLForCloud(cloudName string, namespace string) string {
+	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud

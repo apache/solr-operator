@@ -91,12 +91,6 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
-	// Watch for changes to SolrBackup
-	err = c.Watch(&source.Kind{Type: &solr.SolrBackup{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
-
 	// Watch a ConfigMap created by SolrCloud
 	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
 		IsController: true,
@@ -191,8 +185,6 @@ type ReconcileSolrCloud struct {
 // +kubebuilder:rbac:groups=,resources=configmaps/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters,verbs=get;list;watch;create;update;patch;delete
@@ -213,7 +205,7 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 
 	changed := instance.WithDefaults()
 	if changed {
-		log.Info("Setting default settings for solr-cloud")
+		log.Info("Setting default settings for solr-cloud", "namespace", instance.Namespace, "name", instance.Name)
 		if err := r.Update(context.TODO(), instance); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -225,11 +217,6 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 	busyBoxImage := *instance.Spec.BusyBoxImage
 
 	if err := reconcileZk(r, request, instance, busyBoxImage, &newStatus); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	err, backupPvcMap := getBackupPVCs(r, instance)
-	if err != nil {
 		return reconcile.Result{}, err
 	}
 
@@ -315,7 +302,7 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
 	if strings.Contains(instance.ZkConnectionString(), ":") {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl, hostNameIpMap, backupPvcMap)
+		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
 			return reconcile.Result{}, err
 		}
@@ -400,7 +387,7 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud, newS
 
 	otherVersions := []string{}
 	nodeStatuses := []solr.SolrNodeStatus{}
-	backupPVCs := map[string]int{}
+	backupRestoreReadyPods := 0
 	for _, p := range foundPods.Items {
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.NodeName = p.Name
@@ -426,19 +413,18 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud, newS
 		nodeStatuses = append(nodeStatuses, nodeStatus)
 
 		// Get Volumes for backup/restore
-		for _, volume := range p.Spec.Volumes {
-			if strings.HasPrefix(volume.Name, util.BackupPVCPrefix) {
-				backupName := strings.TrimPrefix(volume.Name, util.BackupPVCPrefix)
-				backupPVCs[backupName] += 1
+		if solrCloud.Spec.BackupRestorePvcName != "" {
+			for _, volume := range p.Spec.Volumes {
+				if volume.Name == util.BackupRestoreVolume {
+					backupRestoreReadyPods += 1
+				}
 			}
 		}
 	}
 	newStatus.SolrNodes = nodeStatuses
 
-	for name, readyPods := range backupPVCs {
-		if readyPods == len(foundPods.Items) {
-			newStatus.BackupsConnected = append(newStatus.BackupsConnected, name)
-		}
+	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
+		newStatus.BackupRestoreReady = true
 	}
 
 
@@ -480,28 +466,6 @@ func reconcileNodeService(r *ReconcileSolrCloud, instance *solr.SolrCloud, nodeN
 	}
 
 	return nil, ip
-}
-
-func getBackupPVCs(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud) (err error, pvcMap map[string]string) {
-	// Get list of backups for the given cloud
-	backups := &solr.SolrBackupList{}
-	err = r.List(context.TODO(), &client.ListOptions{}, backups)
-
-	pvcMap = make(map[string]string)
-
-	if err != nil {
-		return err, pvcMap
-	}
-	if len(backups.Items) > 0 {
-		for _, backup := range backups.Items {
-			pvc := backup.Status.PVC
-			if pvc != "" && backup.Spec.SolrCloud == solrCloud.Name && backup.Status.Finished == false && backup.Status.PVCPhase == corev1.ClaimBound {
-				pvcMap[backup.GetName()] = pvc
-			}
-		}
-	}
-
-	return nil, pvcMap
 }
 
 func reconcileZk(r *ReconcileSolrCloud, request reconcile.Request, instance *solr.SolrCloud, busyBoxImage solr.ContainerImage, newStatus *solr.SolrCloudStatus) error {

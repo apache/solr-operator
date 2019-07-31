@@ -61,6 +61,14 @@ spec:
           type: object
         spec:
           properties:
+            backupRestorePvcName:
+              description: 'Required for backups & restores to be enabled. This is
+                a claim for a persistent volume that will be mounted to all solrNodes
+                to store backups and load restores. The same PVC can be used for multiple
+                clouds. The referenced PVC must have `accessModes: - ReadWriteMany`,
+                as the PV will be mounted on all solr nodes. The PVC must also exist
+                in the same namespace as this cloud.'
+              type: string
             busyBoxImage:
               properties:
                 pullPolicy:
@@ -70,10 +78,10 @@ spec:
                 tag:
                   type: string
               type: object
-            persistentVolumeClaimSpec:
-              description: PersistentVolumeClaimSpec is the spec to describe PVC for
-                the solr container This field is optional. If no PVC spec, etcd container
-                will use emptyDir as volume
+            dataPvcSpec:
+              description: DataPvcSpec is the spec to describe PVC for the solr node
+                to store its data. This field is optional. If no PVC spec is provided,
+                each solr node will use emptyDir as the data volume
               type: object
             replicas:
               description: The number of solr nodes to run
@@ -151,12 +159,11 @@ spec:
           type: object
         status:
           properties:
-            backupsConnected:
-              description: BackupsConnected is the list of backups currently connected
-                to the cloud
-              items:
-                type: string
-              type: array
+            backupRestoreReady:
+              description: BackupRestoreReady announces whether the solrCloud has
+                the backupRestorePVC mounted to all pods and therefore is ready for
+                backups and restores.
+              type: boolean
             externalCommonAddress:
               description: ExternalCommonAddress is the external common http address
                 for all solr nodes. Will only be provided when an ingressUrl is provided
@@ -241,6 +248,7 @@ spec:
           - version
           - internalCommonAddress
           - zookeeperConnectionInfo
+          - backupRestoreReady
           type: object
   version: v1beta1
 status:
