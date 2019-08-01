@@ -45,6 +45,28 @@ func AsyncIdForCollectionBackup(collection string, backupName string) string {
 	return backupName + "-" + collection
 }
 
+func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) {
+	fals := false
+
+	// Check if all collection backups have been completed, this is updated in the loop
+	allFinished = len(backup.Status.CollectionBackupStatuses) > 0
+
+	// Check if persistence should be skipped if no backup completed successfully
+	anySuccessful := false
+
+	for _, collectionStatus := range backup.Status.CollectionBackupStatuses {
+		allFinished = allFinished && collectionStatus.Finished
+		anySuccessful = anySuccessful || (collectionStatus.Successful != nil && *collectionStatus.Successful)
+	}
+	if allFinished && !anySuccessful {
+		backup.Status.Finished = true
+		if backup.Status.Successful == nil {
+			backup.Status.Successful = &fals
+		}
+	}
+	return
+}
+
 func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
 	volumeSource := corev1.VolumeSource{
 		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
@@ -55,7 +77,7 @@ func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *so
 	return GenerateBackupPersistenceJob(backup, volumeSource, BackupSubPathForCloud(solrCloud.Name, backup.Name))
 }
 
-// GenerateBackupPersistenceJob creates a Job that will persist backup data
+// GenerateBackupPersistenceJob creates a Job that will persist backup data and purge the backup from the solrBackupVolume
 func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume corev1.VolumeSource, backupSubPath string) *batchv1.Job {
 	copyLabels := solrBackup.GetLabels()
 	if copyLabels == nil {
@@ -63,7 +85,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 	}
 	labels := solrBackup.SharedLabelsWith(solrBackup.GetLabels())
 
-	ttlSeconds := JobTTLSeconds
+	//ttlSeconds := JobTTLSeconds
 
 	image, env, command, volume, volumeMount, numRetries := GeneratePersistenceOptions(solrBackup)
 
@@ -78,7 +100,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 			MountPath: BaseBackupRestorePath,
 			Name:      "backup-data",
 			SubPath:   backupSubPath,
-			ReadOnly:  true,
+			ReadOnly:  false,
 		},
 	}
 	if volume != nil && volumeMount != nil {
@@ -96,7 +118,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
-			TTLSecondsAfterFinished: &ttlSeconds,
+			//TTLSecondsAfterFinished: &ttlSeconds,
 			BackoffLimit:            numRetries,
 			Parallelism: &parallelismAndCompletions,
 			Completions: &parallelismAndCompletions,
@@ -105,7 +127,6 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
-
 					Volumes: volumes,
 					Containers: [] corev1.Container{
 						{
@@ -117,6 +138,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 							Command: command,
 						},
 					},
+					RestartPolicy: corev1.RestartPolicyNever,
 				},
 			},
 		},
@@ -131,7 +153,8 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		// Options for persisting to a volume
 		image = persistenceSource.Volume.BusyBoxImage
 		envVars = make([]corev1.EnvVar, 0)
-		command = []string{"mv", BaseBackupRestorePath + "/*", "/var/backup-persistence"}
+		// Copy the information to the persistent storage, and delete it from the backup-restore volume.
+		command = []string{"sh", "-c", "cp -r " + BaseBackupRestorePath + "/. /var/backup-persistence/ && chmod -R a+rwx /var/backup-persistence/* && rm -rf " + BaseBackupRestorePath + "/{*,.*}"}
 		volume = &corev1.Volume{
 			Name: "persistence",
 			VolumeSource: persistenceSource.Volume.VolumeSource,
@@ -174,7 +197,6 @@ func StartBackupForCollection(cloud string, collection string, backupName string
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
-			log.Info("Started backup", "asyncId", resp.RequestId)
 		}
 	} else {
 		log.Error(err, "Error starting collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
@@ -206,7 +228,6 @@ func CheckBackupForCollection(cloud string, collection string, backupName string
 				success = false
 			}
 		}
-		log.Info("Error checking on collection backup", "headerStatus", resp.ResponseHeader.Status, "asyncState", resp.Status.AsyncState)
 	} else {
 		log.Error(err, "Error checking on collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
 	}

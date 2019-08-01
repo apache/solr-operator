@@ -20,6 +20,7 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 const (
@@ -108,6 +109,11 @@ type VolumePersistenceSource struct {
 func (spec *VolumePersistenceSource) withDefaults() (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
+	if spec.Path != "" && strings.HasPrefix(spec.Path, "/") {
+		spec.Path = strings.TrimPrefix(spec.Path, "/")
+		changed = true
+	}
+
 	return changed
 }
 
@@ -119,9 +125,6 @@ type SolrBackupStatus struct {
 	// The status of each collection's backup progress
 	// +optional
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
-
-	// Whether the backup process has completed
-	BackupsFinished bool `json:"backupsFinished"`
 
 	// Whether the backups are in progress of being persisted
 	PersistenceStatus BackupPersistenceStatus `json:"persistenceStatus"`

@@ -91,9 +91,6 @@ spec:
           type: object
         status:
           properties:
-            backupsFinished:
-              description: Whether the backup process has completed
-              type: boolean
             collectionBackupStatuses:
               description: The status of each collection's backup progress
               items:
@@ -161,7 +158,6 @@ spec:
               type: boolean
           required:
           - solrVersion
-          - backupsFinished
           - persistenceStatus
           type: object
   version: v1beta1

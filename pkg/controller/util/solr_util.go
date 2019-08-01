@@ -592,7 +592,6 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 
 	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
 
-	log.Info("Collections API call", "url", cloudUrl)
 	resp := &http.Response{}
 	if resp, err = http.Get(cloudUrl); err != nil {
 		return err
@@ -608,8 +607,6 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 	if err == nil {
 		json.NewDecoder(resp.Body).Decode(&response)
 	}
-
-	log.Info("Collections API Response", "status", resp.Status, "response", resp.Body)
 
 	return err
 }
