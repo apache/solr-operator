@@ -112,7 +112,7 @@ spec:
             value: "zk-operator"
 
 ---
-apiVersion: v1beta1
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: zookeeper-operator

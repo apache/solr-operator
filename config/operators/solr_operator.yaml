@@ -236,7 +236,7 @@ subjects:
   name: default
   namespace: default
 ---
-apiVersion: v1beta1
+apiVersion: v1
 kind: Secret
 metadata:
   name: webhook-server-secret
@@ -265,9 +265,9 @@ spec:
     spec:
       containers:
       - args:
-        - -zookeeper-operator
+        - -zk-operator
         - -etcd-operator=false
-        - -ingress-base-url=ing.local.domain
+        - -ingress-base-domain=localhost
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -275,7 +275,7 @@ spec:
               fieldPath: metadata.namespace
         - name: SECRET_NAME
           value: webhook-server-secret
-        image: bloomberg/solr-operator:0.1.1
+        image: bloomberg/solr-operator:0.1.0
         imagePullPolicy: Always
         name: solr-operator
         ports:
