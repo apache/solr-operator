@@ -1,0 +1,9 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: solrcollection-sample
+spec:
+  # Add fields here
+  foo: bar

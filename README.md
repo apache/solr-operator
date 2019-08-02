@@ -30,6 +30,7 @@ Install the Solr CRDs & Operator
 ```bash
 $ kubectl apply -f config/crds/solr_v1beta1_solrcloud.yaml
 $ kubectl apply -f config/crds/solr_v1beta1_solrbackup.yaml
+$ kubectl apply -f config/crds/solr_v1beta1_solrcollection.yaml
 $ kubectl apply -f config/crds/solr_v1beta1_solrprometheusexporter.yaml
 $ kubectl apply -f config/operators/solr_operator.yaml
 ```
@@ -135,6 +136,85 @@ NAME                                       VERSION   DESIREDNODES   NODES   READ
 solrcloud.solr.bloomberg.com/example       8.1.1     4              4       4            47h
 ```
 
+### Solr Backups
+
+Solr backups require 3 things:
+- A solr cloud running in kubernetes to backup
+- The list of collections to backup
+- A shared volume reference that can be written to from many clouds
+    - This could be a NFS volume, a persistent volume claim (that has `ReadWriteMany` access), etc.
+    - The same volume can be used for many solr clouds in the same namespace, as the data stored within the volume is namespaced.
+- A way to persist the data. The currently supported persistence methods are:
+    - A volume reference (this does not have to be `ReadWriteMany`)
+    - An S3 endpoint.
+    
+Backups will be tarred before they are persisted.
+
+There is no current way to restore these backups, but that is in the roadmap to implement.
+
+### Solr Collections
+
+Solr-operator can manage the creation, deletion and modification of Solr collections. 
+
+Collection creation requires a Solr Cloud to apply against. Presently, SolrCollection supports both implicit and compositeId router types, with some of the basic configuration options including `autoAddReplicas`. 
+
+Create an example set of collections against on the "example" solr cloud
+
+```bash
+$ cat example/test_solrcollection.yaml
+
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-1
+spec:
+  solrCloud: example
+  collection: example-collection
+  routerName: compositeId
+  autoAddReplicas: false
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-2-compositeid-autoadd
+spec:
+  solrCloud: example
+  collection: example-collection-2
+  routerName: compositeId
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-3-implicit
+spec:
+  solrCloud: example
+  collection: example-collection-3-implicit
+  routerName: implicit
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+  shards: "fooshard1,fooshard2"
+```
+
+```bash
+$ kubectl apply -f examples/test_solrcollections.yaml
+```
+
+  
+  
+## Solr Images
+
+The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
+
+## Zookeeper
 ### Zookeeper Reference
 
 Solr Clouds require an Apache Zookeeper to connect to.
