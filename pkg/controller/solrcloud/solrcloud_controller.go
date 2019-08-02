@@ -413,7 +413,7 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud, newS
 		nodeStatuses = append(nodeStatuses, nodeStatus)
 
 		// Get Volumes for backup/restore
-		if solrCloud.Spec.BackupRestorePvcName != "" {
+		if solrCloud.Spec.BackupRestoreVolume != nil {
 			for _, volume := range p.Spec.Volumes {
 				if volume.Name == util.BackupRestoreVolume {
 					backupRestoreReadyPods += 1

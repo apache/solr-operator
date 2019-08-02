@@ -321,9 +321,13 @@ func persistSolrCloudBackups(r *ReconcileSolrBackup, backup *solrv1beta1.SolrBac
 		backup.Status.PersistenceStatus.FinishTime = foundPersistenceJob.Status.CompletionTime
 		tru := true
 		fals := false
+		numFailLimit := int32(0)
+		if foundPersistenceJob.Spec.BackoffLimit != nil {
+			numFailLimit = *foundPersistenceJob.Spec.BackoffLimit
+		}
 		if foundPersistenceJob.Status.Succeeded > 0 {
 			backup.Status.PersistenceStatus.Successful = &tru
-		} else if foundPersistenceJob.Status.Failed > 0 {
+		} else if foundPersistenceJob.Status.Failed > numFailLimit {
 			backup.Status.PersistenceStatus.Successful = &fals
 		}
 

@@ -42,8 +42,8 @@ type SolrBackupSpec struct {
 	Persistence PersistenceSource `json:"persistence"`
 }
 
-func (spec *SolrBackupSpec) withDefaults() (changed bool) {
-	changed = spec.Persistence.withDefaults() || changed
+func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
+	changed = spec.Persistence.withDefaults(backupName) || changed
 
 	return changed
 }
@@ -53,44 +53,98 @@ func (spec *SolrBackupSpec) withDefaults() (changed bool) {
 type PersistenceSource struct {
 	// Persist to an s3 compatible endpoint
 	// +optional
-	S3 *S3PersistenceSource `json:"S3,omitempty"`
+	S3 *S3PersistenceSource `json:",omitempty"`
 
 	// Persist to a volume
 	// +optional
 	Volume *VolumePersistenceSource `json:"volume,omitempty"`
 }
 
-func (spec *PersistenceSource) withDefaults() (changed bool) {
+func (spec *PersistenceSource) withDefaults(backupName string) (changed bool) {
 	if spec.Volume != nil {
-		changed = spec.Volume.withDefaults() || changed
+		changed = spec.Volume.withDefaults(backupName) || changed
 	}
 
 	if spec.S3 != nil {
-		changed = spec.S3.withDefaults() || changed
+		changed = spec.S3.withDefaults(backupName) || changed
 	}
 
 	return changed
 }
 
-// UploadSpec defines the location and method of uploading the backup data
+// S3PersistenceSource defines the specs for connecting to s3 for persistence
 type S3PersistenceSource struct {
-	// The s3 compatible endpoint
-	Endpoint string `json:"endpoint"`
-
-	// Image containing the AWS Cli
+	// The S3 compatible endpoint URL
 	// +optional
-	AWSCliImage ContainerImage `json:"AWSCliImage,omitempty"`
+	EndpointUrl string `json:"endpointUrl,omitempty"`
+
+	// The Default region to use with AWS.
+	// Can also be provided through a configFile in the secrets.
+	// Overridden by any endpointUrl value provided.
+	// +optional
+	Region string `json:"region,omitempty"`
+
+	// The S3 bucket to store/find the backup data
+	Bucket string `json:"bucket"`
+
+	// The key for the referenced tarred & zipped backup file
+	// Defaults to the name of the backup/restore + '.tgz'
+	// +optional
+	Key string `json:"key"`
 
 	// The number of retries to communicate with S3
 	// +optional
 	Retries *int32 `json:"retries,omitempty"`
+
+	// The secrets to use when configuring and authenticating s3 calls
+	Secrets S3Secrets `json:"secrets"`
+
+	// Image containing the AWS Cli
+	// +optional
+	AWSCliImage ContainerImage `json:"AWSCliImage,omitempty"`
 }
 
-func (spec *S3PersistenceSource) withDefaults() (changed bool) {
+func (spec *S3PersistenceSource) withDefaults(backupName string) (changed bool) {
 	changed = spec.AWSCliImage.withDefaults(DefaultAWSCliImageRepo, DefaultAWSCliImageVersion, DefaultPullPolicy) || changed
+
+	if spec.Key == "" {
+		spec.Key = backupName + ".tgz"
+		changed = true
+	} else if strings.HasPrefix(spec.Key, "/") {
+		spec.Key = strings.TrimPrefix(spec.Key, "/")
+		changed = true
+	}
+	if spec.Retries == nil {
+		retries := int32(DefaultS3Retries)
+		spec.Retries = &retries
+		changed = true
+	}
 
 	return changed
 }
+
+// S3Secrets describes the secrets provided for accessing s3.
+type S3Secrets struct {
+	// The name of the secrets object to use
+	Name string `json:"fromSecret"`
+
+	// The key (within the provided secret) of an AWS Config file to use
+	// +optional
+	ConfigFile string `json:"configFile,omitempty"`
+
+	// The key (within the provided secret) of an AWS Credentials file to use
+	// +optional
+	CredentialsFile string `json:"credentialsFile,omitempty"`
+
+	// The key (within the provided secret) of the Access Key ID to use
+	// +optional
+	AccessKeyId string `json:"accessKeyId,omitempty"`
+
+	// The key (within the provided secret) of the Secret Access Key to use
+	// +optional
+	SecretAccessKey string `json:"secretAccessKey,omitempty"`
+}
+
 
 // UploadSpec defines the location and method of uploading the backup data
 type VolumePersistenceSource struct {
@@ -101,16 +155,26 @@ type VolumePersistenceSource struct {
 	// +optional
 	Path string `json:"path,omitempty"`
 
+	// The filename of the tarred & zipped backup file
+	// Defaults to the name of the backup/restore + '.tgz'
+	// +optional
+	Filename string `json:"filename"`
+
 	// BusyBox image for manipulating and moving data
 	// +optional
 	BusyBoxImage ContainerImage `json:"busyBoxImage,omitempty"`
 }
 
-func (spec *VolumePersistenceSource) withDefaults() (changed bool) {
+func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
 	if spec.Path != "" && strings.HasPrefix(spec.Path, "/") {
 		spec.Path = strings.TrimPrefix(spec.Path, "/")
+		changed = true
+	}
+
+	if spec.Filename != "" {
+		spec.Filename = backupName + ".tgz"
 		changed = true
 	}
 
@@ -235,7 +299,7 @@ type SolrBackup struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sb *SolrBackup) WithDefaults() bool {
-	return sb.Spec.withDefaults()
+	return sb.Spec.withDefaults(sb.Name)
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object

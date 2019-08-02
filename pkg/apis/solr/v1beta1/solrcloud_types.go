@@ -72,12 +72,13 @@ type SolrCloudSpec struct {
 	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
 
 	// Required for backups & restores to be enabled.
-	// This is a claim for a persistent volume that will be mounted to all solrNodes to store backups and load restores.
-	// The same PVC can be used for multiple clouds.
-	// The referenced PVC must have `accessModes: - ReadWriteMany`, as the PV will be mounted on all solr nodes.
-	// The PVC must also exist in the same namespace as this cloud.
+	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
+	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
+	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
+	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
+	// Other options are to use a NFS volume.
 	// +optional
-	BackupRestorePvcName string `json:"backupRestorePvcName,omitempty"`
+	BackupRestoreVolume *corev1.VolumeSource `json:"backupRestoreVolume,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`

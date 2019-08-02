@@ -17,6 +17,11 @@ import (
 
 const (
 	BaseBackupRestorePath = "/var/solr-backup-restore"
+	TarredFile = "/var/solr-backup-restore/backup.tgz"
+	BackupTarCommand = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
+	CleanupCommand = " && rm -rf " + BaseBackupRestorePath + "/{*,.*}"
+
+	AWSSecretDir = "/var/aws"
 
 	JobTTLSeconds = int32(60)
 )
@@ -68,13 +73,7 @@ func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) 
 }
 
 func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
-	volumeSource := corev1.VolumeSource{
-		PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-			ClaimName: solrCloud.Spec.BackupRestorePvcName,
-		},
-	}
-
-	return GenerateBackupPersistenceJob(backup, volumeSource, BackupSubPathForCloud(solrCloud.Name, backup.Name))
+	return GenerateBackupPersistenceJob(backup, *solrCloud.Spec.BackupRestoreVolume, BackupSubPathForCloud(solrCloud.Name, backup.Name))
 }
 
 // GenerateBackupPersistenceJob creates a Job that will persist backup data and purge the backup from the solrBackupVolume
@@ -152,9 +151,15 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 	if persistenceSource.Volume != nil {
 		// Options for persisting to a volume
 		image = persistenceSource.Volume.BusyBoxImage
-		envVars = make([]corev1.EnvVar, 0)
+		envVars = []corev1.EnvVar{
+			{
+				Name: "FILE_NAME",
+				Value: persistenceSource.Volume.Filename,
+			},
+		}
 		// Copy the information to the persistent storage, and delete it from the backup-restore volume.
-		command = []string{"sh", "-c", "cp -r " + BaseBackupRestorePath + "/. /var/backup-persistence/ && chmod -R a+rwx /var/backup-persistence/* && rm -rf " + BaseBackupRestorePath + "/{*,.*}"}
+		command = []string{"sh", "-c", BackupTarCommand + "cp " + TarredFile + " \"/var/backup-persistence/${FILE_NAME}\"" + CleanupCommand}
+
 		volume = &corev1.Volume{
 			Name: "persistence",
 			VolumeSource: persistenceSource.Volume.VolumeSource,
@@ -168,12 +173,106 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		r := int32(1)
 		numRetries = &r
 	} else if persistenceSource.S3 != nil {
+		s3 := persistenceSource.S3
 		// Options for persisting to S3
-		image = persistenceSource.S3.AWSCliImage
-		envVars = make([]corev1.EnvVar, 0)
-		command = []string{
-			"mv", BaseBackupRestorePath + "/*",
+		image = s3.AWSCliImage
+		envVars = []corev1.EnvVar{
+			{
+				Name: "BUCKET",
+				Value: s3.Bucket,
+			},
+			{
+				Name: "KEY",
+				Value: s3.Key,
+			},
+			{
+				Name: "ENDPOINT_URL",
+				Value: s3.EndpointUrl,
+			},
 		}
+		// Set up optional Environment variables
+		if s3.Region != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "AWS_DEFAULT_REGION",
+				Value: s3.Region,
+			})
+		}
+		if s3.Secrets.AccessKeyId != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "AWS_ACCESS_KEY_ID",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: s3.Secrets.Name,
+						},
+						Key: s3.Secrets.AccessKeyId,
+					},
+				},
+			})
+		}
+		if s3.Secrets.SecretAccessKey != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "AWS_SECRET_ACCESS_KEY",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: s3.Secrets.Name,
+						},
+						Key: s3.Secrets.SecretAccessKey,
+					},
+				},
+			})
+		}
+		if s3.Secrets.ConfigFile != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "AWS_CONFIG_FILE",
+				Value: AWSSecretDir + "/config",
+			})
+		}
+		if s3.Secrets.CredentialsFile != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "AWS_SHARED_CREDENTIALS_FILE",
+				Value: AWSSecretDir + "/credentials",
+			})
+		}
+
+		// If a config or credentials file is provided in the secrets, load them up in a volume
+		if s3.Secrets.ConfigFile != "" || s3.Secrets.CredentialsFile != "" {
+			readonly := int32(400)
+			volume = &corev1.Volume{
+				Name: "awsSecrets",
+				VolumeSource: corev1.VolumeSource{
+					Secret: &corev1.SecretVolumeSource{
+						SecretName: s3.Secrets.Name,
+						Items: []corev1.KeyToPath{
+							{
+								Key: s3.Secrets.ConfigFile,
+								Path: "config",
+								Mode: &readonly,
+							},
+							{
+								Key: s3.Secrets.CredentialsFile,
+								Path: "credentials",
+								Mode: &readonly,
+							},
+						},
+					},
+				},
+			}
+			volumeMount = &corev1.VolumeMount{
+				Name: "awsSecrets",
+				ReadOnly: true,
+				MountPath: AWSSecretDir,
+			}
+		}
+
+		// Only include the endpoint URL if it's provided
+		includeUrl := ""
+		if s3.EndpointUrl != "" {
+			includeUrl = "--endpoint-url \"${ENDPOINT_URL}\" "
+		}
+
+		command = []string{"sh", "-c", BackupTarCommand + "aws s3 cp " + includeUrl + TarredFile + " \"s3://${BUCKET}/${KEY}\"" + CleanupCommand}
 		numRetries = persistenceSource.S3.Retries
 	}
 

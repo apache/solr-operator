@@ -94,15 +94,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 		})
 	}
 	// Add backup volumes
-	if solrCloud.Spec.BackupRestorePvcName != "" {
+	if solrCloud.Spec.BackupRestoreVolume != nil {
 		solrVolumes = append(solrVolumes, corev1.Volume{
 			Name: BackupRestoreVolume,
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: solrCloud.Spec.BackupRestorePvcName,
-					ReadOnly: false,
-				},
-			},
+			VolumeSource: *solrCloud.Spec.BackupRestoreVolume,
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupRestoreVolume, MountPath: BaseBackupRestorePath, SubPath: BackupRestoreSubPathForCloud(solrCloud.Name)})
 	}
