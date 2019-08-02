@@ -96,7 +96,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 	// Add backup volumes
 	if solrCloud.Spec.BackupRestoreVolume != nil {
 		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name: BackupRestoreVolume,
+			Name:         BackupRestoreVolume,
 			VolumeSource: *solrCloud.Spec.BackupRestoreVolume,
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupRestoreVolume, MountPath: BaseBackupRestorePath, SubPath: BackupRestoreSubPathForCloud(solrCloud.Name)})
@@ -106,7 +106,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 	index := 0
 	for hostName, ip := range hostNameIPs {
 		hostAliases[index] = corev1.HostAlias{
-			IP: ip,
+			IP:        ip,
 			Hostnames: []string{hostName},
 		}
 		index++

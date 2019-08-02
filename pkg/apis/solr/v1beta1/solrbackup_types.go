@@ -26,7 +26,7 @@ import (
 const (
 	DefaultAWSCliImageRepo    = "infrastructureascode/aws-cli"
 	DefaultAWSCliImageVersion = "1.16.204"
-	DefaultS3Retries = 5
+	DefaultS3Retries          = 5
 )
 
 // SolrBackupSpec defines the desired state of SolrBackup
@@ -144,7 +144,6 @@ type S3Secrets struct {
 	// +optional
 	SecretAccessKey string `json:"secretAccessKey,omitempty"`
 }
-
 
 // UploadSpec defines the location and method of uploading the backup data
 type VolumePersistenceSource struct {

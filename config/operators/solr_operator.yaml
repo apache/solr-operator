@@ -342,7 +342,7 @@ subjects:
   name: default
   namespace: default
 ---
-apiVersion: v1beta1
+apiVersion: v1
 kind: Secret
 metadata:
   name: webhook-server-secret

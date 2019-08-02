@@ -427,7 +427,6 @@ func reconcileCloudStatus(r *ReconcileSolrCloud, solrCloud *solr.SolrCloud, newS
 		newStatus.BackupRestoreReady = true
 	}
 
-
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
 	if len(otherVersions) > 0 {
 		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Tag
@@ -454,7 +453,7 @@ func reconcileNodeService(r *ReconcileSolrCloud, instance *solr.SolrCloud, nodeN
 		log.Info("Creating Node Service", "namespace", service.Namespace, "name", service.Name)
 		err = r.Create(context.TODO(), service)
 	} else if err == nil {
-		if (util.CopyServiceFields(service, foundService)) {
+		if util.CopyServiceFields(service, foundService) {
 			// Update the found Ingress and write the result back if there are any changes
 			log.Info("Updating Node Service", "namespace", service.Namespace, "name", service.Name)
 			err = r.Update(context.TODO(), foundService)

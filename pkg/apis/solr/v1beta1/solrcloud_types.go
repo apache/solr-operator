@@ -214,7 +214,6 @@ func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 
 // ProvidedZookeeper defines the internal zookeeper ensemble to run
 type ProvidedZookeeper struct {
-
 	// Create a new Zookeeper Ensemble with the following spec
 	// Note: Requires
 	//   - The zookeeperOperator flag to be provided to the Solr Operator
@@ -289,7 +288,6 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 
 // FullZetcdSpec defines the internal etcd ensemble and zetcd server to run for solr (spoofing zookeeper)
 type FullZetcdSpec struct {
-
 	// +optional
 	EtcdSpec *EtcdSpec `json:"etcdSpec,omitempty"`
 

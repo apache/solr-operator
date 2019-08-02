@@ -22,6 +22,7 @@ import (
 	"github.com/bloomberg/solr-operator/pkg/controller/util"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
@@ -34,7 +35,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 )
 
@@ -127,7 +127,6 @@ func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Re
 
 	oldStatus := backup.Status.DeepCopy()
 
-
 	changed := backup.WithDefaults()
 	if changed {
 		log.Info("Setting default settings for solr-backup", "namespace", backup.Namespace, "name", backup.Name)
@@ -143,7 +142,7 @@ func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Re
 
 	solrCloud, allCollectionsComplete, collectionActionTaken, err := reconcileSolrCloudBackup(r, backup)
 	if err != nil {
-		log.Error(err, "Error while taking SolrCloud backup");
+		log.Error(err, "Error while taking SolrCloud backup")
 	}
 	if allCollectionsComplete && collectionActionTaken {
 		// Requeue immediately to start the persisting job
@@ -161,7 +160,7 @@ func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Re
 			err = persistSolrCloudBackups(r, backup, solrCloud)
 		}
 		if err != nil {
-			log.Error(err, "Error while persisting SolrCloud backup");
+			log.Error(err, "Error while persisting SolrCloud backup")
 		}
 	}
 
@@ -216,7 +215,7 @@ func reconcileSolrCloudBackup(r *ReconcileSolrBackup, backup *solrv1beta1.SolrBa
 		cloudReady := solrCloud.Status.BackupRestoreReady && (solrCloud.Status.Replicas == solrCloud.Status.ReadyReplicas)
 		if !cloudReady {
 			log.Info("Cloud not ready for backup backup", "namespace", backup.Namespace, "cloud", solrCloud.Name, "backup", backup.Name)
-			return solrCloud, collectionBackupsFinished, actionTaken, errors.NewServiceUnavailable("Cloud is not ready for backups or restores");
+			return solrCloud, collectionBackupsFinished, actionTaken, errors.NewServiceUnavailable("Cloud is not ready for backups or restores")
 		}
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
@@ -290,7 +289,6 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 
 	return collectionBackupStatus.Finished, err
 }
-
 
 func persistSolrCloudBackups(r *ReconcileSolrBackup, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud) (err error) {
 	if backup.Status.PersistenceStatus.Finished {

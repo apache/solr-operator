@@ -1,3 +1,19 @@
+/*
+Copyright 2019 Bloomberg Finance LP.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package util
 
 import (
@@ -14,12 +30,11 @@ import (
 	"net/url"
 )
 
-
 const (
 	BaseBackupRestorePath = "/var/solr-backup-restore"
-	TarredFile = "/var/solr-backup-restore/backup.tgz"
-	BackupTarCommand = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
-	CleanupCommand = " && rm -rf " + BaseBackupRestorePath + "/{*,.*}"
+	TarredFile            = "/var/solr-backup-restore/backup.tgz"
+	BackupTarCommand      = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
+	CleanupCommand        = " && rm -rf " + BaseBackupRestorePath + "/{*,.*}"
 
 	AWSSecretDir = "/var/aws"
 
@@ -39,11 +54,11 @@ func RestoreSubPathForCloud(cloud string, restoreName string) string {
 }
 
 func BackupPath(backupName string) string {
-	return BaseBackupRestorePath +  "/backups/" + backupName
+	return BaseBackupRestorePath + "/backups/" + backupName
 }
 
 func RestorePath(backupName string) string {
-	return BaseBackupRestorePath +  "/restores/" + backupName
+	return BaseBackupRestorePath + "/restores/" + backupName
 }
 
 func AsyncIdForCollectionBackup(collection string, backupName string) string {
@@ -84,7 +99,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 	}
 	labels := solrBackup.SharedLabelsWith(solrBackup.GetLabels())
 
-	//ttlSeconds := JobTTLSeconds
+	// ttlSeconds := JobTTLSeconds
 
 	image, env, command, volume, volumeMount, numRetries := GeneratePersistenceOptions(solrBackup)
 
@@ -109,7 +124,6 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 
 	parallelismAndCompletions := int32(1)
 
-
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrBackup.PersistenceJobName(),
@@ -117,24 +131,24 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 			Labels:    labels,
 		},
 		Spec: batchv1.JobSpec{
-			//TTLSecondsAfterFinished: &ttlSeconds,
-			BackoffLimit:            numRetries,
-			Parallelism: &parallelismAndCompletions,
-			Completions: &parallelismAndCompletions,
+			// TTLSecondsAfterFinished: &ttlSeconds,
+			BackoffLimit: numRetries,
+			Parallelism:  &parallelismAndCompletions,
+			Completions:  &parallelismAndCompletions,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
 					Volumes: volumes,
-					Containers: [] corev1.Container{
+					Containers: []corev1.Container{
 						{
 							Name:            "backup-persistence",
 							Image:           image.ToImageName(),
 							ImagePullPolicy: image.PullPolicy,
-							VolumeMounts: volumeMounts,
-							Env: env,
-							Command: command,
+							VolumeMounts:    volumeMounts,
+							Env:             env,
+							Command:         command,
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyNever,
@@ -153,7 +167,7 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		image = persistenceSource.Volume.BusyBoxImage
 		envVars = []corev1.EnvVar{
 			{
-				Name: "FILE_NAME",
+				Name:  "FILE_NAME",
 				Value: persistenceSource.Volume.Filename,
 			},
 		}
@@ -161,13 +175,13 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		command = []string{"sh", "-c", BackupTarCommand + "cp " + TarredFile + " \"/var/backup-persistence/${FILE_NAME}\"" + CleanupCommand}
 
 		volume = &corev1.Volume{
-			Name: "persistence",
+			Name:         "persistence",
 			VolumeSource: persistenceSource.Volume.VolumeSource,
 		}
 		volumeMount = &corev1.VolumeMount{
-			Name: "persistence",
-			SubPath: persistenceSource.Volume.Path,
-			ReadOnly: false,
+			Name:      "persistence",
+			SubPath:   persistenceSource.Volume.Path,
+			ReadOnly:  false,
 			MountPath: "/var/backup-persistence",
 		}
 		r := int32(1)
@@ -178,22 +192,22 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		image = s3.AWSCliImage
 		envVars = []corev1.EnvVar{
 			{
-				Name: "BUCKET",
+				Name:  "BUCKET",
 				Value: s3.Bucket,
 			},
 			{
-				Name: "KEY",
+				Name:  "KEY",
 				Value: s3.Key,
 			},
 			{
-				Name: "ENDPOINT_URL",
+				Name:  "ENDPOINT_URL",
 				Value: s3.EndpointUrl,
 			},
 		}
 		// Set up optional Environment variables
 		if s3.Region != "" {
 			envVars = append(envVars, corev1.EnvVar{
-				Name: "AWS_DEFAULT_REGION",
+				Name:  "AWS_DEFAULT_REGION",
 				Value: s3.Region,
 			})
 		}
@@ -225,13 +239,13 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 		}
 		if s3.Secrets.ConfigFile != "" {
 			envVars = append(envVars, corev1.EnvVar{
-				Name: "AWS_CONFIG_FILE",
+				Name:  "AWS_CONFIG_FILE",
 				Value: AWSSecretDir + "/config",
 			})
 		}
 		if s3.Secrets.CredentialsFile != "" {
 			envVars = append(envVars, corev1.EnvVar{
-				Name: "AWS_SHARED_CREDENTIALS_FILE",
+				Name:  "AWS_SHARED_CREDENTIALS_FILE",
 				Value: AWSSecretDir + "/credentials",
 			})
 		}
@@ -246,12 +260,12 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 						SecretName: s3.Secrets.Name,
 						Items: []corev1.KeyToPath{
 							{
-								Key: s3.Secrets.ConfigFile,
+								Key:  s3.Secrets.ConfigFile,
 								Path: "config",
 								Mode: &readonly,
 							},
 							{
-								Key: s3.Secrets.CredentialsFile,
+								Key:  s3.Secrets.CredentialsFile,
 								Path: "credentials",
 								Mode: &readonly,
 							},
@@ -260,8 +274,8 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 				},
 			}
 			volumeMount = &corev1.VolumeMount{
-				Name: "awsSecrets",
-				ReadOnly: true,
+				Name:      "awsSecrets",
+				ReadOnly:  true,
 				MountPath: AWSSecretDir,
 			}
 		}
@@ -278,7 +292,6 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup) (image solr.Contain
 
 	return image, envVars, command, volume, volumeMount, numRetries
 }
-
 
 func StartBackupForCollection(cloud string, collection string, backupName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
@@ -303,7 +316,6 @@ func StartBackupForCollection(cloud string, collection string, backupName string
 
 	return success, err
 }
-
 
 func CheckBackupForCollection(cloud string, collection string, backupName string, namespace string) (finished bool, success bool, asyncStatus string, err error) {
 	queryParams := url.Values{}
@@ -333,7 +345,6 @@ func CheckBackupForCollection(cloud string, collection string, backupName string
 
 	return finished, success, asyncStatus, err
 }
-
 
 func DeleteAsyncInfoForBackup(cloud string, collection string, backupName string, namespace string) (err error) {
 	queryParams := url.Values{}
@@ -373,7 +384,6 @@ type SolrAsyncStatus struct {
 
 	Message string `json:"msg"`
 }
-
 
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backup string, config *rest.Config) (err error) {
 	backupPath := BackupPath(backup)
