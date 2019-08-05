@@ -11,14 +11,14 @@ spec:
     description: Solr Cloud
     name: Cloud
     type: string
-  - JSONPath: .status.started
-    description: Whether the backup has started
-    name: Started
-    type: string
   - JSONPath: .status.finished
     description: Whether the backup has finished
     name: Finished
-    type: integer
+    type: boolean
+  - JSONPath: .status.successful
+    description: Whether the backup was successful
+    name: Successful
+    type: boolean
   - JSONPath: .metadata.creationTimestamp
     name: Age
     type: date

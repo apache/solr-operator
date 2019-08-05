@@ -38,7 +38,7 @@ Make sure that the solr-operator and a zookeeper-operator are running.
 Create an example Solr cloud, with the following configuration.
 
 ```bash
-$ cat example/test-solrcloud.yaml
+$ cat example/test_solrcloud.yaml
 
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCloud
@@ -53,7 +53,7 @@ spec:
 Apply it to your Kubernetes cluster.
 
 ```bash
-$ kubectl apply -f example/test-solrcloud.yaml
+$ kubectl apply -f example/test_solrcloud.yaml
 $ kubectl get solrclouds
 
 NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
@@ -130,6 +130,23 @@ NAME                                       VERSION   DESIREDNODES   NODES   READ
 solrcloud.solr.bloomberg.com/example       8.1.1     4              4       4            47h
 ```
 
+### Solr Backups
+
+Solr backups require 3 things:
+- A solr cloud running in kubernetes to backup
+- The list of collections to backup
+- A shared volume reference that can be written to from many clouds
+    - This could be a NFS volume, a persistent volume claim (that has `ReadWriteMany` access), etc.
+    - The same volume can be used for many solr clouds in the same namespace, as the data stored within the volume is namespaced.
+- A way to persist the data. The currently supported persistence methods are:
+    - A volume reference (this does not have to be `ReadWriteMany`)
+    - An S3 endpoint.
+    
+Backups will be tarred before they are persisted.
+
+There is no current way to restore these backups, but that is in the roadmap to implement.
+  
+  
 ## Solr Images
 
 The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.

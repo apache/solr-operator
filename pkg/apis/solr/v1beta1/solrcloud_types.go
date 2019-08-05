@@ -523,7 +523,10 @@ func (sc *SolrCloud) ProvidedZetcdAddress() string {
 
 // ZkConnectionString returns the zkConnectionString for the cloud
 func (sc *SolrCloud) ZkConnectionString() string {
-	return sc.Status.ZookeeperConnectionInfo.InternalConnectionString + sc.Status.ZookeeperConnectionInfo.ChRoot
+	return sc.Status.ZkConnectionString()
+}
+func (scs SolrCloudStatus) ZkConnectionString() string {
+	return scs.ZookeeperConnectionInfo.InternalConnectionString + scs.ZookeeperConnectionInfo.ChRoot
 }
 
 func (sc *SolrCloud) CommonIngressPrefix() string {

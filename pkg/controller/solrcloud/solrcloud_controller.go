@@ -300,7 +300,7 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
-	if strings.Contains(instance.ZkConnectionString(), ":") {
+	if strings.Contains(newStatus.ZkConnectionString(), ":") {
 		// Generate StatefulSet
 		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
@@ -321,7 +321,8 @@ func (r *ReconcileSolrCloud) Reconcile(request reconcile.Request) (reconcile.Res
 			}
 			newStatus.Replicas = foundStatefulSet.Status.Replicas
 			newStatus.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
-		} else {
+		}
+		if err != nil {
 			return reconcile.Result{}, err
 		}
 	}

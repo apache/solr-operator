@@ -285,8 +285,8 @@ func (sb *SolrBackup) PersistenceJobName() string {
 // +kubebuilder:categories=all
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
-// +kubebuilder:printcolumn:name="Started",type="string",JSONPath=".status.started",description="Whether the backup has started"
-// +kubebuilder:printcolumn:name="Finished",type="integer",JSONPath=".status.finished",description="Whether the backup has finished"
+// +kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
+// +kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrBackup struct {
 	metav1.TypeMeta   `json:",inline"`
