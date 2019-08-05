@@ -45,4 +45,4 @@ vars:
   objref:
     kind: Secret
     name: webhook-server-secret
-    apiVersion: v1beta1
+    apiVersion: v1

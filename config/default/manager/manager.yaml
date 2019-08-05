@@ -54,7 +54,7 @@ spec:
           defaultMode: 420
           secretName: webhook-server-secret
 ---
-apiVersion: v1beta1
+apiVersion: v1
 kind: Secret
 metadata:
   name: webhook-server-secret

@@ -47,7 +47,7 @@ generate:
 ifndef GOPATH
 	$(error GOPATH not defined, please define GOPATH. Run "go help gopath" to learn more about GOPATH)
 endif
-	./hack/update-codegen.sh
+	#./hack/update-codegen.sh
 	go generate ./pkg/... ./cmd/...
 
 ###
@@ -56,7 +56,7 @@ endif
 
 # Run tests
 test: check-format check-license vet
-	./hack/verify-codegen.sh
+	# ./hack/verify-codegen.sh
 	go test ./pkg/... ./cmd/... -coverprofile cover.out
 
 # Run go vet against code

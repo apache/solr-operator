@@ -31,59 +31,59 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
-// SolrCloudInformer provides access to a shared informer and lister for
-// SolrClouds.
-type SolrCloudInformer interface {
+// SolrBackupInformer provides access to a shared informer and lister for
+// SolrBackups.
+type SolrBackupInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() v1beta1.SolrCloudLister
+	Lister() v1beta1.SolrBackupLister
 }
 
-type solrCloudInformer struct {
+type solrBackupInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewSolrCloudInformer constructs a new informer for SolrCloud type.
+// NewSolrBackupInformer constructs a new informer for SolrBackup type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewSolrCloudInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredSolrCloudInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewSolrBackupInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredSolrBackupInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredSolrCloudInformer constructs a new informer for SolrCloud type.
+// NewFilteredSolrBackupInformer constructs a new informer for SolrBackup type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredSolrCloudInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredSolrBackupInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SolrV1beta1().SolrClouds(namespace).List(options)
+				return client.SolrV1beta1().SolrBackups(namespace).List(options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.SolrV1beta1().SolrClouds(namespace).Watch(options)
+				return client.SolrV1beta1().SolrBackups(namespace).Watch(options)
 			},
 		},
-		&solrv1beta1.SolrCloud{},
+		&solrv1beta1.SolrBackup{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *solrCloudInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredSolrCloudInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *solrBackupInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredSolrBackupInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *solrCloudInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&solrv1beta1.SolrCloud{}, f.defaultInformer)
+func (f *solrBackupInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&solrv1beta1.SolrBackup{}, f.defaultInformer)
 }
 
-func (f *solrCloudInformer) Lister() v1beta1.SolrCloudLister {
-	return v1beta1.NewSolrCloudLister(f.Informer().GetIndexer())
+func (f *solrBackupInformer) Lister() v1beta1.SolrBackupLister {
+	return v1beta1.NewSolrBackupLister(f.Informer().GetIndexer())
 }
