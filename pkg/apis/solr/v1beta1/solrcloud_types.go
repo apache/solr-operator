@@ -24,9 +24,6 @@ import (
 	"strings"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 const (
 	DefaultPullPolicy = corev1.PullIfNotPresent
 
@@ -69,9 +66,19 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
-	// PersistentVolumeClaimSpec is the spec to describe PVC for the solr container
-	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
-	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
+	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
+	// +optional
+	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
+
+	// Required for backups & restores to be enabled.
+	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
+	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
+	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
+	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
+	// Other options are to use a NFS volume.
+	// +optional
+	BackupRestoreVolume *corev1.VolumeSource `json:"backupRestoreVolume,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -94,12 +101,12 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
-	if spec.PersistentVolumeClaimSpec != nil {
-		spec.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+	if spec.DataPvcSpec != nil {
+		spec.DataPvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
 			corev1.ReadWriteOnce,
 		}
-		if len(spec.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
-			spec.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+		if len(spec.DataPvcSpec.Resources.Requests) == 0 {
+			spec.DataPvcSpec.Resources.Requests = corev1.ResourceList{
 				corev1.ResourceStorage: resource.MustParse(DefaultSolrStorage),
 			}
 			changed = true
@@ -207,7 +214,6 @@ func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 
 // ProvidedZookeeper defines the internal zookeeper ensemble to run
 type ProvidedZookeeper struct {
-
 	// Create a new Zookeeper Ensemble with the following spec
 	// Note: Requires
 	//   - The zookeeperOperator flag to be provided to the Solr Operator
@@ -282,7 +288,6 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 
 // FullZetcdSpec defines the internal etcd ensemble and zetcd server to run for solr (spoofing zookeeper)
 type FullZetcdSpec struct {
-
 	// +optional
 	EtcdSpec *EtcdSpec `json:"etcdSpec,omitempty"`
 
@@ -386,6 +391,10 @@ type SolrCloudStatus struct {
 
 	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
 	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
+
+	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
+	// and therefore is ready for backups and restores.
+	BackupRestoreReady bool `json:"backupRestoreReady"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
@@ -453,6 +462,15 @@ func (sc *SolrCloud) WithDefaults() bool {
 	return sc.Spec.withDefaults()
 }
 
+func (sc *SolrCloud) GetAllSolrNodeNames() []string {
+	nodeNames := make([]string, *sc.Spec.Replicas)
+	statefulSetName := sc.StatefulSetName()
+	for i := range nodeNames {
+		nodeNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
+	}
+	return nodeNames
+}
+
 // ConfigMapName returns the name of the cloud config-map
 func (sc *SolrCloud) ConfigMapName() string {
 	return fmt.Sprintf("%s-solrcloud-configmap", sc.GetName())
@@ -466,6 +484,11 @@ func (sc *SolrCloud) StatefulSetName() string {
 // CommonServiceName returns the name of the common service for the cloud
 func (sc *SolrCloud) CommonServiceName() string {
 	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// InternalURLForCloud returns the name of the common service for the cloud
+func InternalURLForCloud(cloudName string, namespace string) string {
+	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -500,7 +523,10 @@ func (sc *SolrCloud) ProvidedZetcdAddress() string {
 
 // ZkConnectionString returns the zkConnectionString for the cloud
 func (sc *SolrCloud) ZkConnectionString() string {
-	return sc.Status.ZookeeperConnectionInfo.InternalConnectionString + sc.Status.ZookeeperConnectionInfo.ChRoot
+	return sc.Status.ZkConnectionString()
+}
+func (scs SolrCloudStatus) ZkConnectionString() string {
+	return scs.ZookeeperConnectionInfo.InternalConnectionString + scs.ZookeeperConnectionInfo.ChRoot
 }
 
 func (sc *SolrCloud) CommonIngressPrefix() string {
