@@ -526,7 +526,11 @@ func (sc *SolrCloud) ZkConnectionString() string {
 	return sc.Status.ZkConnectionString()
 }
 func (scs SolrCloudStatus) ZkConnectionString() string {
-	return scs.ZookeeperConnectionInfo.InternalConnectionString + scs.ZookeeperConnectionInfo.ChRoot
+	return scs.ZookeeperConnectionInfo.ZkConnectionString()
+}
+
+func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
+	return zkInfo.InternalConnectionString + zkInfo.ChRoot
 }
 
 func (sc *SolrCloud) CommonIngressPrefix() string {

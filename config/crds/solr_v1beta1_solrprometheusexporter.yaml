@@ -1,0 +1,129 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: solrprometheusexporters.solr.bloomberg.com
+spec:
+  additionalPrinterColumns:
+  - JSONPath: .status.ready
+    description: Whether the prometheus exporter is ready
+    name: Ready
+    type: boolean
+  - JSONPath: .spec.scrapeInterval
+    description: Scrape interval for metrics (in ms)
+    name: Scrape Interval
+    type: integer
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
+  group: solr.bloomberg.com
+  names:
+    kind: SolrPrometheusExporter
+    plural: solrprometheusexporters
+    shortNames:
+    - solrmetrics
+  scope: Namespaced
+  subresources:
+    status: {}
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            exporterEntrypoint:
+              description: The entrypoint into the exporter. Defaults to the official
+                docker-solr location.
+              type: string
+            image:
+              description: Image of Solr Prometheus Exporter to run.
+              properties:
+                pullPolicy:
+                  type: string
+                repository:
+                  type: string
+                tag:
+                  type: string
+              type: object
+            metricsConfig:
+              description: The xml config for the metrics
+              type: string
+            numThreads:
+              description: Number of threads to use for the prometheus exporter Defaults
+                to 1
+              format: int32
+              type: integer
+            scrapeInterval:
+              description: The interval to scrape Solr at (in seconds) Defaults to
+                60 seconds
+              format: int32
+              type: integer
+            solrReference:
+              description: Reference of the Solr instance to collect metrics for
+              properties:
+                cloud:
+                  description: Reference of a solrCloud instance
+                  properties:
+                    zkConnectionInfo:
+                      description: The ZK Connection information for a cloud, could
+                        be used for solr's outside of the kube cluster
+                      properties:
+                        chroot:
+                          description: The ChRoot to connect solr at
+                          type: string
+                        externalConnectionString:
+                          description: The connection string to connect to the ensemble
+                            from outside of the Kubernetes cluster If external and
+                            no internal connection string is provided, the external
+                            cnx string will be used as the internal cnx string
+                          type: string
+                        internalConnectionString:
+                          description: The connection string to connect to the ensemble
+                            from within the Kubernetes cluster
+                          type: string
+                      required:
+                      - internalConnectionString
+                      - chroot
+                      type: object
+                  type: object
+                standalone:
+                  description: Reference of a standalone solr instance
+                  properties:
+                    address:
+                      description: The address of the standalone solr
+                      type: string
+                  required:
+                  - address
+                  type: object
+              type: object
+          required:
+          - solrReference
+          type: object
+        status:
+          properties:
+            ready:
+              description: Is the prometheus exporter up and running
+              type: boolean
+          required:
+          - ready
+          type: object
+  version: v1beta1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

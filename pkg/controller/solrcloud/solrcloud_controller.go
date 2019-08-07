@@ -171,8 +171,8 @@ type ReconcileSolrCloud struct {
 
 // Reconcile reads that state of the cluster for a SolrCloud object and makes changes based on the state read
 // and what is in the SolrCloud.Spec
-// +kubebuilder:rbac:groups=,resources=pods,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=,resources=pods/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=,resources=pods,verbs=get;list;watch
+// +kubebuilder:rbac:groups=,resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups=,resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=,resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete

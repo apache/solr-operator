@@ -7,69 +7,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - persistentvolumeclaims
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - ""
-  resources:
   - pods/exec
   verbs:
   - create
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-  - update
-  - patch
 - apiGroups:
   - batch
   resources:
@@ -90,6 +30,20 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
 - apiGroups:
   - solr.bloomberg.com
   resources:
@@ -118,18 +72,12 @@ rules:
   - get
   - list
   - watch
-  - create
-  - update
-  - patch
-  - delete
 - apiGroups:
   - ""
   resources:
   - pods/status
   verbs:
   - get
-  - update
-  - patch
 - apiGroups:
   - ""
   resources:
@@ -290,6 +238,80 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcloud
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcloud/status
+  verbs:
+  - get
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
