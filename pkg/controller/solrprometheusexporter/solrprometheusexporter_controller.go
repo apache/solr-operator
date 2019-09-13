@@ -37,11 +37,6 @@ import (
 
 var log = logf.Log.WithName("controller")
 
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
-
 // Add creates a new SolrPrometheusExporter Controller and adds it to the Manager with default RBAC. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
 func Add(mgr manager.Manager) error {
@@ -75,6 +70,22 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &solrv1beta1.SolrPrometheusExporter{},
+	})
+	if err != nil {
+		return err
+	}
+
+	err = c.Watch(&source.Kind{Type: &corev1.ConfigMap{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &solrv1beta1.SolrPrometheusExporter{},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -90,13 +101,15 @@ type ReconcileSolrPrometheusExporter struct {
 // and what is in the SolrPrometheusExporter.Spec
 // Automatically generate RBAC rules to allow the Controller to read and write Deployments & config maps and read solrClouds
 // +kubebuilder:rbac:groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=,resources=configmaps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=,resources=configmaps/status,verbs=get
+// +kubebuilder:rbac:groups=,resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=,resources=services/status,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud/status,verbs=get
 func (r *ReconcileSolrPrometheusExporter) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	// Fetch the SolrPrometheusExporter instance
 	prometheusExporter := &solrv1beta1.SolrPrometheusExporter{}
@@ -109,6 +122,15 @@ func (r *ReconcileSolrPrometheusExporter) Reconcile(request reconcile.Request) (
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
+	}
+
+	changed := prometheusExporter.WithDefaults()
+	if changed {
+		log.Info("Setting default settings for Solr PrometheusExporter", "namespace", prometheusExporter.Namespace, "name", prometheusExporter.Name)
+		if err := r.Update(context.TODO(), prometheusExporter); err != nil {
+			return reconcile.Result{}, err
+		}
+		return reconcile.Result{Requeue: true}, nil
 	}
 
 	if prometheusExporter.Spec.Config != "" {
@@ -134,6 +156,27 @@ func (r *ReconcileSolrPrometheusExporter) Reconcile(request reconcile.Request) (
 		}
 	}
 
+	// Generate Metrics Service
+	metricsService := util.GenerateSolrMetricsService(prometheusExporter)
+	if err := controllerutil.SetControllerReference(prometheusExporter, metricsService, r.scheme); err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Check if the Metrics Service already exists
+	foundMetricsService := &corev1.Service{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: metricsService.Name, Namespace: metricsService.Namespace}, foundMetricsService)
+	if err != nil && errors.IsNotFound(err) {
+		log.Info("Creating PrometheusExporter Service", "namespace", metricsService.Namespace, "name", metricsService.Name)
+		err = r.Create(context.TODO(), metricsService)
+	} else if err == nil && util.CopyServiceFields(metricsService, foundMetricsService) {
+		// Update the found Metrics Service and write the result back if there are any changes
+		log.Info("Updating PrometheusExporter Service", "namespace", metricsService.Namespace, "name", metricsService.Name)
+		err = r.Update(context.TODO(), foundMetricsService)
+	}
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
 	// Get the ZkConnectionString to connect to
 	solrConnectionInfo := util.SolrConnectionInfo{}
 	if solrConnectionInfo, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
@@ -150,11 +193,8 @@ func (r *ReconcileSolrPrometheusExporter) Reconcile(request reconcile.Request) (
 	if err != nil && errors.IsNotFound(err) {
 		log.Info("Creating PrometheusExporter Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
 		err = r.Create(context.TODO(), deploy)
-		return reconcile.Result{}, err
-	} else if err != nil {
-		return reconcile.Result{}, err
-	} else {
-		if !util.CopyDeploymentFields(deploy, foundDeploy) {
+	} else if err == nil {
+		if util.CopyDeploymentFields(deploy, foundDeploy) {
 			log.Info("Updating PrometheusExporter Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
 			err = r.Update(context.TODO(), foundDeploy)
 			if err != nil {

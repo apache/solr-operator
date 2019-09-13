@@ -5,5 +5,8 @@ metadata:
     controller-tools.k8s.io: "1.0"
   name: solrprometheusexporter-sample
 spec:
-  # Add fields here
-  foo: bar
+  solrReference:
+    cloud:
+      name: "example"
+  solrImage:
+    tag: 8.2.0

@@ -256,8 +256,24 @@ rules:
   - configmaps/status
   verbs:
   - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
   - update
   - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
 - apiGroups:
   - apps
   resources:
@@ -276,8 +292,20 @@ rules:
   - deployments/status
   verbs:
   - get
-  - update
-  - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
 - apiGroups:
   - solr.bloomberg.com
   resources:
@@ -298,20 +326,6 @@ rules:
   - get
   - update
   - patch
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrcloud
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrcloud/status
-  verbs:
-  - get
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
@@ -393,9 +407,9 @@ spec:
     spec:
       containers:
       - args:
-        - -zookeeper-operator
+        - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-url=ing.local.domain
+        - -ingress-base-domain=ing.local.domain
         env:
         - name: POD_NAMESPACE
           valueFrom:

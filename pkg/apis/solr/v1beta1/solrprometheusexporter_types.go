@@ -88,7 +88,7 @@ type SolrReference struct {
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {
-	if sr.Cloud == nil {
+	if sr.Cloud != nil {
 		changed = sr.Cloud.withDefaults(namespace) || changed
 	}
 	return changed

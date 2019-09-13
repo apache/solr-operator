@@ -138,12 +138,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
-					Annotations: map[string]string{
-						"prometheus.io/scrape": "true",
-						"prometheus.io/scheme": "http",
-						"prometheus.io/path":   "/metrics",
-						"prometheus.io/port":   strconv.Itoa(SolrMetricsPort),
-					},
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &gracePeriodTerm,
@@ -228,6 +222,7 @@ func CopyMetricsConfigMapFields(from, to *corev1.ConfigMap) bool {
 }
 
 // GenerateSolrMetricsService returns a new corev1.Service pointer generated for the SolrCloud Prometheus Exporter deployment
+// Metrics will be collected on this service endpoint, as we don't want to double-tick data if multiple exporters are runnning.
 // solrPrometheusExporter: solrPrometheusExporter instance
 func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExporter) *corev1.Service {
 	copyLabels := solrPrometheusExporter.GetLabels()
@@ -238,13 +233,19 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 	labels["service-type"] = "metrics"
 
 	selectorLabels := solrPrometheusExporter.SharedLabels()
-	selectorLabels["technology"] = solr.SolrTechnologyLabel
+	selectorLabels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrPrometheusExporter.MetricsServiceName(),
 			Namespace: solrPrometheusExporter.GetNamespace(),
 			Labels:    labels,
+			Annotations: map[string]string{
+				"prometheus.io/scrape": "true",
+				"prometheus.io/scheme": "http",
+				"prometheus.io/path":   "/metrics",
+				"prometheus.io/port":   strconv.Itoa(ExtSolrMetricsPort),
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -256,7 +257,8 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 	return service
 }
 
-// CreateMetricsIngressRule returns a new Ingress Rule generated for the solr metrics endpoinut
+// CreateMetricsIngressRule returns a new Ingress Rule generated for the solr metrics endpoint
+// This is not currently used, as an ingress is not created for the metrics endpoint.
 
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
