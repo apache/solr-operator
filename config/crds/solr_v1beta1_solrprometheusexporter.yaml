@@ -77,6 +77,14 @@ spec:
                 cloud:
                   description: Reference of a solrCloud instance
                   properties:
+                    name:
+                      description: The name of a solr cloud running within the kubernetes
+                        cluster
+                      type: string
+                    namespace:
+                      description: The namespace of a solr cloud running within the
+                        kubernetes cluster
+                      type: string
                     zkConnectionInfo:
                       description: The ZK Connection information for a cloud, could
                         be used for solr's outside of the kube cluster
@@ -94,9 +102,6 @@ spec:
                           description: The connection string to connect to the ensemble
                             from within the Kubernetes cluster
                           type: string
-                      required:
-                      - internalConnectionString
-                      - chroot
                       type: object
                   type: object
                 standalone:

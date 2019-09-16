@@ -77,7 +77,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
-	pvcs := []corev1.PersistentVolumeClaim(nil)
+	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.Spec.DataPvcSpec != nil {
 		pvcs = []corev1.PersistentVolumeClaim{
 			{

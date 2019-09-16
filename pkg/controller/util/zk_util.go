@@ -205,19 +205,19 @@ func GenerateZetcdDeployment(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *ap
 // Returns true if the fields copied from don't match to.
 func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 	requireUpdate := false
-	for k, v := range to.Labels {
-		if from.Labels[k] != v {
+	for k, v := range from.Labels {
+		if to.Labels[k] != v {
 			requireUpdate = true
 		}
+		to.Labels[k] = v
 	}
-	to.Labels = from.Labels
 
-	for k, v := range to.Annotations {
-		if from.Annotations[k] != v {
+	for k, v := range from.Annotations {
+		if to.Annotations[k] != v {
 			requireUpdate = true
 		}
+		to.Annotations[k] = v
 	}
-	to.Annotations = from.Annotations
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
@@ -229,9 +229,51 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template, from.Spec.Template) {
+	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
-		to.Spec.Template = from.Spec.Template
+		to.Spec.Template.Labels = from.Spec.Template.Labels
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
+		requireUpdate = true
+		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
+	}
+
+	if len(to.Spec.Template.Spec.Containers) != len(from.Spec.Template.Spec.Containers) {
+		requireUpdate = true
+		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
+	} else if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
+		for i := 0; i < len(to.Spec.Template.Spec.Containers); i++ {
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Name, from.Spec.Template.Spec.Containers[i].Name) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Name = from.Spec.Template.Spec.Containers[i].Name
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Image, from.Spec.Template.Spec.Containers[i].Image) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Image = from.Spec.Template.Spec.Containers[i].Image
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].ImagePullPolicy, from.Spec.Template.Spec.Containers[i].ImagePullPolicy) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].ImagePullPolicy = from.Spec.Template.Spec.Containers[i].ImagePullPolicy
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Command, from.Spec.Template.Spec.Containers[i].Command) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Command = from.Spec.Template.Spec.Containers[i].Command
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Args, from.Spec.Template.Spec.Containers[i].Args) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Args = from.Spec.Template.Spec.Containers[i].Args
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Env = from.Spec.Template.Spec.Containers[i].Env
+			}
+		}
 	}
 
 	return requireUpdate

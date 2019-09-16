@@ -19,7 +19,6 @@ package v1beta1
 import (
 	"fmt"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -67,11 +66,6 @@ func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bo
 		changed = true
 	}
 
-	if ps.ScrapeInterval == 0 {
-		ps.ScrapeInterval = 60
-		changed = true
-	}
-
 	return changed
 }
 
@@ -94,11 +88,17 @@ func (sr *SolrReference) withDefaults(namespace string) (changed bool) {
 	return changed
 }
 
-// SolrCloudReference defines a reference to an internal or external solrCloud
+// SolrCloudReference defines a reference to an internal or external solrCloud.
+// Internal (to the kube cluster) clouds should be specified via the Name and Namespace options.
+// External clouds should be specified by their Zookeeper connection information.
 type SolrCloudReference struct {
 	// The name of a solr cloud running within the kubernetes cluster
 	// +optional
-	KubeSolr *types.NamespacedName `json:",inline"`
+	Name string `json:"name,omitempty"`
+
+	// The namespace of a solr cloud running within the kubernetes cluster
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
 
 	// The ZK Connection information for a cloud, could be used for solr's outside of the kube cluster
 	// +optional
@@ -106,9 +106,9 @@ type SolrCloudReference struct {
 }
 
 func (scr *SolrCloudReference) withDefaults(namespace string) (changed bool) {
-	if scr.KubeSolr != nil {
-		if scr.KubeSolr.Namespace == "" {
-			scr.KubeSolr.Namespace = namespace
+	if scr.Name != "" {
+		if scr.Namespace == "" {
+			scr.Namespace = namespace
 			changed = true
 		}
 	}

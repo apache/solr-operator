@@ -221,9 +221,9 @@ func getSolrConnectionInfo(r *ReconcileSolrPrometheusExporter, prometheusExporte
 	if prometheusExporter.Spec.SolrReference.Cloud != nil {
 		if prometheusExporter.Spec.SolrReference.Cloud.ZookeeperConnectionInfo != nil {
 			solrConnectionInfo.CloudZkConnnectionString = prometheusExporter.Spec.SolrReference.Cloud.ZookeeperConnectionInfo.ZkConnectionString()
-		} else if prometheusExporter.Spec.SolrReference.Cloud.KubeSolr != nil {
+		} else if prometheusExporter.Spec.SolrReference.Cloud.Name != "" {
 			solrCloud := &solrv1beta1.SolrCloud{}
-			err = r.Get(context.TODO(), *prometheusExporter.Spec.SolrReference.Cloud.KubeSolr, solrCloud)
+			err = r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: prometheusExporter.Spec.SolrReference.Cloud.Namespace}, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionString = solrCloud.Status.ZookeeperConnectionInfo.ZkConnectionString()
 			}

@@ -53,70 +53,48 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	labels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 	selectorLabels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 
-	solrVolumes := []corev1.Volume{}
-	volumeMounts := []corev1.VolumeMount{}
+	var solrVolumes []corev1.Volume
+	var volumeMounts []corev1.VolumeMount
 	exporterArgs := []string{
-		"-p", "${EXPORTER_PORT}",
-		"-n", "${EXPORTER_THREADS}",
-		"-s", "${EXPORTER_SCRAPE_INTERVAL}",
+		"-p", strconv.Itoa(SolrMetricsPort),
+		"-n", strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
 	}
-	exporterEnvs := []corev1.EnvVar{
-		{
-			Name:  "JAVA_OPTS",
-			Value: "-Xms1g -Xmx2g",
-		},
-		{
-			Name:  "EXPORTER_PORT",
-			Value: strconv.Itoa(SolrMetricsPort),
-		},
-		{
-			Name:  "EXPORTER_THREADS",
-			Value: strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
-		},
-		{
-			Name:  "EXPORTER_SCRAPE_INTERVAL",
-			Value: strconv.Itoa(int(solrPrometheusExporter.Spec.ScrapeInterval)),
-		},
-		{
-			Name:  "SOLR_LOG_LEVEL",
-			Value: "INFO",
-		},
+
+	if solrPrometheusExporter.Spec.ScrapeInterval > 0 {
+		exporterArgs = append(exporterArgs, "-s", strconv.Itoa(int(solrPrometheusExporter.Spec.ScrapeInterval)))
 	}
 
 	// Setup the solrConnectionInfo
 	if solrConnectionInfo.CloudZkConnnectionString != "" {
-		exporterEnvs = append(exporterEnvs, corev1.EnvVar{Name: "EXPORTER_ZOOKEEPER_CNX", Value: solrConnectionInfo.CloudZkConnnectionString})
-		exporterArgs = append(exporterArgs, "-z", "${EXPORTER_ZOOKEEPER_CNX}")
+		exporterArgs = append(exporterArgs, "-z", solrConnectionInfo.CloudZkConnnectionString)
 	} else if solrConnectionInfo.StandaloneAddress != "" {
-		exporterEnvs = append(exporterEnvs, corev1.EnvVar{Name: "EXPORTER_STANDALONE_ADDRESS", Value: solrConnectionInfo.StandaloneAddress})
-		exporterArgs = append(exporterArgs, "-b", "${EXPORTER_STANDALONE_ADDRESS}")
+		exporterArgs = append(exporterArgs, "-b", solrConnectionInfo.StandaloneAddress)
 	}
 
 	// Only add the config if it is passed in from the user. Otherwise, use the default.
 	if solrPrometheusExporter.Spec.Config != "" {
-		solrVolumes = append(solrVolumes,
-			corev1.Volume{
-				Name: "solr-prometheus-exporter-xml",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: solrPrometheusExporter.MetricsConfigMapName(),
-						},
-						Items: []corev1.KeyToPath{
-							{
-								Key:  "solr-prometheus-exporter.xml",
-								Path: "solr-prometheus-exporter.xml",
-							},
+		solrVolumes = []corev1.Volume{{
+			Name: "solr-prometheus-exporter-xml",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: solrPrometheusExporter.MetricsConfigMapName(),
+					},
+					Items: []corev1.KeyToPath{
+						{
+							Key:  "solr-prometheus-exporter.xml",
+							Path: "solr-prometheus-exporter.xml",
 						},
 					},
 				},
 			},
-		)
+		}}
 
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "solr-prometheus-exporter-xml", MountPath: "/opt/solr-exporter", ReadOnly: true})
+		volumeMounts = []corev1.VolumeMount{{Name: "solr-prometheus-exporter-xml", MountPath: "/opt/solr-exporter", ReadOnly: true}}
 
-		exporterEnvs = append(exporterEnvs, corev1.EnvVar{Name: "EXPORTER_CONFIG", Value: "/opt/solr-exporter/solr-prometheus-exporter.xml"})
-		exporterArgs = append(exporterArgs, "-f", "${EXPORTER_CONFIG}")
+		exporterArgs = append(exporterArgs, "-f", "/opt/solr-exporter/solr-prometheus-exporter.xml")
+	} else {
+		exporterArgs = append(exporterArgs, "-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml")
 	}
 
 	entrypoint := DefaultPrometheusExporterEntrypoint
@@ -155,7 +133,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 							Command:         []string{entrypoint},
 							Args:            exporterArgs,
 
-							Env: exporterEnvs,
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
 								PeriodSeconds:       10,

@@ -423,7 +423,7 @@ type SolrNodeStatus struct {
 type ZookeeperConnectionInfo struct {
 	// The connection string to connect to the ensemble from within the Kubernetes cluster
 	// +optional
-	InternalConnectionString string `json:"internalConnectionString"`
+	InternalConnectionString string `json:"internalConnectionString,omitempty"`
 
 	// The connection string to connect to the ensemble from outside of the Kubernetes cluster
 	// If external and no internal connection string is provided, the external cnx string will be used as the internal cnx string
@@ -431,7 +431,8 @@ type ZookeeperConnectionInfo struct {
 	ExternalConnectionString *string `json:"externalConnectionString,omitempty"`
 
 	// The ChRoot to connect solr at
-	ChRoot string `json:"chroot"`
+	// +optional
+	ChRoot string `json:"chroot,omitempty"`
 }
 
 // +genclient
