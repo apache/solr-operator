@@ -423,7 +423,7 @@ type SolrNodeStatus struct {
 type ZookeeperConnectionInfo struct {
 	// The connection string to connect to the ensemble from within the Kubernetes cluster
 	// +optional
-	InternalConnectionString string `json:"internalConnectionString"`
+	InternalConnectionString string `json:"internalConnectionString,omitempty"`
 
 	// The connection string to connect to the ensemble from outside of the Kubernetes cluster
 	// If external and no internal connection string is provided, the external cnx string will be used as the internal cnx string
@@ -431,7 +431,8 @@ type ZookeeperConnectionInfo struct {
 	ExternalConnectionString *string `json:"externalConnectionString,omitempty"`
 
 	// The ChRoot to connect solr at
-	ChRoot string `json:"chroot"`
+	// +optional
+	ChRoot string `json:"chroot,omitempty"`
 }
 
 // +genclient
@@ -526,7 +527,11 @@ func (sc *SolrCloud) ZkConnectionString() string {
 	return sc.Status.ZkConnectionString()
 }
 func (scs SolrCloudStatus) ZkConnectionString() string {
-	return scs.ZookeeperConnectionInfo.InternalConnectionString + scs.ZookeeperConnectionInfo.ChRoot
+	return scs.ZookeeperConnectionInfo.ZkConnectionString()
+}
+
+func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
+	return zkInfo.InternalConnectionString + zkInfo.ChRoot
 }
 
 func (sc *SolrCloud) CommonIngressPrefix() string {

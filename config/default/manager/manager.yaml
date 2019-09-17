@@ -19,9 +19,9 @@ spec:
     spec:
       containers:
       - args:
-        - -zookeeper-operator
+        - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-url=ing.local.domain
+        - -ingress-base-domain=ing.local.domain
         image: bloomberg/solr-operator:latest
         imagePullPolicy: Always
         name: solr-operator

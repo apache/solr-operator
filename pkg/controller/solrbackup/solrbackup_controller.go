@@ -97,18 +97,12 @@ type ReconcileSolrBackup struct {
 
 // Reconcile reads that state of the cluster for a SolrBackup object and makes changes based on the state read
 // and what is in the SolrBackup.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  The scaffolding writes
-// a Deployment as an example
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments
-// +kubebuilder:rbac:groups=,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=,resources=persistentvolumeclaims/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=,resources=pods,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=,resources=pods/status,verbs=get;update;patch
+// Automatically generate RBAC rules to allow the Controller to read and write Jobs and execute in pods and read SolrClouds
 // +kubebuilder:rbac:groups=,resources=pods/exec,verbs=create
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
 func (r *ReconcileSolrBackup) Reconcile(request reconcile.Request) (reconcile.Result, error) {

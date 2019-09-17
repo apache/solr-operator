@@ -5,4 +5,4 @@ metadata:
 spec:
   replicas: 4
   solrImage:
-    tag: 8.1.1
+    tag: 8.2.0
