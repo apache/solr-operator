@@ -7,69 +7,9 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - persistentvolumeclaims
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - pods/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - ""
-  resources:
   - pods/exec
   verbs:
   - create
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-  - update
-  - patch
 - apiGroups:
   - batch
   resources:
@@ -90,6 +30,20 @@ rules:
   - get
   - update
   - patch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
 - apiGroups:
   - solr.bloomberg.com
   resources:
@@ -118,18 +72,12 @@ rules:
   - get
   - list
   - watch
-  - create
-  - update
-  - patch
-  - delete
 - apiGroups:
   - ""
   resources:
   - pods/status
   verbs:
   - get
-  - update
-  - patch
 - apiGroups:
   - ""
   resources:
@@ -291,6 +239,94 @@ rules:
   - update
   - patch
 - apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - mutatingwebhookconfigurations
@@ -371,9 +407,9 @@ spec:
     spec:
       containers:
       - args:
-        - -zk-operator
+        - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-domain=localhost
+        - -ingress-base-domain=ing.local.domain
         env:
         - name: POD_NAMESPACE
           valueFrom:
@@ -381,7 +417,7 @@ spec:
               fieldPath: metadata.namespace
         - name: SECRET_NAME
           value: webhook-server-secret
-        image: bloomberg/solr-operator:0.1.0
+        image: bloomberg/solr-operator:0.1.2
         imagePullPolicy: Always
         name: solr-operator
         ports:

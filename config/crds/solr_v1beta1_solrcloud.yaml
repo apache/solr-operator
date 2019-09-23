@@ -122,9 +122,6 @@ spec:
                       description: The connection string to connect to the ensemble
                         from within the Kubernetes cluster
                       type: string
-                  required:
-                  - internalConnectionString
-                  - chroot
                   type: object
                 provided:
                   description: 'A zookeeper that is created by the solr operator Note:
@@ -239,9 +236,6 @@ spec:
                   description: The connection string to connect to the ensemble from
                     within the Kubernetes cluster
                   type: string
-              required:
-              - internalConnectionString
-              - chroot
               type: object
           required:
           - solrNodes

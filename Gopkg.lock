@@ -358,6 +358,14 @@
   version = "v0.8.1"
 
 [[projects]]
+  digest = "1:22aa691fe0213cb5c07d103f9effebcb7ad04bee45a0ce5fe5369d0ca2ec3a1f"
+  name = "github.com/pmezard/go-difflib"
+  packages = ["difflib"]
+  pruneopts = "T"
+  revision = "792786c7400a136282c1664665ae0a8db921c6c2"
+  version = "v1.0.0"
+
+[[projects]]
   digest = "1:559af96935e6b54a946ae2512369312e708d2e002d25abc869d021fff3b69913"
   name = "github.com/pravega/zookeeper-operator"
   packages = [
@@ -451,6 +459,14 @@
   pruneopts = "T"
   revision = "298182f68c66c05229eb03ac171abe6e309ee79a"
   version = "v1.0.3"
+
+[[projects]]
+  digest = "1:1d6f160431ac08b6e39b374f2ae9e00c9780cd604d65a5364d7304cd939efd0c"
+  name = "github.com/stretchr/testify"
+  packages = ["assert"]
+  pruneopts = "T"
+  revision = "221dbe5ed46703ee255b1da0dec05086f5035f62"
+  version = "v1.4.0"
 
 [[projects]]
   digest = "1:365b8ecb35a5faf5aa0ee8d798548fc9cd4200cb95d77a5b0b285ac881bae499"
@@ -1048,6 +1064,7 @@
     "github.com/onsi/gomega",
     "github.com/pravega/zookeeper-operator/pkg/apis",
     "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1",
+    "github.com/stretchr/testify/assert",
     "golang.org/x/net/context",
     "k8s.io/api/apps/v1",
     "k8s.io/api/batch/v1",
