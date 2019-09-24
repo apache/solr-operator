@@ -18,9 +18,6 @@ package solrbackup
 
 import (
 	"context"
-	"reflect"
-	"time"
-
 	solrv1beta1 "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	"github.com/bloomberg/solr-operator/pkg/controller/util"
 	batchv1 "k8s.io/api/batch/v1"
@@ -29,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
+	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -37,6 +35,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+	"time"
 )
 
 var log = logf.Log.WithName("controller")

@@ -65,6 +65,54 @@ rules:
   - update
   - patch
 - apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
+- apiGroups:
   - ""
   resources:
   - pods
