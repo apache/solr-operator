@@ -239,6 +239,26 @@ rules:
   - update
   - patch
 - apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollections
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollections/status
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
   - ""
   resources:
   - configmaps
@@ -322,46 +342,6 @@ rules:
   - solr.bloomberg.com
   resources:
   - solrprometheusexporters/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrcollections
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - solr.bloomberg.com
-  resources:
-  - solrcollections/status
   verbs:
   - get
   - update

@@ -19,18 +19,19 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	"io/ioutil"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strconv"
+
+	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"net/http"
-	"net/url"
-	"reflect"
-	"strconv"
 )
 
 const (
@@ -601,6 +602,33 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 
 	if err == nil {
 		json.NewDecoder(resp.Body).Decode(&response)
+	}
+
+	return err
+}
+
+func CallCollectionsApiUnMarshal(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+
+	urlParams.Set("wt", "json")
+
+	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
+
+	resp := &http.Response{}
+	if resp, err = http.Get(cloudUrl); err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if err == nil && resp.StatusCode != 200 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
+	}
+
+	if err == nil {
+		b, _ := ioutil.ReadAll(resp.Body)
+		err = json.Unmarshal(b, &response)
 	}
 
 	return err

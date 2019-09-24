@@ -19,6 +19,7 @@ package solrcollection
 import (
 	"context"
 	"reflect"
+	"time"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	"github.com/bloomberg/solr-operator/pkg/controller/util"
@@ -94,7 +95,10 @@ func (r *ReconcileSolrCollection) Reconcile(request reconcile.Request) (reconcil
 		return reconcile.Result{}, err
 	}
 
-	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.RouterName, collection.Spec.Shards, collection.Namespace)
+	oldStatus := collection.Status.DeepCopy()
+	requeueOrNot := reconcile.Result{Requeue: true, RequeueAfter: time.Second * 5}
+
+	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.MaxShardsPerNode, collection.Spec.RouterName, collection.Spec.Shards, collection.Namespace)
 
 	if err != nil {
 		log.Error(err, "Error while creating SolrCloud collection")
@@ -121,7 +125,7 @@ func (r *ReconcileSolrCollection) Reconcile(request reconcile.Request) (reconcil
 	} else {
 		// The object is being deleted
 		if util.ContainsString(collection.ObjectMeta.Finalizers, collectionFinalizer) {
-			log.Info("Deleting Solr collection", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name)
+			log.Info("Deleting Solr collection", "cloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name)
 			// our finalizer is present, so lets handle our external dependency
 			delete, err := util.DeleteCollection(collection.Spec.SolrCloud, collection.Name, collection.Namespace)
 			if err != nil {
@@ -129,7 +133,7 @@ func (r *ReconcileSolrCollection) Reconcile(request reconcile.Request) (reconcil
 				return reconcile.Result{}, err
 			}
 
-			log.Info("Deleted Solr collection", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name, "Deleted", delete)
+			log.Info("Deleted Solr collection", "cloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name, "Deleted", delete)
 
 		}
 
@@ -140,24 +144,53 @@ func (r *ReconcileSolrCollection) Reconcile(request reconcile.Request) (reconcil
 		}
 	}
 
-	return reconcile.Result{}, nil
+	if !reflect.DeepEqual(oldStatus, collection.Status) {
+		log.Info("Updating status for solr-collection", "collection", collection, "namespace", collection.Namespace, "name", collection.Name)
+		err = r.Status().Update(context.TODO(), collection)
+	}
+
+	if collection.Status.InProgressCreation {
+		if util.CheckIfCollectionExists(collection.Spec.SolrCloud, collection.Spec.Collection, collection.Namespace) {
+			log.Info("Collection exists, creation complete", "collection", collection, "namespace", collection.Namespace, "name", collection.Name)
+			collection.Status.InProgressCreation = false
+			requeueOrNot = reconcile.Result{}
+		} else {
+			log.Info("Collection creation still in progress", "collection", collection, "namespace", collection.Namespace, "name", collection.Name)
+			requeueOrNot = reconcile.Result{Requeue: true}
+		}
+	}
+	if collection.Status.Created {
+		requeueOrNot = reconcile.Result{}
+	}
+
+	return requeueOrNot, nil
 }
 
-func reconcileSolrCollection(r *ReconcileSolrCollection, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, shards string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
+func reconcileSolrCollection(r *ReconcileSolrCollection, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName string, shards string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
 	// Get the solrCloud that this collection is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
-	oldCollectionSpec := collection.Spec.DeepCopy()
 	err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud)
 
-	// If the collection has already been created already, and there is a change in spec variables, run the modify SolrCloud API call
-	if collection.Status.Created && !reflect.DeepEqual(collection.Spec, oldCollectionSpec) {
-		modify, err := util.ModifyCollection(solrCloud.Name, collection.Name, replicationFactor, autoAddReplicas, namespace)
+	// If the collection has already been created already and requires modification
+	if collection.Status.Created {
+		modificationRequired, err := util.CheckIfCollectionModificationRequired(solrCloud.Name, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, namespace)
 
 		if err != nil {
 			return nil, false, err
 		}
 
-		log.Info("Modified Solr collection", "SolrCloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name, "Modified", modify)
+		if modificationRequired {
+			modify, err := util.ModifyCollection(solrCloud.Name, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, namespace)
+
+			if err != nil {
+				return nil, false, err
+			}
+
+			log.Info("Modified Solr collection", "SolrCloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name, "Modified", modify)
+		} else {
+			log.Info("Modification on Solr collection not required", "SolrCloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name, "Modified", nil)
+		}
+
 	}
 
 	// If the collection collection hasn't been created or is in progress, start it creation
@@ -167,6 +200,7 @@ func reconcileSolrCollection(r *ReconcileSolrCollection, collection *solrv1beta1
 		collection.Status.InProgressCreation = true
 		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, routerName, shards, namespace)
 		if err != nil {
+			collection.Status.InProgressCreation = false
 			return nil, false, err
 		}
 		collection.Status.Created = create

@@ -80,12 +80,14 @@ func DeleteCollection(cloud string, collection string, namespace string) (succes
 }
 
 // ModifyCollection to request collection modification on SolrCloud.
-func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, namespace string) (success bool, err error) {
+func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
+	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
 	queryParams.Add("action", "MODIFYCOLLECTION")
 	queryParams.Add("collection", collection)
 	queryParams.Add("replicationFactor", replicationFactorParameter)
+	queryParams.Add("maxShardsPerNode", maxShardsPerNodeParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
 
 	resp := &SolrAsyncResponse{}
@@ -102,6 +104,125 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 	}
 
 	return success, err
+}
+
+// CheckIfCollectionModificationRequired to check if the collection's modifiable parameters have changed in spec and need to be updated
+func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, namespace string) (success bool, err error) {
+	queryParams := url.Values{}
+	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
+	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
+	autoAddReplicasParameter := strconv.FormatBool(autoAddReplicas)
+	success = false
+	queryParams.Add("action", "COLSTATUS")
+	queryParams.Add("collection", collection)
+
+	resp := map[string]interface{}{}
+
+	err = CallCollectionsApiUnMarshal(cloud, namespace, queryParams, &resp)
+
+	if collectionResp, ok := resp[collection].(map[string]interface{}); ok {
+		collectionProperties := collectionResp["properties"].(map[string]interface{})
+
+		// Check modifiable collection parameters
+		if collectionProperties["autoAddReplicas"] != autoAddReplicasParameter {
+			log.Info("Collection modification required, autoAddReplicas changed", "autoAddReplicas", autoAddReplicasParameter)
+			success = true
+		}
+
+		if collectionProperties["maxShardsPerNode"] != maxShardsPerNodeParameter {
+			log.Info("Collection modification required, maxShardsPerNode changed", "maxShardsPerNode", maxShardsPerNodeParameter)
+			success = true
+		}
+
+		if collectionProperties["replicationFactor"] != replicationFactorParameter {
+			log.Info("Collection modification required, replicationFactor changed", "replicationFactor", replicationFactorParameter)
+			success = true
+		}
+	} else {
+		log.Error(err, "Error calling collection API status", "namespace", namespace, "cloud", cloud, "collection", collection)
+	}
+
+	return success, err
+}
+
+// CheckIfCollectionExists to request if collection exists in list of collection
+func CheckIfCollectionExists(cloud string, collection string, namespace string) (success bool) {
+	queryParams := url.Values{}
+	queryParams.Add("action", "LIST")
+
+	resp := &SolrCollectionsListResponse{}
+
+	log.Info("Calling to list collections", "namespace", namespace, "cloud", cloud, "collection", collection)
+	err := CallCollectionsApi(cloud, namespace, queryParams, resp)
+
+	if err == nil {
+		if containsCollection(resp.Collections, collection) {
+			success = true
+		}
+	} else {
+		log.Error(err, "Error listing collections", "namespace", namespace, "cloud", cloud, "collection")
+	}
+
+	return success
+}
+
+type SolrCollectionResponseHeader struct {
+	Status int `json:"status"`
+
+	QTime int `json:"QTime"`
+}
+
+type SolrCollectionAsyncStatus struct {
+	AsyncState string `json:"state"`
+
+	Message string `json:"msg"`
+}
+
+type SolrCollectionsStatusResponse struct {
+	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
+
+	// Use a pointer here
+	*SolrCollectionStatus
+}
+
+type SolrCollectionsListResponse struct {
+	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
+
+	// +optional
+	RequestId string `json:"requestId"`
+
+	// +optional
+	Status SolrCollectionAsyncStatus `json:"status"`
+
+	Collections []string `json:"collections"`
+}
+
+type SolrCollectionStatus struct {
+	StateFormat int `json:"stateFormat"`
+
+	ZnodeVersion int `json:"znodeVersion"`
+
+	Properties SolrCollectionProperties `json:"properties"`
+}
+
+type SolrCollectionProperties struct {
+	AutoAddReplicas string `json:"autoAddReplicas"`
+
+	MaxShardsPerNode string `json:"maxShardsPerNode"`
+
+	NrtReplicas string `json:"nrtReplicas"`
+
+	PullReplicas string `json:"pullReplicas"`
+
+	ReplicationFactor string `json:"replicationFactor"`
+
+	Router SolrCollectionRouter `json:"router"`
+
+	TlogReplicas string `json:"tlogReplicas"`
+}
+
+type SolrCollectionRouter struct {
+	Name string `json:"name"`
 }
 
 // ContainsString helper function to test string contains
@@ -123,4 +244,14 @@ func RemoveString(slice []string, s string) (result []string) {
 		result = append(result, item)
 	}
 	return
+}
+
+// containsCollection helper function to check if collection in list
+func containsCollection(collections []string, collection string) bool {
+	for _, a := range collections {
+		if a == collection {
+			return true
+		}
+	}
+	return false
 }
