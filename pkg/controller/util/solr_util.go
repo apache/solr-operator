@@ -19,18 +19,19 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	"io/ioutil"
+	"net/http"
+	"net/url"
+	"reflect"
+	"strconv"
+
+	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"net/http"
-	"net/url"
-	"reflect"
-	"strconv"
 )
 
 const (
@@ -173,7 +174,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							Env: []corev1.EnvVar{
 								{
 									Name:  "SOLR_JAVA_MEM",
-									Value: "-Xms1g -Xmx2g",
+									Value: solrCloud.Spec.SolrJavaMem,
 								},
 								{
 									Name:  "SOLR_HOME",
