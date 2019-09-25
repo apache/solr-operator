@@ -1,0 +1,84 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  creationTimestamp: null
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: solrcollections.solr.bloomberg.com
+spec:
+  group: solr.bloomberg.com
+  names:
+    kind: SolrCollection
+    plural: solrcollections
+  scope: Namespaced
+  validation:
+    openAPIV3Schema:
+      properties:
+        apiVersion:
+          description: 'APIVersion defines the versioned schema of this representation
+            of an object. Servers should convert recognized schemas to the latest
+            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#resources'
+          type: string
+        kind:
+          description: 'Kind is a string value representing the REST resource this
+            object represents. Servers may infer this from the endpoint the client
+            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/api-conventions.md#types-kinds'
+          type: string
+        metadata:
+          type: object
+        spec:
+          properties:
+            autoAddReplicas:
+              description: When set to true, enables automatic addition of replicas
+                when the number of active replicas falls below the value set for replicationFactor
+              type: boolean
+            collection:
+              description: The name of the collection to perform the action on
+              type: string
+            maxShardsPerNode:
+              description: Max shards per node
+              format: int64
+              type: integer
+            numShards:
+              description: The num of shards to create, used if RouteName is compositeId
+              format: int64
+              type: integer
+            replicationFactor:
+              description: The replication factor to be used
+              format: int64
+              type: integer
+            routerName:
+              description: The router name that will be used. The router defines how
+                documents will be distributed
+              type: string
+            shards:
+              description: A comma separated list of shard names, e.g., shard-x,shard-y,shard-z.
+                This is a required parameter when the router.name is implicit
+              type: string
+            solrCloud:
+              description: A reference to the SolrCloud to create a collection for
+              type: string
+          required:
+          - solrCloud
+          - collection
+          type: object
+        status:
+          properties:
+            created:
+              description: Whether the collection has been created or not
+              type: boolean
+            createdTime:
+              description: Time the collection was created
+              format: date-time
+              type: string
+            inProgressCreation:
+              description: Set the status of the collection creation process
+              type: boolean
+          type: object
+  version: v1beta1
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

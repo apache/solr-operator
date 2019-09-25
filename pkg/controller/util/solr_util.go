@@ -606,3 +606,30 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 
 	return err
 }
+
+func CallCollectionsApiUnMarshal(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+
+	urlParams.Set("wt", "json")
+
+	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
+
+	resp := &http.Response{}
+	if resp, err = http.Get(cloudUrl); err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	if err == nil && resp.StatusCode != 200 {
+		b, _ := ioutil.ReadAll(resp.Body)
+		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
+	}
+
+	if err == nil {
+		b, _ := ioutil.ReadAll(resp.Body)
+		err = json.Unmarshal(b, &response)
+	}
+
+	return err
+}
