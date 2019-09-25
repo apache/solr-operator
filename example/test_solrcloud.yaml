@@ -6,3 +6,4 @@ spec:
   replicas: 4
   solrImage:
     tag: 8.2.0
+  solrJavaMem: "-Xms1g -Xmx3g"

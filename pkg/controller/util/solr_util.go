@@ -174,7 +174,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							Env: []corev1.EnvVar{
 								{
 									Name:  "SOLR_JAVA_MEM",
-									Value: "-Xms1g -Xmx2g",
+									Value: solrCloud.Spec.SolrJavaMem,
 								},
 								{
 									Name:  "SOLR_HOME",
