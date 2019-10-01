@@ -35,6 +35,10 @@ spec:
             collection:
               description: The name of the collection to perform the action on
               type: string
+            collectionConfigName:
+              description: Define a configset to use for the collection. If not provided
+                _default will be used and an AUTOCREATED mutable config will be generated
+              type: string
             maxShardsPerNode:
               description: Max shards per node
               format: int64
@@ -61,6 +65,7 @@ spec:
           required:
           - solrCloud
           - collection
+          - collectionConfigName
           type: object
         status:
           properties:
