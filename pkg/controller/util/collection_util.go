@@ -22,7 +22,7 @@ import (
 )
 
 // CreateCollection to request collection creation on SolrCloud
-func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, shards string, namespace string) (success bool, err error) {
+func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	numShardsParameter := strconv.FormatInt(numShards, 10)
@@ -30,6 +30,7 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 	queryParams.Add("name", collection)
 	queryParams.Add("replicationFactor", replicationFactorParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
+	queryParams.Add("collection.configName", collectionConfigName)
 
 	if routerName == "implicit" {
 		queryParams.Add("router.name", routerName)
@@ -80,7 +81,7 @@ func DeleteCollection(cloud string, collection string, namespace string) (succes
 }
 
 // ModifyCollection to request collection modification on SolrCloud.
-func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, namespace string) (success bool, err error) {
+func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
@@ -89,6 +90,7 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 	queryParams.Add("replicationFactor", replicationFactorParameter)
 	queryParams.Add("maxShardsPerNode", maxShardsPerNodeParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
+	queryParams.Add("collection.configName", collectionConfigName)
 
 	resp := &SolrAsyncResponse{}
 
@@ -107,35 +109,37 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 }
 
 // CheckIfCollectionModificationRequired to check if the collection's modifiable parameters have changed in spec and need to be updated
-func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, namespace string) (success bool, err error) {
+func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
 	autoAddReplicasParameter := strconv.FormatBool(autoAddReplicas)
 	success = false
-	queryParams.Add("action", "COLSTATUS")
+	queryParams.Add("action", "CLUSTERSTATUS")
 	queryParams.Add("collection", collection)
 
-	resp := map[string]interface{}{}
+	resp := &SolrClusterStatusResponse{}
 
-	err = CallCollectionsApiUnMarshal(cloud, namespace, queryParams, &resp)
+	err = CallCollectionsApi(cloud, namespace, queryParams, &resp)
 
-	if collectionResp, ok := resp[collection].(map[string]interface{}); ok {
-		collectionProperties := collectionResp["properties"].(map[string]interface{})
-
+	if collectionResp, ok := resp.Cluster.Collections[collection].(map[string]interface{}); ok {
 		// Check modifiable collection parameters
-		if collectionProperties["autoAddReplicas"] != autoAddReplicasParameter {
+		if collectionResp["autoAddReplicas"] != autoAddReplicasParameter {
 			log.Info("Collection modification required, autoAddReplicas changed", "autoAddReplicas", autoAddReplicasParameter)
 			success = true
 		}
 
-		if collectionProperties["maxShardsPerNode"] != maxShardsPerNodeParameter {
+		if collectionResp["maxShardsPerNode"] != maxShardsPerNodeParameter {
 			log.Info("Collection modification required, maxShardsPerNode changed", "maxShardsPerNode", maxShardsPerNodeParameter)
 			success = true
 		}
 
-		if collectionProperties["replicationFactor"] != replicationFactorParameter {
+		if collectionResp["replicationFactor"] != replicationFactorParameter {
 			log.Info("Collection modification required, replicationFactor changed", "replicationFactor", replicationFactorParameter)
+			success = true
+		}
+		if collectionResp["configName"] != collectionConfigName {
+			log.Info("Collection modification required, configName changed", "configName", collectionConfigName)
 			success = true
 		}
 	} else {
@@ -178,13 +182,6 @@ type SolrCollectionAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-type SolrCollectionsStatusResponse struct {
-	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
-
-	// Use a pointer here
-	*SolrCollectionStatus
-}
-
 type SolrCollectionsListResponse struct {
 	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
 
@@ -197,32 +194,14 @@ type SolrCollectionsListResponse struct {
 	Collections []string `json:"collections"`
 }
 
-type SolrCollectionStatus struct {
-	StateFormat int `json:"stateFormat"`
+type SolrClusterStatusResponse struct {
+	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
 
-	ZnodeVersion int `json:"znodeVersion"`
-
-	Properties SolrCollectionProperties `json:"properties"`
+	Cluster SolrClusterStatusCluster `json:"cluster"`
 }
 
-type SolrCollectionProperties struct {
-	AutoAddReplicas string `json:"autoAddReplicas"`
-
-	MaxShardsPerNode string `json:"maxShardsPerNode"`
-
-	NrtReplicas string `json:"nrtReplicas"`
-
-	PullReplicas string `json:"pullReplicas"`
-
-	ReplicationFactor string `json:"replicationFactor"`
-
-	Router SolrCollectionRouter `json:"router"`
-
-	TlogReplicas string `json:"tlogReplicas"`
-}
-
-type SolrCollectionRouter struct {
-	Name string `json:"name"`
+type SolrClusterStatusCluster struct {
+	Collections map[string]interface{} `json:"collections"`
 }
 
 // ContainsString helper function to test string contains
