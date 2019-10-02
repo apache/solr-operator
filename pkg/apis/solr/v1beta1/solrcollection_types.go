@@ -28,6 +28,9 @@ type SolrCollectionSpec struct {
 	// The name of the collection to perform the action on
 	Collection string `json:"collection"`
 
+	// Define a configset to use for the collection. If not provided _default will be used and an AUTOCREATED mutable config will be generated
+	CollectionConfigName string `json:"collectionConfigName"`
+
 	// The router name that will be used. The router defines how documents will be distributed
 	// +optional
 	RouterName string `json:"routerName,omitempty"`
