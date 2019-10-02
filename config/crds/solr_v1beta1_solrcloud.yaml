@@ -98,6 +98,8 @@ spec:
                 tag:
                   type: string
               type: object
+            solrJavaMem:
+              type: string
             zookeeperRef:
               description: The information for the Zookeeper this SolrCloud should
                 connect to Can be a zookeeper that is running, or one that is created
