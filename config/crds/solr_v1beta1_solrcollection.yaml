@@ -36,8 +36,8 @@ spec:
               description: The name of the collection to perform the action on
               type: string
             collectionConfigName:
-              description: Define a configset to use for the collection. If not provided
-                _default will be used and an AUTOCREATED mutable config will be generated
+              description: Define a configset to use for the collection. Use '_default'
+                if you don't have a custom configset
               type: string
             maxShardsPerNode:
               description: Max shards per node

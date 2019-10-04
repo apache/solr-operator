@@ -234,6 +234,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 			VolumeClaimTemplates: pvcs,
 		},
 	}
+
+	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
+		log.Info("Adding imagePullSecret to statefulset", "ImagePullSecrets", solrCloud.Spec.SolrImage.ImagePullSecret)
+		stateful.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
+		}
+	}
+
 	return stateful
 }
 
