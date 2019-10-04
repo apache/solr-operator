@@ -10,6 +10,7 @@ spec:
   numShards: 2
   replicationFactor: 1
   maxShardsPerNode: 1
+  collectionConfigName: "_default"
 ---
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCollection
@@ -23,6 +24,7 @@ spec:
   numShards: 2
   replicationFactor: 1
   maxShardsPerNode: 1
+  collectionConfigName: "_default"
 ---
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCollection
@@ -37,3 +39,4 @@ spec:
   replicationFactor: 1
   maxShardsPerNode: 1
   shards: "fooshard1,fooshard2"
+  collectionConfigName: "_default"
