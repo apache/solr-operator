@@ -18,10 +18,11 @@ package v1beta1
 
 import (
 	"fmt"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
@@ -131,6 +132,8 @@ type ContainerImage struct {
 	Tag string `json:"tag,omitempty"`
 	// +optional
 	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
+	// +optional
+	ImagePullSecret string `json:"imagePullSecret,omitempty"`
 }
 
 func (c *ContainerImage) withDefaults(repo string, version string, policy corev1.PullPolicy) (changed bool) {

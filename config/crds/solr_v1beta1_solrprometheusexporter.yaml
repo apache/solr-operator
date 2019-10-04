@@ -51,6 +51,8 @@ spec:
             image:
               description: Image of Solr Prometheus Exporter to run.
               properties:
+                imagePullSecret:
+                  type: string
                 pullPolicy:
                   type: string
                 repository:

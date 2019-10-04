@@ -193,10 +193,6 @@ spec:
 $ kubectl apply -f examples/test_solrcollections.yaml
 ```
   
-## Solr Images
-
-The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
-
 ## Zookeeper
 =======
 ### Zookeeper Reference
@@ -263,8 +259,28 @@ Versions `6.6` - `7.x` and `8.2` - `master` should have the exporter available.
   
 ## Solr Images
 
+### Official Solr Images
+
 The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
 
+### Build Your Own Private Solr Images
+
+The solr-operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images. 
+
+Using a private image requires you have a K8s secret preconfigured with appropreiate access to the image. (type: kubernetes.io/dockerconfigjson)
+
+```
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: example-private-repo-solr-image
+spec:
+  replicas: 3
+  solrImage:
+    repository: myprivate-repo.jfrog.io/solr
+    tag: 8.2.0
+    imagePullSecret: "k8s-docker-registry-secret"
+```
 
 ## Solr Operator
 
