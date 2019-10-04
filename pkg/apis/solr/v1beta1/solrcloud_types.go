@@ -141,6 +141,8 @@ type ContainerImage struct {
 	Tag string `json:"tag,omitempty"`
 	// +optional
 	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
+	// +optional
+	ImagePullSecret string `json:"imagePullSecret,omitempty"`
 }
 
 func (c *ContainerImage) withDefaults(repo string, version string, policy corev1.PullPolicy) (changed bool) {

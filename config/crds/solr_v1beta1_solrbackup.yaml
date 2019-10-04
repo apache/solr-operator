@@ -64,6 +64,8 @@ spec:
                     AWSCliImage:
                       description: Image containing the AWS Cli
                       properties:
+                        imagePullSecret:
+                          type: string
                         pullPolicy:
                           type: string
                         repository:
@@ -127,6 +129,8 @@ spec:
                     busyBoxImage:
                       description: BusyBox image for manipulating and moving data
                       properties:
+                        imagePullSecret:
+                          type: string
                         pullPolicy:
                           type: string
                         repository:

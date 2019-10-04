@@ -50,6 +50,7 @@ const (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, hostNameIPs map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	fsGroup := int64(SolrClientPort)
+	defaultMode := int32(420)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	selectorLabels := solrCloud.SharedLabels()
@@ -71,6 +72,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							Path: "solr.xml",
 						},
 					},
+					DefaultMode: &defaultMode,
 				},
 			},
 		},
@@ -145,10 +147,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 					Volumes: solrVolumes,
 					InitContainers: []corev1.Container{
 						{
-							Name:            "cp-solr-xml",
-							Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
-							ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
-							Command:         []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
+							Name:                     "cp-solr-xml",
+							Image:                    solrCloud.Spec.BusyBoxImage.ToImageName(),
+							ImagePullPolicy:          solrCloud.Spec.BusyBoxImage.PullPolicy,
+							TerminationMessagePath:   "/dev/termination-log",
+							TerminationMessagePolicy: "File",
+							Command:                  []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "solr-xml",
@@ -168,7 +172,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							Image:           solrCloud.Spec.SolrImage.ToImageName(),
 							ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
 							Ports: []corev1.ContainerPort{
-								{ContainerPort: SolrClientPort, Name: SolrClientPortName},
+								{
+									ContainerPort: SolrClientPort,
+									Name:          SolrClientPortName,
+									Protocol:      "TCP",
+								},
 							},
 							VolumeMounts: volumeMounts,
 							Env: []corev1.EnvVar{
@@ -188,7 +196,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 									Name: "POD_HOSTNAME",
 									ValueFrom: &corev1.EnvVarSource{
 										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath: "metadata.name",
+											FieldPath:  "metadata.name",
+											APIVersion: "v1",
 										},
 									},
 								},
@@ -207,6 +216,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							},
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
+								TimeoutSeconds:      1,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
 								PeriodSeconds:       10,
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
@@ -218,6 +230,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							},
 							ReadinessProbe: &corev1.Probe{
 								InitialDelaySeconds: 15,
+								TimeoutSeconds:      1,
+								SuccessThreshold:    1,
+								FailureThreshold:    3,
 								PeriodSeconds:       5,
 								Handler: corev1.Handler{
 									HTTPGet: &corev1.HTTPGetAction{
@@ -227,6 +242,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 									},
 								},
 							},
+							TerminationMessagePath:   "/dev/termination-log",
+							TerminationMessagePolicy: "File",
 						},
 					},
 				},
@@ -234,6 +251,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 			VolumeClaimTemplates: pvcs,
 		},
 	}
+
+	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
+		stateful.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
+		}
+	}
+
 	return stateful
 }
 
@@ -260,31 +284,37 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Replicas changed from", from.Spec.Replicas, "To:", to.Spec.Replicas)
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
 	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Selector changed from", from.Spec.Selector, "To:", to.Spec.Selector)
 		to.Spec.Selector = from.Spec.Selector
 	}
 
 	if !reflect.DeepEqual(to.Spec.VolumeClaimTemplates, from.Spec.VolumeClaimTemplates) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", from.Spec.VolumeClaimTemplates, "To:", to.Spec.VolumeClaimTemplates)
 		to.Spec.VolumeClaimTemplates = from.Spec.VolumeClaimTemplates
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Labels changed from", from.Spec.Template.Labels, "To:", to.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Containers changed from", from.Spec.Template.Spec.Containers, "To:", to.Spec.Template.Spec.Containers)
 		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.InitContainers changed from", from.Spec.Template.Spec.InitContainers, "To:", to.Spec.Template.Spec.InitContainers)
 		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
 	}
 
@@ -296,6 +326,12 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", from.Spec.Template.Spec.ImagePullSecrets, "To:", to.Spec.Template.Spec.ImagePullSecrets)
+		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
 	}
 
 	return requireUpdate
