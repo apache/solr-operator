@@ -160,6 +160,7 @@ spec:
   numShards: 2
   replicationFactor: 1
   maxShardsPerNode: 1
+  collectionConfigName: "_default"
 ---
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCollection
@@ -173,6 +174,7 @@ spec:
   numShards: 2
   replicationFactor: 1
   maxShardsPerNode: 1
+  collectionConfigName: "_default"
 ---
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCollection
@@ -187,6 +189,7 @@ spec:
   replicationFactor: 1
   maxShardsPerNode: 1
   shards: "fooshard1,fooshard2"
+  collectionConfigName: "_default"
 ```
 
 ```bash
@@ -324,6 +327,30 @@ Building and releasing a test operator image with a custom namespace.
 ```bash
 $ NAMESPACE=your-namespace make docker-base-build docker-build docker-push
 ```
+
+### Docker for Mac Local Development Setup
+
+#### Install and configure on Docker for Mac
+
+1. (Download and install latest stable version)[https://docs.docker.com/docker-for-mac/install/]
+2. Enable K8s under perferences
+3. Ensure you have kubectl installed on your Mac (if using Brew: `brew install kubernetes-cli`
+3. Run through [Getting Started](#getting-started)
+3. Install nginx-ingress configuration
+
+```
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/mandatory.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/cloud-generic.yaml
+```
+
+4. Ensure your /etc/hosts file is setup to use the ingress for your SolrCloud. Here is what you need if you name your SolrCloud 'example' with 3 replicas
+
+```
+127.0.0.1	localhost default-example-solrcloud.ing.local.domain ing.local.domain default-example-solrcloud-0.ing.local.domain default-example-solrcloud-1.ing.local.domain default-example-solrcloud-2.ing.local.domain dinghy-ping.localhost
+```
+
+5. Navigate to your browser: http://default-example-solrcloud.ing.local.domain/solr/#/ to validate everything is working
+
 
 ## Version Compatability
 

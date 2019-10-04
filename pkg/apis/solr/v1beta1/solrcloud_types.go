@@ -32,6 +32,7 @@ const (
 	DefaultSolrRepo     = "library/solr"
 	DefaultSolrVersion  = "7.7.0"
 	DefaultSolrStorage  = "5Gi"
+	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
@@ -83,6 +84,9 @@ type SolrCloudSpec struct {
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// +optional
+	SolrJavaMem string `json:"solrJavaMem,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -90,6 +94,11 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		changed = true
 		r := DefaultSolrReplicas
 		spec.Replicas = &r
+	}
+
+	if spec.SolrJavaMem == "" {
+		changed = true
+		spec.SolrJavaMem = DefaultSolrJavaMem
 	}
 
 	if spec.ZookeeperRef == nil {

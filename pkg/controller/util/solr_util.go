@@ -174,7 +174,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 							Env: []corev1.EnvVar{
 								{
 									Name:  "SOLR_JAVA_MEM",
-									Value: "-Xms1g -Xmx2g",
+									Value: solrCloud.Spec.SolrJavaMem,
 								},
 								{
 									Name:  "SOLR_HOME",
@@ -610,33 +610,6 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 
 	if err == nil {
 		json.NewDecoder(resp.Body).Decode(&response)
-	}
-
-	return err
-}
-
-func CallCollectionsApiUnMarshal(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
-
-	urlParams.Set("wt", "json")
-
-	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
-
-	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	if err == nil && resp.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(resp.Body)
-		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
-	}
-
-	if err == nil {
-		b, _ := ioutil.ReadAll(resp.Body)
-		err = json.Unmarshal(b, &response)
 	}
 
 	return err
