@@ -89,6 +89,10 @@ spec:
               description: The number of solr nodes to run
               format: int32
               type: integer
+            solrGCTune:
+              description: Set GC Tuning configuration through GC_TUNE environment
+                variable
+              type: string
             solrImage:
               properties:
                 pullPolicy:
@@ -99,6 +103,13 @@ spec:
                   type: string
               type: object
             solrJavaMem:
+              type: string
+            solrLogLevel:
+              description: Set the Solr Log level, defaults to INFO
+              type: string
+            solrOpts:
+              description: You can add common system properties to the SOLR_OPTS environment
+                variable SolrOpts is the string interface for these optional settings
               type: string
             zookeeperRef:
               description: The information for the Zookeeper this SolrCloud should
