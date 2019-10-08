@@ -3,7 +3,9 @@ kind: SolrCloud
 metadata:
   name: example
 spec:
-  replicas: 4
+  replicas: 3
   solrImage:
     tag: 8.2.0
-  solrJavaMem: "-Xms1g -Xmx3g"
+  solrJavaMem: "-Xms1g -Xmx2g"
+  solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+  solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
