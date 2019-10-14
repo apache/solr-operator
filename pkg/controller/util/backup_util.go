@@ -19,6 +19,8 @@ package util
 import (
 	"bytes"
 	"fmt"
+	"net/url"
+
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -27,7 +29,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
-	"net/url"
 )
 
 const (

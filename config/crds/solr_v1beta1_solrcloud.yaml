@@ -73,6 +73,8 @@ spec:
               type: object
             busyBoxImage:
               properties:
+                imagePullSecret:
+                  type: string
                 pullPolicy:
                   type: string
                 repository:
@@ -91,6 +93,8 @@ spec:
               type: integer
             solrImage:
               properties:
+                imagePullSecret:
+                  type: string
                 pullPolicy:
                   type: string
                 repository:
@@ -137,6 +141,8 @@ spec:
                         image:
                           description: Image of Zookeeper to run
                           properties:
+                            imagePullSecret:
+                              type: string
                             pullPolicy:
                               type: string
                             repository:
