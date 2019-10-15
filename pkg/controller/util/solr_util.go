@@ -211,7 +211,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 								},
 								{
 									Name:  "SOLR_LOG_LEVEL",
-									Value: "INFO",
 									Value: solrCloud.Spec.SolrLogLevel,
 								},
 								{
