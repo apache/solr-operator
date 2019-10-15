@@ -33,6 +33,9 @@ const (
 	DefaultSolrVersion  = "7.7.0"
 	DefaultSolrStorage  = "5Gi"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
+	DefaultSolrOpts     = ""
+	DefaultSolrLogLevel = "INFO"
+	DefaultSolrGCTune   = ""
 
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
@@ -68,6 +71,11 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
+	// Pod defines the policy to create pod for the SolrCloud.
+	// Updating the Pod does not take effect on any existing pods.
+	// +optional
+	SolrPod SolrPodPolicy `json:"solrPodPolicy,omitempty"`
+
 	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
 	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
 	// +optional
@@ -87,6 +95,19 @@ type SolrCloudSpec struct {
 
 	// +optional
 	SolrJavaMem string `json:"solrJavaMem,omitempty"`
+
+	// You can add common system properties to the SOLR_OPTS environment variable
+	// SolrOpts is the string interface for these optional settings
+	// +optional
+	SolrOpts string `json:"solrOpts,omitempty"`
+
+	// Set the Solr Log level, defaults to INFO
+	// +optional
+	SolrLogLevel string `json:"solrLogLevel,omitempty"`
+
+	// Set GC Tuning configuration through GC_TUNE environment variable
+	// +optional
+	SolrGCTune string `json:"solrGCTune,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -96,9 +117,24 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.Replicas = &r
 	}
 
-	if spec.SolrJavaMem == "" {
+	if spec.SolrJavaMem == "" && DefaultSolrJavaMem != "" {
 		changed = true
 		spec.SolrJavaMem = DefaultSolrJavaMem
+	}
+
+	if spec.SolrOpts == "" && DefaultSolrOpts != "" {
+		changed = true
+		spec.SolrOpts = DefaultSolrOpts
+	}
+
+	if spec.SolrLogLevel == "" && DefaultSolrLogLevel != "" {
+		changed = true
+		spec.SolrLogLevel = DefaultSolrLogLevel
+	}
+
+	if spec.SolrGCTune == "" && DefaultSolrGCTune != "" {
+		changed = true
+		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
 	if spec.ZookeeperRef == nil {
@@ -130,6 +166,19 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
 	return changed
+}
+
+// SolrPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type SolrPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // ContainerImage defines the fields needed for a Docker repository image. The
@@ -269,6 +318,22 @@ type ZookeeperSpec struct {
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
 	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+
+	// Pod resources for zookeeper pod
+	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
+}
+
+// ZookeeperPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type ZookeeperPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (z *ZookeeperSpec) withDefaults() (changed bool) {
@@ -333,6 +398,22 @@ type EtcdSpec struct {
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
 	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+
+	// Pod resources for etcd pods
+	EtcdPod EtcdPodPolicy `json:"etcdPodPolicy,omitempty"`
+}
+
+// EtcdPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type EtcdPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (s *EtcdSpec) withDefaults() (changed bool) {
@@ -357,6 +438,22 @@ type ZetcdSpec struct {
 
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
+
+	// Pod resources for zetcd pods
+	ZetcdPod ZetcdPodPolicy `json:"zetcdPodPolicy,omitempty"`
+}
+
+// EtcdPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type ZetcdPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (s *ZetcdSpec) withDefaults() (changed bool) {

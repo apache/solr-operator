@@ -91,6 +91,10 @@ spec:
               description: The number of solr nodes to run
               format: int32
               type: integer
+            solrGCTune:
+              description: Set GC Tuning configuration through GC_TUNE environment
+                variable
+              type: string
             solrImage:
               properties:
                 imagePullSecret:
@@ -104,6 +108,25 @@ spec:
               type: object
             solrJavaMem:
               type: string
+            solrLogLevel:
+              description: Set the Solr Log level, defaults to INFO
+              type: string
+            solrOpts:
+              description: You can add common system properties to the SOLR_OPTS environment
+                variable SolrOpts is the string interface for these optional settings
+              type: string
+            solrPodPolicy:
+              description: Pod defines the policy to create pod for the SolrCloud.
+                Updating the Pod does not take effect on any existing pods.
+              properties:
+                affinity:
+                  description: The scheduling constraints on pods.
+                  type: object
+                resources:
+                  description: Resources is the resource requirements for the container.
+                    This field cannot be updated once the cluster is created.
+                  type: object
+              type: object
             zookeeperRef:
               description: The information for the Zookeeper this SolrCloud should
                 connect to Can be a zookeeper that is running, or one that is created
@@ -160,6 +183,18 @@ spec:
                             Defaults to 3
                           format: int32
                           type: integer
+                        zookeeperPodPolicy:
+                          description: Pod resources for zookeeper pod
+                          properties:
+                            affinity:
+                              description: The scheduling constraints on pods.
+                              type: object
+                            resources:
+                              description: Resources is the resource requirements
+                                for the container. This field cannot be updated once
+                                the cluster is created.
+                              type: object
+                          type: object
                       type: object
                   type: object
               type: object

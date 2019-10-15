@@ -17,6 +17,8 @@ limitations under the License.
 package util
 
 import (
+	"reflect"
+
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
@@ -24,7 +26,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"reflect"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 )
 
@@ -55,6 +56,16 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 			PersistentVolumeClaimSpec: *zkSpec.PersistentVolumeClaimSpec,
 		},
 	}
+
+	// Append Pod Policies if provided by user
+	if zkSpec.ZookeeperPod.Affinity != nil {
+		zkCluster.Spec.Pod.Affinity = zkSpec.ZookeeperPod.Affinity
+	}
+
+	if zkSpec.ZookeeperPod.Resources.Limits != nil || zkSpec.ZookeeperPod.Resources.Requests != nil {
+		zkCluster.Spec.Pod.Resources = zkSpec.ZookeeperPod.Resources
+	}
+
 	return zkCluster
 }
 
@@ -101,6 +112,27 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	}
 	to.Spec.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.PersistentVolumeClaimSpec.Resources.Requests
 
+	if !reflect.DeepEqual(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
+		log.Info("Updating Zk pod resources")
+		requireUpdate = true
+	}
+	to.Spec.Pod.Resources = from.Spec.Pod.Resources
+
+	if from.Spec.Pod.Affinity != nil {
+		if !reflect.DeepEqual(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
+			log.Info("Updating Zk pod node affinity")
+			log.Info("Update required because:", "Spec.Pod.Affinity.NodeAffinity changed from", from.Spec.Pod.Affinity.NodeAffinity, "To:", to.Spec.Pod.Affinity.NodeAffinity)
+			requireUpdate = true
+		}
+
+		if !reflect.DeepEqual(to.Spec.Pod.Affinity.PodAffinity, from.Spec.Pod.Affinity.PodAffinity) {
+			log.Info("Updating Zk pod node affinity")
+			log.Info("Update required because:", "Spec.Pod.Affinity.PodAffinity changed from", from.Spec.Pod.Affinity.PodAffinity, "To:", to.Spec.Pod.Affinity.PodAffinity)
+			requireUpdate = true
+		}
+		to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
+	}
+
 	return requireUpdate
 }
 
@@ -129,6 +161,16 @@ func GenerateEtcdCluster(solrCloud *solr.SolrCloud, etcdSpec solr.EtcdSpec, busy
 			},
 		},
 	}
+
+	// Append Pod Policies if provided by user
+	if etcdSpec.EtcdPod.Affinity != nil {
+		etcdCluster.Spec.Pod.Affinity = etcdSpec.EtcdPod.Affinity
+	}
+
+	if etcdSpec.EtcdPod.Resources.Limits != nil || etcdSpec.EtcdPod.Resources.Requests != nil {
+		etcdCluster.Spec.Pod.Resources = etcdSpec.EtcdPod.Resources
+	}
+
 	return etcdCluster
 }
 
@@ -198,6 +240,15 @@ func GenerateZetcdDeployment(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *ap
 			},
 		},
 	}
+
+	if spec.ZetcdPod.Resources.Limits != nil || spec.ZetcdPod.Resources.Requests != nil {
+		deployment.Spec.Template.Spec.Containers[0].Resources = spec.ZetcdPod.Resources
+	}
+
+	if spec.ZetcdPod.Affinity != nil {
+		deployment.Spec.Template.Spec.Affinity = spec.ZetcdPod.Affinity
+	}
+
 	return deployment
 }
 
@@ -239,6 +290,11 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
 	}
 
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+		requireUpdate = true
+		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
+	}
+
 	if len(to.Spec.Template.Spec.Containers) != len(from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
@@ -272,6 +328,11 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
 				requireUpdate = true
 				to.Spec.Template.Spec.Containers[i].Env = from.Spec.Template.Spec.Containers[i].Env
+			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Resources, from.Spec.Template.Spec.Containers[i].Resources) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].Resources = from.Spec.Template.Spec.Containers[i].Resources
 			}
 		}
 	}
