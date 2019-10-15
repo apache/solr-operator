@@ -71,6 +71,11 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
+	// Pod defines the policy to create pod for the SolrCloud.
+	// Updating the Pod does not take effect on any existing pods.
+	// +optional
+	Pod PodPolicy `json:"pod,omitempty"`
+
 	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
 	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
 	// +optional
@@ -161,6 +166,19 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
 	return changed
+}
+
+// PodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type PodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 // ContainerImage defines the fields needed for a Docker repository image. The
