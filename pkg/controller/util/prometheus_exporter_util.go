@@ -150,6 +150,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			},
 		},
 	}
+
+	if solrPrometheusExporter.Spec.Image.ImagePullSecret != "" {
+		deployment.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: solrPrometheusExporter.Spec.Image.ImagePullSecret},
+		}
+	}
+
+	if solrPrometheusExporter.Spec.Pod.Resources.Limits != nil || solrPrometheusExporter.Spec.Pod.Resources.Requests != nil {
+		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.Pod.Resources
+	}
+
 	return deployment
 }
 

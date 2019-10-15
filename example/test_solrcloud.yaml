@@ -9,3 +9,10 @@ spec:
   solrJavaMem: "-Xms1g -Xmx2g"
   solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
   solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+  pod:
+    resources:
+      limits:
+        memory: "2G"
+      requests:
+        cpu: "65m"
+        memory: "156Mi"
