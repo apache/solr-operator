@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/coreos/etcd-operator v0.9.3
+	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/json-iterator/go v1.1.6 // indirect

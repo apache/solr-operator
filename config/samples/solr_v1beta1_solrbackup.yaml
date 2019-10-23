@@ -1,0 +1,7 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrBackup
+metadata:
+  name: solrbackup-sample
+spec:
+  # Add fields here
+  foo: bar
