@@ -16,27 +16,498 @@ limitations under the License.
 package v1beta1
 
 import (
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	corev1 "k8s.io/api/core/v1"
+	"strings"
 )
 
+const (
+	DefaultPullPolicy = corev1.PullIfNotPresent
+
+	DefaultSolrReplicas = int32(3)
+	DefaultSolrRepo     = "library/solr"
+	DefaultSolrVersion  = "7.7.0"
+	DefaultSolrStorage  = "5Gi"
+	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
+	DefaultSolrOpts     = ""
+	DefaultSolrLogLevel = "INFO"
+	DefaultSolrGCTune   = ""
+
+	DefaultBusyBoxImageRepo    = "library/busybox"
+	DefaultBusyBoxImageVersion = "1.28.0-glibc"
+
+	DefaultZkReplicas = int32(3)
+	DefaultZkStorage  = "5Gi"
+	DefaultZkRepo     = "emccorp/zookeeper"
+	DefaultZkVersion  = "3.5.4-beta-operator"
+
+	DefaultEtcdReplicas = 3
+	DefaultEtcdRepo     = "quay.io/coreos/etcd"
+	DefaultEtcdVersion  = "3.2.13"
+
+	DefaultZetcdReplicas = int32(1)
+	DefaultZetcdRepo     = "quay.io/etcd-io/zetcd"
+	DefaultZetcdVersion  = "0.0.5"
+
+	SolrTechnologyLabel      = "solr-cloud"
+	ZookeeperTechnologyLabel = "zookeeper"
+)
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 // SolrCloudSpec defines the desired state of SolrCloud
 type SolrCloudSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// The number of solr nodes to run
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty"`
+
+	// The information for the Zookeeper this SolrCloud should connect to
+	// Can be a zookeeper that is running, or one that is created by the solr operator
+	// +optional
+	ZookeeperRef *ZookeeperRef `json:"zookeeperRef,omitempty"`
+
+	// +optional
+	SolrImage *ContainerImage `json:"solrImage,omitempty"`
+
+	// Pod defines the policy to create pod for the SolrCloud.
+	// Updating the Pod does not take effect on any existing pods.
+	// +optional
+	Pod PodPolicy `json:"pod,omitempty"`
+
+	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
+	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
+	// +optional
+	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
+
+	// Required for backups & restores to be enabled.
+	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
+	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
+	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
+	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
+	// Other options are to use a NFS volume.
+	// +optional
+	BackupRestoreVolume *corev1.VolumeSource `json:"backupRestoreVolume,omitempty"`
+
+	// +optional
+	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// +optional
+	SolrJavaMem string `json:"solrJavaMem,omitempty"`
+
+	// You can add common system properties to the SOLR_OPTS environment variable
+	// SolrOpts is the string interface for these optional settings
+	// +optional
+	SolrOpts string `json:"solrOpts,omitempty"`
+
+	// Set the Solr Log level, defaults to INFO
+	// +optional
+	SolrLogLevel string `json:"solrLogLevel,omitempty"`
+
+	// Set GC Tuning configuration through GC_TUNE environment variable
+	// +optional
+	SolrGCTune string `json:"solrGCTune,omitempty"`
+}
+
+func (spec *SolrCloudSpec) withDefaults() (changed bool) {
+	if spec.Replicas == nil {
+		changed = true
+		r := DefaultSolrReplicas
+		spec.Replicas = &r
+	}
+
+	if spec.SolrJavaMem == "" {
+		changed = true
+		spec.SolrJavaMem = DefaultSolrJavaMem
+	}
+
+	if spec.SolrOpts == "" {
+		changed = true
+		spec.SolrOpts = DefaultSolrOpts
+	}
+
+	if spec.SolrLogLevel == "" {
+		changed = true
+		spec.SolrLogLevel = DefaultSolrLogLevel
+	}
+
+	if spec.SolrGCTune == "" {
+		changed = true
+		spec.SolrGCTune = DefaultSolrGCTune
+	}
+
+	if spec.ZookeeperRef == nil {
+		spec.ZookeeperRef = &ZookeeperRef{}
+	}
+	changed = spec.ZookeeperRef.withDefaults() || changed
+
+	if spec.SolrImage == nil {
+		spec.SolrImage = &ContainerImage{}
+	}
+	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
+
+	if spec.DataPvcSpec != nil {
+		spec.DataPvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+			corev1.ReadWriteOnce,
+		}
+		if len(spec.DataPvcSpec.Resources.Requests) == 0 {
+			spec.DataPvcSpec.Resources.Requests = corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(DefaultSolrStorage),
+			}
+			changed = true
+		}
+	}
+
+	if spec.BusyBoxImage == nil {
+		c := ContainerImage{}
+		spec.BusyBoxImage = &c
+	}
+	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
+
+	return changed
+}
+
+// PodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type PodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+}
+
+// ContainerImage defines the fields needed for a Docker repository image. The
+// format here matches the predominant format used in Helm charts.
+type ContainerImage struct {
+	// +optional
+	Repository string `json:"repository,omitempty"`
+	// +optional
+	Tag string `json:"tag,omitempty"`
+	// +optional
+	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
+	// +optional
+	ImagePullSecret string `json:"imagePullSecret,omitempty"`
+}
+
+func (c *ContainerImage) withDefaults(repo string, version string, policy corev1.PullPolicy) (changed bool) {
+	if c.Repository == "" {
+		changed = true
+		c.Repository = repo
+	}
+	if c.Tag == "" {
+		changed = true
+		c.Tag = version
+	}
+	if c.PullPolicy == "" {
+		changed = true
+		c.PullPolicy = policy
+	}
+	return changed
+}
+
+func (c *ContainerImage) ToImageName() (name string) {
+	return c.Repository + ":" + c.Tag
+}
+
+func ImageVersion(image string) (version string) {
+	split := strings.Split(image, ":")
+	if len(split) < 2 {
+		return ""
+	} else {
+		return split[1]
+	}
+}
+
+// ZookeeperRef defines the zookeeper ensemble for solr to connect to
+// If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
+type ZookeeperRef struct {
+	// A zookeeper ensemble that is run independently of the solr operator
+	// If an externalConnectionString is provided, but no internalConnectionString is, the external will be used as the internal
+	// +optional
+	ConnectionInfo *ZookeeperConnectionInfo `json:"connectionInfo,omitempty"`
+
+	// A zookeeper that is created by the solr operator
+	// Note: This option will not allow the SolrCloud to run across kube-clusters.
+	// +optional
+	ProvidedZookeeper *ProvidedZookeeper `json:"provided,omitempty"`
+}
+
+func (ref *ZookeeperRef) withDefaults() (changed bool) {
+	if ref.ProvidedZookeeper == nil && ref.ConnectionInfo == nil {
+		changed = true
+		ref.ProvidedZookeeper = &ProvidedZookeeper{}
+	} else if ref.ConnectionInfo != nil {
+		if ref.ProvidedZookeeper != nil {
+			ref.ProvidedZookeeper = nil
+			changed = true
+		}
+		changed = ref.ConnectionInfo.withDefaults() || changed
+	}
+	if ref.ProvidedZookeeper != nil {
+		changed = ref.ProvidedZookeeper.withDefaults() || changed
+	}
+	return changed
+}
+
+func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
+	if ci.InternalConnectionString == "" {
+		changed = true
+		if ci.ExternalConnectionString == nil {
+			ci.InternalConnectionString = "N/A"
+		} else {
+			ci.InternalConnectionString = *ci.ExternalConnectionString
+		}
+	}
+	if ci.ChRoot == "" {
+		changed = true
+		ci.ChRoot = "/"
+	} else if !strings.HasPrefix(ci.ChRoot, "/") {
+		changed = true
+		ci.ChRoot = "/" + ci.ChRoot
+	}
+	return changed
+}
+
+// ProvidedZookeeper defines the internal zookeeper ensemble to run
+type ProvidedZookeeper struct {
+	// Create a new Zookeeper Ensemble with the following spec
+	// Note: Requires
+	//   - The zookeeperOperator flag to be provided to the Solr Operator
+	//   - A zookeeper operator to be running
+	// +optional
+	Zookeeper *ZookeeperSpec `json:"zookeeper,omitempty"`
+
+	// Create a new Etcd Cluster and a Zetcd proxy to connect the cluster to solr
+	// Note: Requires
+	//   - The etcdOperator flag to be provided to the Solr Operator
+	//   - An etcd operator to be running
+	// +optional
+	Zetcd *FullZetcdSpec `json:"zetcd,inline"`
+}
+
+func (z *ProvidedZookeeper) withDefaults() (changed bool) {
+	if z.Zookeeper == nil && z.Zetcd == nil {
+		changed = true
+		z.Zookeeper = &ZookeeperSpec{}
+	}
+	if z.Zookeeper != nil {
+		changed = z.Zookeeper.withDefaults() || changed
+	}
+	if z.Zetcd != nil {
+		changed = z.Zetcd.withDefaults() || changed
+	}
+	return changed
+}
+
+// ZookeeperSpec defines the internal zookeeper ensemble to run for solr
+type ZookeeperSpec struct {
+	// Number of members to create up for the ZK ensemble
+	// Defaults to 3
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Image of Zookeeper to run
+	// +optional
+	Image *ContainerImage `json:"image,omitempty"`
+
+	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
+	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
+	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+}
+
+func (z *ZookeeperSpec) withDefaults() (changed bool) {
+	if z.Replicas == nil {
+		changed = true
+		r := DefaultZkReplicas
+		z.Replicas = &r
+	}
+
+	if z.Image == nil {
+		z.Image = &ContainerImage{}
+	}
+	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
+
+	if z.PersistentVolumeClaimSpec == nil {
+		z.PersistentVolumeClaimSpec = &corev1.PersistentVolumeClaimSpec{}
+	}
+	z.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+		corev1.ReadWriteOnce,
+	}
+	if len(z.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
+		z.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+			corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+		}
+		changed = true
+	}
+	return changed
+}
+
+// FullZetcdSpec defines the internal etcd ensemble and zetcd server to run for solr (spoofing zookeeper)
+type FullZetcdSpec struct {
+	// +optional
+	EtcdSpec *EtcdSpec `json:"etcdSpec,omitempty"`
+
+	// +optional
+	ZetcdSpec *ZetcdSpec `json:"zetcdSpec,omitempty"`
+}
+
+func (z *FullZetcdSpec) withDefaults() (changed bool) {
+	if z.EtcdSpec == nil {
+		z.EtcdSpec = &EtcdSpec{}
+	}
+	changed = z.EtcdSpec.withDefaults() || changed
+
+	if z.ZetcdSpec == nil {
+		z.ZetcdSpec = &ZetcdSpec{}
+	}
+	changed = z.ZetcdSpec.withDefaults() || changed
+
+	return changed
+}
+
+// EtcdSpec defines the internal etcd ensemble to run for solr (spoofing zookeeper)
+type EtcdSpec struct {
+	// The number of EtcdReplicas to create
+	// +optional
+	Replicas *int `json:"replicas,omitempty"`
+
+	// +optional
+	Image *ContainerImage `json:"image,omitempty"`
+
+	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
+	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
+	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+}
+
+func (s *EtcdSpec) withDefaults() (changed bool) {
+	if s.Replicas == nil {
+		changed = true
+		r := DefaultEtcdReplicas
+		s.Replicas = &r
+	}
+
+	if s.Image == nil {
+		s.Image = &ContainerImage{}
+	}
+	changed = s.Image.withDefaults(DefaultEtcdRepo, DefaultEtcdVersion, DefaultPullPolicy) || changed
+
+	return changed
+}
+
+// ZetcdSpec defines the zetcd proxy to run connection solr and etcd
+type ZetcdSpec struct {
+	// +optional
+	Replicas *int32 `json:"replicas,omitempty"`
+
+	// +optional
+	Image *ContainerImage `json:"image,omitempty"`
+}
+
+func (s *ZetcdSpec) withDefaults() (changed bool) {
+	if s.Replicas == nil {
+		changed = true
+		r := DefaultZetcdReplicas
+		s.Replicas = &r
+	}
+
+	if s.Image == nil {
+		s.Image = &ContainerImage{}
+	}
+	changed = s.Image.withDefaults(DefaultZetcdRepo, DefaultZetcdVersion, DefaultPullPolicy) || changed
+
+	return changed
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud
 type SolrCloudStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// SolrNodes contain the statuses of each solr node running in this solr cloud.
+	SolrNodes []SolrNodeStatus `json:"solrNodes"`
+
+	// Replicas is the number of number of desired replicas in the cluster
+	Replicas int32 `json:"replicas"`
+
+	// ReadyReplicas is the number of number of ready replicas in the cluster
+	ReadyReplicas int32 `json:"readyReplicas"`
+
+	// The version of solr that the cloud is running
+	Version string `json:"version"`
+
+	// The version of solr that the cloud is meant to be running.
+	// Will only be provided when the cloud is migrating between versions
+	// +optional
+	TargetVersion string `json:"targetVersion,omitempty"`
+
+	// InternalCommonAddress is the internal common http address for all solr nodes
+	InternalCommonAddress string `json:"internalCommonAddress"`
+
+	// ExternalCommonAddress is the external common http address for all solr nodes.
+	// Will only be provided when an ingressUrl is provided for the cloud
+	// +optional
+	ExternalCommonAddress *string `json:"externalCommonAddress,omitempty"`
+
+	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
+	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
+
+	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
+	// and therefore is ready for backups and restores.
+	BackupRestoreReady bool `json:"backupRestoreReady"`
+}
+
+// SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
+// and internal and external addresses
+type SolrNodeStatus struct {
+	// The name of the pod running the node
+	NodeName string `json:"name"`
+
+	// An address the node can be connected to from within the Kube cluster
+	InternalAddress string `json:"internalAddress"`
+
+	// An address the node can be connected to from outside of the Kube cluster
+	// Will only be provided when an ingressUrl is provided for the cloud
+	// +optional
+	ExternalAddress string `json:"externalAddress,omitempty"`
+
+	// Is the node up and running
+	Ready bool `json:"ready"`
+
+	// The version of solr that the node is running
+	Version string `json:"version"`
+}
+
+// SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
+// and internal and external addresses
+type ZookeeperConnectionInfo struct {
+	// The connection string to connect to the ensemble from within the Kubernetes cluster
+	// +optional
+	InternalConnectionString string `json:"internalConnectionString,omitempty"`
+
+	// The connection string to connect to the ensemble from outside of the Kubernetes cluster
+	// If external and no internal connection string is provided, the external cnx string will be used as the internal cnx string
+	// +optional
+	ExternalConnectionString *string `json:"externalConnectionString,omitempty"`
+
+	// The ChRoot to connect solr at
+	// +optional
+	ChRoot string `json:"chroot,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
 // SolrCloud is the Schema for the solrclouds API
+// +kubebuilder:resource:shortName=solr
+// +kubebuilder:categories=all
+// +kubebuilder:subresource:status
+// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas
+// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Solr Version of the cloud"
+// +kubebuilder:printcolumn:name="TargetVersion",type="string",JSONPath=".status.targetVersion",description="Target Solr Version of the cloud"
+// +kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
+// +kubebuilder:printcolumn:name="Nodes",type="integer",JSONPath=".status.replicas",description="Number of solr nodes running"
+// +kubebuilder:printcolumn:name="ReadyNodes",type="integer",JSONPath=".status.readyReplicas",description="Number of solr nodes connected to the cloud"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrCloud struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
