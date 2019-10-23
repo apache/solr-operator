@@ -71,7 +71,6 @@ type SolrCollectionStatus struct {
 	InProgressCreation bool `json:"inProgressCreation,omitempty"`
 }
 
-
 // +kubebuilder:object:root=true
 
 // SolrCollection is the Schema for the solrcollections API
