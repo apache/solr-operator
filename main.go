@@ -76,6 +76,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrBackup")
 		os.Exit(1)
 	}
+	if err = (&controllers.SolrCollectionReconciler{
+		Client: mgr.GetClient(),
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCollection"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SolrCollection")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

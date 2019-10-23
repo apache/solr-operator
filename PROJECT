@@ -8,3 +8,6 @@ resources:
 - group: solr
   version: v1beta1
   kind: SolrBackup
+- group: solr
+  version: v1beta1
+  kind: SolrCollection
