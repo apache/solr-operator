@@ -16,9 +16,10 @@ limitations under the License.
 package v1beta1
 
 import (
+	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/api/core/v1"
 	"strings"
 )
 
@@ -53,6 +54,7 @@ const (
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
 )
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -514,6 +516,115 @@ type SolrCloud struct {
 
 	Spec   SolrCloudSpec   `json:"spec,omitempty"`
 	Status SolrCloudStatus `json:"status,omitempty"`
+}
+
+// WithDefaults set default values when not defined in the spec.
+func (sc *SolrCloud) WithDefaults() bool {
+	return sc.Spec.withDefaults()
+}
+
+func (sc *SolrCloud) GetAllSolrNodeNames() []string {
+	nodeNames := make([]string, *sc.Spec.Replicas)
+	statefulSetName := sc.StatefulSetName()
+	for i := range nodeNames {
+		nodeNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
+	}
+	return nodeNames
+}
+
+// ConfigMapName returns the name of the cloud config-map
+func (sc *SolrCloud) ConfigMapName() string {
+	return fmt.Sprintf("%s-solrcloud-configmap", sc.GetName())
+}
+
+// StatefulSetName returns the name of the statefulset for the cloud
+func (sc *SolrCloud) StatefulSetName() string {
+	return fmt.Sprintf("%s-solrcloud", sc.GetName())
+}
+
+// CommonServiceName returns the name of the common service for the cloud
+func (sc *SolrCloud) CommonServiceName() string {
+	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// InternalURLForCloud returns the name of the common service for the cloud
+func InternalURLForCloud(cloudName string, namespace string) string {
+	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
+}
+
+// HeadlessServiceName returns the name of the headless service for the cloud
+func (sc *SolrCloud) HeadlessServiceName() string {
+	return fmt.Sprintf("%s-solrcloud-headless", sc.GetName())
+}
+
+// CommonIngressName returns the name of the common ingress for the cloud
+func (sc *SolrCloud) CommonIngressName() string {
+	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// ProvidedZookeeperName returns the provided zk cluster
+func (sc *SolrCloud) ProvidedZookeeperName() string {
+	return fmt.Sprintf("%s-solrcloud-zookeeper", sc.GetName())
+}
+
+// ProvidedZookeeperAddress returns the client address of the provided zk cluster
+func (sc *SolrCloud) ProvidedZookeeperAddress() string {
+	return fmt.Sprintf("%s-solrcloud-zookeeper-client:2181", sc.GetName())
+}
+
+// ProvidedZetcdName returns the name of the zetcd cluster
+func (sc *SolrCloud) ProvidedZetcdName() string {
+	return fmt.Sprintf("%s-solrcloud-zetcd", sc.GetName())
+}
+
+// IngressName returns the name of the ingress for the cloud
+func (sc *SolrCloud) ProvidedZetcdAddress() string {
+	return fmt.Sprintf("%s-solrcloud-zetcd:2181", sc.GetName())
+}
+
+// ZkConnectionString returns the zkConnectionString for the cloud
+func (sc *SolrCloud) ZkConnectionString() string {
+	return sc.Status.ZkConnectionString()
+}
+func (scs SolrCloudStatus) ZkConnectionString() string {
+	return scs.ZookeeperConnectionInfo.ZkConnectionString()
+}
+
+func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
+	return zkInfo.InternalConnectionString + zkInfo.ChRoot
+}
+
+func (sc *SolrCloud) CommonIngressPrefix() string {
+	return fmt.Sprintf("%s-%s-solrcloud", sc.Namespace, sc.Name)
+}
+
+func (sc *SolrCloud) CommonIngressUrl(ingressBaseUrl string) string {
+	return fmt.Sprintf("%s.%s", sc.CommonIngressPrefix(), ingressBaseUrl)
+}
+
+func (sc *SolrCloud) NodeIngressPrefix(nodeName string) string {
+	return fmt.Sprintf("%s-%s", sc.Namespace, nodeName)
+}
+
+func (sc *SolrCloud) NodeIngressUrl(nodeName string, ingressBaseUrl string) string {
+	return fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), ingressBaseUrl)
+}
+
+func (sc *SolrCloud) SharedLabels() map[string]string {
+	return sc.SharedLabelsWith(map[string]string{})
+}
+
+func (sc *SolrCloud) SharedLabelsWith(labels map[string]string) map[string]string {
+	newLabels := map[string]string{}
+
+	if labels != nil {
+		for k, v := range labels {
+			newLabels[k] = v
+		}
+	}
+
+	newLabels["solr-cloud"] = sc.Name
+	return newLabels
 }
 
 // +kubebuilder:object:root=true

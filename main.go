@@ -19,8 +19,8 @@ import (
 	"flag"
 	"os"
 
-	solrv1beta1 "bloomberg.com/solr-operator/api/v1beta1"
-	"bloomberg.com/solr-operator/controllers"
+	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
+	"github.com/bloomberg/solr-operator/controllers"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
