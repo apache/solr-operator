@@ -211,7 +211,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 								},
 								{
 									Name:  "SOLR_LOG_LEVEL",
-									Value: "INFO",
+									Value: solrCloud.Spec.SolrLogLevel,
+								},
+								{
+									Name:  "SOLR_OPTS",
+									Value: solrCloud.Spec.SolrOpts,
+								},
+								{
+									Name:  "GC_TUNE",
+									Value: solrCloud.Spec.SolrGCTune,
 								},
 							},
 							LivenessProbe: &corev1.Probe{
