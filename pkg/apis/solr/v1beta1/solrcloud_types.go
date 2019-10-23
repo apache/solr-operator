@@ -33,6 +33,9 @@ const (
 	DefaultSolrVersion  = "7.7.0"
 	DefaultSolrStorage  = "5Gi"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
+	DefaultSolrOpts     = ""
+	DefaultSolrLogLevel = "INFO"
+	DefaultSolrGCTune   = ""
 
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
@@ -87,6 +90,19 @@ type SolrCloudSpec struct {
 
 	// +optional
 	SolrJavaMem string `json:"solrJavaMem,omitempty"`
+
+	// You can add common system properties to the SOLR_OPTS environment variable
+	// SolrOpts is the string interface for these optional settings
+	// +optional
+	SolrOpts string `json:"solrOpts,omitempty"`
+
+	// Set the Solr Log level, defaults to INFO
+	// +optional
+	SolrLogLevel string `json:"solrLogLevel,omitempty"`
+
+	// Set GC Tuning configuration through GC_TUNE environment variable
+	// +optional
+	SolrGCTune string `json:"solrGCTune,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -96,9 +112,24 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.Replicas = &r
 	}
 
-	if spec.SolrJavaMem == "" {
+	if spec.SolrJavaMem == "" && DefaultSolrJavaMem != "" {
 		changed = true
 		spec.SolrJavaMem = DefaultSolrJavaMem
+	}
+
+	if spec.SolrOpts == "" && DefaultSolrOpts != "" {
+		changed = true
+		spec.SolrOpts = DefaultSolrOpts
+	}
+
+	if spec.SolrLogLevel == "" && DefaultSolrLogLevel != "" {
+		changed = true
+		spec.SolrLogLevel = DefaultSolrLogLevel
+	}
+
+	if spec.SolrGCTune == "" && DefaultSolrGCTune != "" {
+		changed = true
+		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
 	if spec.ZookeeperRef == nil {

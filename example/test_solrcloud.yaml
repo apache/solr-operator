@@ -7,3 +7,5 @@ spec:
   solrImage:
     tag: 8.2.0
   solrJavaMem: "-Xms1g -Xmx3g"
+  solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+  solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
