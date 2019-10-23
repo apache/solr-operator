@@ -1,4 +1,5 @@
 /*
+Copyright 2019 Bloomberg Finance LP.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,20 +20,57 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // SolrCollectionSpec defines the desired state of SolrCollection
 type SolrCollectionSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// A reference to the SolrCloud to create a collection for
+	SolrCloud string `json:"solrCloud"`
+
+	// The name of the collection to perform the action on
+	Collection string `json:"collection"`
+
+	// Define a configset to use for the collection. Use '_default' if you don't have a custom configset
+	CollectionConfigName string `json:"collectionConfigName"`
+
+	// The router name that will be used. The router defines how documents will be distributed
+	// +optional
+	RouterName string `json:"routerName,omitempty"`
+
+	// The num of shards to create, used if RouteName is compositeId
+	// +optional
+	NumShards int64 `json:"numShards,omitempty"`
+
+	// The replication factor to be used
+	// +optional
+	ReplicationFactor int64 `json:"replicationFactor,omitempty"`
+
+	// Max shards per node
+	// +optional
+	MaxShardsPerNode int64 `json:"maxShardsPerNode,omitempty"`
+
+	// A comma separated list of shard names, e.g., shard-x,shard-y,shard-z. This is a required parameter when the router.name is implicit
+	// +optional
+	Shards string `json:"shards,omitempty"`
+
+	// When set to true, enables automatic addition of replicas when the number of active replicas falls below the value set for replicationFactor
+	// +optional
+	AutoAddReplicas bool `json:"autoAddReplicas,omitempty"`
 }
 
 // SolrCollectionStatus defines the observed state of SolrCollection
 type SolrCollectionStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Whether the collection has been created or not
+	// +optional
+	Created bool `json:"created,omitempty"`
+
+	// Time the collection was created
+	// +optional
+	CreatedTime *metav1.Time `json:"createdTime,omitempty"`
+
+	// Set the status of the collection creation process
+	// +optional
+	InProgressCreation bool `json:"inProgressCreation,omitempty"`
 }
+
 
 // +kubebuilder:object:root=true
 
