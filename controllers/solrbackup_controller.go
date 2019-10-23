@@ -58,6 +58,8 @@ type SolrBackupReconciler struct {
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
 func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	_ = r.Log.WithValues("solrbackup", req.NamespacedName)
 	// Fetch the SolrBackup instance
 	backup := &solrv1beta1.SolrBackup{}
 	err := r.Get(context.TODO(), req.NamespacedName, backup)

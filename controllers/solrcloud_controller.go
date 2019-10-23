@@ -84,6 +84,9 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 // +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters/status,verbs=get;update;patch
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	_ = r.Log.WithValues("solrcloud", req.NamespacedName)
+
 	// Fetch the SolrCloud instance
 	instance := &solr.SolrCloud{}
 	err := r.Get(context.TODO(), req.NamespacedName, instance)

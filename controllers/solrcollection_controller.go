@@ -47,6 +47,9 @@ type SolrCollectionReconciler struct {
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections/status,verbs=get;update;patch
 func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	_ = context.Background()
+	_ = r.Log.WithValues("solrcloeection", req.NamespacedName)
+
 	// Fetch the SolrCollection collection
 	collection := &solrv1beta1.SolrCollection{}
 	collectionFinalizer := "collection.finalizers.bloomberg.com"

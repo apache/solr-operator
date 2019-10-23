@@ -160,6 +160,11 @@ type SolrPrometheusExporter struct {
 	Status SolrPrometheusExporterStatus `json:"status,omitempty"`
 }
 
+// WithDefaults set default values when not defined in the spec.
+func (spe *SolrPrometheusExporter) WithDefaults() bool {
+	return spe.Spec.withDefaults(spe.Namespace)
+}
+
 func (spe *SolrPrometheusExporter) SharedLabels() map[string]string {
 	return spe.SharedLabelsWith(map[string]string{})
 }
