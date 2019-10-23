@@ -2,8 +2,8 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solr-operator
-  namespace: default
+  name: controller-manager
+  namespace: system
 spec:
   template:
     metadata:
@@ -12,7 +12,7 @@ spec:
     spec:
       containers:
       # Expose the prometheus metrics on default port
-      - name: solr-operator
+      - name: manager
         ports:
         - containerPort: 8080
           name: metrics
