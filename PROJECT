@@ -11,3 +11,6 @@ resources:
 - group: solr
   version: v1beta1
   kind: SolrCollection
+- group: solr
+  version: v1beta1
+  kind: SolrPrometheusExporter
