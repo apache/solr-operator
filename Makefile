@@ -13,6 +13,17 @@ endif
 
 all: manager
 
+clean:
+	rm -rf ./bin
+
+###
+# Building
+###
+
+# Build manager binary
+build: generate vet
+	BIN=manager VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
+
 # Run tests
 test: check-format check-license generate fmt vet manifests
 	go test ./... -coverprofile cover.out
