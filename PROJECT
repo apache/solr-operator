@@ -1,0 +1,3 @@
+version: "2"
+domain: bloomberg.com
+repo: bloomberg.com/solr-operator
