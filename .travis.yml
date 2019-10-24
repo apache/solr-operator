@@ -12,11 +12,9 @@ script:
 
   # build locally and run locally
   - make clean
-
   - make manifests
   - make build
   # - ./bin/manager --help
-
   - make test
   - make manifests-check
 

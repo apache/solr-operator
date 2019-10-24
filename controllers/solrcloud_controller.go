@@ -503,5 +503,6 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	} else if useEtcdCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&etcd.EtcdCluster{})
 	}
+	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(r)
 }

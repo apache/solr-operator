@@ -20,7 +20,9 @@ import (
 	"flag"
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers"
+	etcdv1beta2 "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	"github.com/coreos/etcd-operator/pkg/util/constants"
+	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -46,6 +48,9 @@ func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
 
 	_ = solrv1beta1.AddToScheme(scheme)
+	_ = zkv1beta1.AddToScheme(scheme)
+	_ = etcdv1beta2.AddToScheme(scheme)
+
 	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")

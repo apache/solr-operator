@@ -40,4 +40,4 @@ export GOOS=${GOOS:-}
 go build \
     -ldflags "-X ./pkg/version.Version=${VERSION} -X ./pkg/version.GitSHA=${GIT_SHA}" \
     -o ./bin/${BIN} \
-    ./cmd/${BIN}
+    .

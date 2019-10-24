@@ -289,6 +289,7 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 }
 
 func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrBackup{}).
 		Owns(&batchv1.Job{}).

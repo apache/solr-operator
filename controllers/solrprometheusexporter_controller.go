@@ -177,6 +177,7 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 }
 
 func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	r.scheme = mgr.GetScheme()
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrPrometheusExporter{}).
 		Complete(r)
