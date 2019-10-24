@@ -1,0 +1,18 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: example
+spec:
+  replicas: 3
+  solrImage:
+    tag: 8.2.0
+  solrJavaMem: "-Xms1g -Xmx2g"
+  solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+  solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+  pod:
+    resources:
+      limits:
+        memory: "2G"
+      requests:
+        cpu: "65m"
+        memory: "156Mi"

@@ -14,7 +14,7 @@ endif
 all: manager
 
 # Run tests
-test: generate fmt vet manifests
+test: check-format check-license generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
 # Build manager binary
@@ -45,6 +45,12 @@ fmt:
 # Run go vet against code
 vet:
 	go vet ./...
+
+check-format:
+	./hack/check_format.sh
+
+check-license:
+	./hack/check_license.sh
 
 # Generate code
 generate: controller-gen

@@ -1,0 +1,13 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrPrometheusExporter
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: solrprometheusexporter-sample
+spec:
+  solrReference:
+    cloud:
+      kubeSolr:
+        name: "example"
+  image:
+    tag: 8.2.0
