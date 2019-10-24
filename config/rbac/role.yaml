@@ -9,7 +9,7 @@ rules:
 - apiGroups:
   - solr.bloomberg.com
   resources:
-  - solrbackups
+  - solrcollections
   verbs:
   - create
   - delete
@@ -21,7 +21,7 @@ rules:
 - apiGroups:
   - solr.bloomberg.com
   resources:
-  - solrbackups/status
+  - solrcollections/status
   verbs:
   - get
   - patch

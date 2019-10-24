@@ -1,4 +1,5 @@
 /*
+Copyright 2019 Bloomberg Finance LP.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,21 +18,28 @@ package main
 
 import (
 	"flag"
-	"os"
-
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers"
+	"github.com/coreos/etcd-operator/pkg/util/constants"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	// +kubebuilder:scaffold:imports
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme    = runtime.NewScheme()
+	setupLog  = ctrl.Log.WithName("setup")
+	namespace string
+	name      string
+
+	useEtcdCRD      bool
+	useZookeeperCRD bool
+
+	ingressBaseDomain string
 )
 
 func init() {
@@ -39,9 +47,22 @@ func init() {
 
 	_ = solrv1beta1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
+	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
+	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
+	flag.StringVar(&ingressBaseDomain, "ingress-base-domain", "", "The operator will use this base domain for host matching in an ingress for the cloud.")
+	flag.Parse()
 }
 
 func main() {
+	namespace = os.Getenv(constants.EnvOperatorPodNamespace)
+	if len(namespace) == 0 {
+		//log.Fatalf("must set env (%s)", constants.EnvOperatorPodNamespace)
+	}
+	name = os.Getenv(constants.EnvOperatorPodName)
+	if len(name) == 0 {
+		//log.Fatalf("must set env (%s)", constants.EnvOperatorPodName)
+	}
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
@@ -61,6 +82,10 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	controllers.SetIngressBaseUrl(ingressBaseDomain)
+	controllers.UseEtcdCRD(useEtcdCRD)
+	controllers.UseZkCRD(useZookeeperCRD)
 
 	if err = (&controllers.SolrCloudReconciler{
 		Client: mgr.GetClient(),
