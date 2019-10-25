@@ -1,0 +1,42 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-1
+spec:
+  solrCloud: example
+  collection: example-collection
+  routerName: compositeId
+  autoAddReplicas: false
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+  collectionConfigName: "_default"
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-2-compositeid-autoadd
+spec:
+  solrCloud: example
+  collection: example-collection-2
+  routerName: compositeId
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+  collectionConfigName: "_default"
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollection
+metadata:
+  name: example-collection-3-implicit
+spec:
+  solrCloud: example
+  collection: example-collection-3-implicit
+  routerName: implicit
+  autoAddReplicas: true
+  numShards: 2
+  replicationFactor: 1
+  maxShardsPerNode: 1
+  shards: "fooshard1,fooshard2"
+  collectionConfigName: "_default"

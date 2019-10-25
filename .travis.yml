@@ -1,0 +1,33 @@
+language: go
+services:
+  - docker
+
+go:
+  - "1.13"
+  - master
+
+script:
+  - docker --version
+  - ./hack/install_dependencies.sh
+
+  # build locally and run locally
+  - make clean
+  - make manifests
+  - make build
+  # - ./bin/manager --help
+  - make test
+  - make manifests-check
+
+jobs:
+  include:
+    - stage: "Docker"
+      name: "Build (& Release if tagged)"
+      script:
+        - make docker-build
+      deploy:
+        - provider: script
+          script: bash docker_deploy.sh
+          skip_cleanup: true
+          on:
+            tags: true
+            condition: -n "$DOCKER_PASSWORD"

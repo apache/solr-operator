@@ -1,0 +1,7 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: solrcloud-sample
+spec:
+  # Add fields here
+  foo: bar

@@ -1,8 +1,15 @@
-
-# Image URL to use all building/pushing image targets
-IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
+
+# Image URL to use all building/pushing image targets
+NAME ?= solr-operator
+NAMESPACE ?= bloomberg/
+VERSION ?= 0.2.0
+IMG ?= $(NAMESPACE)$(NAME):$(VERSION)
+
+GIT_SHA = $(shell git rev-parse --short HEAD)
+GOOS = $(shell go env GOOS)
+ARCH = $(shell go env GOARCH)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -11,10 +18,24 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-all: manager
+all: generate
+
+version:
+	@echo $(VERSION)
+
+clean:
+	rm -rf ./bin
+
+###
+# Building
+###
+
+# Build manager binary
+build: generate vet
+	BIN=manager VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Run tests
-test: generate fmt vet manifests
+test: check-format check-license generate fmt vet manifests
 	go test ./... -coverprofile cover.out
 
 # Build manager binary
@@ -45,6 +66,16 @@ fmt:
 # Run go vet against code
 vet:
 	go vet ./...
+
+check-format:
+	./hack/check_format.sh
+
+check-license:
+	./hack/check_license.sh
+
+manifests-check:
+	@echo "Check to make sure the manifests are up to date"
+	git diff --exit-code -- config
 
 # Generate code
 generate: controller-gen
