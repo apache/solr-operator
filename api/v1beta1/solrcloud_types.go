@@ -114,22 +114,22 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.Replicas = &r
 	}
 
-	if spec.SolrJavaMem == "" {
+	if spec.SolrJavaMem == "" && DefaultSolrJavaMem != "" {
 		changed = true
 		spec.SolrJavaMem = DefaultSolrJavaMem
 	}
 
-	if spec.SolrOpts == "" {
+	if spec.SolrOpts == "" && DefaultSolrOpts != "" {
 		changed = true
 		spec.SolrOpts = DefaultSolrOpts
 	}
 
-	if spec.SolrLogLevel == "" {
+	if spec.SolrLogLevel == "" && DefaultSolrLogLevel != "" {
 		changed = true
 		spec.SolrLogLevel = DefaultSolrLogLevel
 	}
 
-	if spec.SolrGCTune == "" {
+	if spec.SolrGCTune == "" && DefaultSolrGCTune != "" {
 		changed = true
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
