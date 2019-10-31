@@ -68,7 +68,7 @@ spec:
                 to 1
               format: int32
               type: integer
-            pod:
+            podPolicy:
               description: Pod defines the policy to create pod for the SolrCloud.
                 Updating the Pod does not take effect on any existing pods.
               properties:

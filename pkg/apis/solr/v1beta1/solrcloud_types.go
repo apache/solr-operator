@@ -320,6 +320,7 @@ type ZookeeperSpec struct {
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
 
 	// Pod resources for zookeeper pod
+	// +optional
 	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
 }
 
@@ -400,6 +401,7 @@ type EtcdSpec struct {
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
 
 	// Pod resources for etcd pods
+	// +optional
 	EtcdPod EtcdPodPolicy `json:"etcdPodPolicy,omitempty"`
 }
 
@@ -440,6 +442,7 @@ type ZetcdSpec struct {
 	Image *ContainerImage `json:"image,omitempty"`
 
 	// Pod resources for zetcd pods
+	// +optional
 	ZetcdPod ZetcdPodPolicy `json:"zetcdPodPolicy,omitempty"`
 }
 

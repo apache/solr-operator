@@ -158,8 +158,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		}
 	}
 
-	if solrPrometheusExporter.Spec.Pod.Resources.Limits != nil || solrPrometheusExporter.Spec.Pod.Resources.Requests != nil {
-		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.Pod.Resources
+	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
+		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
 	}
 
 	return deployment

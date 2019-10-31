@@ -746,7 +746,7 @@ func (in *SolrPrometheusExporterSpec) DeepCopyInto(out *SolrPrometheusExporterSp
 		*out = new(ContainerImage)
 		**out = **in
 	}
-	in.Pod.DeepCopyInto(&out.Pod)
+	in.PodPolicy.DeepCopyInto(&out.PodPolicy)
 	return
 }
 
