@@ -68,6 +68,18 @@ spec:
                 to 1
               format: int32
               type: integer
+            podPolicy:
+              description: Pod defines the policy to create pod for the SolrCloud.
+                Updating the Pod does not take effect on any existing pods.
+              properties:
+                affinity:
+                  description: The scheduling constraints on pods.
+                  type: object
+                resources:
+                  description: Resources is the resource requirements for the container.
+                    This field cannot be updated once the cluster is created.
+                  type: object
+              type: object
             scrapeInterval:
               description: The interval to scrape Solr at (in seconds) Defaults to
                 60 seconds

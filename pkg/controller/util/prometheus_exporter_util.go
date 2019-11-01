@@ -14,14 +14,15 @@ limitations under the License.
 package util
 
 import (
+	"reflect"
+	"strconv"
+
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"reflect"
-	"strconv"
 )
 
 const (
@@ -150,6 +151,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			},
 		},
 	}
+
+	if solrPrometheusExporter.Spec.Image.ImagePullSecret != "" {
+		deployment.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
+			{Name: solrPrometheusExporter.Spec.Image.ImagePullSecret},
+		}
+	}
+
+	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
+		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
+	}
+
 	return deployment
 }
 
