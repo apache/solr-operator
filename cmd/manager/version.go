@@ -14,10 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package version
+package main
 
-// Version represents the software version of the Solr Operator
-var Version = "0.2.1"
+// Static Version information
+var (
+	// Version represents the software version of the Solr Operator
+	Version string
 
-// GitSHA represents the Git commit hash in short format
-var GitSHA string
+	// BuildTime is the date and time at which the operator was built
+	BuildTime string
+
+	// GitSHA represents the Git commit hash in short format
+	GitSHA string
+)

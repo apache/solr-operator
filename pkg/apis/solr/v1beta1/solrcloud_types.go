@@ -74,7 +74,7 @@ type SolrCloudSpec struct {
 	// Pod defines the policy to create pod for the SolrCloud.
 	// Updating the Pod does not take effect on any existing pods.
 	// +optional
-	Pod PodPolicy `json:"pod,omitempty"`
+	SolrPod SolrPodPolicy `json:"solrPodPolicy,omitempty"`
 
 	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
 	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
@@ -117,22 +117,22 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.Replicas = &r
 	}
 
-	if spec.SolrJavaMem == "" {
+	if spec.SolrJavaMem == "" && DefaultSolrJavaMem != "" {
 		changed = true
 		spec.SolrJavaMem = DefaultSolrJavaMem
 	}
 
-	if spec.SolrOpts == "" {
+	if spec.SolrOpts == "" && DefaultSolrOpts != "" {
 		changed = true
 		spec.SolrOpts = DefaultSolrOpts
 	}
 
-	if spec.SolrLogLevel == "" {
+	if spec.SolrLogLevel == "" && DefaultSolrLogLevel != "" {
 		changed = true
 		spec.SolrLogLevel = DefaultSolrLogLevel
 	}
 
-	if spec.SolrGCTune == "" {
+	if spec.SolrGCTune == "" && DefaultSolrGCTune != "" {
 		changed = true
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
@@ -168,9 +168,9 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	return changed
 }
 
-// PodPolicy defines the common pod configuration for Pods, including when used
+// SolrPodPolicy defines the common pod configuration for Pods, including when used
 // in deployments, stateful-sets, etc.
-type PodPolicy struct {
+type SolrPodPolicy struct {
 	// The scheduling constraints on pods.
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
@@ -318,6 +318,23 @@ type ZookeeperSpec struct {
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
 	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+
+	// Pod resources for zookeeper pod
+	// +optional
+	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
+}
+
+// ZookeeperPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type ZookeeperPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (z *ZookeeperSpec) withDefaults() (changed bool) {
@@ -382,6 +399,23 @@ type EtcdSpec struct {
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
 	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+
+	// Pod resources for etcd pods
+	// +optional
+	EtcdPod EtcdPodPolicy `json:"etcdPodPolicy,omitempty"`
+}
+
+// EtcdPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type EtcdPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (s *EtcdSpec) withDefaults() (changed bool) {
@@ -406,6 +440,23 @@ type ZetcdSpec struct {
 
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
+
+	// Pod resources for zetcd pods
+	// +optional
+	ZetcdPod ZetcdPodPolicy `json:"zetcdPodPolicy,omitempty"`
+}
+
+// EtcdPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type ZetcdPodPolicy struct {
+	// The scheduling constraints on pods.
+	// +optional
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
+	// +optional
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 func (s *ZetcdSpec) withDefaults() (changed bool) {

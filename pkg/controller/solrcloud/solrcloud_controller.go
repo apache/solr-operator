@@ -19,11 +19,12 @@ package solrcloud
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+
 	"github.com/bloomberg/solr-operator/pkg/controller/util"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/labels"
-	"reflect"
-	"strings"
 
 	solr "github.com/bloomberg/solr-operator/pkg/apis/solr/v1beta1"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"

@@ -38,7 +38,7 @@ type SolrPrometheusExporterSpec struct {
 	// Pod defines the policy to create pod for the SolrCloud.
 	// Updating the Pod does not take effect on any existing pods.
 	// +optional
-	Pod PodPolicy `json:"pod,omitempty"`
+	PodPolicy SolrPodPolicy `json:"podPolicy,omitempty"`
 
 	// The entrypoint into the exporter. Defaults to the official docker-solr location.
 	// +optional
