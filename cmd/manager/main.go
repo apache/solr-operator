@@ -22,7 +22,6 @@ import (
 	"github.com/bloomberg/solr-operator/pkg/apis"
 	"github.com/bloomberg/solr-operator/pkg/controller"
 	"github.com/bloomberg/solr-operator/pkg/controller/solrcloud"
-	"github.com/bloomberg/solr-operator/pkg/version"
 	"github.com/bloomberg/solr-operator/pkg/webhook"
 	"github.com/coreos/etcd-operator/pkg/util/constants"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -67,8 +66,9 @@ func main() {
 	logf.SetLogger(logf.ZapLogger(false))
 	log := logf.Log.WithName("entrypoint")
 
-	log.Info(fmt.Sprintf("solr-operator Version: %v", version.Version))
-	log.Info(fmt.Sprintf("solr-operator Git SHA: %s", version.GitSHA))
+	log.Info(fmt.Sprintf("solr-operator Version: %v", Version))
+	log.Info(fmt.Sprintf("solr-operator Git SHA: %s", GitSHA))
+	log.Info(fmt.Sprintf("solr-operator Build Time: %s", BuildTime))
 	log.Info(fmt.Sprintf("Go Version: %v", runtime.Version()))
 	log.Info(fmt.Sprintf("Go OS/Arch: %s / %s", runtime.GOOS, runtime.GOARCH))
 
