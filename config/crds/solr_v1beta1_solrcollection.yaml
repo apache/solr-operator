@@ -51,6 +51,12 @@ spec:
               description: The replication factor to be used
               format: int64
               type: integer
+            routerField:
+              description: If this parameter is specified, the router will look at
+                the value of the field in an input document to compute the hash and
+                identify a shard instead of looking at the uniqueKey field. If the
+                field specified is null in the document, the document will be rejected.
+              type: string
             routerName:
               description: The router name that will be used. The router defines how
                 documents will be distributed
