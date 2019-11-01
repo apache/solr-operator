@@ -47,7 +47,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, hostNameIPs map[string]string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, ingressBaseDomain string, hostNameIPs map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	fsGroup := int64(SolrClientPort)
 	defaultMode := int32(420)
@@ -207,7 +207,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 								},
 								{
 									Name:  "ZK_HOST",
-									Value: solrCloud.ZkConnectionString(),
+									Value: solrCloudStatus.ZkConnectionString(),
 								},
 								{
 									Name:  "SOLR_LOG_LEVEL",
