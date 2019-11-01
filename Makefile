@@ -2,7 +2,7 @@
 NAME ?= solr-operator
 NAMESPACE ?= bloomberg/
 IMG = $(NAMESPACE)$(NAME)
-VERSION ?= 0.1.3
+VERSION ?= 0.1.4
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
