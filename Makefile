@@ -4,9 +4,8 @@ CRD_OPTIONS ?= "crd:trivialVersions=true"
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
 NAMESPACE ?= bloomberg/
-VERSION ?= 0.2.0
-IMG ?= $(NAMESPACE)$(NAME):$(VERSION)
-
+IMG = $(NAMESPACE)$(NAME)
+VERSION ?= 0.1.4
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)

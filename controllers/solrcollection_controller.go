@@ -18,16 +18,17 @@ package controllers
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 )
@@ -68,7 +69,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	oldStatus := collection.Status.DeepCopy()
 	requeueOrNot := reconcile.Result{Requeue: true, RequeueAfter: time.Second * 5}
 
-	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.MaxShardsPerNode, collection.Spec.RouterName, collection.Spec.Shards, collection.Spec.CollectionConfigName, collection.Namespace)
+	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.MaxShardsPerNode, collection.Spec.RouterName, collection.Spec.RouterField, collection.Spec.Shards, collection.Spec.CollectionConfigName, collection.Namespace)
 
 	if err != nil {
 		r.Log.Error(err, "Error while creating SolrCloud collection")
@@ -136,7 +137,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return requeueOrNot, nil
 }
 
-func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
+func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
 	// Get the solrCloud that this collection is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
 	err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud)
@@ -168,7 +169,7 @@ func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta
 
 		// Request the creation of collection by calling solr
 		collection.Status.InProgressCreation = true
-		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, routerName, shards, collectionConfigName, namespace)
+		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, routerName, routerField, shards, collectionConfigName, namespace)
 		if err != nil {
 			collection.Status.InProgressCreation = false
 			return nil, false, err

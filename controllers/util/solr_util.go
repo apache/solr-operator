@@ -266,6 +266,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 		}
 	}
 
+	if solrCloud.Spec.SolrPod.Affinity != nil {
+		stateful.Spec.Template.Spec.Affinity = solrCloud.Spec.SolrPod.Affinity
+	}
+
+	if solrCloud.Spec.SolrPod.Resources.Limits != nil || solrCloud.Spec.SolrPod.Resources.Requests != nil {
+		stateful.Spec.Template.Spec.Containers[0].Resources = solrCloud.Spec.SolrPod.Resources
+	}
+
 	return stateful
 }
 
@@ -340,6 +348,18 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", from.Spec.Template.Spec.ImagePullSecrets, "To:", to.Spec.Template.Spec.ImagePullSecrets)
 		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[0].Resources, from.Spec.Template.Spec.Containers[0].Resources) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Containers[0].Resources changed from", from.Spec.Template.Spec.Containers[0].Resources, "To:", to.Spec.Template.Spec.Containers[0].Resources)
+		to.Spec.Template.Spec.Containers[0].Resources = from.Spec.Template.Spec.Containers[0].Resources
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", from.Spec.Template.Spec.Affinity, "To:", to.Spec.Template.Spec.Affinity)
+		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
 	}
 
 	return requireUpdate

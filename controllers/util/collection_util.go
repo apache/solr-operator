@@ -22,7 +22,7 @@ import (
 )
 
 // CreateCollection to request collection creation on SolrCloud
-func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
+func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	numShardsParameter := strconv.FormatInt(numShards, 10)
@@ -31,6 +31,7 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 	queryParams.Add("replicationFactor", replicationFactorParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
 	queryParams.Add("collection.configName", collectionConfigName)
+	queryParams.Add("router.field", routerField)
 
 	if routerName == "implicit" {
 		queryParams.Add("router.name", routerName)

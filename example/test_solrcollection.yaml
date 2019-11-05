@@ -34,6 +34,7 @@ spec:
   solrCloud: example
   collection: example-collection-3-implicit
   routerName: implicit
+  routerField: 'car'
   autoAddReplicas: true
   numShards: 2
   replicationFactor: 1

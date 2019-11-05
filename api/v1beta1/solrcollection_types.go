@@ -35,6 +35,12 @@ type SolrCollectionSpec struct {
 	// +optional
 	RouterName string `json:"routerName,omitempty"`
 
+	// If this parameter is specified, the router will look at the value of the field in an input document
+	// to compute the hash and identify a shard instead of looking at the uniqueKey field.
+	// If the field specified is null in the document, the document will be rejected.
+	// +optional
+	RouterField string `json:"routerField,omitempty"`
+
 	// The num of shards to create, used if RouteName is compositeId
 	// +optional
 	NumShards int64 `json:"numShards,omitempty"`

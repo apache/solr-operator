@@ -7,5 +7,28 @@ spec:
   solrImage:
     tag: 8.2.0
   solrJavaMem: "-Xms1g -Xmx3g"
+  solrPodPolicy:
+    resources:
+      limits:
+        memory: "1G"
+      requests:
+        cpu: "65m"
+        memory: "156Mi"
+  zookeeperRef:
+    provided:
+      zookeeper:
+        persistentVolumeClaimSpec:
+          storageClassName: "hostpath"
+          resources:
+            requests:
+              storage: "5Gi"
+        replicas: 3 
+        zookeeperPodPolicy:
+          resources:
+            limits:
+              memory: "1G"
+            requests:
+              cpu: "65m"
+              memory: "156Mi"
   solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
   solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
