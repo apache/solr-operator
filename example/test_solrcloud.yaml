@@ -22,7 +22,7 @@ spec:
           resources:
             requests:
               storage: "5Gi"
-        replicas: 3 
+        replicas: 1 
         zookeeperPodPolicy:
           resources:
             limits:

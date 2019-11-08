@@ -19,6 +19,7 @@ package util
 import (
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // CreateCollection to request collection creation on SolrCloud
@@ -59,6 +60,31 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 	return success, err
 }
 
+// CreateCollecttionAlias to request the creation of an alias to one or more collections
+func CreateCollecttionAlias(cloud string, alias string, aliasType string, collections []string, namespace string) (success bool, err error) {
+	queryParams := url.Values{}
+	collectionsArray := strings.Join(collections, ",")
+	queryParams.Add("action", "CREATEALIAS")
+	queryParams.Add("name", alias)
+	queryParams.Add("collections", collectionsArray)
+
+	resp := &SolrAsyncResponse{}
+
+	log.Info("Calling to create alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
+	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+
+	if err == nil {
+		if resp.ResponseHeader.Status == 0 {
+			success = true
+		}
+	} else {
+		log.Error(err, "Error creating alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
+	}
+
+	return success, err
+
+}
+
 // DeleteCollection to request collection deletion on SolrCloud
 func DeleteCollection(cloud string, collection string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
@@ -76,6 +102,28 @@ func DeleteCollection(cloud string, collection string, namespace string) (succes
 		}
 	} else {
 		log.Error(err, "Error deleting collection", "namespace", namespace, "cloud", cloud, "collection")
+	}
+
+	return success, err
+}
+
+// DeleteCollectionAlias removes an alias
+func DeleteCollectionAlias(cloud string, alias string, namespace string) (success bool, err error) {
+	queryParams := url.Values{}
+	queryParams.Add("action", "DELETEALIAS")
+	queryParams.Add("name", alias)
+
+	resp := &SolrAsyncResponse{}
+
+	log.Info("Calling to delete collection alias", "namespace", namespace, "cloud", cloud, "alias", alias)
+	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+
+	if err == nil {
+		if resp.ResponseHeader.Status == 0 {
+			success = true
+		}
+	} else {
+		log.Error(err, "Error deleting collection alias", "namespace", namespace, "cloud", cloud, "alias", alias)
 	}
 
 	return success, err
@@ -171,6 +219,33 @@ func CheckIfCollectionExists(cloud string, collection string, namespace string) 
 	return success
 }
 
+// CurrentCollectionAliasDetails will return a success if details found for an alias and comma separated string of associated collections
+func CurrentCollectionAliasDetails(cloud string, alias string, namespace string) (success bool, collections string) {
+	queryParams := url.Values{}
+	queryParams.Add("action", "LISTALIASES")
+
+	resp := &SolrCollectionAliasDetailsResponse{}
+
+	log.Info("Calling to list aliases", "namespace", namespace, "cloud", cloud)
+	err := CallCollectionsApi(cloud, namespace, queryParams, resp)
+
+	if err == nil {
+		success, collections := containsAlias(resp.Aliases, alias)
+		if success {
+			return success, collections
+		}
+	}
+
+	return success, ""
+}
+
+type SolrCollectionAliasDetailsResponse struct {
+	SolrResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
+
+	// +optional
+	Aliases map[string]interface{} `json:"aliases"`
+}
+
 type SolrCollectionResponseHeader struct {
 	Status int `json:"status"`
 
@@ -234,4 +309,14 @@ func containsCollection(collections []string, collection string) bool {
 		}
 	}
 	return false
+}
+
+// containsAlias helper function to check if alias in
+func containsAlias(aliases map[string]interface{}, alias string) (bool, string) {
+	for collections, a := range aliases {
+		if a == alias {
+			return true, collections
+		}
+	}
+	return false, ""
 }
