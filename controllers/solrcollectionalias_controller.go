@@ -64,6 +64,7 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	requeueOrNot := reconcile.Result{Requeue: true, RequeueAfter: time.Second * 5}
 
 	aliasCreationStatus := reconcileSolrCollectionAlias(r, alias, alias.Spec.SolrCloud, alias.Name, alias.Spec.AliasType, alias.Spec.Collections, alias.Namespace)
+	alias.Status.Created = aliasCreationStatus
 
 	if err != nil {
 		r.Log.Error(err, "Error while creating SolrCloud alias")
@@ -83,6 +84,8 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 		solrCloud := &solrv1beta1.SolrCloud{}
 		err = r.Get(context.TODO(), types.NamespacedName{Namespace: alias.Namespace, Name: alias.Spec.SolrCloud}, solrCloud)
 
+		r.Log.Info("Preparing to delete collection here is solrCloud result", "solrCloud", solrCloud)
+		r.Log.Info("Preparing to delete collection here is aliasCreationStatus result", "aliasCreationStatus", aliasCreationStatus)
 		if util.ContainsString(alias.ObjectMeta.Finalizers, aliasFinalizer) && solrCloud != nil && aliasCreationStatus {
 			r.Log.Info("Deleting Solr collection alias", "cloud", alias.Spec.SolrCloud, "namespace", alias.Namespace, "Collection Name", alias.Name)
 			// our finalizer is present, along with the associated SolrCloud and alias lets delete alias
@@ -114,6 +117,7 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	}
 
 	if aliasCreationStatus {
+		r.Log.Info("aliasCreationStatus is true reconsile result")
 		requeueOrNot = reconcile.Result{}
 	}
 
@@ -123,9 +127,13 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 func reconcileSolrCollectionAlias(r *SolrCollectionAliasReconciler, alias *solrv1beta1.SolrCollectionAlias, solrCloudName string, aliasName string, aliasType string, collections []string, namespace string) (aliasCreationStatus bool) {
 	success, aliasCollections := util.CurrentCollectionAliasDetails(solrCloudName, aliasName, namespace)
 
+	r.Log.Info("Here is CurrentCollectionAliasDetails output", "success", success, "aliasCollections", aliasCollections)
+	r.Log.Info("Here is DeepEqual results comparing alias.Status.Collections, aliasCollections", "results", reflect.DeepEqual(alias.Status.Collections, aliasCollections))
 	// If not created, or if alias status differs from spec requirements create alias
 	if !success || !reflect.DeepEqual(alias.Status.Collections, aliasCollections) {
+		r.Log.Info("Applying collection alias")
 		if status, err := util.CreateCollecttionAlias(solrCloudName, aliasName, aliasType, collections, namespace); err != nil {
+			r.Log.Info("Here is return for CreateCollecttionAlias", "status", status)
 			alias.Status.Created = status
 			alias.Status.Collections = collections
 			return alias.Status.Created

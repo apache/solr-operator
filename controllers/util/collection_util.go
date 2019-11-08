@@ -74,7 +74,9 @@ func CreateCollecttionAlias(cloud string, alias string, aliasType string, collec
 	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
+		log.Info("Response from solrapi for alias creation", "resp", resp)
 		if resp.ResponseHeader.Status == 0 {
+			log.Info("ResponseHeader.Status", "ResponseHeader.Status", resp.ResponseHeader.Status)
 			success = true
 		}
 	} else {
