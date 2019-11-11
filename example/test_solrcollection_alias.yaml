@@ -6,4 +6,4 @@ spec:
   solrCloud: example
   aliasType: standard
   collections:
-    - example-collection-1
+    - example-collection-1 

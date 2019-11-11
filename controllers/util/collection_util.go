@@ -61,7 +61,7 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 }
 
 // CreateCollecttionAlias to request the creation of an alias to one or more collections
-func CreateCollecttionAlias(cloud string, alias string, aliasType string, collections []string, namespace string) (success bool, err error) {
+func CreateCollecttionAlias(cloud string, alias string, aliasType string, collections []string, namespace string) (err error) {
 	queryParams := url.Values{}
 	collectionsArray := strings.Join(collections, ",")
 	queryParams.Add("action", "CREATEALIAS")
@@ -74,16 +74,14 @@ func CreateCollecttionAlias(cloud string, alias string, aliasType string, collec
 	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
-		log.Info("Response from solrapi for alias creation", "resp", resp)
 		if resp.ResponseHeader.Status == 0 {
 			log.Info("ResponseHeader.Status", "ResponseHeader.Status", resp.ResponseHeader.Status)
-			success = true
 		}
 	} else {
 		log.Error(err, "Error creating alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
 	}
 
-	return success, err
+	return err
 
 }
 
@@ -228,7 +226,6 @@ func CurrentCollectionAliasDetails(cloud string, alias string, namespace string)
 
 	resp := &SolrCollectionAliasDetailsResponse{}
 
-	log.Info("Calling to list aliases", "namespace", namespace, "cloud", cloud)
 	err := CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
@@ -245,7 +242,7 @@ type SolrCollectionAliasDetailsResponse struct {
 	SolrResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
 
 	// +optional
-	Aliases map[string]interface{} `json:"aliases"`
+	Aliases map[string]string `json:"aliases"`
 }
 
 type SolrCollectionResponseHeader struct {
@@ -313,11 +310,11 @@ func containsCollection(collections []string, collection string) bool {
 	return false
 }
 
-// containsAlias helper function to check if alias in
-func containsAlias(aliases map[string]interface{}, alias string) (bool, string) {
-	for collections, a := range aliases {
-		if a == alias {
-			return true, collections
+// containsAlias helper function to check if alias defined and return success and associated collections
+func containsAlias(aliases map[string]string, alias string) (success bool, collections string) {
+	for k, v := range aliases {
+		if k == alias {
+			return true, v
 		}
 	}
 	return false, ""
