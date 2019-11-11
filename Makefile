@@ -9,7 +9,7 @@ VERSION ?= 0.1.4
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
-
+GO111MODULE ?= on
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -22,8 +22,15 @@ all: generate
 version:
 	@echo $(VERSION)
 
+###
+# Setup
+###
+
 clean:
 	rm -rf ./bin
+
+vendor:
+	export GO111MODULE=on; go mod tidy
 
 ###
 # Building
@@ -57,6 +64,7 @@ deploy: manifests
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	#kustomize build config/default > config/operators/solr_operator.yaml
 
 # Run go fmt against code
 fmt:
@@ -80,20 +88,16 @@ manifests-check:
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
-# Build the docker image
-docker-build: test
-	docker build . -t ${IMG}
 
-# Push the docker image
+docker-build: test
+	docker build . -t ${IMG}:${VERSION}
+
+# Push the docker image for the operator
 docker-push:
-	docker push ${IMG}
+	docker push ${IMG}:${VERSION}
+	docker push ${IMG}:latest
 
 # find or download controller-gen
 # download controller-gen if necessary
 controller-gen:
-ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.1
-CONTROLLER_GEN=$(GOBIN)/controller-gen
-else
 CONTROLLER_GEN=$(shell which controller-gen)
-endif
