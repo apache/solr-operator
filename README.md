@@ -29,11 +29,7 @@ $ kubectl apply -f example/ext_ops.yaml
 Install the Solr CRDs & Operator
 
 ```bash
-$ kubectl apply -f config/crds/solr_v1beta1_solrcloud.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrbackup.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrcollection.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrprometheusexporter.yaml
-$ kubectl apply -f config/operators/solr_operator.yaml
+$ make deploy 
 ```
                         
 ## Running a Solr Cloud

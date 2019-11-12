@@ -6,7 +6,9 @@ metadata:
   creationTimestamp: null
   name: solr-operator-role
 rules:
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - configmaps
   verbs:
   - create
@@ -16,27 +18,37 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - configmaps/status
   verbs:
   - get
   - patch
   - update
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - get
   - list
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - pods/exec
   verbs:
   - create
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - pods/status
   verbs:
   - get
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - services
   verbs:
   - create
@@ -46,7 +58,9 @@ rules:
   - patch
   - update
   - watch
-- resources:
+- apiGroups:
+  - ""
+  resources:
   - services/status
   verbs:
   - get
