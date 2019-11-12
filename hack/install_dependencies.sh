@@ -8,8 +8,8 @@ kubebuilder_version=2.0.1
 os=$(go env GOOS)
 arch=$(go env GOARCH)
 
-# Install Kustomize, they use gomodules now
-GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.2.1
+# Install go modules 
+GO111MODULE=on go mod tidy 
 
 # Install Kubebuilder
 curl -sL https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch} | tar -xz -C /tmp/
