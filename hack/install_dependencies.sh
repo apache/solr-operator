@@ -4,7 +4,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-kubebuilder_version=2.0.1
+kubebuilder_version=2.1.0
 os=$(go env GOOS)
 arch=$(go env GOARCH)
 

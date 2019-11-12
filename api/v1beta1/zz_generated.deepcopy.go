@@ -290,7 +290,7 @@ func (in *SolrBackup) DeepCopyObject() runtime.Object {
 func (in *SolrBackupList) DeepCopyInto(out *SolrBackupList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]SolrBackup, len(*in))
@@ -402,7 +402,7 @@ func (in *SolrCloud) DeepCopyObject() runtime.Object {
 func (in *SolrCloudList) DeepCopyInto(out *SolrCloudList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]SolrCloud, len(*in))
@@ -553,7 +553,7 @@ func (in *SolrCollection) DeepCopyObject() runtime.Object {
 func (in *SolrCollectionList) DeepCopyInto(out *SolrCollectionList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]SolrCollection, len(*in))
@@ -682,7 +682,7 @@ func (in *SolrPrometheusExporter) DeepCopyObject() runtime.Object {
 func (in *SolrPrometheusExporterList) DeepCopyInto(out *SolrPrometheusExporterList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]SolrPrometheusExporter, len(*in))
