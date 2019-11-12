@@ -29,7 +29,7 @@ $ kubectl apply -f example/ext_ops.yaml
 Install the Solr CRDs & Operator
 
 ```bash
-$ make deploy 
+$ make install deploy
 ```
                         
 ## Running a Solr Cloud

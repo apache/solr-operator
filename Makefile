@@ -1,5 +1,5 @@
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
+CRD_OPTIONS ?= "crd"
 
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
