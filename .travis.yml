@@ -23,6 +23,7 @@ jobs:
     - stage: "Docker"
       name: "Build (& Release if tagged)"
       script:
+        - ./hack/install_dependencies.sh
         - make docker-build
       deploy:
         - provider: script
