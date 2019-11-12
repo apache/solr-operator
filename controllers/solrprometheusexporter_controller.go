@@ -38,9 +38,6 @@ type SolrPrometheusExporterReconciler struct {
 	scheme *runtime.Scheme
 }
 
-// Reconcile reads that state of the cluster for a SolrPrometheusExporter object and makes changes based on the state read
-// and what is in the SolrPrometheusExporter.Spec
-// Automatically generate RBAC rules to allow the Controller to read and write Deployments & config maps and read solrClouds
 // +kubebuilder:rbac:groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=,resources=configmaps/status,verbs=get
 // +kubebuilder:rbac:groups=,resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -51,6 +48,7 @@ type SolrPrometheusExporterReconciler struct {
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters/status,verbs=get;update;patch
+
 func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("solrprometheusexporter", req.NamespacedName)

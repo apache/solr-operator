@@ -47,16 +47,14 @@ type SolrBackupReconciler struct {
 	scheme *runtime.Scheme
 }
 
-// Reconcile reads that state of the cluster for a SolrBackup object and makes changes based on the state read
-// and what is in the SolrBackup.Spec
-// Automatically generate RBAC rules to allow the Controller to read and write Jobs and execute in pods and read SolrClouds
-// +kubebuilder:rbac:groups=,resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
+
 func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
 	_ = r.Log.WithValues("solrbackup", req.NamespacedName)
