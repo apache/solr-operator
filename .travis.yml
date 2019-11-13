@@ -3,22 +3,18 @@ services:
   - docker
 
 go:
-  - "1.12"
+  - "1.13"
   - master
 
 script:
   - docker --version
-  # dep
   - ./hack/install_dependencies.sh
 
   # build locally and run locally
   - make clean
-  - make vendor
-
   - make manifests
   - make build
   # - ./bin/manager --help
-
   - make test
   - make manifests-check
 
@@ -27,9 +23,8 @@ jobs:
     - stage: "Docker"
       name: "Build (& Release if tagged)"
       script:
-        - make docker-base-build
+        - ./hack/install_dependencies.sh
         - make docker-build
-        - make docker-vendor-build
       deploy:
         - provider: script
           script: bash docker_deploy.sh
