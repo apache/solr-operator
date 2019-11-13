@@ -581,7 +581,7 @@ func (in *SolrCollectionAlias) DeepCopyObject() runtime.Object {
 func (in *SolrCollectionAliasList) DeepCopyInto(out *SolrCollectionAliasList) {
 	*out = *in
 	out.TypeMeta = in.TypeMeta
-	out.ListMeta = in.ListMeta
+	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
 		*out = make([]SolrCollectionAlias, len(*in))
