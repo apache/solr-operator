@@ -306,6 +306,12 @@ The CRD should be updated anytime you update the API.
 $ make manifests
 ```
 
+Beware that you must be running an updated version of `controller-gen`. To update to a compatible version, run:
+
+```bash
+$ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+```
+
 ### Docker
 
 #### Docker Images

@@ -63,6 +63,8 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 	IngressBaseUrl = ingressBaseUrl
 }
 
+var _ reconcile.Reconciler = &SolrCloudReconciler{}
+
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -490,6 +492,10 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 }
 
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return r.SetupWithManagerAndReconciler(mgr, nil)
+}
+
+func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, reconciler *reconcile.Reconciler) error {
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrCloud{}).
 		Owns(&corev1.ConfigMap{}).
@@ -503,5 +509,9 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ctrlBuilder = ctrlBuilder.Owns(&etcd.EtcdCluster{})
 	}
 	r.scheme = mgr.GetScheme()
-	return ctrlBuilder.Complete(r)
+	if reconciler != nil {
+		return ctrlBuilder.Complete(*reconciler)
+	} else {
+		return ctrlBuilder.Complete(r)
+	}
 }

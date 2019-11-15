@@ -10,6 +10,8 @@ require (
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
 	github.com/pravega/zookeeper-operator v0.0.0-20190125200339-95e80d5de229
+	github.com/stretchr/testify v1.3.0
+	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
 	k8s.io/api v0.0.0-20191016110246-af539daaa43a
 	k8s.io/apimachinery v0.0.0-20191004115701-31ade1b30762
 	k8s.io/client-go v0.0.0-20191016110837-54936ba21026
