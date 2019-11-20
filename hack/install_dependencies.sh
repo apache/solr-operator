@@ -17,4 +17,4 @@ sudo mv /tmp/kubebuilder_${kubebuilder_version}_${os}_${arch} /usr/local/kubebui
 export PATH=$PATH:/usr/local/kubebuilder/bin
 
 # Get Zookeeper crds
-go get https://github.com/pravega/zookeeper-operator
+go get github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1
