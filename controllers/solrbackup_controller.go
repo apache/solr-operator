@@ -287,9 +287,14 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 }
 
 func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.scheme = mgr.GetScheme()
-	return ctrl.NewControllerManagedBy(mgr).
+	return r.SetupWithManagerAndReconciler(mgr, r)
+}
+
+func (r *SolrBackupReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, reconciler reconcile.Reconciler) error {
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrBackup{}).
-		Owns(&batchv1.Job{}).
-		Complete(r)
+		Owns(&batchv1.Job{})
+
+	r.scheme = mgr.GetScheme()
+	return ctrlBuilder.Complete(reconciler)
 }

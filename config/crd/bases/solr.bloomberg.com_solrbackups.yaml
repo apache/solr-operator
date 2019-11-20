@@ -62,64 +62,71 @@ spec:
               description: Persistence is the specification on how to persist the
                 backup data.
               properties:
-                AWSCliImage:
-                  description: Image containing the AWS Cli
+                S3:
+                  description: Persist to an s3 compatible endpoint
                   properties:
-                    imagePullSecret:
+                    AWSCliImage:
+                      description: Image containing the AWS Cli
+                      properties:
+                        imagePullSecret:
+                          type: string
+                        pullPolicy:
+                          description: PullPolicy describes a policy for if/when to
+                            pull a container image
+                          type: string
+                        repository:
+                          type: string
+                        tag:
+                          type: string
+                      type: object
+                    bucket:
+                      description: The S3 bucket to store/find the backup data
                       type: string
-                    pullPolicy:
-                      description: PullPolicy describes a policy for if/when to pull
-                        a container image
+                    endpointUrl:
+                      description: The S3 compatible endpoint URL
                       type: string
-                    repository:
+                    key:
+                      description: The key for the referenced tarred & zipped backup
+                        file Defaults to the name of the backup/restore + '.tgz'
                       type: string
-                    tag:
+                    region:
+                      description: The Default region to use with AWS. Can also be
+                        provided through a configFile in the secrets. Overridden by
+                        any endpointUrl value provided.
                       type: string
-                  type: object
-                bucket:
-                  description: The S3 bucket to store/find the backup data
-                  type: string
-                endpointUrl:
-                  description: The S3 compatible endpoint URL
-                  type: string
-                key:
-                  description: The key for the referenced tarred & zipped backup file
-                    Defaults to the name of the backup/restore + '.tgz'
-                  type: string
-                region:
-                  description: The Default region to use with AWS. Can also be provided
-                    through a configFile in the secrets. Overridden by any endpointUrl
-                    value provided.
-                  type: string
-                retries:
-                  description: The number of retries to communicate with S3
-                  format: int32
-                  type: integer
-                secrets:
-                  description: The secrets to use when configuring and authenticating
-                    s3 calls
-                  properties:
-                    accessKeyId:
-                      description: The key (within the provided secret) of the Access
-                        Key ID to use
-                      type: string
-                    configFile:
-                      description: The key (within the provided secret) of an AWS
-                        Config file to use
-                      type: string
-                    credentialsFile:
-                      description: The key (within the provided secret) of an AWS
-                        Credentials file to use
-                      type: string
-                    fromSecret:
-                      description: The name of the secrets object to use
-                      type: string
-                    secretAccessKey:
-                      description: The key (within the provided secret) of the Secret
-                        Access Key to use
-                      type: string
+                    retries:
+                      description: The number of retries to communicate with S3
+                      format: int32
+                      type: integer
+                    secrets:
+                      description: The secrets to use when configuring and authenticating
+                        s3 calls
+                      properties:
+                        accessKeyId:
+                          description: The key (within the provided secret) of the
+                            Access Key ID to use
+                          type: string
+                        configFile:
+                          description: The key (within the provided secret) of an
+                            AWS Config file to use
+                          type: string
+                        credentialsFile:
+                          description: The key (within the provided secret) of an
+                            AWS Credentials file to use
+                          type: string
+                        fromSecret:
+                          description: The name of the secrets object to use
+                          type: string
+                        secretAccessKey:
+                          description: The key (within the provided secret) of the
+                            Secret Access Key to use
+                          type: string
+                      required:
+                      - fromSecret
+                      type: object
                   required:
-                  - fromSecret
+                  - bucket
+                  - secrets
                   type: object
                 volume:
                   description: Persist to a volume
@@ -1378,9 +1385,6 @@ spec:
                   required:
                   - source
                   type: object
-              required:
-              - bucket
-              - secrets
               type: object
             solrCloud:
               description: A reference to the SolrCloud to create a backup for

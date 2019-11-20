@@ -8,12 +8,13 @@ go:
 
 script:
   - docker --version
+  - make clean
   - ./hack/install_dependencies.sh
 
   # build locally and run locally
-  - make clean
   - make manifests
   - make build
+
   # - ./bin/manager --help
   - make test
   - make manifests-check

@@ -56,7 +56,7 @@ func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
 type PersistenceSource struct {
 	// Persist to an s3 compatible endpoint
 	// +optional
-	S3 *S3PersistenceSource `json:",omitempty"`
+	S3 *S3PersistenceSource `json:"S3,omitempty"`
 
 	// Persist to a volume
 	// +optional

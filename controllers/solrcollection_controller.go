@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"time"
 
@@ -36,7 +37,8 @@ import (
 // SolrCollectionReconciler reconciles a SolrCollection object
 type SolrCollectionReconciler struct {
 	client.Client
-	Log logr.Logger
+	scheme *runtime.Scheme
+	Log    logr.Logger
 }
 
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
@@ -44,7 +46,7 @@ type SolrCollectionReconciler struct {
 
 func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	_ = r.Log.WithValues("solrcloeection", req.NamespacedName)
+	_ = r.Log.WithValues("solrcollection", req.NamespacedName)
 
 	// Fetch the SolrCollection collection
 	collection := &solrv1beta1.SolrCollection{}
@@ -68,6 +70,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 
 	if err != nil {
 		r.Log.Error(err, "Error while creating SolrCloud collection")
+		return reconcile.Result{}, err
 	}
 
 	if collection.Status.CreatedTime == nil {
@@ -135,7 +138,9 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
 	// Get the solrCloud that this collection is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
-	err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud)
+	if err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud); err != nil {
+		return nil, false, err
+	}
 
 	// If the collection has already been created already and requires modification
 	if collection.Status.Created {
@@ -179,7 +184,14 @@ func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta
 }
 
 func (r *SolrCollectionReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&solrv1beta1.SolrCollection{}).
-		Complete(r)
+	return r.SetupWithManagerAndReconciler(mgr, r)
+}
+
+func (r *SolrCollectionReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, reconciler reconcile.Reconciler) error {
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
+		For(&solrv1beta1.SolrCollection{})
+
+	r.scheme = mgr.GetScheme()
+
+	return ctrlBuilder.Complete(reconciler)
 }

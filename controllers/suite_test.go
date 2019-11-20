@@ -20,8 +20,10 @@ import (
 	stdlog "log"
 	"os"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
 	"testing"
+	"time"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
@@ -33,7 +35,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var cfg *rest.Config
+var testCfg *rest.Config
+var testClient client.Client
+
+const timeout = time.Second * 5
+
+var additionalLables = map[string]string{
+	"additional": "label",
+	"another":    "test",
+}
 
 func TestMain(m *testing.M) {
 	t := &envtest.Environment{
@@ -46,7 +56,7 @@ func TestMain(m *testing.M) {
 	zkOp.AddToScheme(scheme.Scheme)
 
 	var err error
-	if cfg, err = t.Start(); err != nil {
+	if testCfg, err = t.Start(); err != nil {
 		stdlog.Fatal(err)
 	}
 

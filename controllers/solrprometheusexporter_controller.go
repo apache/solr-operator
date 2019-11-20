@@ -29,6 +29,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // SolrPrometheusExporterReconciler reconciles a SolrPrometheusExporter object
@@ -175,8 +176,16 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 }
 
 func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	r.scheme = mgr.GetScheme()
-	return ctrl.NewControllerManagedBy(mgr).
+	return r.SetupWithManagerAndReconciler(mgr, r)
+}
+
+func (r *SolrPrometheusExporterReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, reconciler reconcile.Reconciler) error {
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrPrometheusExporter{}).
-		Complete(r)
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Service{}).
+		Owns(&appsv1.Deployment{})
+
+	r.scheme = mgr.GetScheme()
+	return ctrlBuilder.Complete(reconciler)
 }
