@@ -89,13 +89,13 @@ func TestCloudReconcile(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
-	expectStatefulSet(g, requests, expectedCloudRequest, cloudSsKey)
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	// Check the client Service
-	expectService(g, requests, expectedCloudRequest, cloudCsKey)
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
 
 	// Check the headless Service
-	expectService(g, requests, expectedCloudRequest, cloudHsKey)
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
 
 	// Check the ingress
 	expectNoIngress(g, requests, cloudIKey)
@@ -150,13 +150,13 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
-	expectStatefulSet(g, requests, expectedCloudRequest, cloudSsKey)
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	// Check the client Service
-	expectService(g, requests, expectedCloudRequest, cloudCsKey)
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
 
 	// Check the headless Service
-	expectService(g, requests, expectedCloudRequest, cloudHsKey)
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
 
 	// Check the ingress
 	expectIngress(g, requests, expectedCloudRequest, cloudIKey)

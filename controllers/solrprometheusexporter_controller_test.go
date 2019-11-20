@@ -19,6 +19,7 @@ package controllers
 import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,9 +79,10 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 
 	expectNoConfigMap(g, requests, metricsCMKey)
 
-	expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 
-	expectService(g, requests, expectedMetricsRequest, metricsSKey)
+	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
+	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
 }
 
 func TestMetricsReconcileWithExporterConfig(t *testing.T) {
@@ -124,9 +126,10 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{"solr-prometheus-exporter.xml": testExporterConfig})
+	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{"solr-prometheus-exporter.xml": testExporterConfig})
 
-	expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, metricsCMKey.Name)
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, configMap.Name)
 
-	expectService(g, requests, expectedMetricsRequest, metricsSKey)
+	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
+	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
 }

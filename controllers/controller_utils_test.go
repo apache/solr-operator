@@ -28,10 +28,13 @@ import (
 	"testing"
 )
 
-func expectStatefulSet(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) {
+func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) *appsv1.StatefulSet {
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
 		Should(gomega.Succeed())
+
+	// Verify the statefulSet Specs
+	assert.Equal(t, stateful.Spec.Template.Labels, stateful.Spec.Selector.MatchLabels, "StatefulSet has different Pod template labels and selector labels.")
 
 	// Delete the StatefulSet and expect Reconcile to be called for StatefulSet deletion
 	g.Expect(testClient.Delete(context.TODO(), stateful)).NotTo(gomega.HaveOccurred())
@@ -42,12 +45,16 @@ func expectStatefulSet(g *gomega.GomegaWithT, requests chan reconcile.Request, e
 	// Manually delete StatefulSet since GC isn't enabled in the test control plane
 	g.Eventually(func() error { return testClient.Delete(context.TODO(), stateful) }, timeout).
 		Should(gomega.MatchError("statefulsets.apps \"" + statefulSetKey.Name + "\" not found"))
+
+	return stateful
 }
 
-func expectService(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, serviceKey types.NamespacedName) {
+func expectService(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, serviceKey types.NamespacedName, selectorLables map[string]string) *corev1.Service {
 	service := &corev1.Service{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
 		Should(gomega.Succeed())
+
+	assert.Equal(t, selectorLables, service.Spec.Selector, "Service is not pointing to the correct Pods.")
 
 	// Delete the Service and expect Reconcile to be called for Service deletion
 	g.Expect(testClient.Delete(context.TODO(), service)).NotTo(gomega.HaveOccurred())
@@ -58,9 +65,11 @@ func expectService(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	// Manually delete Service since GC isn't enabled in the test control plane
 	g.Eventually(func() error { return testClient.Delete(context.TODO(), service) }, timeout).
 		Should(gomega.MatchError("services \"" + serviceKey.Name + "\" not found"))
+
+	return service
 }
 
-func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, ingressKey types.NamespacedName) {
+func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, ingressKey types.NamespacedName) *extv1.Ingress {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.Succeed())
@@ -74,6 +83,8 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	// Manually delete Ingress since GC isn't enabled in the test control plane
 	g.Eventually(func() error { return testClient.Delete(context.TODO(), ingress) }, timeout).
 		Should(gomega.MatchError("ingresses.extensions \"" + ingressKey.Name + "\" not found"))
+
+	return ingress
 }
 
 func expectNoIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, ingressKey types.NamespacedName) {
@@ -82,7 +93,7 @@ func expectNoIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, ing
 		Should(gomega.MatchError("Ingress.extensions \"" + ingressKey.Name + "\" not found"))
 }
 
-func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, configMapKey types.NamespacedName, configMapData map[string]string) {
+func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, configMapKey types.NamespacedName, configMapData map[string]string) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
 		Should(gomega.Succeed())
@@ -101,6 +112,8 @@ func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcil
 	// Manually delete ConfigMap since GC isn't enabled in the test control plane
 	g.Eventually(func() error { return testClient.Delete(context.TODO(), configMap) }, timeout).
 		Should(gomega.MatchError("configmaps \"" + configMapKey.Name + "\" not found"))
+
+	return configMap
 }
 
 func expectNoConfigMap(g *gomega.GomegaWithT, requests chan reconcile.Request, configMapKey types.NamespacedName) {

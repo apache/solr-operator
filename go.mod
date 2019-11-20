@@ -9,7 +9,7 @@ require (
 	github.com/go-logr/logr v0.1.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0
-	github.com/pravega/zookeeper-operator v0.0.0-20190125200339-95e80d5de229
+	github.com/pravega/zookeeper-operator v0.2.5-rc0
 	github.com/stretchr/testify v1.3.0
 	golang.org/x/net v0.0.0-20190812203447-cdfb69ac37fc
 	k8s.io/api v0.0.0-20191016110246-af539daaa43a

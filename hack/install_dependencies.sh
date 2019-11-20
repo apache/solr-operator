@@ -15,3 +15,6 @@ GO111MODULE=on go mod tidy
 curl -sL https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch} | tar -xz -C /tmp/
 sudo mv /tmp/kubebuilder_${kubebuilder_version}_${os}_${arch} /usr/local/kubebuilder
 export PATH=$PATH:/usr/local/kubebuilder/bin
+
+# Get Zookeeper crds
+go get https://github.com/pravega/zookeeper-operator
