@@ -36,17 +36,13 @@ vendor:
 # Building
 ###
 
-# Build manager binary
+# Build solr-operator binary
 build: generate vet
-	BIN=manager VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
+	BIN=solr-operator VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Run tests
 test: check-format check-license generate fmt vet manifests
 	go test ./... -coverprofile cover.out
-
-# Build manager binary
-manager: generate fmt vet
-	go build -o bin/manager main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -88,13 +84,6 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 
-docker-build:
-	docker build . -t ${IMG}:${VERSION}
-
-# Push the docker image for the operator
-docker-push:
-	docker push ${IMG}:${VERSION}
-	docker push ${IMG}:latest
 
 # # find or download controller-gen
 # download controller-gen if necessary
@@ -105,3 +94,34 @@ ifeq (, $(shell which controller-gen))
 else
     CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+###
+# Docker Building & Pushing
+###
+
+# Build the base builder docker image
+# This can be a static go build or dynamic
+docker-base-build:
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator-build -f ./build/Dockerfile.build
+
+# Build the docker image for the operator only
+docker-build: docker-base-build
+	docker build --build-arg BUILD_IMG=solr-operator-build . -t solr-operator -f ./build/Dockerfile.slim
+	docker tag solr-operator ${IMG}:${VERSION}
+	docker tag solr-operator ${IMG}:latest
+
+# Build the docker image for the operator, containing the vendor deps as well
+docker-vendor-build: docker-build
+	docker build --build-arg BUILD_IMG=solr-operator-build --build-arg SLIM_IMAGE=solr-operator . -t solr-operator-vendor -f ./build/Dockerfile.vendor
+	docker tag solr-operator-vendor ${IMG}:${VERSION}-vendor
+	docker tag solr-operator-vendor ${IMG}:latest-vendor
+
+# Push the docker image for the operator
+docker-push:
+	docker push ${IMG}:${VERSION}
+	docker push ${IMG}:latest
+
+# Push the docker image for the operator with vendor deps
+docker-vendor-push:
+	docker push ${IMG}:${VERSION}-vendor
+	docker push ${IMG}:latest-vendor

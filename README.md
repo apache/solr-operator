@@ -318,16 +318,22 @@ $ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
 
 Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
 
-- [Base Image](build/Dockerfile.build.dynamic) - Downloads vendor directories, builds operator executable (This is not published, only used to build the following images)
+- [Builder Image](build/Dockerfile.build) - Downloads gomod dependencies, builds operator executable (This is not published, only used to build the following images)
 - [Slim Image](build/Dockerfile.slim) - Contains only the operator executable
-- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all vendored dependencies (at `/solr-operator-vendor-sources`)
+- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all dependencies (at `/solr-operator-vendor-sources`)
 
 #### Building
 
 Building and releasing a test operator image with a custom namespace.
 
 ```bash
-$ NAMESPACE=your-namespace make docker-base-build docker-build docker-push
+$ NAMESPACE=your-namespace make docker-build docker-push
+```
+
+You can test the vendor docker container by running
+
+```bash
+$ NAMESPACE=your-namespace make docker-vendor-build docker-vendor-push
 ```
 
 ### Docker for Mac Local Development Setup
