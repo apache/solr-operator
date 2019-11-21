@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	"github.com/go-logr/logr"
@@ -495,7 +494,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, reconciler reconcile.Reconciler) error {
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
-		For(&solrv1beta1.SolrCloud{}).
+		For(&solr.SolrCloud{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).

@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),
-			filepath.Join("..", "..", "..", "pravega", "zookeeper-operator", "deploy", "crds"),
+			filepath.Join("..", "example", "dependencies"),
 		},
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)

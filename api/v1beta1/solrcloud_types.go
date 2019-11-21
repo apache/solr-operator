@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"fmt"
+	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -318,8 +319,15 @@ type ZookeeperSpec struct {
 	Image *ContainerImage `json:"image,omitempty"`
 
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
-	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
+	// This field is optional. If no PVC spec is provided, etcd container will use emptyDir as volume.
+	// WARNING: This field is DEPRECATED, please use the Persistence option
+	// +optional
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
+
+	// Persistence is the configuration for zookeeper persistent layer.
+	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
+	// +optional
+	Persistence *zk.Persistence `json:"persistence,omitempty"`
 
 	// Pod resources for zookeeper pod
 	// +optional
@@ -351,17 +359,20 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	}
 	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
 
-	if z.PersistentVolumeClaimSpec == nil {
-		z.PersistentVolumeClaimSpec = &corev1.PersistentVolumeClaimSpec{}
-	}
-	z.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
-		corev1.ReadWriteOnce,
-	}
-	if len(z.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
-		z.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
-			corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+	if z.Persistence == nil && z.PersistentVolumeClaimSpec != nil {
+		z.Persistence = &zk.Persistence{}
+		if z.PersistentVolumeClaimSpec.AccessModes == nil {
+			z.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			}
+		}
+		if len(z.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
+			z.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+			}
 		}
 		changed = true
+		z.Persistence.PersistentVolumeClaimSpec = *z.PersistentVolumeClaimSpec
 	}
 	return changed
 }

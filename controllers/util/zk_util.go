@@ -51,9 +51,9 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 				Tag:        zkSpec.Image.Tag,
 				PullPolicy: zkSpec.Image.PullPolicy,
 			},
-			Labels:                    labels,
-			Replicas:                  *zkSpec.Replicas,
-			PersistentVolumeClaimSpec: *zkSpec.PersistentVolumeClaimSpec,
+			Labels:      labels,
+			Replicas:    *zkSpec.Replicas,
+			Persistence: zkSpec.Persistence,
 		},
 	}
 
@@ -107,10 +107,20 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	}
 	to.Spec.Image.Tag = from.Spec.Image.Tag
 
-	if !reflect.DeepEqual(to.Spec.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.PersistentVolumeClaimSpec.Resources.Requests) {
+	if from.Spec.Persistence != nil {
+		if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
+			requireUpdate = true
+		}
+		to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
+
+		if !reflect.DeepEqual(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
+			requireUpdate = true
+		}
+		to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
+	} else if to.Spec.Persistence != nil {
 		requireUpdate = true
+		to.Spec.Persistence = nil
 	}
-	to.Spec.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.PersistentVolumeClaimSpec.Resources.Requests
 
 	if !reflect.DeepEqual(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
 		log.Info("Updating Zk pod resources")

@@ -21,6 +21,7 @@ limitations under the License.
 package v1beta1
 
 import (
+	zookeeperv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 )
@@ -934,6 +935,11 @@ func (in *ZookeeperSpec) DeepCopyInto(out *ZookeeperSpec) {
 	if in.PersistentVolumeClaimSpec != nil {
 		in, out := &in.PersistentVolumeClaimSpec, &out.PersistentVolumeClaimSpec
 		*out = new(v1.PersistentVolumeClaimSpec)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Persistence != nil {
+		in, out := &in.Persistence, &out.Persistence
+		*out = new(zookeeperv1beta1.Persistence)
 		(*in).DeepCopyInto(*out)
 	}
 	in.ZookeeperPod.DeepCopyInto(&out.ZookeeperPod)

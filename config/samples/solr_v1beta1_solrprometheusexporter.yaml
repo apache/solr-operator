@@ -1,7 +1,0 @@
-apiVersion: solr.bloomberg.com/v1beta1
-kind: SolrPrometheusExporter
-metadata:
-  name: solrprometheusexporter-sample
-spec:
-  # Add fields here
-  foo: bar

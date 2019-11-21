@@ -19,7 +19,6 @@ spec:
       - args:
         - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-domain=ing.local.domain
         image: controller:0.1.5-3
         imagePullPolicy: Always
         name: solr-operator

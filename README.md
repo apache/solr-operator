@@ -23,7 +23,7 @@ Install the Zookeeper & Etcd Operators, which this operator depends on by defaul
 Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
 
 ```bash
-$ kubectl apply -f example/ext_ops.yaml
+$ kubectl apply -f example/dependencies
 ```
 
 Install the Solr CRDs & Operator
@@ -354,16 +354,19 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 5. Navigate to your browser: http://default-example-solrcloud.ing.local.domain/solr/#/ to validate everything is working
 
 
-## Version Compatability
+## Version Compatability & Changes
 
-### Backwards Incompatible CRD Changes
+#### v0.2.0
+- Uses `gomod` instead of `dep`
+- `SolrCloud.zookeeperRef.provided.zookeeper.persistentVolumeClaimSpec` has been deprecated in favor of the `SolrCloud.zookeeperRef.provided.zookeeper.persistence` option.  
+This option is backwards compatible, but will be removed in a future version.
 
 #### v0.1.1
 - `SolrCloud.Spec.persistentVolumeClaim` was renamed to `SolrCloud.Spec.dataPvcSpec`
 
 ### Compatibility with Kubernetes Versions
 
-#### Fully Compatible - v1.12+
+#### Fully Compatible - v1.13+
 
 #### Feature Gates required for older versions
 
