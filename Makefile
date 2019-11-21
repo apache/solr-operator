@@ -5,7 +5,7 @@ CRD_OPTIONS ?= "crd"
 NAME ?= solr-operator
 NAMESPACE ?= bloomberg/
 IMG = $(NAMESPACE)$(NAME)
-VERSION ?= 0.1.4
+VERSION ?= $(shell git describe --tags HEAD)
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
@@ -58,7 +58,7 @@ install: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	cd config/manager && kustomize edit set image controller=${IMG}
+	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
@@ -88,7 +88,7 @@ generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 
-docker-build: test
+docker-build:
 	docker build . -t ${IMG}:${VERSION}
 
 # Push the docker image for the operator

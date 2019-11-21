@@ -22,3 +22,6 @@ bin
 *.swp
 *.swo
 *~
+
+# Remove the kustomize file for the manager, as it contains local information
+config/manager/kustomization.yaml
