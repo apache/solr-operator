@@ -1,0 +1,11 @@
+ARG BUILD_IMG
+ARG SLIM_IMAGE
+FROM $BUILD_IMG as builder
+
+# =============================================================================
+# Copy the controller-manager into a thin image
+# =============================================================================
+ARG SLIM_IMAGE
+FROM $SLIM_IMAGE as final
+
+COPY --from=builder /go/pkg/mod /solr-operator-vendor-sources
