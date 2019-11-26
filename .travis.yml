@@ -11,12 +11,13 @@ script:
   - make clean
   - ./hack/install_dependencies.sh
 
-  # build locally and run locally
+  # build locally and test generated files and code
+  - make mod-tidy
   - make manifests
   - make build
 
-  - make test
   - make manifests-check
+  - make test
 
 jobs:
   include:

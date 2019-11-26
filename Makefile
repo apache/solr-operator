@@ -29,7 +29,7 @@ version:
 clean:
 	rm -rf ./bin
 
-vendor:
+mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
 ###
@@ -58,7 +58,7 @@ deploy: manifests
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
+manifests: mod-tidy controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
@@ -82,7 +82,6 @@ manifests-check:
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
-
 
 
 # # find or download controller-gen

@@ -298,7 +298,7 @@ spec:
                         ( _optional_ , e.g. `ing.base.domain` )
 ## Development
 
-### Updating the CRD
+### Before you create a PR
 
 The CRD should be updated anytime you update the API.
 
@@ -310,6 +310,12 @@ Beware that you must be running an updated version of `controller-gen`. To updat
 
 ```bash
 $ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+```
+
+Make sure that you have updated the go.mod file:
+
+```bash
+$ make mod-tidy
 ```
 
 ### Docker
