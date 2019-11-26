@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"sort"
 	"strconv"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -106,16 +107,25 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, ingressBaseDomain string, ho
 	}
 
 	hostAliases := make([]corev1.HostAlias, len(hostNameIPs))
-	index := 0
-	for hostName, ip := range hostNameIPs {
-		hostAliases[index] = corev1.HostAlias{
-			IP:        ip,
-			Hostnames: []string{hostName},
-		}
-		index++
-	}
 	if len(hostAliases) == 0 {
 		hostAliases = nil
+	} else {
+		hostNames := make([]string, len(hostNameIPs))
+		index := 0
+		for hostName := range hostNameIPs {
+			hostNames[index] = hostName
+			index += 1
+		}
+
+		sort.Strings(hostNames)
+
+		for index, hostName := range hostNames {
+			hostAliases[index] = corev1.HostAlias{
+				IP:        hostNameIPs[hostName],
+				Hostnames: []string{hostName},
+			}
+			index++
+		}
 	}
 
 	// if an ingressBaseDomain is provided, the node should be addressable outside of the cluster
@@ -310,10 +320,20 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	if !reflect.DeepEqual(to.Spec.VolumeClaimTemplates, from.Spec.VolumeClaimTemplates) {
-		requireUpdate = true
+	requireVolumeUpdate := false
+	if len(from.Spec.VolumeClaimTemplates) != len(to.Spec.VolumeClaimTemplates) {
+		requireVolumeUpdate = true
 		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", from.Spec.VolumeClaimTemplates, "To:", to.Spec.VolumeClaimTemplates)
-		to.Spec.VolumeClaimTemplates = from.Spec.VolumeClaimTemplates
+	}
+	for i, fromVct := range from.Spec.VolumeClaimTemplates {
+		if !reflect.DeepEqual(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
+			requireVolumeUpdate = true
+			log.Info("Update required because:", "Spec.VolumeClaimTemplates.Spec changed from", fromVct.Spec, "To:", to.Spec.VolumeClaimTemplates[i].Spec)
+
+		}
+	}
+	if requireVolumeUpdate {
+		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
@@ -334,10 +354,10 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
 	}
 
-	/*if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
+	if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
-	}*/
+	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true

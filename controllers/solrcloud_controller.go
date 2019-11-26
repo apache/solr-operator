@@ -36,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sort"
 	"strings"
 )
 
@@ -111,6 +112,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	busyBoxImage := *instance.Spec.BusyBoxImage
 
+	blockReconciliationOfStatefulSet := false
+
 	if err := reconcileZk(r, req, instance, busyBoxImage, &newStatus); err != nil {
 		return reconcile.Result{}, err
 	}
@@ -147,8 +150,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		if IngressBaseUrl != "" && ip != "" {
-			hostNameIpMap[instance.NodeIngressUrl(nodeName, IngressBaseUrl)] = ip
+		if IngressBaseUrl != "" {
+			if ip == "" {
+				// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
+				blockReconciliationOfStatefulSet = true
+			} else {
+				hostNameIpMap[instance.NodeIngressUrl(nodeName, IngressBaseUrl)] = ip
+			}
 		}
 	}
 
@@ -195,7 +203,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
-	if strings.Contains(newStatus.ZkConnectionString(), ":") {
+	if !strings.Contains(newStatus.ZkConnectionString(), ":") {
+		blockReconciliationOfStatefulSet = true
+	}
+
+	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
 		statefulSet := util.GenerateStatefulSet(instance, IngressBaseUrl, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
@@ -282,9 +294,11 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	}
 
 	otherVersions := []string{}
-	nodeStatuses := []solr.SolrNodeStatus{}
+	nodeNames := make([]string, len(foundPods.Items))
+	nodeStatusMap := map[string]solr.SolrNodeStatus{}
 	backupRestoreReadyPods := 0
-	for _, p := range foundPods.Items {
+	for idx, p := range foundPods.Items {
+		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.NodeName = p.Name
 		nodeStatus.InternalAddress = fmt.Sprintf("http://%s.%s.svc.cluster.local", p.Name, p.Namespace)
@@ -306,7 +320,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		}
 		nodeStatus.Ready = ready
 
-		nodeStatuses = append(nodeStatuses, nodeStatus)
+		nodeStatusMap[nodeStatus.NodeName] = nodeStatus
 
 		// Get Volumes for backup/restore
 		if solrCloud.Spec.BackupRestoreVolume != nil {
@@ -317,7 +331,12 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 			}
 		}
 	}
-	newStatus.SolrNodes = nodeStatuses
+	sort.Strings(nodeNames)
+
+	newStatus.SolrNodes = make([]solr.SolrNodeStatus, len(nodeNames))
+	for idx, nodeName := range nodeNames {
+		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
+	}
 
 	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
 		newStatus.BackupRestoreReady = true

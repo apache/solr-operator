@@ -160,6 +160,10 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 			}
 			changed = true
 		}
+		if spec.DataPvcSpec.VolumeMode == nil {
+			temp := corev1.PersistentVolumeFilesystem
+			spec.DataPvcSpec.VolumeMode = &temp
+		}
 	}
 
 	if spec.BusyBoxImage == nil {
