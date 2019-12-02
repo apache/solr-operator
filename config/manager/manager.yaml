@@ -1,0 +1,37 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solr-operator 
+  labels:
+    control-plane: solr-operator
+spec:
+  selector:
+    matchLabels:
+      control-plane: solr-operator 
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        control-plane: solr-operator 
+    spec:
+      containers:
+      - args:
+        - -zk-operator=true
+        - -etcd-operator=false
+        image: bloomberg/solr-operator:latest
+        imagePullPolicy: Always
+        name: solr-operator
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+        resources:
+          limits:
+            cpu: 200m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      terminationGracePeriodSeconds: 10

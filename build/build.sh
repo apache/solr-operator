@@ -40,4 +40,4 @@ export GOOS=${GOOS:-}
 go build \
     -ldflags "-X main.Version=${VERSION} -X main.GitSHA=${GIT_SHA} -X 'main.BuildTime=$(date)'" \
     -o ./bin/${BIN} \
-    ./cmd/${BIN}
+    .

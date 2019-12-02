@@ -17,12 +17,11 @@ bin
 
 !vendor/**/zz_generated.*
 
-# Vendored dependencies
-
-vendor
-
 # editor and IDE paraphernalia
 .idea
 *.swp
 *.swo
 *~
+
+# Remove the kustomize file for the manager, as it contains local information
+config/manager/kustomization.yaml

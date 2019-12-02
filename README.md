@@ -23,17 +23,13 @@ Install the Zookeeper & Etcd Operators, which this operator depends on by defaul
 Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
 
 ```bash
-$ kubectl apply -f example/ext_ops.yaml
+$ kubectl apply -f example/dependencies
 ```
 
 Install the Solr CRDs & Operator
 
 ```bash
-$ kubectl apply -f config/crds/solr_v1beta1_solrcloud.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrbackup.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrcollection.yaml
-$ kubectl apply -f config/crds/solr_v1beta1_solrprometheusexporter.yaml
-$ kubectl apply -f config/operators/solr_operator.yaml
+$ make install deploy
 ```
                         
 ## Running a Solr Cloud
@@ -302,12 +298,24 @@ spec:
                         ( _optional_ , e.g. `ing.base.domain` )
 ## Development
 
-### Updating the CRD
+### Before you create a PR
 
 The CRD should be updated anytime you update the API.
 
 ```bash
 $ make manifests
+```
+
+Beware that you must be running an updated version of `controller-gen`. To update to a compatible version, run:
+
+```bash
+$ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+```
+
+Make sure that you have updated the go.mod file:
+
+```bash
+$ make mod-tidy
 ```
 
 ### Docker
@@ -316,16 +324,22 @@ $ make manifests
 
 Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
 
-- [Base Image](build/Dockerfile.build.dynamic) - Downloads vendor directories, builds operator executable (This is not published, only used to build the following images)
+- [Builder Image](build/Dockerfile.build) - Downloads gomod dependencies, builds operator executable (This is not published, only used to build the following images)
 - [Slim Image](build/Dockerfile.slim) - Contains only the operator executable
-- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all vendored dependencies (at `/solr-operator-vendor-sources`)
+- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all dependencies (at `/solr-operator-vendor-sources`)
 
 #### Building
 
 Building and releasing a test operator image with a custom namespace.
 
 ```bash
-$ NAMESPACE=your-namespace make docker-base-build docker-build docker-push
+$ NAMESPACE=your-namespace make docker-build docker-push
+```
+
+You can test the vendor docker container by running
+
+```bash
+$ NAMESPACE=your-namespace make docker-vendor-build docker-vendor-push
 ```
 
 ### Docker for Mac Local Development Setup
@@ -352,16 +366,19 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 5. Navigate to your browser: http://default-example-solrcloud.ing.local.domain/solr/#/ to validate everything is working
 
 
-## Version Compatability
+## Version Compatability & Changes
 
-### Backwards Incompatible CRD Changes
+#### v0.2.0
+- Uses `gomod` instead of `dep`
+- `SolrCloud.zookeeperRef.provided.zookeeper.persistentVolumeClaimSpec` has been deprecated in favor of the `SolrCloud.zookeeperRef.provided.zookeeper.persistence` option.  
+This option is backwards compatible, but will be removed in a future version.
 
 #### v0.1.1
 - `SolrCloud.Spec.persistentVolumeClaim` was renamed to `SolrCloud.Spec.dataPvcSpec`
 
 ### Compatibility with Kubernetes Versions
 
-#### Fully Compatible - v1.12+
+#### Fully Compatible - v1.13+
 
 #### Feature Gates required for older versions
 

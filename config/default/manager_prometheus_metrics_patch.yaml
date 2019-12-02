@@ -2,8 +2,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solr-operator
-  namespace: default
+  name: solr-operator 
 spec:
   template:
     metadata:
