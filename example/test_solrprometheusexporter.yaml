@@ -6,8 +6,7 @@ metadata:
   name: solrprometheusexporter-sample
 spec:
   solrReference:
-    cloud:
-      kubeSolr:
-        name: "example"
+    standalone:
+      address: "http://example-solrcloud-common.default/solr"
   image:
     tag: 8.2.0

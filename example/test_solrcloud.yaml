@@ -17,12 +17,13 @@ spec:
   zookeeperRef:
     provided:
       zookeeper:
-        persistentVolumeClaimSpec:
-          storageClassName: "hostpath"
-          resources:
-            requests:
-              storage: "5Gi"
-        replicas: 3 
+        persistence:
+          spec:
+            storageClassName: "hostpath"
+            resources:
+              requests:
+                storage: "5Gi"
+        replicas: 1
         zookeeperPodPolicy:
           resources:
             limits:
