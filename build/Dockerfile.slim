@@ -1,18 +1,16 @@
 ARG BUILD_IMG
-FROM $BUILD_IMG as base
+FROM $BUILD_IMG as builder
 
 # =============================================================================
 # Copy the controller-manager into a thin image
 # =============================================================================
 
-FROM alpine:3.9 as final
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
 
-ARG PROJECT_NAME=solr-operator
-ARG REPO_PATH=github.com/bloomberg/$PROJECT_NAME
+WORKDIR /
+COPY --from=builder workspace/bin/solr-operator .
+USER nonroot:nonroot
 
-COPY --from=base /go/src/${REPO_PATH}/bin/manager /usr/local/bin/${PROJECT_NAME}
-
-RUN adduser -D ${PROJECT_NAME}
-USER ${PROJECT_NAME}
-
-ENTRYPOINT ["/usr/local/bin/solr-operator"]
+ENTRYPOINT ["/solr-operator"]

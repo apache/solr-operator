@@ -1,3 +1,19 @@
-version: "1beta1"
+version: "2"
 domain: bloomberg.com
 repo: github.com/bloomberg/solr-operator
+resources:
+- group: solr
+  version: v1beta1
+  kind: SolrCloud
+- group: solr
+  version: v1beta1
+  kind: SolrBackup
+- group: solr
+  version: v1beta1
+  kind: SolrCollection
+- group: solr
+  version: v1beta1
+  kind: SolrPrometheusExporter
+- group: solr
+  version: v1beta1
+  kind: SolrCollectionAlias
