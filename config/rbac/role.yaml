@@ -189,6 +189,20 @@ rules:
 - apiGroups:
   - solr.bloomberg.com
   resources:
+  - solrcloud
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcloud/status
+  verbs:
+  - get
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
   - solrclouds
   verbs:
   - create
@@ -202,6 +216,26 @@ rules:
   - solr.bloomberg.com
   resources:
   - solrclouds/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollectionaliases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollectionaliases/status
   verbs:
   - get
   - patch

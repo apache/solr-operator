@@ -191,6 +191,28 @@ spec:
 ```bash
 $ kubectl apply -f examples/test_solrcollections.yaml
 ```
+
+#### Solr Collection Alias
+
+The solr-operator supports the full lifecycle of standard aliases. Here is an example pointing an alias to 2 collections
+
+```
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCollectionAlias
+metadata:
+  name: collection-alias-example
+spec:
+  solrCloud: example
+  aliasType: standard
+  collections:
+    - example-collection-1
+    - example-collection-2
+```
+
+Aliases can be useful when migrating from one collection to another without having to update application endpoint configurations.
+
+Routed aliases are presently not supported
+
   
 ## Zookeeper
 =======
@@ -293,8 +315,8 @@ spec:
                      Required to use the `ProvidedZookeeper.Zetcd` option within the Spec.
                      If _true_, then an Etcd Operator must be running for the cluster.
                      ( _true_ | _false_ , defaults to _false_)
-* **-ingress-base-url** If you desire to make solr externally addressable via ingresses, a base ingress domain is required.
-                        Solr Clouds will be created with ingress rules at `*.(ingress-base-url)`.
+* **-ingress-base-domain** If you desire to make solr externally addressable via ingresses, a base ingress domain is required.
+                        Solr Clouds will be created with ingress rules at `*.(ingress-base-domain)`.
                         ( _optional_ , e.g. `ing.base.domain` )
 ## Development
 

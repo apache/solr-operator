@@ -20,10 +20,11 @@ import (
 	stdlog "log"
 	"os"
 	"path/filepath"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sync"
 	"testing"
 	"time"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
