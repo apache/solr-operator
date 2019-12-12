@@ -150,3 +150,14 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 
 	return deploy
 }
+
+func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
+	matchCount := 0
+	for _, envVar := range foundEnvVars {
+		if expectedVal, match := expectedEnvVars[envVar.Name]; match {
+			matchCount += 1
+			assert.Equal(t, expectedVal, envVar.Value, "Wrong value for env variable '%s' in podSpec", envVar.Name)
+		}
+	}
+	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
+}

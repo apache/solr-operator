@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"github.com/stretchr/testify/assert"
 	"testing"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -53,6 +54,9 @@ func TestCloudReconcile(t *testing.T) {
 					InternalConnectionString: "host:7271",
 				},
 			},
+			SolrJavaMem:  "-Xmx4G",
+			SolrOpts:     "extra-opts",
+			SolrLogLevel: "DEBUG",
 		},
 	}
 
@@ -90,6 +94,17 @@ func TestCloudReconcile(t *testing.T) {
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":        "host:7271/",
+		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
+		"SOLR_JAVA_MEM":  "-Xmx4G",
+		"SOLR_PORT":      "8983",
+		"SOLR_LOG_LEVEL": "DEBUG",
+		"SOLR_OPTS":      "extra-opts",
+	}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 	// Check the client Service
 	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -102,7 +117,8 @@ func TestCloudReconcile(t *testing.T) {
 }
 
 func TestCloudReconcileWithIngress(t *testing.T) {
-	SetIngressBaseUrl("ing.base.domain")
+	ingressBaseDomain := "ing.base.domain"
+	SetIngressBaseUrl(ingressBaseDomain)
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
@@ -112,8 +128,10 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
 					InternalConnectionString: "host:7271",
+					ChRoot:                   "chroot/other",
 				},
 			},
+			SolrGCTune: "gc Options",
 		},
 	}
 
@@ -148,9 +166,21 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
+	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet require a container.")
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":   "host:7271/chroot/other",
+		"SOLR_HOST": instance.NodeIngressUrl("$(POD_HOSTNAME)", ingressBaseDomain),
+		"SOLR_PORT": "8983",
+		"GC_TUNE":   "gc Options",
+	}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 	// Check the client Service
 	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)

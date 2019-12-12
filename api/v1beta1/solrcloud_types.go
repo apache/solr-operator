@@ -263,10 +263,8 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 
 func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 	if ci.InternalConnectionString == "" {
-		changed = true
-		if ci.ExternalConnectionString == nil {
-			ci.InternalConnectionString = "N/A"
-		} else {
+		if ci.ExternalConnectionString != nil {
+			changed = true
 			ci.InternalConnectionString = *ci.ExternalConnectionString
 		}
 	}
@@ -295,6 +293,10 @@ type ProvidedZookeeper struct {
 	//   - An etcd operator to be running
 	// +optional
 	Zetcd *FullZetcdSpec `json:"zetcd,inline"`
+
+	// The ChRoot to connect solr at
+	// +optional
+	ChRoot string `json:"chroot,omitempty"`
 }
 
 func (z *ProvidedZookeeper) withDefaults() (changed bool) {
@@ -307,6 +309,14 @@ func (z *ProvidedZookeeper) withDefaults() (changed bool) {
 	}
 	if z.Zetcd != nil {
 		changed = z.Zetcd.withDefaults() || changed
+	}
+
+	if z.ChRoot == "" {
+		changed = true
+		z.ChRoot = "/"
+	} else if !strings.HasPrefix(z.ChRoot, "/") {
+		changed = true
+		z.ChRoot = "/" + z.ChRoot
 	}
 	return changed
 }
