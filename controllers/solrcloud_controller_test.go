@@ -191,3 +191,79 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	// Check the ingress
 	expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 }
+
+func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
+	SetIngressBaseUrl("")
+	UseEtcdCRD(false)
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			ZookeeperRef: &solr.ZookeeperRef{
+				ProvidedZookeeper: &solr.ProvidedZookeeper{
+					ChRoot:    "a-ch/root",
+					Zookeeper: &solr.ZookeeperSpec{},
+				},
+			},
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	// Blocked until https://github.com/pravega/zookeeper-operator/pull/99 is merged
+	//g.Expect(zookeepercluster.AddZookeeperReconciler(mgr)).NotTo(gomega.HaveOccurred())
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	// Add an additional check for reconcile, so that the zkCluster will have been created
+	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	// Check the statefulSet
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":   instance.ProvidedZookeeperName() + "-client:2181/a-ch/root",
+		"SOLR_HOST": "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
+	}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+	// Check the client Service
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+
+	// Check the headless Service
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
+
+	// Check the ingress
+	expectNoIngress(g, requests, cloudIKey)
+}

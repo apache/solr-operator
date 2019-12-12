@@ -390,10 +390,14 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 
 ## Version Compatability & Changes
 
+#### v0.2.1
+- The zkConnectionString used for provided zookeepers changed from using the string provided in the `ZkCluster.Status`, which used an IP, to using the service name. This will cause a rolling restart of your solrs using the provided zookeeper option, but there will be no data loss.
+
 #### v0.2.0
 - Uses `gomod` instead of `dep`
 - `SolrCloud.zookeeperRef.provided.zookeeper.persistentVolumeClaimSpec` has been deprecated in favor of the `SolrCloud.zookeeperRef.provided.zookeeper.persistence` option.  
 This option is backwards compatible, but will be removed in a future version.
+- An upgrade to the ZKOperator version `0.2.4` is required.
 
 #### v0.1.1
 - `SolrCloud.Spec.persistentVolumeClaim` was renamed to `SolrCloud.Spec.dataPvcSpec`

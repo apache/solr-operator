@@ -54,6 +54,20 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 			Labels:      labels,
 			Replicas:    *zkSpec.Replicas,
 			Persistence: zkSpec.Persistence,
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          "client",
+					ContainerPort: 2181,
+				},
+				{
+					Name:          "quorum",
+					ContainerPort: 2888,
+				},
+				{
+					Name:          "leader-election",
+					ContainerPort: 3888,
+				},
+			},
 		},
 	}
 

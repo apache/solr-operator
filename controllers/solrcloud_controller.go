@@ -456,13 +456,12 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 					r.Log.Info("Updating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
 					err = r.Update(context.TODO(), foundService)
 				}
-			} else {
-				return err
+				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
+					ChRoot:                   pzk.ChRoot,
+				}
 			}
-			newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-				InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
-				ChRoot:                   pzk.ChRoot,
-			}
+			return err
 		} else if pzk.Zookeeper != nil {
 			// Generate ZookeeperCluster
 			if !useZkCRD {
@@ -490,13 +489,12 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 					external = nil
 				}
 				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: foundZkCluster.Status.InternalClientEndpoint,
+					InternalConnectionString: fmt.Sprintf("%s:%d", foundZkCluster.GetClientServiceName(), foundZkCluster.ZookeeperPorts().Client),
 					ExternalConnectionString: external,
 					ChRoot:                   pzk.ChRoot,
 				}
-			} else {
-				return err
 			}
+			return err
 		}
 	}
 	return nil
