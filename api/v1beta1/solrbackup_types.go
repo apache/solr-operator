@@ -175,7 +175,7 @@ func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bo
 		changed = true
 	}
 
-	if spec.Filename != "" {
+	if spec.Filename == "" {
 		spec.Filename = backupName + ".tgz"
 		changed = true
 	}
