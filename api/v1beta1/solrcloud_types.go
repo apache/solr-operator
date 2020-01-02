@@ -363,6 +363,26 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	}
 	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
 
+	if z.Persistence == nil {
+		z.Persistence = &zk.Persistence{}
+	}
+
+	if z.Persistence.VolumeReclaimPolicy == "" {
+		z.Persistence.VolumeReclaimPolicy = "Retain"
+	}
+
+	if z.Persistence.PersistentVolumeClaimSpec.AccessModes == nil {
+		z.Persistence.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+			corev1.ReadWriteOnce,
+		}
+	}
+
+	if len(z.Persistence.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
+		z.Persistence.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+			corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+		}
+	}
+
 	if z.Persistence == nil && z.PersistentVolumeClaimSpec != nil {
 		z.Persistence = &zk.Persistence{}
 		if z.PersistentVolumeClaimSpec.AccessModes == nil {
