@@ -21,9 +21,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"testing"
 )
@@ -160,4 +162,57 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 		}
 	}
 	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
+}
+
+func cleanupTest(g *gomega.GomegaWithT, namespace string) {
+	opts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+	// Delete all StatefulSets
+	statefuls := &appsv1.StatefulSetList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), statefuls, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range statefuls.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+
+	// Delete all Deployments
+	deployments := &appsv1.DeploymentList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), deployments, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range deployments.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+
+	// Delete all Services
+	services := &corev1.ServiceList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), services, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range services.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+
+	// Delete all ConfigMaps
+	configmaps := &corev1.ConfigMapList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), configmaps, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range configmaps.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+
+	// Delete all Jobs
+	jobs := &batchv1.JobList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), jobs, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range jobs.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+
+	// Delete all Ingresses
+	ingresses := &extv1.IngressList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), ingresses, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range ingresses.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
 }

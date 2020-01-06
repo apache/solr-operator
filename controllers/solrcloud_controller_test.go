@@ -80,6 +80,8 @@ func TestCloudReconcile(t *testing.T) {
 		mgrStopped.Wait()
 	}()
 
+	cleanupTest(g, instance.Namespace)
+
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
@@ -154,6 +156,8 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 		close(stopMgr)
 		mgrStopped.Wait()
 	}()
+
+	cleanupTest(g, instance.Namespace)
 
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
@@ -231,6 +235,8 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 		close(stopMgr)
 		mgrStopped.Wait()
 	}()
+
+	cleanupTest(g, instance.Namespace)
 
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
