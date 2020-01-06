@@ -501,8 +501,8 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
-			Selector:  selectorLabels,
-			ClusterIP: corev1.ClusterIPNone,
+			Selector:                 selectorLabels,
+			ClusterIP:                corev1.ClusterIPNone,
 			PublishNotReadyAddresses: true,
 		},
 	}
