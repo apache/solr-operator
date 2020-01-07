@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sort"
 	"strings"
+	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -205,6 +206,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
 	if !strings.Contains(newStatus.ZkConnectionString(), ":") {
 		blockReconciliationOfStatefulSet = true
+	} else if newStatus.ZkConnectionString() != instance.Status.ZkConnectionString() {
+		// If the zkConnectionString has changed, make sure that it is able to be connected to and the chRoot exists
+		err = util.CreateChRootIfNecessary(newStatus.ZookeeperConnectionInfo)
+		r.Log.Error(err, "Cannot create ZK Chroot for Solr Cloud", "namespace", instance.Namespace, "name", instance.Name)
+		return reconcile.Result{RequeueAfter: time.Second * 5}, err
 	}
 
 	if !blockReconciliationOfStatefulSet {
