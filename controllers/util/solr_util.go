@@ -481,6 +481,7 @@ func GenerateService(solrCloud *solr.SolrCloud) *corev1.Service {
 }
 
 // GenerateHeadlessService returns a new Headless corev1.Service pointer generated for the SolrCloud instance
+// The PublishNotReadyAddresses option is set as true, because we want each pod to be reachable no matter the readiness of the pod.
 // solrCloud: SolrCloud instance
 func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	// TODO: Default and Validate these with Webhooks
@@ -500,14 +501,16 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
-			Selector:  selectorLabels,
-			ClusterIP: corev1.ClusterIPNone,
+			Selector:                 selectorLabels,
+			ClusterIP:                corev1.ClusterIPNone,
+			PublishNotReadyAddresses: true,
 		},
 	}
 	return service
 }
 
-// GenerateNodeService returns a new External corev1.Service pointer generated for the given Solr Node
+// GenerateNodeService returns a new External corev1.Service pointer generated for the given Solr Node.
+// The PublishNotReadyAddresses option is set as true, because we want each pod to be reachable no matter the readiness of the pod.
 // solrCloud: SolrCloud instance
 // nodeName: string node
 func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Service {
@@ -530,6 +533,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 			Ports: []corev1.ServicePort{
 				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
+			PublishNotReadyAddresses: true,
 		},
 	}
 	return service
@@ -568,6 +572,11 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 		requireUpdate = true
 	}
 	to.Spec.ExternalName = from.Spec.ExternalName
+
+	if !reflect.DeepEqual(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
+		requireUpdate = true
+	}
+	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
 
 	return requireUpdate
 }
