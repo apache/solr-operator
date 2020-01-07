@@ -23,8 +23,8 @@ import (
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
-	zkCli "github.com/samuel/go-zookeeper/zk"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
+	zkCli "github.com/samuel/go-zookeeper/zk"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
