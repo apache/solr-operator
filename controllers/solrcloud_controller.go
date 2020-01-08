@@ -109,6 +109,9 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
+	requeueOrNot := reconcile.Result{}
+
 	newStatus := solr.SolrCloudStatus{}
 
 	busyBoxImage := *instance.Spec.BusyBoxImage
@@ -116,13 +119,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	blockReconciliationOfStatefulSet := false
 
 	if err := reconcileZk(r, req, instance, busyBoxImage, &newStatus); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Generate Service
 	service := util.GenerateService(instance)
 	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the Service already exists
@@ -139,7 +142,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		newStatus.InternalCommonAddress = "http://" + foundService.Name + "." + foundService.Namespace
 	} else {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	solrNodeNames := instance.GetAllSolrNodeNames()
@@ -149,7 +152,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, nodeName := range solrNodeNames {
 		err, ip := reconcileNodeService(r, instance, nodeName)
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 		if IngressBaseUrl != "" {
 			if ip == "" {
@@ -164,7 +167,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Generate HeadlessService
 	headless := util.GenerateHeadlessService(instance)
 	if err := controllerutil.SetControllerReference(instance, headless, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the HeadlessService already exists
@@ -179,13 +182,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Update(context.TODO(), foundHeadless)
 	}
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Generate ConfigMap
 	configMap := util.GenerateConfigMap(instance)
 	if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the ConfigMap already exists
@@ -200,7 +203,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Update(context.TODO(), foundConfigMap)
 	}
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -209,15 +212,18 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	} else if newStatus.ZkConnectionString() != instance.Status.ZkConnectionString() {
 		// If the zkConnectionString has changed, make sure that it is able to be connected to and the chRoot exists
 		err = util.CreateChRootIfNecessary(newStatus.ZookeeperConnectionInfo)
-		r.Log.Error(err, "Cannot create ZK Chroot for Solr Cloud", "namespace", instance.Namespace, "name", instance.Name)
-		return reconcile.Result{RequeueAfter: time.Second * 5}, err
+		if err != nil {
+			r.Log.Error(err, "Cannot create ZK Chroot for Solr Cloud", "namespace", instance.Namespace, "name", instance.Name)
+			requeueOrNot = reconcile.Result{RequeueAfter: time.Second * 5}
+			blockReconciliationOfStatefulSet = true
+		}
 	}
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
 		statefulSet := util.GenerateStatefulSet(instance, &newStatus, IngressBaseUrl, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 
 		// Check if the StatefulSet already exists
@@ -236,20 +242,20 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			newStatus.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
 		}
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
 	err = reconcileCloudStatus(r, instance, &newStatus)
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	if IngressBaseUrl != "" {
 		// Generate Ingress
 		ingress := util.GenerateCommonIngress(instance, solrNodeNames, IngressBaseUrl)
 		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 
 		// Check if the Ingress already exists
@@ -264,7 +270,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			err = r.Update(context.TODO(), foundIngress)
 		}
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		} else {
 			address := "http://" + instance.CommonIngressUrl(IngressBaseUrl)
 			newStatus.ExternalCommonAddress = &address
@@ -276,11 +282,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		r.Log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name)
 		err = r.Status().Update(context.Background(), instance)
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
-	return reconcile.Result{}, nil
+	return requeueOrNot, nil
 }
 
 func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus) (err error) {

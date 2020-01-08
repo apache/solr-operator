@@ -254,22 +254,13 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":   instance.ProvidedZookeeperName() + "-client:2181/a-ch/root",
-		"SOLR_HOST": "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	// Check that the ZkConnectionInformation is correct
+	assert.Equal(t, instance.ProvidedZookeeperName()+"-client:2181", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
+	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
+	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
 
-	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-
-	// Check the headless Service
-	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-
-	// Check the ingress
-	expectNoIngress(g, requests, cloudIKey)
+	// Check that the statefulSet has not been created, because the ZkChRoot is not able to be created or verified
+	expectNoStatefulSet(g, cloudSsKey)
 }
