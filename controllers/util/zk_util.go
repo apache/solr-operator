@@ -423,11 +423,12 @@ func CreateChRootIfNecessary(info solr.ZookeeperConnectionInfo) error {
 				log.Error(err, "Could not check existence of Znode", "path", pathToCreate)
 				return err
 			} else if !exists {
+				log.Info("Creating Znode for chRoot of SolrCloud", "path", pathToCreate)
 				_, err = zkClient.Create(pathToCreate, []byte(""), 0, zkCli.WorldACL(zkCli.PermAll))
 
 				if err != nil {
 					log.Error(err, "Could not create Znode for chRoot of SolrCloud", "path", pathToCreate)
-					break
+					return err
 				}
 			}
 		}
