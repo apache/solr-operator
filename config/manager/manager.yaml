@@ -15,6 +15,7 @@ spec:
       labels:
         control-plane: solr-operator 
     spec:
+      serviceAccountName: solr-operator
       containers:
       - args:
         - -zk-operator=true

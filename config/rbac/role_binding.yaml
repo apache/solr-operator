@@ -8,5 +8,5 @@ roleRef:
   name: solr-operator-role
 subjects:
 - kind: ServiceAccount
-  name: default
-  namespace: system
+  name: solr-operator
+  namespace: default
