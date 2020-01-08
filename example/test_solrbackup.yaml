@@ -1,9 +1,14 @@
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrBackup
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-  name: solrbackup-sample
+  name: solrbackup-test
+  namespace: default
 spec:
-  # Add fields here
-  foo: bar
+  persistence:
+    volume:
+      source:
+        persistentVolumeClaim:
+          claimName: "pvc-test"
+  solrCloud: example
+  collections:
+    - example

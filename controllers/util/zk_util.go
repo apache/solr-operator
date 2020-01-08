@@ -134,10 +134,13 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 			requireUpdate = true
 		}
 		to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
-	} else if to.Spec.Persistence != nil {
+	}
+	/* Uncomment when the following PR is merged in: https://github.com/pravega/zookeeper-operator/pull/64
+	   Otherwise the ZK Operator will create persistence when none is given, and this will infinitely loop.
+	else if to.Spec.Persistence != nil {
 		requireUpdate = true
 		to.Spec.Persistence = nil
-	}
+	}*/
 
 	if !reflect.DeepEqual(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
 		log.Info("Updating Zk pod resources")
@@ -148,13 +151,13 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	if from.Spec.Pod.Affinity != nil {
 		if !reflect.DeepEqual(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
 			log.Info("Updating Zk pod node affinity")
-			log.Info("Update required because:", "Spec.Pod.Affinity.NodeAffinity changed from", from.Spec.Pod.Affinity.NodeAffinity, "To:", to.Spec.Pod.Affinity.NodeAffinity)
+			log.Info("Update required because:", "Spec.Pod.Affinity.NodeAffinity changed from", to.Spec.Pod.Affinity.NodeAffinity, "To:", from.Spec.Pod.Affinity.NodeAffinity)
 			requireUpdate = true
 		}
 
 		if !reflect.DeepEqual(to.Spec.Pod.Affinity.PodAffinity, from.Spec.Pod.Affinity.PodAffinity) {
 			log.Info("Updating Zk pod node affinity")
-			log.Info("Update required because:", "Spec.Pod.Affinity.PodAffinity changed from", from.Spec.Pod.Affinity.PodAffinity, "To:", to.Spec.Pod.Affinity.PodAffinity)
+			log.Info("Update required because:", "Spec.Pod.Affinity.PodAffinity changed from", to.Spec.Pod.Affinity.PodAffinity, "To:", from.Spec.Pod.Affinity.PodAffinity)
 			requireUpdate = true
 		}
 		to.Spec.Pod.Affinity = from.Spec.Pod.Affinity

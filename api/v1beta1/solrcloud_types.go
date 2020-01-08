@@ -40,10 +40,11 @@ const (
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
 
-	DefaultZkReplicas = int32(3)
-	DefaultZkStorage  = "5Gi"
-	DefaultZkRepo     = "emccorp/zookeeper"
-	DefaultZkVersion  = "3.5.4-beta-operator"
+	DefaultZkReplicas            = int32(3)
+	DefaultZkStorage             = "5Gi"
+	DefaultZkRepo                = "emccorp/zookeeper"
+	DefaultZkVersion             = "3.5.4-beta-operator"
+	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
 	DefaultEtcdReplicas = 3
 	DefaultEtcdRepo     = "quay.io/coreos/etcd"
@@ -373,20 +374,34 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	}
 	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
 
+	// Backwards compatibility with old ZK Persistence options.
+	// This will be removed eventually
 	if z.Persistence == nil && z.PersistentVolumeClaimSpec != nil {
-		z.Persistence = &zk.Persistence{}
-		if z.PersistentVolumeClaimSpec.AccessModes == nil {
-			z.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			}
-		}
-		if len(z.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
-			z.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
-				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
-			}
+		z.Persistence = &zk.Persistence{
+			PersistentVolumeClaimSpec: *z.PersistentVolumeClaimSpec,
 		}
 		changed = true
-		z.Persistence.PersistentVolumeClaimSpec = *z.PersistentVolumeClaimSpec
+	}
+
+	if z.Persistence != nil {
+		if z.Persistence.VolumeReclaimPolicy == "" {
+			z.Persistence.VolumeReclaimPolicy = DefaultZkVolumeReclaimPolicy
+			changed = true
+		}
+
+		if len(z.Persistence.PersistentVolumeClaimSpec.AccessModes) == 0 {
+			z.Persistence.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			}
+			changed = true
+		}
+
+		if len(z.Persistence.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
+			z.Persistence.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+			}
+			changed = true
+		}
 	}
 	return changed
 }
