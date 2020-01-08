@@ -40,10 +40,11 @@ const (
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
 
-	DefaultZkReplicas = int32(3)
-	DefaultZkStorage  = "5Gi"
-	DefaultZkRepo     = "emccorp/zookeeper"
-	DefaultZkVersion  = "3.5.4-beta-operator"
+	DefaultZkReplicas            = int32(3)
+	DefaultZkStorage             = "5Gi"
+	DefaultZkRepo                = "emccorp/zookeeper"
+	DefaultZkVersion             = "3.5.4-beta-operator"
+	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
 	DefaultEtcdReplicas = 3
 	DefaultEtcdRepo     = "quay.io/coreos/etcd"
@@ -367,24 +368,24 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	// This will be removed eventually
 	if z.Persistence == nil && z.PersistentVolumeClaimSpec != nil {
 		z.Persistence = &zk.Persistence{
-			PersistentVolumeClaimSpec = *z.PersistentVolumeClaimSpec
+			PersistentVolumeClaimSpec: *z.PersistentVolumeClaimSpec,
 		}
 		changed = true
 	}
 
 	if z.Persistence != nil {
 		if z.Persistence.VolumeReclaimPolicy == "" {
-			z.Persistence.VolumeReclaimPolicy = "Retain"
+			z.Persistence.VolumeReclaimPolicy = DefaultZkVolumeReclaimPolicy
 			changed = true
 		}
 
-		if z.Persistence.PersistentVolumeClaimSpec.AccessModes == nil {
+		if len(z.Persistence.PersistentVolumeClaimSpec.AccessModes) == 0 {
 			z.Persistence.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			}
 			changed = true
-		} 
-		
+		}
+
 		if len(z.Persistence.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
 			z.Persistence.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
 				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
