@@ -289,7 +289,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		instance.Status = newStatus
 		r.Log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name)
-		err = r.Status().Update(context.Background(), instance)
+		err = r.Status().Update(context.TODO(), instance)
 		if err != nil {
 			return requeueOrNot, err
 		}
