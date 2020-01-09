@@ -18,6 +18,9 @@ package controllers
 
 import (
 	"context"
+	"reflect"
+	"time"
+
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
@@ -26,18 +29,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
-)
-
-var (
-	Config *rest.Config
 )
 
 // SolrBackupReconciler reconciles a SolrBackup object
@@ -45,6 +42,7 @@ type SolrBackupReconciler struct {
 	client.Client
 	Log    logr.Logger
 	scheme *runtime.Scheme
+	config *rest.Config
 }
 
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
@@ -131,6 +129,7 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrBackup) (solrCloud *solrv1beta1.SolrCloud, collectionBackupsFinished bool, actionTaken bool, err error) {
 	// Get the solrCloud that this backup is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
+
 	err = r.Get(context.TODO(), types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.SolrCloud}, solrCloud)
 	if err != nil && errors.IsNotFound(err) {
 		r.Log.Error(err, "Could not find cloud to backup", "namespace", backup.Namespace, "backupName", backup.Name, "solrCloudName", backup.Spec.SolrCloud)
@@ -152,7 +151,7 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	// This should only occur before the backup processes have been started
 	if backup.Status.SolrVersion == "" {
 		// Prep the backup directory in the persistentVolume
-		err := util.EnsureDirectoryForBackup(solrCloud, backup.Name, Config)
+		err := util.EnsureDirectoryForBackup(solrCloud, backup.Name, r.config)
 		if err != nil {
 			return solrCloud, collectionBackupsFinished, actionTaken, err
 		}
@@ -295,6 +294,7 @@ func (r *SolrBackupReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, r
 		For(&solrv1beta1.SolrBackup{}).
 		Owns(&batchv1.Job{})
 
+	r.config = mgr.GetConfig()
 	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(reconciler)
 }

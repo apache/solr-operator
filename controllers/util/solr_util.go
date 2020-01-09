@@ -310,26 +310,25 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Replicas changed from", from.Spec.Replicas, "To:", to.Spec.Replicas)
+		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
 	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Selector changed from", from.Spec.Selector, "To:", to.Spec.Selector)
+		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
 		to.Spec.Selector = from.Spec.Selector
 	}
 
 	requireVolumeUpdate := false
 	if len(from.Spec.VolumeClaimTemplates) != len(to.Spec.VolumeClaimTemplates) {
 		requireVolumeUpdate = true
-		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", from.Spec.VolumeClaimTemplates, "To:", to.Spec.VolumeClaimTemplates)
+		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", to.Spec.VolumeClaimTemplates, "To:", from.Spec.VolumeClaimTemplates)
 	}
 	for i, fromVct := range from.Spec.VolumeClaimTemplates {
 		if !reflect.DeepEqual(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
 			requireVolumeUpdate = true
-			log.Info("Update required because:", "Spec.VolumeClaimTemplates.Spec changed from", fromVct.Spec, "To:", to.Spec.VolumeClaimTemplates[i].Spec)
-
+			log.Info("Update required because:", "Spec.VolumeClaimTemplates.Spec changed from", to.Spec.VolumeClaimTemplates[i].Spec, "To:", fromVct.Spec)
 		}
 	}
 	if requireVolumeUpdate {
@@ -338,47 +337,49 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 
 	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Labels changed from", from.Spec.Template.Labels, "To:", to.Spec.Template.Labels)
+		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Containers changed from", from.Spec.Template.Spec.Containers, "To:", to.Spec.Template.Spec.Containers)
+		log.Info("Update required because:", "Spec.Template.Containers changed from", to.Spec.Template.Spec.Containers, "To:", from.Spec.Template.Spec.Containers)
 		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.InitContainers changed from", from.Spec.Template.Spec.InitContainers, "To:", to.Spec.Template.Spec.InitContainers)
+		log.Info("Update required because:", "Spec.Template.Spec.InitContainers changed from", to.Spec.Template.Spec.InitContainers, "To:", from.Spec.Template.Spec.InitContainers)
 		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
+		log.Info("Update required because:", "Spec.Template.Spec.HostAliases changed from", to.Spec.Template.Spec.HostAliases, "To:", from.Spec.Template.Spec.HostAliases)
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
+		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", from.Spec.Template.Spec.ImagePullSecrets, "To:", to.Spec.Template.Spec.ImagePullSecrets)
+		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
 		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[0].Resources, from.Spec.Template.Spec.Containers[0].Resources) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Containers[0].Resources changed from", from.Spec.Template.Spec.Containers[0].Resources, "To:", to.Spec.Template.Spec.Containers[0].Resources)
+		log.Info("Update required because:", "Spec.Template.Spec.Containers[0].Resources changed from", to.Spec.Template.Spec.Containers[0].Resources, "To:", from.Spec.Template.Spec.Containers[0].Resources)
 		to.Spec.Template.Spec.Containers[0].Resources = from.Spec.Template.Spec.Containers[0].Resources
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
 		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", from.Spec.Template.Spec.Affinity, "To:", to.Spec.Template.Spec.Affinity)
+		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
 		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
 	}
 
@@ -481,6 +482,7 @@ func GenerateService(solrCloud *solr.SolrCloud) *corev1.Service {
 }
 
 // GenerateHeadlessService returns a new Headless corev1.Service pointer generated for the SolrCloud instance
+// The PublishNotReadyAddresses option is set as true, because we want each pod to be reachable no matter the readiness of the pod.
 // solrCloud: SolrCloud instance
 func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	// TODO: Default and Validate these with Webhooks
@@ -500,14 +502,16 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 			Ports: []corev1.ServicePort{
 				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
-			Selector:  selectorLabels,
-			ClusterIP: corev1.ClusterIPNone,
+			Selector:                 selectorLabels,
+			ClusterIP:                corev1.ClusterIPNone,
+			PublishNotReadyAddresses: true,
 		},
 	}
 	return service
 }
 
-// GenerateNodeService returns a new External corev1.Service pointer generated for the given Solr Node
+// GenerateNodeService returns a new External corev1.Service pointer generated for the given Solr Node.
+// The PublishNotReadyAddresses option is set as true, because we want each pod to be reachable no matter the readiness of the pod.
 // solrCloud: SolrCloud instance
 // nodeName: string node
 func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Service {
@@ -530,6 +534,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 			Ports: []corev1.ServicePort{
 				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
+			PublishNotReadyAddresses: true,
 		},
 	}
 	return service
@@ -568,6 +573,11 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 		requireUpdate = true
 	}
 	to.Spec.ExternalName = from.Spec.ExternalName
+
+	if !reflect.DeepEqual(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
+		requireUpdate = true
+	}
+	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
 
 	return requireUpdate
 }

@@ -31,8 +31,8 @@ import (
 )
 
 const (
-	BaseBackupRestorePath = "/var/solr-backup-restore"
-	TarredFile            = "/var/solr-backup-restore/backup.tgz"
+	BaseBackupRestorePath = "/var/solr/solr-backup-restore"
+	TarredFile            = "/var/solr/solr-backup-restore/backup.tgz"
 	BackupTarCommand      = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
 	CleanupCommand        = " && rm -rf " + BaseBackupRestorePath + "/{*,.*}"
 
@@ -432,6 +432,7 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 		Stderr: &stderr,
 		Tty:    false,
 	})
+
 	if err != nil {
 		return fmt.Errorf("error in Stream: %v", err)
 	}

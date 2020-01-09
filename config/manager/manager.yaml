@@ -15,10 +15,12 @@ spec:
       labels:
         control-plane: solr-operator 
     spec:
+      serviceAccountName: solr-operator
       containers:
       - args:
         - -zk-operator=true
         - -etcd-operator=false
+        - -ingress-base-domain=ing.local.domain
         image: bloomberg/solr-operator:latest
         imagePullPolicy: Always
         name: solr-operator
