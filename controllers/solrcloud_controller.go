@@ -209,14 +209,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
 	if !strings.Contains(newStatus.ZkConnectionString(), ":") {
 		blockReconciliationOfStatefulSet = true
-	} else if newStatus.ZkConnectionString() != instance.Status.ZkConnectionString() {
-		// If the zkConnectionString has changed, make sure that it is able to be connected to and the chRoot exists
-		err = util.CreateChRootIfNecessary(newStatus.ZookeeperConnectionInfo)
-		if err != nil {
-			r.Log.Error(err, "Cannot create ZK Chroot for Solr Cloud", "namespace", instance.Namespace, "name", instance.Name)
-			requeueOrNot = reconcile.Result{RequeueAfter: time.Second * 5}
-			blockReconciliationOfStatefulSet = true
-		}
 	}
 
 	if !blockReconciliationOfStatefulSet {
@@ -230,10 +222,27 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		foundStatefulSet := &appsv1.StatefulSet{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 		if err != nil && errors.IsNotFound(err) {
-			r.Log.Info("Creating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
-			err = r.Create(context.TODO(), statefulSet)
+			// Before creating the statefulSet, we must first check that the  ZkConnection String is usable
+			if zkErr := ensureZkChrootExists(r, instance, newStatus.ZookeeperConnectionInfo, &requeueOrNot); zkErr == nil {
+				r.Log.Info("Creating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+				err = r.Create(context.TODO(), statefulSet)
+			} else {
+				// Erase the "StatefulSet not found" error, so that we can continue reconciling
+				err = nil
+				r.Log.Info("Cannot create StatefulSet until zkConnectionString & chroot have been ensured to exist.", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+			}
 		} else if err == nil {
-			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) {
+			updateSS := true
+			// If the statefulSet is using the wrong ZkConnectionString, we must first check that the new ZkConnection String is usable
+			if foundStatefulSet.Annotations[util.SolrZKConnectionStringAnnotation] != statefulSet.Annotations[util.SolrZKConnectionStringAnnotation] {
+				if zkErr := ensureZkChrootExists(r, instance, newStatus.ZookeeperConnectionInfo, &requeueOrNot); zkErr == nil {
+					updateSS = true
+				} else {
+					updateSS = false
+					r.Log.Info("Solr has a new ZkConnectionString, cannot update StatefulSet until new zkConnectionString & chroot have been ensured to exist.", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+				}
+			}
+			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) && updateSS {
 				// Update the found StatefulSet and write the result back if there are any changes
 				r.Log.Info("Updating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
 				err = r.Update(context.TODO(), foundStatefulSet)
@@ -510,6 +519,17 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 		}
 	}
 	return nil
+}
+
+func ensureZkChrootExists(r *SolrCloudReconciler, solr *solr.SolrCloud, info solr.ZookeeperConnectionInfo, requeueOrNot *reconcile.Result) error {
+	err := util.CreateChRootIfNecessary(info)
+	if err != nil {
+		r.Log.Error(err, "Zk or Chroot has changed, cannot create new ZK Chroot for Solr Cloud", "namespace", solr.Namespace, "name", solr.Name)
+		requeueOrNot.RequeueAfter = time.Second * 5
+
+		// TODO: Create an event for the SolrCloud so that users understand why the StatefulSet hasn't been updated/created.
+	}
+	return err
 }
 
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {

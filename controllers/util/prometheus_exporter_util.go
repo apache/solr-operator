@@ -186,20 +186,7 @@ func GenerateMetricsConfigMap(solrPrometheusExporter *solr.SolrPrometheusExporte
 
 // CopyConfigMapFields copies the owned fields from one ConfigMap to another
 func CopyMetricsConfigMapFields(from, to *corev1.ConfigMap) bool {
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
