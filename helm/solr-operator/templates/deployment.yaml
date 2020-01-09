@@ -25,8 +25,8 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
-        - -zk-operator={{ if eq .Values.zkOperator "zooKeeper" }}true{{ else }}false{{ end }}
-        - -etcd-operator={{ if eq .Values.etcOperator "etcd" }}true{{ else }}false{{ end }}
+        - -zk-operator={{ .Values.useZkOperator }}
+        - -etcd-operator={{ .Values.useEtcdOperator }}
         - -ingress-base-domain={{ .Values.ingressBaseDomain }}
         env:
         - name: POD_NAMESPACE

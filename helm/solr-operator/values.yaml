@@ -13,9 +13,9 @@ nameOverride: ""
 fullnameOverride: ""
 
 
-zkOperator: "true"
-etcOperator: "true"
-ingressBaseDomain: ing.local.domain
+useZkOperator: "true"
+useEtcdOperator: "false"
+ingressBaseDomain: ""
 
 resources:
   limits:

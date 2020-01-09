@@ -38,16 +38,16 @@ The command removes all the Kubernetes components associated with the chart and 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| etcOperator | string | `"true"` |  |
+| useEtcdOperator | string | `"true"` |  |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"Always"` |  |
 | image.repository | string | `"bloomberg/solr-operator"` |  |
 | image.tag | string | `"v0.2.0"` |  |
-| ingressBaseDomain | string | `"ing.local.domain"` |  |
+| ingressBaseDomain | string | `""` |  |
 | nameOverride | string | `""` |  |
 | replicaCount | int | `1` |  |
 | resources.limits.cpu | string | `"400m"` |  |
 | resources.limits.memory | string | `"500Mi"` |  |
 | resources.requests.cpu | string | `"100m"` |  |
 | resources.requests.memory | string | `"100Mi"` |  |
-| zkOperator | string | `"true"` |  |
+| useZkOperator | string | `"true"` |  |
