@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Go Report Card](https://goreportcard.com/badge/github.com/bloomberg/solr-operator)](https://goreportcard.com/report/github.com/bloomberg/solr-operator)
-[![Commit since last release](https://img.shields.io/github/commits-since/bloomberg/solr-operator/latest.svg?style=plastic)](https://github.com/bloomberg/solr-operator/commits/master)
+[![Commit since last release](https://img.shields.io/github/commits-since/bloomberg/solr-operator/latest.svg)](https://github.com/bloomberg/solr-operator/commits/master)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
@@ -16,7 +16,7 @@ If you run into issues using the Solr Operator, please:
 - Create a Github Issue in this repo, describing your problem with as much detail as possible
 - Reach out on our Slack channel!
 
-There is a [#solr-operator](https://kubernetes.slack.com/messages/solr-operator) channel in the official Kubernetes slack workspace.
+Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-operator) channel in the official Kubernetes slack workspace.
 
 ## Menu
 
