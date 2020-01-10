@@ -1,9 +1,22 @@
 # Solr Operator
-[![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator) [![Go Report Card](https://goreportcard.com/badge/github.com/bloomberg/solr-operator)](https://goreportcard.com/report/github.com/bloomberg/solr-operator) ![Latest Version](https://img.shields.io/github/tag/bloomberg/solr-operator) [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
+[![Latest Version](https://img.shields.io/github/tag/bloomberg/solr-operator)](https://github.com/bloomberg/solr-operator/releases)
+[![Build Status](https://travis-ci.com/bloomberg/solr-operator.svg?branch=master)](https://travis-ci.com/bloomberg/solr-operator)
+[![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
+[![Go Report Card](https://goreportcard.com/badge/github.com/bloomberg/solr-operator)](https://goreportcard.com/report/github.com/bloomberg/solr-operator)
+[![Commit since last release](https://img.shields.io/github/commits-since/bloomberg/solr-operator/latest.svg?style=plastic)](https://github.com/bloomberg/solr-operator/commits/master)
+[![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
+[![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
 The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 
 The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
+
+If you run into issues using the Solr Operator, please:
+- Reference the [version compatibility and upgrade notes](#version-compatability--upgrade-notes) provided below
+- Create a Github Issue in this repo, describing your problem with as much detail as possible
+- Reach out on our Slack channel!
+
+There is a [#solr-operator](https://kubernetes.slack.com/messages/solr-operator) channel in the official Kubernetes slack workspace.
 
 ## Menu
 
@@ -13,6 +26,7 @@ The project is currently in beta (`v1beta1`), and while we do not anticipate cha
     - [Solr Backups](#solr-backups)
     - [Solr Metrics](#solr-prometheus-exporter)
 - [Contributions](#contributions)
+- [Version Compatibility and Upgrade Notes](#version-compatability--upgrade-notes)
 - [License](#license)
 - [Code of Conduct](#code-of-conduct)
 - [Security Vulnerability Reporting](#security-vulnerability-reporting)
@@ -133,6 +147,38 @@ NAME                                       VERSION   DESIREDNODES   NODES   READ
 solrcloud.solr.bloomberg.com/example       8.1.1     4              4       4            47h
 ```
 
+## Zookeeper Reference
+
+Solr Clouds require an Apache Zookeeper to connect to.
+
+The Solr operator gives a few options.
+
+**Note** - Both options below come with options to specify a `chroot`, or a ZNode path for solr to use as it's base "directory" in Zookeeper. Before the operator creates or updates a StatefulSet with a given `chroot`, it will first ensure that the given ZNode path exists and if it doesn't the operator will create all necessary ZNodes in the path. If no chroot is given, a default of `/` will be used, which doesn't require the existence check previously mentioned. If a chroot is provided without a prefix of `/`, the operator will add the prefix, as it is required by Zookeeper.
+
+### ZK Connection Info
+
+This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
+If you provide an external connection string, you do not _have_ to provide an internal one as well.
+
+### Provided Instance
+
+If you do not require the Solr cloud to run cross-kube cluster, and do not want to manage your own Zookeeper ensemble,
+the solr-operator can manage Zookeeper ensemble(s) for you.
+
+#### Zookeeper
+
+Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a new Zookeeper ensemble can be spun up for 
+each solrCloud that has this option specified.
+
+The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+#### Zetcd
+
+Using [etcd-operator](https://github.com/coreos/etcd-operator), a new Etcd ensemble can be spun up for each solrCloud that has this option specified.
+A [Zetcd](https://github.com/etcd-io/zetcd) deployment is also created so that Solr can interact with Etcd as if it were a Zookeeper ensemble.
+
+The startup parameter `etcd-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
 ### Solr Collections
 
 Solr-operator can manage the creation, deletion and modification of Solr collections. 
@@ -214,38 +260,6 @@ Aliases can be useful when migrating from one collection to another without havi
 Routed aliases are presently not supported
 
   
-## Zookeeper
-=======
-### Zookeeper Reference
-
-Solr Clouds require an Apache Zookeeper to connect to.
-
-The Solr operator gives a few options.
-
-#### ZK Connection Info
-
-This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
-If you provide an external connection string, you do not _have_ to provide an internal one as well.
-
-#### Provided Instance
-
-If you do not require the Solr cloud to run cross-kube cluster, and do not want to manage your own Zookeeper ensemble,
-the solr-operator can manage Zookeeper ensemble(s) for you.
-
-##### Zookeeper
-
-Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a new Zookeeper ensemble can be spun up for 
-each solrCloud that has this option specified.
-
-The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
-
-##### Zetcd
-
-Using [etcd-operator](https://github.com/coreos/etcd-operator), a new Etcd ensemble can be spun up for each solrCloud that has this option specified.
-A [Zetcd](https://github.com/etcd-io/zetcd) deployment is also created so that Solr can interact with Etcd as if it were a Zookeeper ensemble.
-
-The startup parameter `etcd-operator` must be provided on startup of the solr-operator for this parameter to be available.
-
 ## Solr Backups
 
 Solr backups require 3 things:
@@ -388,7 +402,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 5. Navigate to your browser: http://default-example-solrcloud.ing.local.domain/solr/#/ to validate everything is working
 
 
-## Version Compatability & Changes
+## Version Compatibility & Upgrade Notes
 
 #### v0.2.1
 - The zkConnectionString used for provided zookeepers changed from using the string provided in the `ZkCluster.Status`, which used an IP, to using the service name. This will cause a rolling restart of your solrs using the provided zookeeper option, but there will be no data loss.
