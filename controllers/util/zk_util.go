@@ -18,10 +18,13 @@ package util
 
 import (
 	"reflect"
+	"strings"
+	"time"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
+	zkCli "github.com/samuel/go-zookeeper/zk"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,6 +57,20 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 			Labels:      labels,
 			Replicas:    *zkSpec.Replicas,
 			Persistence: zkSpec.Persistence,
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          "client",
+					ContainerPort: 2181,
+				},
+				{
+					Name:          "quorum",
+					ContainerPort: 2888,
+				},
+				{
+					Name:          "leader-election",
+					ContainerPort: 3888,
+				},
+			},
 		},
 	}
 
@@ -72,22 +89,7 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 // CopyZookeeperClusterFields copies the owned fields from one ZookeeperCluster to another
 // Returns true if the fields copied from don't match to.
 func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
-	requireUpdate := false
-	for k, v := range to.Labels {
-		if from.Labels[k] != v {
-			log.Info("Updating Zookeeper label ", k, v)
-			requireUpdate = true
-		}
-	}
-	to.Labels = from.Labels
-
-	for k, v := range to.Annotations {
-		if from.Annotations[k] != v {
-			log.Info("Updating Zk annotation", k, v)
-			requireUpdate = true
-		}
-	}
-	to.Annotations = from.Annotations
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		log.Info("Updating Zk replicas")
@@ -108,15 +110,35 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	to.Spec.Image.Tag = from.Spec.Image.Tag
 
 	if from.Spec.Persistence != nil {
-		if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
+		if to.Spec.Persistence == nil {
+			log.Info("Updating Zk Persistence")
 			requireUpdate = true
-		}
-		to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
+			to.Spec.Persistence = from.Spec.Persistence
+		} else {
+			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
+				log.Info("Updating Zk Persistence PVC Requests")
+				requireUpdate = true
+				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
+			}
 
-		if !reflect.DeepEqual(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
-			requireUpdate = true
+			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
+				log.Info("Updating Zk Persistence PVC AccessModes")
+				requireUpdate = true
+				to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes = from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes
+			}
+
+			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
+				log.Info("Updating Zk Persistence PVC StorageClassName")
+				requireUpdate = true
+				to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName = from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName
+			}
+
+			if !reflect.DeepEqual(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
+				log.Info("Updating Zk Persistence VolumeReclaimPolicy")
+				requireUpdate = true
+				to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
+			}
 		}
-		to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
 	}
 	/* Uncomment when the following PR is merged in: https://github.com/pravega/zookeeper-operator/pull/64
 	   Otherwise the ZK Operator will create persistence when none is given, and this will infinitely loop.
@@ -190,20 +212,7 @@ func GenerateEtcdCluster(solrCloud *solr.SolrCloud, etcdSpec solr.EtcdSpec, busy
 // CopyEtcdClusterFields copies the owned fields from one EtcdCluster to another
 // Returns true if the fields copied from don't match to.
 func CopyEtcdClusterFields(from, to *etcd.EtcdCluster) bool {
-	requireUpdate := false
-	for k, v := range to.Labels {
-		if from.Labels[k] != v {
-			requireUpdate = true
-		}
-	}
-	to.Labels = from.Labels
-
-	for k, v := range to.Annotations {
-		if from.Annotations[k] != v {
-			requireUpdate = true
-		}
-	}
-	to.Annotations = from.Annotations
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	if !reflect.DeepEqual(to.Spec, from.Spec) {
 		requireUpdate = true
@@ -268,20 +277,7 @@ func GenerateZetcdDeployment(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *ap
 // CopyDeploymentFields copies the owned fields from one Deployment to another
 // Returns true if the fields copied from don't match to.
 func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
@@ -381,4 +377,41 @@ func GenerateZetcdService(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *corev
 		},
 	}
 	return service
+}
+
+func CreateChRootIfNecessary(info solr.ZookeeperConnectionInfo) error {
+	if info.InternalConnectionString != "" && info.ChRoot != "/" {
+		zkClient, _, err := zkCli.Connect(strings.Split(info.InternalConnectionString, ","), time.Second)
+		if err != nil {
+			log.Error(err, "Could not connect to Zookeeper", "connectionString", info.InternalConnectionString)
+			return err
+		}
+
+		pathParts := strings.Split(strings.TrimPrefix(info.ChRoot, "/"), "/")
+		pathToCreate := ""
+		// Loop through each parent of the ZNode, and make sure that they exist recursively
+		for _, part := range pathParts {
+			if part == "" {
+				continue
+			}
+			pathToCreate += "/" + part
+
+			// Make sure that this part of the chRoot exists
+			exists, _, err := zkClient.Exists(pathToCreate)
+			if err != nil {
+				log.Error(err, "Could not check existence of Znode", "path", pathToCreate)
+				return err
+			} else if !exists {
+				log.Info("Creating Znode for chRoot of SolrCloud", "path", pathToCreate)
+				_, err = zkClient.Create(pathToCreate, []byte(""), 0, zkCli.WorldACL(zkCli.PermAll))
+
+				if err != nil {
+					log.Error(err, "Could not create Znode for chRoot of SolrCloud", "path", pathToCreate)
+					return err
+				}
+			}
+		}
+		return err
+	}
+	return nil
 }

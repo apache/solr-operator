@@ -38,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sort"
 	"strings"
+	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -108,6 +109,9 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
+	requeueOrNot := reconcile.Result{}
+
 	newStatus := solr.SolrCloudStatus{}
 
 	busyBoxImage := *instance.Spec.BusyBoxImage
@@ -115,13 +119,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	blockReconciliationOfStatefulSet := false
 
 	if err := reconcileZk(r, req, instance, busyBoxImage, &newStatus); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Generate Service
 	service := util.GenerateService(instance)
 	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the Service already exists
@@ -138,7 +142,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		newStatus.InternalCommonAddress = "http://" + foundService.Name + "." + foundService.Namespace
 	} else {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	solrNodeNames := instance.GetAllSolrNodeNames()
@@ -148,7 +152,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, nodeName := range solrNodeNames {
 		err, ip := reconcileNodeService(r, instance, nodeName)
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 		if IngressBaseUrl != "" {
 			if ip == "" {
@@ -163,7 +167,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Generate HeadlessService
 	headless := util.GenerateHeadlessService(instance)
 	if err := controllerutil.SetControllerReference(instance, headless, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the HeadlessService already exists
@@ -178,13 +182,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Update(context.TODO(), foundHeadless)
 	}
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Generate ConfigMap
 	configMap := util.GenerateConfigMap(instance)
 	if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Check if the ConfigMap already exists
@@ -199,7 +203,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Update(context.TODO(), foundConfigMap)
 	}
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -211,17 +215,34 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// Generate StatefulSet
 		statefulSet := util.GenerateStatefulSet(instance, &newStatus, IngressBaseUrl, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 
 		// Check if the StatefulSet already exists
 		foundStatefulSet := &appsv1.StatefulSet{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 		if err != nil && errors.IsNotFound(err) {
-			r.Log.Info("Creating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
-			err = r.Create(context.TODO(), statefulSet)
+			// Before creating the statefulSet, we must first check that the  ZkConnection String is usable
+			if zkErr := ensureZkChrootExists(r, instance, newStatus.ZookeeperConnectionInfo, &requeueOrNot); zkErr == nil {
+				r.Log.Info("Creating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+				err = r.Create(context.TODO(), statefulSet)
+			} else {
+				// Erase the "StatefulSet not found" error, so that we can continue reconciling
+				err = nil
+				r.Log.Info("Cannot create StatefulSet until zkConnectionString & chroot have been ensured to exist.", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+			}
 		} else if err == nil {
-			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) {
+			updateSS := true
+			// If the statefulSet is using the wrong ZkConnectionString, we must first check that the new ZkConnection String is usable
+			if foundStatefulSet.Annotations[util.SolrZKConnectionStringAnnotation] != statefulSet.Annotations[util.SolrZKConnectionStringAnnotation] {
+				if zkErr := ensureZkChrootExists(r, instance, newStatus.ZookeeperConnectionInfo, &requeueOrNot); zkErr == nil {
+					updateSS = true
+				} else {
+					updateSS = false
+					r.Log.Info("Solr has a new ZkConnectionString, cannot update StatefulSet until new zkConnectionString & chroot have been ensured to exist.", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
+				}
+			}
+			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) && updateSS {
 				// Update the found StatefulSet and write the result back if there are any changes
 				r.Log.Info("Updating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
 				err = r.Update(context.TODO(), foundStatefulSet)
@@ -230,20 +251,20 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			newStatus.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
 		}
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
 	err = reconcileCloudStatus(r, instance, &newStatus)
 	if err != nil {
-		return reconcile.Result{}, err
+		return requeueOrNot, err
 	}
 
 	if IngressBaseUrl != "" {
 		// Generate Ingress
 		ingress := util.GenerateCommonIngress(instance, solrNodeNames, IngressBaseUrl)
 		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 
 		// Check if the Ingress already exists
@@ -258,7 +279,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			err = r.Update(context.TODO(), foundIngress)
 		}
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		} else {
 			address := "http://" + instance.CommonIngressUrl(IngressBaseUrl)
 			newStatus.ExternalCommonAddress = &address
@@ -268,13 +289,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		instance.Status = newStatus
 		r.Log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name)
-		err = r.Status().Update(context.Background(), instance)
+		err = r.Status().Update(context.TODO(), instance)
 		if err != nil {
-			return reconcile.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
-	return reconcile.Result{}, nil
+	return requeueOrNot, nil
 }
 
 func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus) (err error) {
@@ -450,10 +471,6 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 			if err != nil && errors.IsNotFound(err) {
 				r.Log.Info("Creating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
 				err = r.Create(context.TODO(), service)
-				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
-					ChRoot:                   "/",
-				}
 			} else if err == nil {
 				if util.CopyServiceFields(service, foundService) {
 					// Update the found Zetcd Service and write the result back if there are any changes
@@ -462,12 +479,10 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 				}
 				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
 					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
-					ChRoot:                   "/",
+					ChRoot:                   pzk.ChRoot,
 				}
-			} else {
-				return err
 			}
-
+			return err
 		} else if pzk.Zookeeper != nil {
 			// Generate ZookeeperCluster
 			if !useZkCRD {
@@ -495,16 +510,26 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 					external = nil
 				}
 				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: foundZkCluster.Status.InternalClientEndpoint,
+					InternalConnectionString: fmt.Sprintf("%s:%d", foundZkCluster.GetClientServiceName(), foundZkCluster.ZookeeperPorts().Client),
 					ExternalConnectionString: external,
-					ChRoot:                   "/",
+					ChRoot:                   pzk.ChRoot,
 				}
-			} else {
-				return err
 			}
+			return err
 		}
 	}
 	return nil
+}
+
+func ensureZkChrootExists(r *SolrCloudReconciler, solr *solr.SolrCloud, info solr.ZookeeperConnectionInfo, requeueOrNot *reconcile.Result) error {
+	err := util.CreateChRootIfNecessary(info)
+	if err != nil {
+		r.Log.Error(err, "Zk or Chroot has changed, cannot create new ZK Chroot for Solr Cloud", "namespace", solr.Namespace, "name", solr.Name)
+		requeueOrNot.RequeueAfter = time.Second * 5
+
+		// TODO: Create an event for the SolrCloud so that users understand why the StatefulSet hasn't been updated/created.
+	}
+	return err
 }
 
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {

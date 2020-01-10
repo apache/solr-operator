@@ -2040,6 +2040,9 @@ spec:
                   description: 'A zookeeper that is created by the solr operator Note:
                     This option will not allow the SolrCloud to run across kube-clusters.'
                   properties:
+                    chroot:
+                      description: The ChRoot to connect solr at
+                      type: string
                     etcdSpec:
                       description: EtcdSpec defines the internal etcd ensemble to
                         run for solr (spoofing zookeeper)

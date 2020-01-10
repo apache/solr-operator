@@ -23,6 +23,7 @@ spec:
         memory: "156Mi"
   zookeeperRef:
     provided:
+      chroot: "/this/will/be/auto/created"
       zookeeper:
         persistence:
           spec:

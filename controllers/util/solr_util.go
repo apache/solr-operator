@@ -41,6 +41,8 @@ const (
 	ExtSolrClientPort     = 80
 	ExtSolrClientPortName = "ext-solr-client"
 	BackupRestoreVolume   = "backup-restore"
+
+	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -58,6 +60,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	labels["technology"] = solr.SolrTechnologyLabel
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
+
+	annotations := map[string]string{
+		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
+	}
 
 	solrVolumes := []corev1.Volume{
 		{
@@ -136,9 +142,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.StatefulSetName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        solrCloud.StatefulSetName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Selector: &metav1.LabelSelector{
@@ -290,23 +297,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 // CopyStatefulSetFields copies the owned fields from one StatefulSet to another
 // Returns true if the fields copied from don't match to.
 func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
-
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-			log.Info("Update SS", "diff", "labels", "label", k, v, to.Labels[k])
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-			log.Info("Update SS", "diff", "annotations", "annotation", k, v, to.Annotations[k])
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
@@ -426,20 +417,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 
 // CopyConfigMapFields copies the owned fields from one ConfigMap to another
 func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
@@ -542,20 +520,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 
 // CopyServiceFields copies the owned fields from one Service to another
 func CopyServiceFields(from, to *corev1.Service) bool {
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
@@ -650,20 +615,7 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, ingressBa
 
 // CopyIngressFields copies the owned fields from one Ingress to another
 func CopyIngressFields(from, to *extv1.Ingress) bool {
-	requireUpdate := false
-	for k, v := range from.Labels {
-		if to.Labels[k] != v {
-			requireUpdate = true
-		}
-		to.Labels[k] = v
-	}
-
-	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
-			requireUpdate = true
-		}
-		to.Annotations[k] = v
-	}
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 

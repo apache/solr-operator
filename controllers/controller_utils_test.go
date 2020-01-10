@@ -17,13 +17,17 @@ limitations under the License.
 package controllers
 
 import (
+	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"testing"
 )
@@ -47,6 +51,12 @@ func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconc
 		Should(gomega.MatchError("statefulsets.apps \"" + statefulSetKey.Name + "\" not found"))
 
 	return stateful
+}
+
+func expectNoStatefulSet(g *gomega.GomegaWithT, statefulSetKey types.NamespacedName) {
+	stateful := &appsv1.StatefulSet{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
+		Should(gomega.MatchError("StatefulSet.apps \"" + statefulSetKey.Name + "\" not found"))
 }
 
 func expectService(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, serviceKey types.NamespacedName, selectorLables map[string]string) *corev1.Service {
@@ -149,4 +159,50 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 		Should(gomega.MatchError("deployments.apps \"" + deploymentKey.Name + "\" not found"))
 
 	return deploy
+}
+
+func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
+	matchCount := 0
+	for _, envVar := range foundEnvVars {
+		if expectedVal, match := expectedEnvVars[envVar.Name]; match {
+			matchCount += 1
+			assert.Equal(t, expectedVal, envVar.Value, "Wrong value for env variable '%s' in podSpec", envVar.Name)
+		}
+	}
+	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
+}
+
+func cleanupTest(g *gomega.GomegaWithT, namespace string) {
+	deleteOpts := []client.DeleteAllOfOption{
+		client.InNamespace(namespace),
+	}
+
+	cleanupObjects := []runtime.Object{
+		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
+		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrCollection{}, &solr.SolrCollectionAlias{}, &solr.SolrPrometheusExporter{},
+
+		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
+		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
+		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
+		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{},
+	}
+	cleanupTestObjects(g, namespace, deleteOpts, cleanupObjects)
+
+	// Delete all Services separately (https://github.com/kubernetes/kubernetes/pull/85802#issuecomment-561239845)
+	opts := []client.ListOption{
+		client.InNamespace(namespace),
+	}
+	services := &corev1.ServiceList{}
+	g.Eventually(func() error { return testClient.List(context.TODO(), services, opts...) }, timeout).Should(gomega.Succeed())
+
+	for _, item := range services.Items {
+		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
+	}
+}
+
+func cleanupTestObjects(g *gomega.GomegaWithT, namespace string, deleteOpts []client.DeleteAllOfOption, objects []runtime.Object) {
+	// Delete all SolrClouds
+	for _, obj := range objects {
+		g.Eventually(func() error { return testClient.DeleteAllOf(context.TODO(), obj, deleteOpts...) }, timeout).Should(gomega.Succeed())
+	}
 }

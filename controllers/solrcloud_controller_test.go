@@ -55,6 +55,9 @@ func TestCloudReconcile(t *testing.T) {
 					InternalConnectionString: "host:7271",
 				},
 			},
+			SolrJavaMem:  "-Xmx4G",
+			SolrOpts:     "extra-opts",
+			SolrLogLevel: "DEBUG",
 		},
 	}
 
@@ -78,6 +81,8 @@ func TestCloudReconcile(t *testing.T) {
 		mgrStopped.Wait()
 	}()
 
+	cleanupTest(g, instance.Namespace)
+
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
@@ -93,6 +98,17 @@ func TestCloudReconcile(t *testing.T) {
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":        "host:7271/",
+		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
+		"SOLR_JAVA_MEM":  "-Xmx4G",
+		"SOLR_PORT":      "8983",
+		"SOLR_LOG_LEVEL": "DEBUG",
+		"SOLR_OPTS":      "extra-opts",
+	}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
 	// Check the client Service
 	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
 
@@ -104,7 +120,8 @@ func TestCloudReconcile(t *testing.T) {
 }
 
 func TestCloudReconcileWithIngress(t *testing.T) {
-	SetIngressBaseUrl("ing.base.domain")
+	ingressBaseDomain := "ing.base.domain"
+	SetIngressBaseUrl(ingressBaseDomain)
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
@@ -114,6 +131,152 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
 					InternalConnectionString: "host:7271",
+				},
+			},
+			SolrGCTune: "gc Options",
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
+	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	// Check the statefulSet
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet require a container.")
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":   "host:7271/",
+		"SOLR_HOST": instance.NodeIngressUrl("$(POD_HOSTNAME)", ingressBaseDomain),
+		"SOLR_PORT": "8983",
+		"GC_TUNE":   "gc Options",
+	}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+	// Check the client Service
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+
+	// Check the headless Service
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
+
+	// Check the ingress
+	expectIngress(g, requests, expectedCloudRequest, cloudIKey)
+}
+
+func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
+	SetIngressBaseUrl("")
+	UseEtcdCRD(false)
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			ZookeeperRef: &solr.ZookeeperRef{
+				ProvidedZookeeper: &solr.ProvidedZookeeper{
+					ChRoot:    "a-ch/root",
+					Zookeeper: &solr.ZookeeperSpec{},
+				},
+			},
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	// Blocked until https://github.com/pravega/zookeeper-operator/pull/99 is merged
+	//g.Expect(zookeepercluster.AddZookeeperReconciler(mgr)).NotTo(gomega.HaveOccurred())
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	// Add an additional check for reconcile, so that the zkCluster will have been created
+	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+
+	// Check that the ZkConnectionInformation is correct
+	assert.Equal(t, instance.ProvidedZookeeperName()+"-client:2181", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
+	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
+	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+
+	// Check that the statefulSet has not been created, because the ZkChRoot is not able to be created or verified
+	expectNoStatefulSet(g, cloudSsKey)
+}
+
+func TestCloudWithExternalZookeeperChroot(t *testing.T) {
+	SetIngressBaseUrl("")
+	UseEtcdCRD(false)
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			ZookeeperRef: &solr.ZookeeperRef{
+				ConnectionInfo: &solr.ZookeeperConnectionInfo{
+					ChRoot:                   "a-ch/root",
+					InternalConnectionString: "host:7271,host2:7271",
 				},
 			},
 		},
@@ -139,6 +302,8 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 		mgrStopped.Wait()
 	}()
 
+	cleanupTest(g, instance.Namespace)
+
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
@@ -150,18 +315,21 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	// Add an additional check for reconcile, so that the zkCluster will have been created
+	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
-	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+	// Check that the ZkConnectionInformation is correct
+	assert.Equal(t, "host:7271,host2:7271", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong internal zkConnectionString in status")
+	assert.Equal(t, "host:7271,host2:7271", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong external zkConnectionString in status")
+	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
+	assert.Equal(t, "host:7271,host2:7271/a-ch/root", instance.Status.ZookeeperConnectionInfo.ZkConnectionString(), "Wrong zkConnectionString())")
 
-	// Check the headless Service
-	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-
-	// Check the ingress
-	expectIngress(g, requests, expectedCloudRequest, cloudIKey)
+	// Check that the statefulSet has not been created, because the ZkChRoot is not able to be created or verified
+	expectNoStatefulSet(g, cloudSsKey)
 }
 
 func TestDefaults(t *testing.T) {
@@ -204,6 +372,8 @@ func TestDefaults(t *testing.T) {
 		close(stopMgr)
 		mgrStopped.Wait()
 	}()
+
+	cleanupTest(g, instance.Namespace)
 
 	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
 	err = testClient.Create(context.TODO(), instance)
