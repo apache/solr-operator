@@ -1,0 +1,26 @@
+# Default values for solr-operator.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: bloomberg/solr-operator
+  tag: v0.2.0
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+
+useZkOperator: "true"
+useEtcdOperator: "false"
+ingressBaseDomain: ""
+
+resources:
+  limits:
+    cpu: 400m
+    memory: 500Mi
+  requests:
+    cpu: 100m
+    memory: 100Mi
