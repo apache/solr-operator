@@ -42,7 +42,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"Always"` |  |
 | image.repository | string | `"bloomberg/solr-operator"` |  |
-| image.tag | string | `"v0.2.0"` |  |
+| image.tag | string | `"v0.2.1"` |  |
 | ingressBaseDomain | string | `""` |  |
 | nameOverride | string | `""` |  |
 | replicaCount | int | `1` |  |
