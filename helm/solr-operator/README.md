@@ -38,7 +38,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| useEtcdOperator | string | `"true"` |  |
+| useEtcdOperator | string | `"false"` |  |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"Always"` |  |
 | image.repository | string | `"bloomberg/solr-operator"` |  |
