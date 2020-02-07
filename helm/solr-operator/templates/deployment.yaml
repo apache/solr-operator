@@ -20,6 +20,7 @@ spec:
         control-plane: solr-operator
         controller-tools.k8s.io: "1.0"
     spec:
+      serviceAccountName: solr-operator
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 

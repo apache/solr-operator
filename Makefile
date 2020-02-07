@@ -61,6 +61,7 @@ deploy: manifests
 manifests: mod-tidy controller-gen
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	kustomize build config/crd > helm/solr-operator/crds/crds.yaml
+	cp config/rbac/role.yaml helm/solr-operator/templates/role.yaml
 
 # Run go fmt against code
 fmt:
