@@ -36,18 +36,25 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ## Chart Values
 
+### Running the Solr Operator
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| useEtcdOperator | string | `"false"` |  |
-| fullnameOverride | string | `""` |  |
+| image.repository | string | `"bloomberg/solr-operator"` | The repository of the Solr Operator image |
+| image.tag | string | `"v0.2.1"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"Always"` |  |
-| image.repository | string | `"bloomberg/solr-operator"` |  |
-| image.tag | string | `"v0.2.1"` |  |
-| ingressBaseDomain | string | `""` |  |
+| fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
-| replicaCount | int | `1` |  |
+| replicaCount | int | `1` | The number of Solr Operator pods to run |
 | resources.limits.cpu | string | `"400m"` |  |
 | resources.limits.memory | string | `"500Mi"` |  |
 | resources.requests.cpu | string | `"100m"` |  |
 | resources.requests.memory | string | `"100Mi"` |  |
-| useZkOperator | string | `"true"` |  |
+
+### Configuring the Solr Operator
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| ingressBaseDomain | string | `""` | If you have a base domain that points to your ingress controllers for this kubernetes cluster, you can provide this. SolrClouds will then begin to use ingresses that utilize this base domain. E.g. `solrcloud-test.<base.domain>` |
+| useZkOperator | string | `"true"` | This option enables the use of provided Zookeeper instances for SolrClouds |
+| useEtcdOperator | string | `"false"` | This option enables the use of provided Zetcd instances for SolrClouds |
