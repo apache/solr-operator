@@ -280,7 +280,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 								},
 							},
 							VolumeMounts: volumeMounts,
-							Env: envVars,
+							Env:          envVars,
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
 								TimeoutSeconds:      1,

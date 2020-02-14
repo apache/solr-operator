@@ -94,7 +94,6 @@ type AdditionalVolume struct {
 	DefaultContainerMount corev1.VolumeMount `json:"defaultContainerMount"`
 }
 
-
 // ContainerImage defines the fields needed for a Docker repository image. The
 // format here matches the predominant format used in Helm charts.
 type ContainerImage struct {

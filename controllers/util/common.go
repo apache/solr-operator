@@ -54,7 +54,7 @@ func DuplicateLabelsOrAnnotations(from map[string]string) map[string]string {
 	for k, v := range from {
 		to[k] = v
 	}
-	return to;
+	return to
 }
 
 func MergeLabelsOrAnnotations(base, additional map[string]string) map[string]string {
@@ -64,5 +64,5 @@ func MergeLabelsOrAnnotations(base, additional map[string]string) map[string]str
 			merged[k] = v
 		}
 	}
-	return merged;
+	return merged
 }
