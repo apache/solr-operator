@@ -46,7 +46,7 @@ Install the Solr CRDs & Operator
 $ make install deploy
 ```
 
-You can also deploy the Solr Operator by using our provided [Helm Chart](../blob/master/helm/solr-operator/README.md).
+You can also deploy the Solr Operator by using our provided [Helm Chart](helm/solr-operator/README.md).
 
                         
 ## Running a Solr Cloud
