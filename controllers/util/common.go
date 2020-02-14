@@ -48,3 +48,21 @@ func CopyLabelsAndAnnotations(from, to *metav1.ObjectMeta) (requireUpdate bool) 
 
 	return requireUpdate
 }
+
+func DuplicateLabelsOrAnnotations(from map[string]string) map[string]string {
+	to := make(map[string]string, len(from))
+	for k, v := range from {
+		to[k] = v
+	}
+	return to;
+}
+
+func MergeLabelsOrAnnotations(base, additional map[string]string) map[string]string {
+	merged := DuplicateLabelsOrAnnotations(base)
+	for k, v := range additional {
+		if _, alreadyExists := merged[k]; !alreadyExists {
+			merged[k] = v
+		}
+	}
+	return merged;
+}

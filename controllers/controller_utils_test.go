@@ -38,7 +38,8 @@ func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconc
 		Should(gomega.Succeed())
 
 	// Verify the statefulSet Specs
-	assert.Equal(t, stateful.Spec.Template.Labels, stateful.Spec.Selector.MatchLabels, "StatefulSet has different Pod template labels and selector labels.")
+	testMapContainsOther(t, "StatefulSet pod template selector", stateful.Spec.Template.Labels, stateful.Spec.Selector.MatchLabels)
+	assert.GreaterOrEqual(t, len(stateful.Spec.Selector.MatchLabels), 1, "StatefulSet pod template selector must have at least 1 label")
 
 	// Delete the StatefulSet and expect Reconcile to be called for StatefulSet deletion
 	g.Expect(testClient.Delete(context.TODO(), stateful)).NotTo(gomega.HaveOccurred())
@@ -170,6 +171,27 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 		}
 	}
 	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
+}
+
+func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
+	for k, v := range expected {
+		foundV, foundExists := found[k]
+		assert.True(t, foundExists, "Expected key '%s' does not exist in found %s", k, mapName)
+		if foundExists {
+			assert.Equal(t, v, foundV, "Wrong value for %s key '%s'", mapName, k)
+		}
+	}
+	assert.Equal(t, len(expected), len(found), "Expected and found %s do not have the same number of entries", mapName)
+}
+
+func testMapContainsOther(t *testing.T, mapName string, base map[string]string, other map[string]string) {
+	for k, v := range other {
+		foundV, foundExists := base[k]
+		assert.True(t, foundExists, "Expected key '%s' does not exist in found %s", k, mapName)
+		if foundExists {
+			assert.Equal(t, v, foundV, "Wrong value for %s key '%s'", mapName, k)
+		}
+	}
 }
 
 func cleanupTest(g *gomega.GomegaWithT, namespace string) {

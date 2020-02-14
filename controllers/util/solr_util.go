@@ -65,6 +65,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
 	}
 
+	podLabels := labels
+
+	customSSOptions := solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions
+	if nil != customSSOptions {
+		labels = MergeLabelsOrAnnotations(labels, customSSOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customSSOptions.Annotations)
+	}
+
+	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
+	podAnnotations := make(map[string]string, 0)
+	if nil != customPodOptions {
+		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
+		podAnnotations = customPodOptions.Annotations
+	}
+
+	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
 		{
 			Name: "solr-xml",
@@ -112,6 +128,20 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupRestoreVolume, MountPath: BaseBackupRestorePath, SubPath: BackupRestoreSubPathForCloud(solrCloud.Name)})
 	}
 
+	if nil != customPodOptions {
+		// Add Custom Volumes to pod
+		for _, volume := range customPodOptions.Volumes {
+			volume.DefaultContainerMount.Name = volume.Name
+			volumeMounts = append(volumeMounts, volume.DefaultContainerMount)
+
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name:         volume.Name,
+				VolumeSource: volume.Source,
+			})
+		}
+	}
+
+	// Host Aliases
 	hostAliases := make([]corev1.HostAlias, len(hostNameIPs))
 	if len(hostAliases) == 0 {
 		hostAliases = nil
@@ -140,6 +170,57 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		solrHostName = solrCloud.NodeIngressUrl("$(POD_HOSTNAME)", ingressBaseDomain)
 	}
 
+	// Environment Variables
+	envVars := []corev1.EnvVar{
+		{
+			Name:  "SOLR_JAVA_MEM",
+			Value: solrCloud.Spec.SolrJavaMem,
+		},
+		{
+			Name:  "SOLR_HOME",
+			Value: "/var/solr/data",
+		},
+		{
+			Name:  "SOLR_PORT",
+			Value: strconv.Itoa(SolrClientPort),
+		},
+		{
+			Name: "POD_HOSTNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name:  "SOLR_HOST",
+			Value: solrHostName,
+		},
+		{
+			Name:  "ZK_HOST",
+			Value: solrCloudStatus.ZkConnectionString(),
+		},
+		{
+			Name:  "SOLR_LOG_LEVEL",
+			Value: solrCloud.Spec.SolrLogLevel,
+		},
+		{
+			Name:  "SOLR_OPTS",
+			Value: solrCloud.Spec.SolrOpts,
+		},
+		{
+			Name:  "GC_TUNE",
+			Value: solrCloud.Spec.SolrGCTune,
+		},
+	}
+
+	// Add Custom EnvironmentVariables to the solr container
+	if nil != customPodOptions {
+		envVars = append(envVars, customPodOptions.EnvVariables...)
+	}
+
+	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.StatefulSetName(),
@@ -154,7 +235,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			ServiceName: solrCloud.HeadlessServiceName(),
 			Replicas:    solrCloud.Spec.Replicas,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      podLabels,
+					Annotations: podAnnotations,
+				},
 
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &gracePeriodTerm,
@@ -196,49 +280,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 								},
 							},
 							VolumeMounts: volumeMounts,
-							Env: []corev1.EnvVar{
-								{
-									Name:  "SOLR_JAVA_MEM",
-									Value: solrCloud.Spec.SolrJavaMem,
-								},
-								{
-									Name:  "SOLR_HOME",
-									Value: "/var/solr/data",
-								},
-								{
-									Name:  "SOLR_PORT",
-									Value: strconv.Itoa(SolrClientPort),
-								},
-								{
-									Name: "POD_HOSTNAME",
-									ValueFrom: &corev1.EnvVarSource{
-										FieldRef: &corev1.ObjectFieldSelector{
-											FieldPath:  "metadata.name",
-											APIVersion: "v1",
-										},
-									},
-								},
-								{
-									Name:  "SOLR_HOST",
-									Value: solrHostName,
-								},
-								{
-									Name:  "ZK_HOST",
-									Value: solrCloudStatus.ZkConnectionString(),
-								},
-								{
-									Name:  "SOLR_LOG_LEVEL",
-									Value: solrCloud.Spec.SolrLogLevel,
-								},
-								{
-									Name:  "SOLR_OPTS",
-									Value: solrCloud.Spec.SolrOpts,
-								},
-								{
-									Name:  "GC_TUNE",
-									Value: solrCloud.Spec.SolrGCTune,
-								},
-							},
+							Env: envVars,
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
 								TimeoutSeconds:      1,
@@ -283,12 +325,28 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
+	// DEPRECATED: Replaced by the options below
 	if solrCloud.Spec.SolrPod.Affinity != nil {
 		stateful.Spec.Template.Spec.Affinity = solrCloud.Spec.SolrPod.Affinity
 	}
 
+	// DEPRECATED: Replaced by the options below
 	if solrCloud.Spec.SolrPod.Resources.Limits != nil || solrCloud.Spec.SolrPod.Resources.Requests != nil {
 		stateful.Spec.Template.Spec.Containers[0].Resources = solrCloud.Spec.SolrPod.Resources
+	}
+
+	if nil != customPodOptions {
+		if customPodOptions.Affinity != nil {
+			stateful.Spec.Template.Spec.Affinity = customPodOptions.Affinity
+		}
+
+		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
+			stateful.Spec.Template.Spec.Containers[0].Resources = customPodOptions.Resources
+		}
+
+		if customPodOptions.PodSecurityContext != nil {
+			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
+		}
 	}
 
 	return stateful
@@ -330,6 +388,12 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
+		to.Spec.Template.Annotations = from.Spec.Template.Annotations
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {

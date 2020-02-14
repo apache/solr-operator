@@ -17,6 +17,7 @@ limitations under the License.
 package controllers
 
 import (
+	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
 	"testing"
 
@@ -125,8 +126,28 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+	testPodAnnotations := map[string]string {
+		"test1": "value1",
+		"test2": "value2",
+	}
+	testPodLabels := map[string]string {
+		"test3": "value3",
+		"test4": "value4",
+	}
+	testSSAnnotations := map[string]string {
+		"test5": "value5",
+		"test6": "value6",
+	}
+	testSSLabels := map[string]string {
+		"test7": "value7",
+		"test8": "value8",
+	}
 	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: expectedCloudRequest.Name,
+			Namespace: expectedCloudRequest.Namespace,
+			Labels: map[string]string{"base": "here"},
+		},
 		Spec: solr.SolrCloudSpec{
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
@@ -134,6 +155,16 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 				},
 			},
 			SolrGCTune: "gc Options",
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				PodOptions:         &solr.PodOptions{
+					Annotations: testPodAnnotations,
+					Labels:      testPodLabels,
+				},
+				StatefulSetOptions: &solr.StatefulSetOptions{
+					Annotations: testSSAnnotations,
+					Labels:      testSSLabels,
+				},
+			},
 		},
 	}
 
@@ -184,13 +215,19 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 		"SOLR_PORT": "8983",
 		"GC_TUNE":   "gc Options",
 	}
+	expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string {"technology": "solr-cloud"})
+	expectedStatefulSetAnnotations := map[string]string {util.SolrZKConnectionStringAnnotation: "host:7271/"}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	testMapsEqual(t, "statefulSet labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels), statefulSet.Labels)
+	testMapsEqual(t, "statefulSet annotations", util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations), statefulSet.Annotations)
+	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
+	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
 
 	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
 
 	// Check the headless Service
-	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Selector.MatchLabels)
 
 	// Check the ingress
 	expectIngress(g, requests, expectedCloudRequest, cloudIKey)

@@ -75,6 +75,13 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
+	// DEPRECATED: Please use the options provided in customSolrKubeOptions.podOptions
+	//
+	// Pod defines the policy to create pod for the SolrCloud.
+	// Updating the Pod does not take effect on any existing pods.
+	// +optional
+	SolrPod SolrPodPolicy `json:"solrPodPolicy,omitempty"`
+
 	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
 	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
 	// +optional
@@ -92,10 +99,6 @@ type SolrCloudSpec struct {
 	// Provide custom options for kubernetes objects created for the Solr Cloud.
 	// +optional
 	CustomSolrKubeOptions CustomSolrKubeOptions `json:"customSolrKubeOptions,omitempty"`
-
-	// Customize how Solr is addressed both internally and externally in kubernetes.
-	// +optional
-	SolrAddressabilityOptions SolrAddressabilityOptions `json:"solrAddressabilityOptions,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -188,6 +191,8 @@ type CustomSolrKubeOptions struct {
 	// +optional
 	StatefulSetOptions *StatefulSetOptions `json:"statefulSetOptions,omitempty"`
 
+	/* These features are not yet supported
+
 	// CommonServiceOptions defines the custom options for the common solrCloud Service.
 	// +optional
 	CommonServiceOptions *ServiceOptions `json:"commonServiceOptions,omitempty"`
@@ -208,63 +213,23 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+	*/
 }
 
-type SolrAddressabilityOptions struct {
-	// The way in which this SolrCloud nodes should be made addressable externally.
-	// If none is provided, nodes will not be addressable externally.
+// DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
+//
+// SolrPodPolicy defines the common pod configuration for Pods, including when used
+// in deployments, stateful-sets, etc.
+type SolrPodPolicy struct {
+	// The scheduling constraints on pods.
 	// +optional
-	External *ExternalAddressability `json:"externalOptions,omitempty"`
+	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
-	// PodPort defines the port to have the Solr Pod listen on.
-	// Defaults to 8983
+	// Resources is the resource requirements for the container.
+	// This field cannot be updated once the cluster is created.
 	// +optional
-	PodPort int `json:"podPort,omitempty"`
-
-	// ServicePort defines the port to have all Solr services listen on. This is the port Solr will advertise itself as.
-	// Defaults to 80
-	// +optional
-	ServicePort int `json:"servicePort,omitempty"`
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
-
-// ExternalAddressability defines the config for making Solr services available externally to kubernetes.
-// Be careful when using LoadBalanced and includeNodes, as many IP addresses could be created if you are running many large solrClouds.
-type ExternalAddressability struct {
-	// The way in which this SolrCloud service(s) should be made addressable externally.
-	Method ExternalAddressabilityMethod `json:"method"`
-
-	// Expose the common Solr service externally. This is a single service.
-	// +optional
-	ExposeCommon bool `json:"exposeCommon"`
-
-	// Expose each of the Solr Node services externally. This is equal to the number of Solr nodes running within the statefulSet.
-	// +optional
-	ExposeNodes bool `json:"ExposeNodes"`
-
-	// Override the baseDomain provided as startup parameters to the operator, used by ingresses and externalDNS
-	// +optional
-	BaseDomain string `json:"baseDomain,omitempty"`
-
-	// Provide additional baseDomains that ingresses or ExternalDNS should listen on.
-	// +optional
-	AdditionalBaseDomains []string `json:"additionalDomains,omitempty"`
-
-	// UseExternalDNS for services and/or ingresses. Defaults to false
-	// +optional
-	UseExternalDNS bool `json:"useExternalDNS,omitempty"`
-}
-
-// ExternalAddressability is a string enumeration type that enumerates
-// all possible ways that a SolrCloud can be made addressable external to the kubernetes cluster.
-type ExternalAddressabilityMethod string
-
-const (
-	// Use an ingress to make the Solr services externally addressable
-	Ingress = "Ingress"
-
-	// Use LoadBalancedServices to make the Solr services externally addressable
-	LoadBalancedService = "LoadBalancedService"
-)
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
