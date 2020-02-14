@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "solr-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    control-plane: solr-operator
+    controller-tools.k8s.io: "1.0"
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      control-plane: solr-operator
+      controller-tools.k8s.io: "1.0"
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+      labels:
+        control-plane: solr-operator
+        controller-tools.k8s.io: "1.0"
+    spec:
+      serviceAccountName: solr-operator
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        args:
+        - -zk-operator={{ .Values.useZkOperator }}
+        - -etcd-operator={{ .Values.useEtcdOperator }}
+        - -ingress-base-domain={{ .Values.ingressBaseDomain }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+            {{- toYaml .Values.resources | nindent 12 }} 
+      terminationGracePeriodSeconds: 10

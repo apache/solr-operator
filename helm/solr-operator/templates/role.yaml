@@ -1,0 +1,302 @@
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: solr-operator-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - pods/status
+  verbs:
+  - get
+- apiGroups:
+  - ""
+  resources:
+  - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - statefulsets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - batch
+  resources:
+  - jobs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - etcd.database.coreos.com
+  resources:
+  - etcdclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - etcd.database.coreos.com
+  resources:
+  - etcdclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrbackups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcloud
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcloud/status
+  verbs:
+  - get
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrclouds/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollectionaliases
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollectionaliases/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollections
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrcollections/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.bloomberg.com
+  resources:
+  - solrprometheusexporters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - zookeeper.pravega.io
+  resources:
+  - zookeeperclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - zookeeper.pravega.io
+  resources:
+  - zookeeperclusters/status
+  verbs:
+  - get
+  - patch
+  - update
