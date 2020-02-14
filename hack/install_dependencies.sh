@@ -12,7 +12,6 @@ arch=$(go env GOARCH)
 GO111MODULE=on go mod tidy 
 
 #Install Kustomize
-#GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4
 GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v3
 
 # Install Kubebuilder
