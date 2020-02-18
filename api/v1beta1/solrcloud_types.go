@@ -75,6 +75,8 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
+	// DEPRECATED: Please use the options provided in customSolrKubeOptions.podOptions
+	//
 	// Pod defines the policy to create pod for the SolrCloud.
 	// Updating the Pod does not take effect on any existing pods.
 	// +optional
@@ -93,6 +95,10 @@ type SolrCloudSpec struct {
 	// Other options are to use a NFS volume.
 	// +optional
 	BackupRestoreVolume *corev1.VolumeSource `json:"backupRestoreVolume,omitempty"`
+
+	// Provide custom options for kubernetes objects created for the Solr Cloud.
+	// +optional
+	CustomSolrKubeOptions CustomSolrKubeOptions `json:"customSolrKubeOptions,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -176,6 +182,42 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	return changed
 }
 
+type CustomSolrKubeOptions struct {
+	// SolrPodOptions defines the custom options for solrCloud pods.
+	// +optional
+	PodOptions *PodOptions `json:"podOptions,omitempty"`
+
+	// StatefulSetOptions defines the custom options for the solrCloud StatefulSet.
+	// +optional
+	StatefulSetOptions *StatefulSetOptions `json:"statefulSetOptions,omitempty"`
+
+	/* These features are not yet supported
+
+	// CommonServiceOptions defines the custom options for the common solrCloud Service.
+	// +optional
+	CommonServiceOptions *ServiceOptions `json:"commonServiceOptions,omitempty"`
+
+	// HeadlessServiceOptions defines the custom options for the headless solrCloud Service.
+	// +optional
+	HeadlessServiceOptions *ServiceOptions `json:"headlessServiceOptions,omitempty"`
+
+	// NodeServiceOptions defines the custom options for the individual solrCloud Node services, if they are created.
+	// These services will only be created when exposing SolrNodes externally in the AddressabilityOptions.
+	// +optional
+	NodeServiceOptions *ServiceOptions `json:"headlessServiceOptions,omitempty"`
+
+	// ServiceOptions defines the custom options for solrCloud Services.
+	// +optional
+	ConfigMapOptions *ConfigMapOptions `json:"configMapOptions,omitempty"`
+
+	// IngressOptions defines the custom options for solrCloud Ingress.
+	// +optional
+	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+	*/
+}
+
+// DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
+//
 // SolrPodPolicy defines the common pod configuration for Pods, including when used
 // in deployments, stateful-sets, etc.
 type SolrPodPolicy struct {
@@ -187,48 +229,6 @@ type SolrPodPolicy struct {
 	// This field cannot be updated once the cluster is created.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
-}
-
-// ContainerImage defines the fields needed for a Docker repository image. The
-// format here matches the predominant format used in Helm charts.
-type ContainerImage struct {
-	// +optional
-	Repository string `json:"repository,omitempty"`
-	// +optional
-	Tag string `json:"tag,omitempty"`
-	// +optional
-	PullPolicy corev1.PullPolicy `json:"pullPolicy,omitempty"`
-	// +optional
-	ImagePullSecret string `json:"imagePullSecret,omitempty"`
-}
-
-func (c *ContainerImage) withDefaults(repo string, version string, policy corev1.PullPolicy) (changed bool) {
-	if c.Repository == "" {
-		changed = true
-		c.Repository = repo
-	}
-	if c.Tag == "" {
-		changed = true
-		c.Tag = version
-	}
-	if c.PullPolicy == "" {
-		changed = true
-		c.PullPolicy = policy
-	}
-	return changed
-}
-
-func (c *ContainerImage) ToImageName() (name string) {
-	return c.Repository + ":" + c.Tag
-}
-
-func ImageVersion(image string) (version string) {
-	split := strings.Split(image, ":")
-	if len(split) < 2 {
-		return ""
-	} else {
-		return split[1]
-	}
 }
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to

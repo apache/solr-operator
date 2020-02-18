@@ -17,7 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -47,6 +49,61 @@ func TestCloudReconcile(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+
+	extraVars := []corev1.EnvVar{
+		{
+			Name:  "VAR_1",
+			Value: "VAL_1",
+		},
+		{
+			Name: "VAR_2",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					APIVersion: "v1",
+					FieldPath:  "test.path",
+				},
+			},
+		},
+	}
+	one := int64(1)
+	two := int64(2)
+	podSecurityContext := corev1.PodSecurityContext{
+		RunAsUser:  &one,
+		RunAsGroup: &two,
+	}
+	extraVolumes := []solr.AdditionalVolume{
+		{
+			Name: "vol1",
+			Source: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+			DefaultContainerMount: corev1.VolumeMount{
+				Name:      "ignore",
+				ReadOnly:  false,
+				MountPath: "/test/mount/path",
+				SubPath:   "/sub",
+			},
+		},
+	}
+	affinity := &corev1.Affinity{
+		PodAffinity: &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					TopologyKey: "testKey",
+				},
+			},
+			PreferredDuringSchedulingIgnoredDuringExecution: nil,
+		},
+	}
+	resources := corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceStorage: *resource.NewQuantity(1028*1028*1028, resource.BinarySI),
+		},
+	}
+
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
@@ -58,6 +115,15 @@ func TestCloudReconcile(t *testing.T) {
 			SolrJavaMem:  "-Xmx4G",
 			SolrOpts:     "extra-opts",
 			SolrLogLevel: "DEBUG",
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				PodOptions: &solr.PodOptions{
+					EnvVariables:       extraVars,
+					PodSecurityContext: &podSecurityContext,
+					Volumes:            extraVolumes,
+					Affinity:           affinity,
+					Resources:          resources,
+				},
+			},
 		},
 	}
 
@@ -99,6 +165,8 @@ func TestCloudReconcile(t *testing.T) {
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+
+	// Env Variable Tests
 	expectedEnvVars := map[string]string{
 		"ZK_HOST":        "host:7271/",
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
@@ -107,7 +175,19 @@ func TestCloudReconcile(t *testing.T) {
 		"SOLR_LOG_LEVEL": "DEBUG",
 		"SOLR_OPTS":      "extra-opts",
 	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+	testPodEnvVariables(t, expectedEnvVars, foundEnv[:len(foundEnv)-2])
+	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-2:], "Extra Env Vars are not the same as the ones provided in podOptions")
+
+	// Other Pod Options Checks
+	assert.Equal(t, podSecurityContext, *statefulSet.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
+	assert.Equal(t, affinity, statefulSet.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
+	assert.Equal(t, resources.Limits, statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits, "Resources.Limits is not the same as the one provided in podOptions")
+	assert.Equal(t, resources.Requests, statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests, "Resources.Requests is not the same as the one provided in podOptions")
+	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
+	assert.Equal(t, extraVolumes[0].DefaultContainerMount, statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, extraVolumes[0].Name, statefulSet.Spec.Template.Spec.Volumes[2].Name, "Additional Volume from podOptions not loaded into pod properly.")
+	assert.Equal(t, extraVolumes[0].Source, statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 
 	// Check the client Service
 	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -125,8 +205,28 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+	testPodAnnotations := map[string]string{
+		"test1": "value1",
+		"test2": "value2",
+	}
+	testPodLabels := map[string]string{
+		"test3": "value3",
+		"test4": "value4",
+	}
+	testSSAnnotations := map[string]string{
+		"test5": "value5",
+		"test6": "value6",
+	}
+	testSSLabels := map[string]string{
+		"test7": "value7",
+		"test8": "value8",
+	}
 	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      expectedCloudRequest.Name,
+			Namespace: expectedCloudRequest.Namespace,
+			Labels:    map[string]string{"base": "here"},
+		},
 		Spec: solr.SolrCloudSpec{
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
@@ -134,6 +234,16 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 				},
 			},
 			SolrGCTune: "gc Options",
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				PodOptions: &solr.PodOptions{
+					Annotations: testPodAnnotations,
+					Labels:      testPodLabels,
+				},
+				StatefulSetOptions: &solr.StatefulSetOptions{
+					Annotations: testSSAnnotations,
+					Labels:      testSSLabels,
+				},
+			},
 		},
 	}
 
@@ -177,20 +287,26 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet require a container.")
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
 	expectedEnvVars := map[string]string{
 		"ZK_HOST":   "host:7271/",
 		"SOLR_HOST": instance.NodeIngressUrl("$(POD_HOSTNAME)", ingressBaseDomain),
 		"SOLR_PORT": "8983",
 		"GC_TUNE":   "gc Options",
 	}
+	expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"technology": "solr-cloud"})
+	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/"}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	testMapsEqual(t, "statefulSet labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels), statefulSet.Labels)
+	testMapsEqual(t, "statefulSet annotations", util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations), statefulSet.Annotations)
+	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
+	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
 
 	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
 
 	// Check the headless Service
-	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
+	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Selector.MatchLabels)
 
 	// Check the ingress
 	expectIngress(g, requests, expectedCloudRequest, cloudIKey)
