@@ -4992,12 +4992,12 @@ spec:
                     annotations:
                       additionalProperties:
                         type: string
-                      description: Annotations to be added for the solrCloud Services.
+                      description: Annotations to be added for the StatefulSet.
                       type: object
                     labels:
                       additionalProperties:
                         type: string
-                      description: Labels to be added for the solrCloud Services.
+                      description: Labels to be added for the StatefulSet.
                       type: object
                   type: object
               type: object

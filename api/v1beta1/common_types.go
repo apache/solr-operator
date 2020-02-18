@@ -23,11 +23,11 @@ import (
 
 // StatefulSetOptions defines custom options for StatefulSets
 type StatefulSetOptions struct {
-	// Annotations to be added for the solrCloud Services.
+	// Annotations to be added for the StatefulSet.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Labels to be added for the solrCloud Services.
+	// Labels to be added for the StatefulSet.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 }
