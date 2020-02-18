@@ -19,6 +19,7 @@ package controllers
 import (
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -48,6 +49,61 @@ func TestCloudReconcile(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+
+	extraVars := []corev1.EnvVar{
+		{
+			Name:  "VAR_1",
+			Value: "VAL_1",
+		},
+		{
+			Name: "VAR_2",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					APIVersion: "v1",
+					FieldPath:  "test.path",
+				},
+			},
+		},
+	}
+	one := int64(1)
+	two := int64(2)
+	podSecurityContext := corev1.PodSecurityContext{
+		RunAsUser:  &one,
+		RunAsGroup: &two,
+	}
+	extraVolumes := []solr.AdditionalVolume{
+		{
+			Name: "vol1",
+			Source: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+			DefaultContainerMount: corev1.VolumeMount{
+				Name:      "ignore",
+				ReadOnly:  false,
+				MountPath: "/test/mount/path",
+				SubPath:   "/sub",
+			},
+		},
+	}
+	affinity := &corev1.Affinity{
+		PodAffinity: &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					TopologyKey: "testKey",
+				},
+			},
+			PreferredDuringSchedulingIgnoredDuringExecution: nil,
+		},
+	}
+	resources := corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceStorage: *resource.NewQuantity(1028*1028*1028, resource.BinarySI),
+		},
+	}
+
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
@@ -59,6 +115,15 @@ func TestCloudReconcile(t *testing.T) {
 			SolrJavaMem:  "-Xmx4G",
 			SolrOpts:     "extra-opts",
 			SolrLogLevel: "DEBUG",
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				PodOptions: &solr.PodOptions{
+					EnvVariables:       extraVars,
+					PodSecurityContext: &podSecurityContext,
+					Volumes:            extraVolumes,
+					Affinity:           affinity,
+					Resources:          resources,
+				},
+			},
 		},
 	}
 
@@ -100,6 +165,8 @@ func TestCloudReconcile(t *testing.T) {
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+
+	// Env Variable Tests
 	expectedEnvVars := map[string]string{
 		"ZK_HOST":        "host:7271/",
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
@@ -108,7 +175,19 @@ func TestCloudReconcile(t *testing.T) {
 		"SOLR_LOG_LEVEL": "DEBUG",
 		"SOLR_OPTS":      "extra-opts",
 	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+	testPodEnvVariables(t, expectedEnvVars, foundEnv[:len(foundEnv)-2])
+	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-2:], "Extra Env Vars are not the same as the ones provided in podOptions")
+
+	// Other Pod Options Checks
+	assert.Equal(t, podSecurityContext, *statefulSet.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
+	assert.Equal(t, affinity, statefulSet.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
+	assert.Equal(t, resources.Limits, statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits, "Resources.Limits is not the same as the one provided in podOptions")
+	assert.Equal(t, resources.Requests, statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests, "Resources.Requests is not the same as the one provided in podOptions")
+	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
+	assert.Equal(t, extraVolumes[0].DefaultContainerMount, statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, extraVolumes[0].Name, statefulSet.Spec.Template.Spec.Volumes[2].Name, "Additional Volume from podOptions not loaded into pod properly.")
+	assert.Equal(t, extraVolumes[0].Source, statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 
 	// Check the client Service
 	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
