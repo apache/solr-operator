@@ -438,6 +438,12 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
 	}
 
+	if !reflect.DeepEqual(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
+		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
+	}
+
 	return requireUpdate
 }
 
