@@ -385,7 +385,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
 
 	// Check the configMap
-	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string {})
+	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string{})
 	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
 	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
 }
