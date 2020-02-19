@@ -452,12 +452,20 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
+	annotations := map[string]string{}
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.ConfigMapName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        solrCloud.ConfigMapName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Data: map[string]string{
 			"solr.xml": `<?xml version="1.0" encoding="UTF-8" ?>
@@ -482,6 +490,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 `,
 		},
 	}
+
 	return configMap
 }
 
@@ -499,9 +508,9 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
 	return requireUpdate
 }
 
-// GenerateService returns a new corev1.Service pointer generated for the SolrCloud instance
+// GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
 // solrCloud: SolrCloud instance
-func GenerateService(solrCloud *solr.SolrCloud) *corev1.Service {
+func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 	// TODO: Default and Validate these with Webhooks
 	copyLabels := solrCloud.GetLabels()
 	if copyLabels == nil {
@@ -513,11 +522,20 @@ func GenerateService(solrCloud *solr.SolrCloud) *corev1.Service {
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
+	annotations := map[string]string{}
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.CommonServiceOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.CommonServiceName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        solrCloud.CommonServiceName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -540,11 +558,20 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
+	annotations := map[string]string{}
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.HeadlessServiceOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.HeadlessServiceName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        solrCloud.HeadlessServiceName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -571,11 +598,20 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 	selectorLabels["statefulset.kubernetes.io/pod-name"] = nodeName
 
+	annotations := map[string]string{}
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.NodeServiceOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      nodeName,
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        nodeName,
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
@@ -623,6 +659,13 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 // ingressBaseDomain: string baseDomain of the ingress
 func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
+	annotations := map[string]string{}
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.IngressOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
 
 	rules := []extv1.IngressRule{
 		{
@@ -649,9 +692,10 @@ func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingres
 
 	ingress = &extv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.CommonIngressName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
+			Name:        solrCloud.CommonIngressName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: extv1.IngressSpec{
 			Rules: rules,

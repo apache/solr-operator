@@ -2722,6 +2722,83 @@ spec:
               description: Provide custom options for kubernetes objects created for
                 the Solr Cloud.
               properties:
+                commonServiceOptions:
+                  description: CommonServiceOptions defines the custom options for
+                    the common solrCloud Service.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: Annotations to be added for the Service.
+                      type: object
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels to be added for the Service.
+                      type: object
+                  type: object
+                configMapOptions:
+                  description: ServiceOptions defines the custom options for solrCloud
+                    Services.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: Annotations to be added for the ConfigMap.
+                      type: object
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels to be added for the ConfigMap.
+                      type: object
+                  type: object
+                headlessServiceOptions:
+                  description: HeadlessServiceOptions defines the custom options for
+                    the headless solrCloud Service.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: Annotations to be added for the Service.
+                      type: object
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels to be added for the Service.
+                      type: object
+                  type: object
+                ingressOptions:
+                  description: IngressOptions defines the custom options for solrCloud
+                    Ingress.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: Annotations to be added for the Ingress.
+                      type: object
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels to be added for the Ingress.
+                      type: object
+                  type: object
+                nodeServiceOptions:
+                  description: NodeServiceOptions defines the custom options for the
+                    individual solrCloud Node services, if they are created. These
+                    services will only be created when exposing SolrNodes externally
+                    via an Ingress in the AddressabilityOptions.
+                  properties:
+                    annotations:
+                      additionalProperties:
+                        type: string
+                      description: Annotations to be added for the Service.
+                      type: object
+                    labels:
+                      additionalProperties:
+                        type: string
+                      description: Labels to be added for the Service.
+                      type: object
+                  type: object
                 podOptions:
                   description: SolrPodOptions defines the custom options for solrCloud
                     pods.

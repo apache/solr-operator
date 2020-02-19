@@ -122,25 +122,25 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return requeueOrNot, err
 	}
 
-	// Generate Service
-	service := util.GenerateService(instance)
-	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
+	// Generate Common Service
+	commonService := util.GenerateCommonService(instance)
+	if err := controllerutil.SetControllerReference(instance, commonService, r.scheme); err != nil {
 		return requeueOrNot, err
 	}
 
-	// Check if the Service already exists
-	foundService := &corev1.Service{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
+	// Check if the Common Service already exists
+	foundCommonService := &corev1.Service{}
+	err = r.Get(context.TODO(), types.NamespacedName{Name: commonService.Name, Namespace: commonService.Namespace}, foundCommonService)
 	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating Service", "namespace", service.Namespace, "name", service.Name)
-		err = r.Create(context.TODO(), service)
+		r.Log.Info("Creating Common Service", "namespace", commonService.Namespace, "name", commonService.Name)
+		err = r.Create(context.TODO(), commonService)
 	} else if err == nil {
-		if util.CopyServiceFields(service, foundService) {
+		if util.CopyServiceFields(commonService, foundCommonService) {
 			// Update the found Service and write the result back if there are any changes
-			r.Log.Info("Updating Service", "namespace", service.Namespace, "name", service.Name)
-			err = r.Update(context.TODO(), foundService)
+			r.Log.Info("Updating Common Service", "namespace", commonService.Namespace, "name", commonService.Name)
+			err = r.Update(context.TODO(), foundCommonService)
 		}
-		newStatus.InternalCommonAddress = "http://" + foundService.Name + "." + foundService.Namespace
+		newStatus.InternalCommonAddress = "http://" + foundCommonService.Name + "." + foundCommonService.Namespace
 	} else {
 		return requeueOrNot, err
 	}

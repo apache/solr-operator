@@ -191,8 +191,6 @@ type CustomSolrKubeOptions struct {
 	// +optional
 	StatefulSetOptions *StatefulSetOptions `json:"statefulSetOptions,omitempty"`
 
-	/* These features are not yet supported
-
 	// CommonServiceOptions defines the custom options for the common solrCloud Service.
 	// +optional
 	CommonServiceOptions *ServiceOptions `json:"commonServiceOptions,omitempty"`
@@ -202,9 +200,9 @@ type CustomSolrKubeOptions struct {
 	HeadlessServiceOptions *ServiceOptions `json:"headlessServiceOptions,omitempty"`
 
 	// NodeServiceOptions defines the custom options for the individual solrCloud Node services, if they are created.
-	// These services will only be created when exposing SolrNodes externally in the AddressabilityOptions.
+	// These services will only be created when exposing SolrNodes externally via an Ingress in the AddressabilityOptions.
 	// +optional
-	NodeServiceOptions *ServiceOptions `json:"headlessServiceOptions,omitempty"`
+	NodeServiceOptions *ServiceOptions `json:"nodeServiceOptions,omitempty"`
 
 	// ServiceOptions defines the custom options for solrCloud Services.
 	// +optional
@@ -213,7 +211,6 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
-	*/
 }
 
 // DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
