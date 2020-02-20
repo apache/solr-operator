@@ -12,7 +12,7 @@ The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built 
 The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
 
 If you run into issues using the Solr Operator, please:
-- Reference the [version compatibility and upgrade notes](#version-compatability--upgrade-notes) provided below
+- Reference the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) provided below
 - Create a Github Issue in this repo, describing your problem with as much detail as possible
 - Reach out on our Slack channel!
 
