@@ -174,14 +174,7 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 }
 
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
-	for k, v := range expected {
-		foundV, foundExists := found[k]
-		assert.True(t, foundExists, "Expected key '%s' does not exist in found %s", k, mapName)
-		if foundExists {
-			assert.Equal(t, v, foundV, "Wrong value for %s key '%s'", mapName, k)
-		}
-	}
-	assert.Equal(t, len(expected), len(found), "Expected and found %s do not have the same number of entries", mapName)
+	assert.Equal(t, expected, found, "Expected and found %s are not the same", mapName)
 }
 
 func testMapContainsOther(t *testing.T, mapName string, base map[string]string, other map[string]string) {

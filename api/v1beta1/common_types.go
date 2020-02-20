@@ -67,33 +67,33 @@ type PodOptions struct {
 
 // ServiceOptions defines custom options for services
 type ServiceOptions struct {
-	// Annotations to be added for the solrCloud Services.
+	// Annotations to be added for the Service.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Labels to be added for the solrCloud Services.
+	// Labels to be added for the Service.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // IngressOptions defines custom options for ingresses
 type IngressOptions struct {
-	// Annotations to be added for the solrCloud Ingress.
+	// Annotations to be added for the Ingress.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Labels to be added for the solrCloud Ingress.
+	// Labels to be added for the Ingress.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // ConfigMapOptions defines custom options for configMaps
 type ConfigMapOptions struct {
-	// Annotations to be added for the solrCloud ConfigMap.
+	// Annotations to be added for the ConfigMap.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
-	// Labels to be added for the solrCloud ConfigMap.
+	// Labels to be added for the ConfigMap.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 }

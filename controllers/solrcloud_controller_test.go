@@ -42,6 +42,7 @@ var (
 	cloudCsKey           = types.NamespacedName{Name: "foo-clo-solrcloud-common", Namespace: "default"}
 	cloudHsKey           = types.NamespacedName{Name: "foo-clo-solrcloud-headless", Namespace: "default"}
 	cloudIKey            = types.NamespacedName{Name: "foo-clo-solrcloud-common", Namespace: "default"}
+	cloudCMKey           = types.NamespacedName{Name: "foo-clo-solrcloud-configmap", Namespace: "default"}
 )
 
 func TestCloudReconcile(t *testing.T) {
@@ -199,28 +200,73 @@ func TestCloudReconcile(t *testing.T) {
 	expectNoIngress(g, requests, cloudIKey)
 }
 
+var (
+	testPodAnnotations = map[string]string{
+		"testP1": "valueP1",
+		"testP2": "valueP2",
+	}
+	testPodLabels = map[string]string{
+		"testP3": "valueP3",
+		"testP4": "valueP4",
+	}
+	testSSAnnotations = map[string]string{
+		"testSS1": "valueSS1",
+		"testSS2": "valueSS2",
+	}
+	testSSLabels = map[string]string{
+		"testSS3": "valueSS3",
+		"testSS4": "valueSS4",
+	}
+	testIngressLabels = map[string]string{
+		"testI1": "valueI1",
+		"testI2": "valueI2",
+	}
+	testIngressAnnotations = map[string]string{
+		"testI3": "valueI3",
+		"testI4": "valueI4",
+	}
+	testCommonServiceLabels = map[string]string{
+		"testCS1": "valueCS1",
+		"testCS2": "valueCS2",
+	}
+	testCommonServiceAnnotations = map[string]string{
+		"testCS3": "valueCS3",
+		"testCS4": "valueCS4",
+	}
+	testHeadlessServiceLabels = map[string]string{
+		"testHS1": "valueHS1",
+		"testHS2": "valueHS2",
+	}
+	testHeadlessServiceAnnotations = map[string]string{
+		"testHS3": "valueHS3",
+		"testHS4": "valueHS4",
+	}
+	testNodeServiceLabels = map[string]string{
+		"testNS1": "valueNS1",
+		"testNS2": "valueNS2",
+	}
+	testNodeServiceAnnotations = map[string]string{
+		"testNS3": "valueNS3",
+		"testNS4": "valueNS4",
+	}
+	testConfigMapLabels = map[string]string{
+		"testCM1": "valueCM1",
+		"testCM2": "valueCM2",
+	}
+	testConfigMapAnnotations = map[string]string{
+		"testCM3": "valueCM3",
+		"testCM4": "valueCM4",
+	}
+)
+
 func TestCloudReconcileWithIngress(t *testing.T) {
 	ingressBaseDomain := "ing.base.domain"
 	SetIngressBaseUrl(ingressBaseDomain)
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
-	testPodAnnotations := map[string]string{
-		"test1": "value1",
-		"test2": "value2",
-	}
-	testPodLabels := map[string]string{
-		"test3": "value3",
-		"test4": "value4",
-	}
-	testSSAnnotations := map[string]string{
-		"test5": "value5",
-		"test6": "value6",
-	}
-	testSSLabels := map[string]string{
-		"test7": "value7",
-		"test8": "value8",
-	}
+	replicas := int32(4)
+
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      expectedCloudRequest.Name,
@@ -228,6 +274,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 			Labels:    map[string]string{"base": "here"},
 		},
 		Spec: solr.SolrCloudSpec{
+			Replicas: &replicas,
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
 					InternalConnectionString: "host:7271",
@@ -242,6 +289,26 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations: testSSAnnotations,
 					Labels:      testSSLabels,
+				},
+				CommonServiceOptions: &solr.ServiceOptions{
+					Annotations: testCommonServiceAnnotations,
+					Labels:      testCommonServiceLabels,
+				},
+				HeadlessServiceOptions: &solr.ServiceOptions{
+					Annotations: testHeadlessServiceAnnotations,
+					Labels:      testHeadlessServiceLabels,
+				},
+				NodeServiceOptions: &solr.ServiceOptions{
+					Annotations: testNodeServiceAnnotations,
+					Labels:      testNodeServiceLabels,
+				},
+				IngressOptions: &solr.IngressOptions{
+					Annotations: testIngressAnnotations,
+					Labels:      testIngressLabels,
+				},
+				ConfigMapOptions: &solr.ConfigMapOptions{
+					Annotations: testConfigMapAnnotations,
+					Labels:      testConfigMapLabels,
 				},
 			},
 		},
@@ -286,6 +353,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+	assert.EqualValues(t, replicas, *statefulSet.Spec.Replicas, "Solr StatefulSet has incorrect number of replicas.")
 
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
 	expectedEnvVars := map[string]string{
@@ -303,13 +371,36 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
 
 	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
+	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
+	expectedCommonServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "common"})
+	testMapsEqual(t, "common service labels", util.MergeLabelsOrAnnotations(expectedCommonServiceLabels, testCommonServiceLabels), service.Labels)
+	testMapsEqual(t, "common service annotations", testCommonServiceAnnotations, service.Annotations)
 
 	// Check the headless Service
-	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Selector.MatchLabels)
+	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Selector.MatchLabels)
+	expectedHeadlessServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "headless"})
+	testMapsEqual(t, "headless service labels", util.MergeLabelsOrAnnotations(expectedHeadlessServiceLabels, testHeadlessServiceLabels), service.Labels)
+	testMapsEqual(t, "headless service annotations", testHeadlessServiceAnnotations, service.Annotations)
 
 	// Check the ingress
-	expectIngress(g, requests, expectedCloudRequest, cloudIKey)
+	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
+	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
+	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+
+	nodeNames := instance.GetAllSolrNodeNames()
+	assert.EqualValues(t, replicas, len(nodeNames), "SolrCloud has incorrect number of nodeNames.")
+	for _, nodeName := range nodeNames {
+		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
+		service := expectService(t, g, requests, expectedCloudRequest, nodeSKey, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}))
+		expectedNodeServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "external"})
+		testMapsEqual(t, "node '"+nodeName+"' service labels", util.MergeLabelsOrAnnotations(expectedNodeServiceLabels, testNodeServiceLabels), service.Labels)
+		testMapsEqual(t, "node '"+nodeName+"' service annotations", testNodeServiceAnnotations, service.Annotations)
+	}
+
+	// Check the configMap
+	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string{})
+	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
+	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
 }
 
 func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
