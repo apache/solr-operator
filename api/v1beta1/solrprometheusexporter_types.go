@@ -39,6 +39,10 @@ type SolrPrometheusExporterSpec struct {
 	// +optional
 	PodPolicy SolrPodPolicy `json:"podPolicy,omitempty"`
 
+	// Provide custom options for kubernetes objects created for the SolrPrometheusExporter.
+	// +optional
+	CustomKubeOptions CustomExporterKubeOptions `json:"customKubeOptions,omitempty"`
+
 	// The entrypoint into the exporter. Defaults to the official docker-solr location.
 	// +optional
 	ExporterEntrypoint string `json:"exporterEntrypoint,omitempty"`
@@ -128,6 +132,24 @@ func (scr *SolrCloudReference) withDefaults(namespace string) (changed bool) {
 type StandaloneSolrReference struct {
 	// The address of the standalone solr
 	Address string `json:"address"`
+}
+
+type CustomExporterKubeOptions struct {
+	// SolrPodOptions defines the custom options for the solrPrometheusExporter pods.
+	// +optional
+	PodOptions *PodOptions `json:"podOptions,omitempty"`
+
+	// DeploymentOptions defines the custom options for the solrPrometheusExporter Deployment.
+	// +optional
+	DeploymentOptions *DeploymentOptions `json:"deploymentOptions,omitempty"`
+
+	// ServiceOptions defines the custom options for the solrPrometheusExporter Service.
+	// +optional
+	ServiceOptions *ServiceOptions `json:"serviceOptions,omitempty"`
+
+	// ServiceOptions defines the custom options for the solrPrometheusExporter ConfigMap.
+	// +optional
+	ConfigMapOptions *ConfigMapOptions `json:"configMapOptions,omitempty"`
 }
 
 // SolrPrometheusExporterStatus defines the observed state of SolrPrometheusExporter

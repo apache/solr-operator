@@ -1260,8 +1260,8 @@ spec:
                       type: object
                   type: object
                 configMapOptions:
-                  description: ServiceOptions defines the custom options for solrCloud
-                    Services.
+                  description: ServiceOptions defines the custom options for the solrCloud
+                    ConfigMap.
                   properties:
                     annotations:
                       additionalProperties:
@@ -1290,7 +1290,7 @@ spec:
                       type: object
                   type: object
                 ingressOptions:
-                  description: IngressOptions defines the custom options for solrCloud
+                  description: IngressOptions defines the custom options for the solrCloud
                     Ingress.
                   properties:
                     annotations:

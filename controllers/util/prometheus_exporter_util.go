@@ -15,7 +15,6 @@ limitations under the License.
 package util
 
 import (
-	"reflect"
 	"strconv"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -50,10 +49,26 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	fsGroup := int64(SolrMetricsPort)
 
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
+	annotations := make(map[string]string, 0)
 	selectorLabels := solrPrometheusExporter.SharedLabels()
 
 	labels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 	selectorLabels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
+
+	podLabels := labels
+	podAnnotations := make(map[string]string, 0)
+
+	customDeploymentOptions := solrPrometheusExporter.Spec.CustomKubeOptions.DeploymentOptions
+	if nil != customDeploymentOptions {
+		labels = MergeLabelsOrAnnotations(labels, customDeploymentOptions.Labels)
+		annotations = customDeploymentOptions.Annotations
+	}
+
+	customPodOptions := solrPrometheusExporter.Spec.CustomKubeOptions.PodOptions
+	if nil != customPodOptions {
+		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
+		podAnnotations = customPodOptions.Annotations
+	}
 
 	var solrVolumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
@@ -104,11 +119,30 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		entrypoint = solrPrometheusExporter.Spec.ExporterEntrypoint
 	}
 
+	// Add Custom EnvironmentVariables to the solr container
+	envVars := make([]corev1.EnvVar, 0)
+	if nil != customPodOptions {
+		// Add environment variables to container
+		envVars = append(envVars, customPodOptions.EnvVariables...)
+
+		// Add Custom Volumes to pod
+		for _, volume := range customPodOptions.Volumes {
+			volume.DefaultContainerMount.Name = volume.Name
+			volumeMounts = append(volumeMounts, volume.DefaultContainerMount)
+
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name:         volume.Name,
+				VolumeSource: volume.Source,
+			})
+		}
+	}
+
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrPrometheusExporter.MetricsDeploymentName(),
-			Namespace: solrPrometheusExporter.GetNamespace(),
-			Labels:    labels,
+			Name:        solrPrometheusExporter.MetricsDeploymentName(),
+			Namespace:   solrPrometheusExporter.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{
@@ -117,7 +151,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Replicas: &singleReplica,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels:      podLabels,
+					Annotations: podAnnotations,
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &gracePeriodTerm,
@@ -134,6 +169,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 							VolumeMounts:    volumeMounts,
 							Command:         []string{entrypoint},
 							Args:            exporterArgs,
+							Env:             envVars,
 
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
@@ -159,6 +195,30 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		}
 	}
 
+	// DEPRECATED: Replaced by the options below
+	if solrPrometheusExporter.Spec.PodPolicy.Affinity != nil {
+		deployment.Spec.Template.Spec.Affinity = solrPrometheusExporter.Spec.PodPolicy.Affinity
+	}
+
+	// DEPRECATED: Replaced by the options below
+	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
+		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
+	}
+
+	if nil != customPodOptions {
+		if customPodOptions.Affinity != nil {
+			deployment.Spec.Template.Spec.Affinity = customPodOptions.Affinity
+		}
+
+		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
+			deployment.Spec.Template.Spec.Containers[0].Resources = customPodOptions.Resources
+		}
+
+		if customPodOptions.PodSecurityContext != nil {
+			deployment.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
+		}
+	}
+
 	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
 		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
 	}
@@ -170,32 +230,26 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 // solrPrometheusExporter: SolrPrometheusExporter instance
 func GenerateMetricsConfigMap(solrPrometheusExporter *solr.SolrPrometheusExporter) *corev1.ConfigMap {
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
+	annotations := make(map[string]string, 0)
+
+	customOptions := solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = customOptions.Annotations
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrPrometheusExporter.MetricsConfigMapName(),
-			Namespace: solrPrometheusExporter.GetNamespace(),
-			Labels:    labels,
+			Name:        solrPrometheusExporter.MetricsConfigMapName(),
+			Namespace:   solrPrometheusExporter.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Data: map[string]string{
 			"solr-prometheus-exporter.xml": solrPrometheusExporter.Spec.Config,
 		},
 	}
 	return configMap
-}
-
-// CopyConfigMapFields copies the owned fields from one ConfigMap to another
-func CopyMetricsConfigMapFields(from, to *corev1.ConfigMap) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
-
-	if !reflect.DeepEqual(to.Data, from.Data) {
-		requireUpdate = true
-	}
-	to.Data = from.Data
-
-	return requireUpdate
 }
 
 // GenerateSolrMetricsService returns a new corev1.Service pointer generated for the SolrCloud Prometheus Exporter deployment
@@ -208,21 +262,28 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 	}
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
 	labels["service-type"] = "metrics"
+	annotations := map[string]string{
+		"prometheus.io/scrape": "true",
+		"prometheus.io/scheme": "http",
+		"prometheus.io/path":   "/metrics",
+		"prometheus.io/port":   strconv.Itoa(ExtSolrMetricsPort),
+	}
 
 	selectorLabels := solrPrometheusExporter.SharedLabels()
 	selectorLabels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 
+	customOptions := solrPrometheusExporter.Spec.CustomKubeOptions.ServiceOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrPrometheusExporter.MetricsServiceName(),
-			Namespace: solrPrometheusExporter.GetNamespace(),
-			Labels:    labels,
-			Annotations: map[string]string{
-				"prometheus.io/scrape": "true",
-				"prometheus.io/scheme": "http",
-				"prometheus.io/path":   "/metrics",
-				"prometheus.io/port":   strconv.Itoa(ExtSolrMetricsPort),
-			},
+			Name:        solrPrometheusExporter.MetricsServiceName(),
+			Namespace:   solrPrometheusExporter.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{

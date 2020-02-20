@@ -452,7 +452,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	annotations := map[string]string{}
+	annotations := make(map[string]string, 0)
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
 	if nil != customOptions {

@@ -139,7 +139,8 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 		Should(gomega.Succeed())
 
 	// Verify the deployment Specs
-	assert.Equal(t, deploy.Spec.Template.Labels, deploy.Spec.Selector.MatchLabels, "Deployment has different Pod template labels and selector labels.")
+	testMapContainsOther(t, "Deployment pod template selector", deploy.Spec.Template.Labels, deploy.Spec.Selector.MatchLabels)
+	assert.GreaterOrEqual(t, len(deploy.Spec.Selector.MatchLabels), 1, "Deployment pod template selector must have at least 1 label")
 
 	if configMapName != "" {
 		if assert.Equal(t, 1, len(deploy.Spec.Template.Spec.Volumes), "Deployment should have 1 volume, the configMap. More or less were found.") {

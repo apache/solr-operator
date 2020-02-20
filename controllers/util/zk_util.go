@@ -291,17 +291,19 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 
 	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
+		to.Spec.Template.Annotations = from.Spec.Template.Annotations
 	}
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
-	}
-
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
-		requireUpdate = true
-		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
 	}
 
 	if len(to.Spec.Template.Spec.Containers) != len(from.Spec.Template.Spec.Containers) {
@@ -343,7 +345,30 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 				requireUpdate = true
 				to.Spec.Template.Spec.Containers[i].Resources = from.Spec.Template.Spec.Containers[i].Resources
 			}
+
+			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].VolumeMounts, from.Spec.Template.Spec.Containers[i].VolumeMounts) {
+				requireUpdate = true
+				to.Spec.Template.Spec.Containers[i].VolumeMounts = from.Spec.Template.Spec.Containers[i].VolumeMounts
+			}
 		}
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
+		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
+		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
+	}
+
+	if !reflect.DeepEqual(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
+		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
 	}
 
 	return requireUpdate
