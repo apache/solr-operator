@@ -60,6 +60,10 @@ type SolrCollectionSpec struct {
 	// When set to true, enables automatic addition of replicas when the number of active replicas falls below the value set for replicationFactor
 	// +optional
 	AutoAddReplicas bool `json:"autoAddReplicas,omitempty"`
+
+	// The name of an Autoscaling policy to use for this collection
+	// +optional
+	AutoscalingPolicy string `json:"autoscalingPolicy,omitempty"`
 }
 
 // SolrCollectionStatus defines the observed state of SolrCollection

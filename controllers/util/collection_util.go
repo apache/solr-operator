@@ -23,7 +23,7 @@ import (
 )
 
 // CreateCollection to request collection creation on SolrCloud
-func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
+func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, autoscalingPolicy string, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	numShardsParameter := strconv.FormatInt(numShards, 10)
@@ -31,6 +31,7 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 	queryParams.Add("name", collection)
 	queryParams.Add("replicationFactor", replicationFactorParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
+	queryParams.Add("policy", autoscalingPolicy)
 	queryParams.Add("collection.configName", collectionConfigName)
 	queryParams.Add("router.field", routerField)
 
@@ -130,7 +131,7 @@ func DeleteCollectionAlias(cloud string, alias string, namespace string) (succes
 }
 
 // ModifyCollection to request collection modification on SolrCloud.
-func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
+func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, autoscalingPolicy string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
@@ -139,6 +140,7 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 	queryParams.Add("replicationFactor", replicationFactorParameter)
 	queryParams.Add("maxShardsPerNode", maxShardsPerNodeParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
+	queryParams.Add("policy", autoscalingPolicy)
 	queryParams.Add("collection.configName", collectionConfigName)
 
 	resp := &SolrAsyncResponse{}
@@ -158,7 +160,7 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 }
 
 // CheckIfCollectionModificationRequired to check if the collection's modifiable parameters have changed in spec and need to be updated
-func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
+func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, autoscalingPolicy string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
@@ -174,21 +176,27 @@ func CheckIfCollectionModificationRequired(cloud string, collection string, repl
 	if collectionResp, ok := resp.Cluster.Collections[collection].(map[string]interface{}); ok {
 		// Check modifiable collection parameters
 		if collectionResp["autoAddReplicas"] != autoAddReplicasParameter {
-			log.Info("Collection modification required, autoAddReplicas changed", "autoAddReplicas", autoAddReplicasParameter)
+			log.Info("Collection modification required, autoAddReplicas changed", "autoAddReplicas", autoAddReplicasParameter, "oldValue", collectionResp["autoAddReplicas"])
 			success = true
 		}
 
 		if collectionResp["maxShardsPerNode"] != maxShardsPerNodeParameter {
-			log.Info("Collection modification required, maxShardsPerNode changed", "maxShardsPerNode", maxShardsPerNodeParameter)
+			log.Info("Collection modification required, maxShardsPerNode changed", "maxShardsPerNode", maxShardsPerNodeParameter, "oldValue", collectionResp["maxShardsPerNode"])
 			success = true
 		}
 
 		if collectionResp["replicationFactor"] != replicationFactorParameter {
-			log.Info("Collection modification required, replicationFactor changed", "replicationFactor", replicationFactorParameter)
+			log.Info("Collection modification required, replicationFactor changed", "replicationFactor", replicationFactorParameter, "oldValue", collectionResp["replicationFactor"])
 			success = true
 		}
+
+		if collectionResp["policy"] != autoscalingPolicy {
+			log.Info("Collection modification required, autoscalingPolicy changed", "policy", autoscalingPolicy, "oldValue", collectionResp["policy"])
+			success = true
+		}
+
 		if collectionResp["configName"] != collectionConfigName {
-			log.Info("Collection modification required, configName changed", "configName", collectionConfigName)
+			log.Info("Collection modification required, configName changed", "configName", collectionConfigName, "oldValue", collectionResp["configName"])
 			success = true
 		}
 	} else {
