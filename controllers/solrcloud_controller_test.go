@@ -265,6 +265,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+	replicas := int32(4)
 
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{
@@ -273,6 +274,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 			Labels:    map[string]string{"base": "here"},
 		},
 		Spec: solr.SolrCloudSpec{
+			Replicas: &replicas,
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
 					InternalConnectionString: "host:7271",
@@ -351,6 +353,7 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+	assert.EqualValues(t, replicas, *statefulSet.Spec.Replicas, "Solr StatefulSet has incorrect number of replicas.")
 
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
 	expectedEnvVars := map[string]string{
@@ -383,6 +386,16 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
 	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+
+	nodeNames := instance.GetAllSolrNodeNames()
+	assert.EqualValues(t, replicas, len(nodeNames), "SolrCloud has incorrect number of nodeNames.")
+	for _, nodeName := range nodeNames {
+		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
+		service := expectService(t, g, requests, expectedCloudRequest, nodeSKey, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}))
+		expectedNodeServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "external"})
+		testMapsEqual(t, "node '"+nodeName+"' service labels", util.MergeLabelsOrAnnotations(expectedNodeServiceLabels, testNodeServiceLabels), service.Labels)
+		testMapsEqual(t, "node '"+nodeName+"' service annotations", testNodeServiceAnnotations, service.Annotations)
+	}
 
 	// Check the configMap
 	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string{})
