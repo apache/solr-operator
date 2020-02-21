@@ -23,13 +23,15 @@ import (
 )
 
 // CreateCollection to request collection creation on SolrCloud
-func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, autoscalingPolicy string, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
+func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, autoscalingPolicy string, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	numShardsParameter := strconv.FormatInt(numShards, 10)
+	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
 	queryParams.Add("action", "CREATE")
 	queryParams.Add("name", collection)
 	queryParams.Add("replicationFactor", replicationFactorParameter)
+	queryParams.Add("maxShardsPerNode", maxShardsPerNodeParameter)
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
 	queryParams.Add("policy", autoscalingPolicy)
 	queryParams.Add("collection.configName", collectionConfigName)
