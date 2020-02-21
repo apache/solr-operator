@@ -411,6 +411,9 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 - `SolrCloud.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrCloud.spec.customSolrKubeOptions.podOptions` option.  
 This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
 
+- `SolrPrometheusExporter.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrCloud.spec.customKubeOptions.podOptions` option.  
+This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
+
 #### v0.2.1
 - The zkConnectionString used for provided zookeepers changed from using the string provided in the `ZkCluster.Status`, which used an IP, to using the service name. This will cause a rolling restart of your solrs using the provided zookeeper option, but there will be no data loss.
 

@@ -70,8 +70,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		podAnnotations = customPodOptions.Annotations
 	}
 
-	var solrVolumes []corev1.Volume
-	var volumeMounts []corev1.VolumeMount
+	solrVolumes := make([]corev1.Volume, 0)
+	volumeMounts := make([]corev1.VolumeMount, 0)
 	exporterArgs := []string{
 		"-p", strconv.Itoa(SolrMetricsPort),
 		"-n", strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
@@ -217,10 +217,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if customPodOptions.PodSecurityContext != nil {
 			deployment.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
-	}
-
-	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
-		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
 	}
 
 	return deployment

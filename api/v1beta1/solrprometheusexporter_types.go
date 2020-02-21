@@ -34,6 +34,8 @@ type SolrPrometheusExporterSpec struct {
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
 
+	// DEPRECATED: Please use the options provided in customKubeOptions.podOptions
+	//
 	// Pod defines the policy to create pod for the SolrCloud.
 	// Updating the Pod does not take effect on any existing pods.
 	// +optional

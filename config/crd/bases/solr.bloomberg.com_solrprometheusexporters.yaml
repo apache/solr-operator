@@ -2391,8 +2391,9 @@ spec:
               format: int32
               type: integer
             podPolicy:
-              description: Pod defines the policy to create pod for the SolrCloud.
-                Updating the Pod does not take effect on any existing pods.
+              description: "DEPRECATED: Please use the options provided in customKubeOptions.podOptions
+                \n Pod defines the policy to create pod for the SolrCloud. Updating
+                the Pod does not take effect on any existing pods."
               properties:
                 affinity:
                   description: The scheduling constraints on pods.

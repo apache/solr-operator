@@ -281,11 +281,13 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 
 	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
 	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
 		to.Spec.Selector = from.Spec.Selector
 	}
 
@@ -303,6 +305,7 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 
 	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
 	}
 
@@ -313,41 +316,49 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 		for i := 0; i < len(to.Spec.Template.Spec.Containers); i++ {
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Name, from.Spec.Template.Spec.Containers[i].Name) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Name changed from", to.Spec.Template.Spec.Containers[i].Name, "To:", from.Spec.Template.Spec.Containers[i].Name)
 				to.Spec.Template.Spec.Containers[i].Name = from.Spec.Template.Spec.Containers[i].Name
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Image, from.Spec.Template.Spec.Containers[i].Image) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Image changed from", to.Spec.Template.Spec.Containers[i].Image, "To:", from.Spec.Template.Spec.Containers[i].Image)
 				to.Spec.Template.Spec.Containers[i].Image = from.Spec.Template.Spec.Containers[i].Image
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].ImagePullPolicy, from.Spec.Template.Spec.Containers[i].ImagePullPolicy) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].ImagePullPolicy changed from", to.Spec.Template.Spec.Containers[i].ImagePullPolicy, "To:", from.Spec.Template.Spec.Containers[i].ImagePullPolicy)
 				to.Spec.Template.Spec.Containers[i].ImagePullPolicy = from.Spec.Template.Spec.Containers[i].ImagePullPolicy
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Command, from.Spec.Template.Spec.Containers[i].Command) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Command changed from", to.Spec.Template.Spec.Containers[i].Command, "To:", from.Spec.Template.Spec.Containers[i].Command)
 				to.Spec.Template.Spec.Containers[i].Command = from.Spec.Template.Spec.Containers[i].Command
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Args, from.Spec.Template.Spec.Containers[i].Args) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Args changed from", to.Spec.Template.Spec.Containers[i].Args, "To:", from.Spec.Template.Spec.Containers[i].Args)
 				to.Spec.Template.Spec.Containers[i].Args = from.Spec.Template.Spec.Containers[i].Args
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Env changed from", to.Spec.Template.Spec.Containers[i].Env, "To:", from.Spec.Template.Spec.Containers[i].Env)
 				to.Spec.Template.Spec.Containers[i].Env = from.Spec.Template.Spec.Containers[i].Env
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Resources, from.Spec.Template.Spec.Containers[i].Resources) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Resources changed from", to.Spec.Template.Spec.Containers[i].Resources, "To:", from.Spec.Template.Spec.Containers[i].Resources)
 				to.Spec.Template.Spec.Containers[i].Resources = from.Spec.Template.Spec.Containers[i].Resources
 			}
 
 			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].VolumeMounts, from.Spec.Template.Spec.Containers[i].VolumeMounts) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].VolumeMounts changed from", to.Spec.Template.Spec.Containers[i].VolumeMounts, "To:", from.Spec.Template.Spec.Containers[i].VolumeMounts)
 				to.Spec.Template.Spec.Containers[i].VolumeMounts = from.Spec.Template.Spec.Containers[i].VolumeMounts
 			}
 		}
