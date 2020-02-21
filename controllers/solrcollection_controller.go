@@ -169,7 +169,7 @@ func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta
 
 		// Request the creation of collection by calling solr
 		collection.Status.InProgressCreation = true
-		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, routerName, routerField, shards, collectionConfigName, namespace)
+		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, maxShardsPerNode, routerName, routerField, shards, collectionConfigName, namespace)
 		if err != nil {
 			collection.Status.InProgressCreation = false
 			return nil, false, err
