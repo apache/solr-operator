@@ -411,7 +411,7 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 - `SolrCloud.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrCloud.spec.customSolrKubeOptions.podOptions` option.  
 This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
 
-- `SolrPrometheusExporter.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrCloud.spec.customKubeOptions.podOptions` option.  
+- `SolrPrometheusExporter.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrPrometheusExporter.spec.customKubeOptions.podOptions` option.  
 This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
 
 #### v0.2.1
