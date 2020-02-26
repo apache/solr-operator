@@ -170,7 +170,7 @@ func TestCloudReconcile(t *testing.T) {
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
 		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName(),
+		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName() + "." + instance.Namespace,
 		"SOLR_JAVA_MEM":  "-Xmx4G",
 		"SOLR_PORT":      "8983",
 		"SOLR_LOG_LEVEL": "DEBUG",

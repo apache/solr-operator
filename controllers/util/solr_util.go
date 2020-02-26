@@ -165,9 +165,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// if an ingressBaseDomain is provided, the node should be addressable outside of the cluster
-	solrHostName := "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName()
+	solrHostName := solrCloud.ExternalNodeUrl("$(POD_HOSTNAME)", ingressBaseDomain, false)
+	solrAdressingPort := 8983
 	if ingressBaseDomain != "" {
-		solrHostName = solrCloud.NodeIngressUrl("$(POD_HOSTNAME)", ingressBaseDomain)
+		solrAdressingPort = 80
 	}
 
 	// Environment Variables
@@ -280,6 +281,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 								},
 							},
 							VolumeMounts: volumeMounts,
+							Args:         []string{"-DhostPort=" + strconv.Itoa(solrAdressingPort)},
 							Env:          envVars,
 							LivenessProbe: &corev1.Probe{
 								InitialDelaySeconds: 20,
@@ -472,7 +474,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 <solr>
   <solrcloud>
     <str name="host">${host:}</str>
-    <int name="hostPort">80</int>
+    <int name="hostPort">${hostPort:80}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
@@ -575,7 +577,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
+				{Name: SolrClientPortName, Port: SolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
 			},
 			Selector:                 selectorLabels,
 			ClusterIP:                corev1.ClusterIPNone,
