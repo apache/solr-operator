@@ -19,7 +19,6 @@ package controllers
 import (
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
@@ -50,60 +49,6 @@ func TestCloudReconcile(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
-
-	extraVars := []corev1.EnvVar{
-		{
-			Name:  "VAR_1",
-			Value: "VAL_1",
-		},
-		{
-			Name: "VAR_2",
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					APIVersion: "v1",
-					FieldPath:  "test.path",
-				},
-			},
-		},
-	}
-	one := int64(1)
-	two := int64(2)
-	podSecurityContext := corev1.PodSecurityContext{
-		RunAsUser:  &one,
-		RunAsGroup: &two,
-	}
-	extraVolumes := []solr.AdditionalVolume{
-		{
-			Name: "vol1",
-			Source: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-			DefaultContainerMount: corev1.VolumeMount{
-				Name:      "ignore",
-				ReadOnly:  false,
-				MountPath: "/test/mount/path",
-				SubPath:   "/sub",
-			},
-		},
-	}
-	affinity := &corev1.Affinity{
-		PodAffinity: &corev1.PodAffinity{
-			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
-				{
-					TopologyKey: "testKey",
-				},
-			},
-			PreferredDuringSchedulingIgnoredDuringExecution: nil,
-		},
-	}
-	resources := corev1.ResourceRequirements{
-		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
-		},
-		Requests: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceStorage: *resource.NewQuantity(1028*1028*1028, resource.BinarySI),
-		},
-	}
 
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
@@ -186,7 +131,9 @@ func TestCloudReconcile(t *testing.T) {
 	assert.Equal(t, resources.Limits, statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits, "Resources.Limits is not the same as the one provided in podOptions")
 	assert.Equal(t, resources.Requests, statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests, "Resources.Requests is not the same as the one provided in podOptions")
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
+	assert.Equal(t, len(extraVolumes)+1, len(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
 	assert.Equal(t, extraVolumes[0].DefaultContainerMount, statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, len(extraVolumes)+2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, statefulSet.Spec.Template.Spec.Volumes[2].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 
@@ -199,65 +146,6 @@ func TestCloudReconcile(t *testing.T) {
 	// Check the ingress
 	expectNoIngress(g, requests, cloudIKey)
 }
-
-var (
-	testPodAnnotations = map[string]string{
-		"testP1": "valueP1",
-		"testP2": "valueP2",
-	}
-	testPodLabels = map[string]string{
-		"testP3": "valueP3",
-		"testP4": "valueP4",
-	}
-	testSSAnnotations = map[string]string{
-		"testSS1": "valueSS1",
-		"testSS2": "valueSS2",
-	}
-	testSSLabels = map[string]string{
-		"testSS3": "valueSS3",
-		"testSS4": "valueSS4",
-	}
-	testIngressLabels = map[string]string{
-		"testI1": "valueI1",
-		"testI2": "valueI2",
-	}
-	testIngressAnnotations = map[string]string{
-		"testI3": "valueI3",
-		"testI4": "valueI4",
-	}
-	testCommonServiceLabels = map[string]string{
-		"testCS1": "valueCS1",
-		"testCS2": "valueCS2",
-	}
-	testCommonServiceAnnotations = map[string]string{
-		"testCS3": "valueCS3",
-		"testCS4": "valueCS4",
-	}
-	testHeadlessServiceLabels = map[string]string{
-		"testHS1": "valueHS1",
-		"testHS2": "valueHS2",
-	}
-	testHeadlessServiceAnnotations = map[string]string{
-		"testHS3": "valueHS3",
-		"testHS4": "valueHS4",
-	}
-	testNodeServiceLabels = map[string]string{
-		"testNS1": "valueNS1",
-		"testNS2": "valueNS2",
-	}
-	testNodeServiceAnnotations = map[string]string{
-		"testNS3": "valueNS3",
-		"testNS4": "valueNS4",
-	}
-	testConfigMapLabels = map[string]string{
-		"testCM1": "valueCM1",
-		"testCM2": "valueCM2",
-	}
-	testConfigMapAnnotations = map[string]string{
-		"testCM3": "valueCM3",
-		"testCM4": "valueCM4",
-	}
-)
 
 func TestCloudReconcileWithIngress(t *testing.T) {
 	ingressBaseDomain := "ing.base.domain"

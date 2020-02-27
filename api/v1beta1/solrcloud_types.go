@@ -204,11 +204,11 @@ type CustomSolrKubeOptions struct {
 	// +optional
 	NodeServiceOptions *ServiceOptions `json:"nodeServiceOptions,omitempty"`
 
-	// ServiceOptions defines the custom options for solrCloud Services.
+	// ServiceOptions defines the custom options for the solrCloud ConfigMap.
 	// +optional
 	ConfigMapOptions *ConfigMapOptions `json:"configMapOptions,omitempty"`
 
-	// IngressOptions defines the custom options for solrCloud Ingress.
+	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
 }

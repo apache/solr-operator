@@ -32,6 +32,17 @@ type StatefulSetOptions struct {
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
+// DeploymentOptions defines custom options for Deployments
+type DeploymentOptions struct {
+	// Annotations to be added for the Deployment.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels to be added for the Deployment.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
 // PodOptions defines the common pod configuration for Pods, including when used
 // in deployments, stateful-sets, etc.
 type PodOptions struct {

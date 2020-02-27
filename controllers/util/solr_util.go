@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"reflect"
 	"sort"
 	"strconv"
 
@@ -74,7 +73,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
-	podAnnotations := make(map[string]string, 0)
+	var podAnnotations map[string]string
 	if nil != customPodOptions {
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
 		podAnnotations = customPodOptions.Annotations
@@ -357,13 +356,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
-	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
+	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
-	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
+	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
 		to.Spec.Selector = from.Spec.Selector
@@ -375,7 +374,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", to.Spec.VolumeClaimTemplates, "To:", from.Spec.VolumeClaimTemplates)
 	}
 	for i, fromVct := range from.Spec.VolumeClaimTemplates {
-		if !reflect.DeepEqual(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
+		if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
 			requireVolumeUpdate = true
 			log.Info("Update required because:", "Spec.VolumeClaimTemplates.Spec changed from", to.Spec.VolumeClaimTemplates[i].Spec, "To:", fromVct.Spec)
 		}
@@ -384,61 +383,61 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
+	if !DeepEqualWithNils(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
+	if !DeepEqualWithNils(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
 		to.Spec.Template.Annotations = from.Spec.Template.Annotations
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Containers changed from", to.Spec.Template.Spec.Containers, "To:", from.Spec.Template.Spec.Containers)
 		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.InitContainers changed from", to.Spec.Template.Spec.InitContainers, "To:", from.Spec.Template.Spec.InitContainers)
 		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
 		log.Info("Update required because:", "Spec.Template.Spec.HostAliases changed from", to.Spec.Template.Spec.HostAliases, "To:", from.Spec.Template.Spec.HostAliases)
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
 		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
 		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[0].Resources, from.Spec.Template.Spec.Containers[0].Resources) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[0].Resources, from.Spec.Template.Spec.Containers[0].Resources) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.Containers[0].Resources changed from", to.Spec.Template.Spec.Containers[0].Resources, "To:", from.Spec.Template.Spec.Containers[0].Resources)
 		to.Spec.Template.Spec.Containers[0].Resources = from.Spec.Template.Spec.Containers[0].Resources
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
 		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
 		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
@@ -452,7 +451,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	annotations := map[string]string{}
+	var annotations map[string]string
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
 	if nil != customOptions {
@@ -500,7 +499,7 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
-	if !reflect.DeepEqual(to.Data, from.Data) {
+	if !DeepEqualWithNils(to.Data, from.Data) {
 		requireUpdate = true
 	}
 	to.Data = from.Data
@@ -511,18 +510,13 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
 // solrCloud: SolrCloud instance
 func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
-	// TODO: Default and Validate these with Webhooks
-	copyLabels := solrCloud.GetLabels()
-	if copyLabels == nil {
-		copyLabels = map[string]string{}
-	}
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["service-type"] = "common"
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
-	annotations := map[string]string{}
+	var annotations map[string]string
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.CommonServiceOptions
 	if nil != customOptions {
@@ -558,7 +552,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
-	annotations := map[string]string{}
+	var annotations map[string]string
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.HeadlessServiceOptions
 	if nil != customOptions {
@@ -598,7 +592,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 	selectorLabels["statefulset.kubernetes.io/pod-name"] = nodeName
 
-	annotations := map[string]string{}
+	var annotations map[string]string
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.NodeServiceOptions
 	if nil != customOptions {
@@ -630,22 +624,22 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
-	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
+	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
 	}
 	to.Spec.Selector = from.Spec.Selector
 
-	if !reflect.DeepEqual(to.Spec.Ports, from.Spec.Ports) {
+	if !DeepEqualWithNils(to.Spec.Ports, from.Spec.Ports) {
 		requireUpdate = true
 	}
 	to.Spec.Ports = from.Spec.Ports
 
-	if !reflect.DeepEqual(to.Spec.ExternalName, from.Spec.ExternalName) {
+	if !DeepEqualWithNils(to.Spec.ExternalName, from.Spec.ExternalName) {
 		requireUpdate = true
 	}
 	to.Spec.ExternalName = from.Spec.ExternalName
 
-	if !reflect.DeepEqual(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
+	if !DeepEqualWithNils(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
 		requireUpdate = true
 	}
 	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
@@ -659,7 +653,7 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 // ingressBaseDomain: string baseDomain of the ingress
 func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	annotations := map[string]string{}
+	var annotations map[string]string
 
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.IngressOptions
 	if nil != customOptions {
@@ -733,7 +727,7 @@ func CopyIngressFields(from, to *extv1.Ingress) bool {
 
 	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
 
-	if !reflect.DeepEqual(to.Spec.Rules, from.Spec.Rules) {
+	if !DeepEqualWithNils(to.Spec.Rules, from.Spec.Rules) {
 		requireUpdate = true
 	}
 	to.Spec.Rules = from.Spec.Rules
