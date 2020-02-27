@@ -49,14 +49,14 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	fsGroup := int64(SolrMetricsPort)
 
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
-	annotations := make(map[string]string, 0)
+	var annotations map[string]string
 	selectorLabels := solrPrometheusExporter.SharedLabels()
 
 	labels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 	selectorLabels["technology"] = solr.SolrPrometheusExporterTechnologyLabel
 
 	podLabels := labels
-	podAnnotations := make(map[string]string, 0)
+	var podAnnotations map[string]string
 
 	customDeploymentOptions := solrPrometheusExporter.Spec.CustomKubeOptions.DeploymentOptions
 	if nil != customDeploymentOptions {
@@ -70,8 +70,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		podAnnotations = customPodOptions.Annotations
 	}
 
-	solrVolumes := make([]corev1.Volume, 0)
-	volumeMounts := make([]corev1.VolumeMount, 0)
+	var solrVolumes []corev1.Volume
+	var volumeMounts []corev1.VolumeMount
 	exporterArgs := []string{
 		"-p", strconv.Itoa(SolrMetricsPort),
 		"-n", strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
@@ -120,7 +120,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Add Custom EnvironmentVariables to the solr container
-	envVars := make([]corev1.EnvVar, 0)
+	var envVars []corev1.EnvVar
 	if nil != customPodOptions {
 		// Add environment variables to container
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -226,7 +226,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 // solrPrometheusExporter: SolrPrometheusExporter instance
 func GenerateMetricsConfigMap(solrPrometheusExporter *solr.SolrPrometheusExporter) *corev1.ConfigMap {
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
-	annotations := make(map[string]string, 0)
+	var annotations map[string]string
 
 	customOptions := solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions
 	if nil != customOptions {

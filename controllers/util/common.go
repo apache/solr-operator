@@ -18,6 +18,7 @@ package util
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"reflect"
 )
 
 // CopyLabelsAndAnnotations copies the labels and annotations from one object to another.
@@ -25,7 +26,7 @@ import (
 // Returns true if there are updates required to the object.
 func CopyLabelsAndAnnotations(from, to *metav1.ObjectMeta) (requireUpdate bool) {
 	if len(to.Labels) == 0 && len(from.Labels) > 0 {
-		to.Labels = map[string]string{}
+		to.Labels = make(map[string]string, len(from.Labels))
 	}
 	for k, v := range from.Labels {
 		if to.Labels[k] != v {
@@ -36,7 +37,7 @@ func CopyLabelsAndAnnotations(from, to *metav1.ObjectMeta) (requireUpdate bool) 
 	}
 
 	if len(to.Annotations) == 0 && len(from.Annotations) > 0 {
-		to.Annotations = map[string]string{}
+		to.Annotations = make(map[string]string, len(from.Annotations))
 	}
 	for k, v := range from.Annotations {
 		if to.Annotations[k] != v {
@@ -65,4 +66,22 @@ func MergeLabelsOrAnnotations(base, additional map[string]string) map[string]str
 		}
 	}
 	return merged
+}
+
+// DeepEqualWithNils returns a deepEquals call that treats nil and zero-length maps, arrays and slices as the same.
+func DeepEqualWithNils(x, y interface{}) bool {
+	if (x == nil) != (y == nil) {
+		// Make sure that x is not the nil value
+		if x == nil {
+			x = y
+		}
+		v := reflect.ValueOf(x)
+		switch v.Kind() {
+		case reflect.Array:
+		case reflect.Map:
+		case reflect.Slice:
+			return v.Len() == 0
+		}
+	}
+	return reflect.DeepEqual(x, y)
 }
