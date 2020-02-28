@@ -699,6 +699,34 @@ func (sc *SolrCloud) NodeIngressUrl(nodeName string, ingressBaseUrl string) stri
 	return fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), ingressBaseUrl)
 }
 
+func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) string {
+	url := fmt.Sprintf("%s.%s.%s", nodeName, sc.HeadlessServiceName(), sc.Namespace)
+	if withPort {
+		url += ":8983"
+	}
+	return url
+}
+
+func (sc *SolrCloud) NodeServiceUrl(nodeName string) string {
+	return fmt.Sprintf("%s.%s", nodeName, sc.Namespace)
+}
+
+func (sc *SolrCloud) InternalNodeUrl(nodeName string, useHeadlessService bool, withPort bool) string {
+	if useHeadlessService {
+		return sc.NodeHeadlessUrl(nodeName, withPort)
+	} else {
+		return sc.NodeServiceUrl(nodeName)
+	}
+}
+
+func (sc *SolrCloud) ExternalNodeUrl(nodeName string, ingressBaseDomain string, withPort bool) string {
+	if ingressBaseDomain == "" {
+		return sc.NodeHeadlessUrl(nodeName, withPort)
+	} else {
+		return sc.NodeIngressUrl(nodeName, ingressBaseDomain)
+	}
+}
+
 func (sc *SolrCloud) SharedLabels() map[string]string {
 	return sc.SharedLabelsWith(map[string]string{})
 }

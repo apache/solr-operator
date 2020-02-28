@@ -322,7 +322,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.NodeName = p.Name
-		nodeStatus.InternalAddress = fmt.Sprintf("http://%s.%s.svc.cluster.local", p.Name, p.Namespace)
+		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.NodeName, IngressBaseUrl == "", true)
 		if IngressBaseUrl != "" {
 			nodeStatus.ExternalAddress = "http://" + solrCloud.NodeIngressUrl(nodeStatus.NodeName, IngressBaseUrl)
 		}
