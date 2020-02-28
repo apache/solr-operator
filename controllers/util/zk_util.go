@@ -17,7 +17,6 @@ limitations under the License.
 package util
 
 import (
-	"reflect"
 	"strings"
 	"time"
 
@@ -91,19 +90,19 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
-	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
+	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
 		log.Info("Updating Zk replicas")
 		requireUpdate = true
 	}
 	to.Spec.Replicas = from.Spec.Replicas
 
-	if !reflect.DeepEqual(to.Spec.Image.Repository, from.Spec.Image.Repository) {
+	if !DeepEqualWithNils(to.Spec.Image.Repository, from.Spec.Image.Repository) {
 		log.Info("Updating Zk image repository")
 		requireUpdate = true
 	}
 	to.Spec.Image.Repository = from.Spec.Image.Repository
 
-	if !reflect.DeepEqual(to.Spec.Image.Tag, from.Spec.Image.Tag) {
+	if !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
 		log.Info("Updating Zk image tag")
 		requireUpdate = true
 	}
@@ -115,25 +114,25 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 			requireUpdate = true
 			to.Spec.Persistence = from.Spec.Persistence
 		} else {
-			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
+			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
 				log.Info("Updating Zk Persistence PVC Requests")
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
 			}
 
-			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
+			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
 				log.Info("Updating Zk Persistence PVC AccessModes")
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes = from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes
 			}
 
-			if !reflect.DeepEqual(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
+			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
 				log.Info("Updating Zk Persistence PVC StorageClassName")
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName = from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName
 			}
 
-			if !reflect.DeepEqual(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
+			if !DeepEqualWithNils(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
 				log.Info("Updating Zk Persistence VolumeReclaimPolicy")
 				requireUpdate = true
 				to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
@@ -147,20 +146,20 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 		to.Spec.Persistence = nil
 	}*/
 
-	if !reflect.DeepEqual(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
+	if !DeepEqualWithNils(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
 		log.Info("Updating Zk pod resources")
 		requireUpdate = true
 	}
 	to.Spec.Pod.Resources = from.Spec.Pod.Resources
 
 	if from.Spec.Pod.Affinity != nil {
-		if !reflect.DeepEqual(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
+		if !DeepEqualWithNils(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
 			log.Info("Updating Zk pod node affinity")
 			log.Info("Update required because:", "Spec.Pod.Affinity.NodeAffinity changed from", to.Spec.Pod.Affinity.NodeAffinity, "To:", from.Spec.Pod.Affinity.NodeAffinity)
 			requireUpdate = true
 		}
 
-		if !reflect.DeepEqual(to.Spec.Pod.Affinity.PodAffinity, from.Spec.Pod.Affinity.PodAffinity) {
+		if !DeepEqualWithNils(to.Spec.Pod.Affinity.PodAffinity, from.Spec.Pod.Affinity.PodAffinity) {
 			log.Info("Updating Zk pod node affinity")
 			log.Info("Update required because:", "Spec.Pod.Affinity.PodAffinity changed from", to.Spec.Pod.Affinity.PodAffinity, "To:", from.Spec.Pod.Affinity.PodAffinity)
 			requireUpdate = true
@@ -214,7 +213,7 @@ func GenerateEtcdCluster(solrCloud *solr.SolrCloud, etcdSpec solr.EtcdSpec, busy
 func CopyEtcdClusterFields(from, to *etcd.EtcdCluster) bool {
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
-	if !reflect.DeepEqual(to.Spec, from.Spec) {
+	if !DeepEqualWithNils(to.Spec, from.Spec) {
 		requireUpdate = true
 	}
 	to.Spec = from.Spec
@@ -279,71 +278,107 @@ func GenerateZetcdDeployment(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *ap
 func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
-	if !reflect.DeepEqual(to.Spec.Replicas, from.Spec.Replicas) {
+	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
-	if !reflect.DeepEqual(to.Spec.Selector, from.Spec.Selector) {
+	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Labels, from.Spec.Template.Labels) {
+	if !DeepEqualWithNils(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
 		to.Spec.Template.Labels = from.Spec.Template.Labels
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
+	if !DeepEqualWithNils(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
 		requireUpdate = true
-		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
+		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
+		to.Spec.Template.Annotations = from.Spec.Template.Annotations
 	}
 
-	if !reflect.DeepEqual(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
 		requireUpdate = true
-		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
+		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
+		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
 	}
 
 	if len(to.Spec.Template.Spec.Containers) != len(from.Spec.Template.Spec.Containers) {
 		requireUpdate = true
 		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
-	} else if !reflect.DeepEqual(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
+	} else if !DeepEqualWithNils(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
 		for i := 0; i < len(to.Spec.Template.Spec.Containers); i++ {
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Name, from.Spec.Template.Spec.Containers[i].Name) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Name, from.Spec.Template.Spec.Containers[i].Name) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Name changed from", to.Spec.Template.Spec.Containers[i].Name, "To:", from.Spec.Template.Spec.Containers[i].Name)
 				to.Spec.Template.Spec.Containers[i].Name = from.Spec.Template.Spec.Containers[i].Name
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Image, from.Spec.Template.Spec.Containers[i].Image) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Image, from.Spec.Template.Spec.Containers[i].Image) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Image changed from", to.Spec.Template.Spec.Containers[i].Image, "To:", from.Spec.Template.Spec.Containers[i].Image)
 				to.Spec.Template.Spec.Containers[i].Image = from.Spec.Template.Spec.Containers[i].Image
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].ImagePullPolicy, from.Spec.Template.Spec.Containers[i].ImagePullPolicy) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].ImagePullPolicy, from.Spec.Template.Spec.Containers[i].ImagePullPolicy) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].ImagePullPolicy changed from", to.Spec.Template.Spec.Containers[i].ImagePullPolicy, "To:", from.Spec.Template.Spec.Containers[i].ImagePullPolicy)
 				to.Spec.Template.Spec.Containers[i].ImagePullPolicy = from.Spec.Template.Spec.Containers[i].ImagePullPolicy
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Command, from.Spec.Template.Spec.Containers[i].Command) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Command, from.Spec.Template.Spec.Containers[i].Command) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Command changed from", to.Spec.Template.Spec.Containers[i].Command, "To:", from.Spec.Template.Spec.Containers[i].Command)
 				to.Spec.Template.Spec.Containers[i].Command = from.Spec.Template.Spec.Containers[i].Command
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Args, from.Spec.Template.Spec.Containers[i].Args) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Args, from.Spec.Template.Spec.Containers[i].Args) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Args changed from", to.Spec.Template.Spec.Containers[i].Args, "To:", from.Spec.Template.Spec.Containers[i].Args)
 				to.Spec.Template.Spec.Containers[i].Args = from.Spec.Template.Spec.Containers[i].Args
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Env changed from", to.Spec.Template.Spec.Containers[i].Env, "To:", from.Spec.Template.Spec.Containers[i].Env)
 				to.Spec.Template.Spec.Containers[i].Env = from.Spec.Template.Spec.Containers[i].Env
 			}
 
-			if !reflect.DeepEqual(to.Spec.Template.Spec.Containers[i].Resources, from.Spec.Template.Spec.Containers[i].Resources) {
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Resources, from.Spec.Template.Spec.Containers[i].Resources) {
 				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].Resources changed from", to.Spec.Template.Spec.Containers[i].Resources, "To:", from.Spec.Template.Spec.Containers[i].Resources)
 				to.Spec.Template.Spec.Containers[i].Resources = from.Spec.Template.Spec.Containers[i].Resources
 			}
+
+			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].VolumeMounts, from.Spec.Template.Spec.Containers[i].VolumeMounts) {
+				requireUpdate = true
+				log.Info("Update required because:", "Spec.Template.Spec.Containers["+string(i)+")].VolumeMounts changed from", to.Spec.Template.Spec.Containers[i].VolumeMounts, "To:", from.Spec.Template.Spec.Containers[i].VolumeMounts)
+				to.Spec.Template.Spec.Containers[i].VolumeMounts = from.Spec.Template.Spec.Containers[i].VolumeMounts
+			}
 		}
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
+		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
+		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
+		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
 	}
 
 	return requireUpdate
