@@ -552,7 +552,10 @@ type SolrCloudStatus struct {
 // and internal and external addresses
 type SolrNodeStatus struct {
 	// The name of the pod running the node
-	NodeName string `json:"name"`
+	Name string `json:"name"`
+
+	// The name of the Kubernetes Node which the pod is running on
+	NodeName string `json:"nodeName"`
 
 	// An address the node can be connected to from within the Kube cluster
 	InternalAddress string `json:"internalAddress"`
