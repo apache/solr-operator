@@ -127,7 +127,7 @@ service/example-solrcloud-1                ClusterIP   ##.###.##.#      <none>  
 service/example-solrcloud-2                ClusterIP   ##.###.###.##    <none>        80/TCP                47h
 service/example-solrcloud-3                ClusterIP   ##.###.##.###    <none>        80/TCP                47h
 service/example-solrcloud-common           ClusterIP   ##.###.###.###   <none>        80/TCP                47h
-service/example-solrcloud-headless         ClusterIP   None             <none>        80/TCP                47h
+service/example-solrcloud-headless         ClusterIP   None             <none>        8983/TCP              47h
 service/example-solrcloud-zk-client        ClusterIP   ##.###.###.###   <none>        21210/TCP             49d
 service/example-solrcloud-zk-headless      ClusterIP   None             <none>        22210/TCP,23210/TCP   49d
 
@@ -407,8 +407,14 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/mast
 
 ## Version Compatibility & Upgrade Notes
 
+#### v0.2.3
+- If you do not use an ingress with the Solr Operator, the Solr Hostname and Port will change when upgrading to this version. This is to fix an outstanding bug. Because of the headless service port change, you will likely see an outage for inter-node communication until all pods have been restarted.
+
 #### v0.2.2
 - `SolrCloud.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrCloud.spec.customSolrKubeOptions.podOptions` option.  
+This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
+
+- `SolrPrometheusExporter.spec.solrPodPolicy` has been **DEPRECATED** in favor of the `SolrPrometheusExporter.spec.customKubeOptions.podOptions` option.  
 This option is backwards compatible, but will be removed in a future version (`v0.3.0`).
 
 #### v0.2.1

@@ -1260,8 +1260,8 @@ spec:
                       type: object
                   type: object
                 configMapOptions:
-                  description: ServiceOptions defines the custom options for solrCloud
-                    Services.
+                  description: ServiceOptions defines the custom options for the solrCloud
+                    ConfigMap.
                   properties:
                     annotations:
                       additionalProperties:
@@ -1290,7 +1290,7 @@ spec:
                       type: object
                   type: object
                 ingressOptions:
-                  description: IngressOptions defines the custom options for solrCloud
+                  description: IngressOptions defines the custom options for the solrCloud
                     Ingress.
                   properties:
                     annotations:
@@ -7078,6 +7078,10 @@ spec:
                   name:
                     description: The name of the pod running the node
                     type: string
+                  nodeName:
+                    description: The name of the Kubernetes Node which the pod is
+                      running on
+                    type: string
                   ready:
                     description: Is the node up and running
                     type: boolean
@@ -7087,6 +7091,7 @@ spec:
                 required:
                 - internalAddress
                 - name
+                - nodeName
                 - ready
                 - version
                 type: object

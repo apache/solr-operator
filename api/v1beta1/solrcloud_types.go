@@ -204,11 +204,11 @@ type CustomSolrKubeOptions struct {
 	// +optional
 	NodeServiceOptions *ServiceOptions `json:"nodeServiceOptions,omitempty"`
 
-	// ServiceOptions defines the custom options for solrCloud Services.
+	// ServiceOptions defines the custom options for the solrCloud ConfigMap.
 	// +optional
 	ConfigMapOptions *ConfigMapOptions `json:"configMapOptions,omitempty"`
 
-	// IngressOptions defines the custom options for solrCloud Ingress.
+	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
 }
@@ -552,7 +552,10 @@ type SolrCloudStatus struct {
 // and internal and external addresses
 type SolrNodeStatus struct {
 	// The name of the pod running the node
-	NodeName string `json:"name"`
+	Name string `json:"name"`
+
+	// The name of the Kubernetes Node which the pod is running on
+	NodeName string `json:"nodeName"`
 
 	// An address the node can be connected to from within the Kube cluster
 	InternalAddress string `json:"internalAddress"`
@@ -697,6 +700,34 @@ func (sc *SolrCloud) NodeIngressPrefix(nodeName string) string {
 
 func (sc *SolrCloud) NodeIngressUrl(nodeName string, ingressBaseUrl string) string {
 	return fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), ingressBaseUrl)
+}
+
+func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) string {
+	url := fmt.Sprintf("%s.%s.%s", nodeName, sc.HeadlessServiceName(), sc.Namespace)
+	if withPort {
+		url += ":8983"
+	}
+	return url
+}
+
+func (sc *SolrCloud) NodeServiceUrl(nodeName string) string {
+	return fmt.Sprintf("%s.%s", nodeName, sc.Namespace)
+}
+
+func (sc *SolrCloud) InternalNodeUrl(nodeName string, useHeadlessService bool, withPort bool) string {
+	if useHeadlessService {
+		return sc.NodeHeadlessUrl(nodeName, withPort)
+	} else {
+		return sc.NodeServiceUrl(nodeName)
+	}
+}
+
+func (sc *SolrCloud) ExternalNodeUrl(nodeName string, ingressBaseDomain string, withPort bool) string {
+	if ingressBaseDomain == "" {
+		return sc.NodeHeadlessUrl(nodeName, withPort)
+	} else {
+		return sc.NodeIngressUrl(nodeName, ingressBaseDomain)
+	}
 }
 
 func (sc *SolrCloud) SharedLabels() map[string]string {

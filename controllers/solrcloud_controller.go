@@ -321,10 +321,11 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
-		nodeStatus.NodeName = p.Name
-		nodeStatus.InternalAddress = fmt.Sprintf("http://%s.%s.svc.cluster.local", p.Name, p.Namespace)
+		nodeStatus.Name = p.Name
+		nodeStatus.NodeName = p.Spec.NodeName
+		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.NodeName, IngressBaseUrl == "", true)
 		if IngressBaseUrl != "" {
-			nodeStatus.ExternalAddress = "http://" + solrCloud.NodeIngressUrl(nodeStatus.NodeName, IngressBaseUrl)
+			nodeStatus.ExternalAddress = "http://" + solrCloud.NodeIngressUrl(nodeStatus.Name, IngressBaseUrl)
 		}
 		ready := false
 		if len(p.Status.ContainerStatuses) > 0 {
@@ -341,7 +342,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		}
 		nodeStatus.Ready = ready
 
-		nodeStatusMap[nodeStatus.NodeName] = nodeStatus
+		nodeStatusMap[nodeStatus.Name] = nodeStatus
 
 		// Get Volumes for backup/restore
 		if solrCloud.Spec.BackupRestoreVolume != nil {

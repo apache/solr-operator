@@ -25,6 +25,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -139,14 +140,13 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 		Should(gomega.Succeed())
 
 	// Verify the deployment Specs
-	assert.Equal(t, deploy.Spec.Template.Labels, deploy.Spec.Selector.MatchLabels, "Deployment has different Pod template labels and selector labels.")
+	testMapContainsOther(t, "Deployment pod template selector", deploy.Spec.Template.Labels, deploy.Spec.Selector.MatchLabels)
+	assert.GreaterOrEqual(t, len(deploy.Spec.Selector.MatchLabels), 1, "Deployment pod template selector must have at least 1 label")
 
 	if configMapName != "" {
-		if assert.Equal(t, 1, len(deploy.Spec.Template.Spec.Volumes), "Deployment should have 1 volume, the configMap. More or less were found.") {
-			assert.Equal(t, configMapName, deploy.Spec.Template.Spec.Volumes[0].ConfigMap.Name, "Deployment should have 1 volume, the configMap. More or less were found.")
+		if assert.LessOrEqual(t, 1, len(deploy.Spec.Template.Spec.Volumes), "Deployment should have at least 1 volume, the configMap. Less were found.") {
+			assert.Equal(t, configMapName, deploy.Spec.Template.Spec.Volumes[0].ConfigMap.Name, "Deployment configMap volume has the wrong name.")
 		}
-	} else {
-		assert.Equal(t, 0, len(deploy.Spec.Template.Spec.Volumes), "Deployment should have no volumes, since there is no configMap. Volumes were found.")
 	}
 
 	// Delete the Deployment and expect Reconcile to be called for Deployment deletion
@@ -221,3 +221,131 @@ func cleanupTestObjects(g *gomega.GomegaWithT, namespace string, deleteOpts []cl
 		g.Eventually(func() error { return testClient.DeleteAllOf(context.TODO(), obj, deleteOpts...) }, timeout).Should(gomega.Succeed())
 	}
 }
+
+var (
+	testPodAnnotations = map[string]string{
+		"testP1": "valueP1",
+		"testP2": "valueP2",
+	}
+	testPodLabels = map[string]string{
+		"testP3": "valueP3",
+		"testP4": "valueP4",
+	}
+	testSSAnnotations = map[string]string{
+		"testSS1": "valueSS1",
+		"testSS2": "valueSS2",
+	}
+	testSSLabels = map[string]string{
+		"testSS3": "valueSS3",
+		"testSS4": "valueSS4",
+	}
+	testIngressLabels = map[string]string{
+		"testI1": "valueI1",
+		"testI2": "valueI2",
+	}
+	testIngressAnnotations = map[string]string{
+		"testI3": "valueI3",
+		"testI4": "valueI4",
+	}
+	testCommonServiceLabels = map[string]string{
+		"testCS1": "valueCS1",
+		"testCS2": "valueCS2",
+	}
+	testCommonServiceAnnotations = map[string]string{
+		"testCS3": "valueCS3",
+		"testCS4": "valueCS4",
+	}
+	testHeadlessServiceLabels = map[string]string{
+		"testHS1": "valueHS1",
+		"testHS2": "valueHS2",
+	}
+	testHeadlessServiceAnnotations = map[string]string{
+		"testHS3": "valueHS3",
+		"testHS4": "valueHS4",
+	}
+	testNodeServiceLabels = map[string]string{
+		"testNS1": "valueNS1",
+		"testNS2": "valueNS2",
+	}
+	testNodeServiceAnnotations = map[string]string{
+		"testNS3": "valueNS3",
+		"testNS4": "valueNS4",
+	}
+	testConfigMapLabels = map[string]string{
+		"testCM1": "valueCM1",
+		"testCM2": "valueCM2",
+	}
+	testConfigMapAnnotations = map[string]string{
+		"testCM3": "valueCM3",
+		"testCM4": "valueCM4",
+	}
+	testDeploymentAnnotations = map[string]string{
+		"testD1": "valueD1",
+		"testD2": "valueD2",
+	}
+	testDeploymentLabels = map[string]string{
+		"testD3": "valueD3",
+		"testD4": "valueD4",
+	}
+	testMetricsServiceLabels = map[string]string{
+		"testS1": "valueS1",
+		"testS2": "valueS2",
+	}
+	testMetricsServiceAnnotations = map[string]string{
+		"testS3": "valueS3",
+		"testS4": "valueS4",
+	}
+	extraVars = []corev1.EnvVar{
+		{
+			Name:  "VAR_1",
+			Value: "VAL_1",
+		},
+		{
+			Name: "VAR_2",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					APIVersion: "v1",
+					FieldPath:  "metadata.name",
+				},
+			},
+		},
+	}
+	one                = int64(1)
+	two                = int64(2)
+	podSecurityContext = corev1.PodSecurityContext{
+		RunAsUser:  &one,
+		RunAsGroup: &two,
+	}
+	extraVolumes = []solr.AdditionalVolume{
+		{
+			Name: "vol1",
+			Source: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+			DefaultContainerMount: corev1.VolumeMount{
+				Name:      "ignore",
+				ReadOnly:  false,
+				MountPath: "/test/mount/path",
+				SubPath:   "sub/",
+			},
+		},
+	}
+	affinity = &corev1.Affinity{
+		PodAffinity: &corev1.PodAffinity{
+			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
+				{
+					TopologyKey: "testKey",
+				},
+			},
+			PreferredDuringSchedulingIgnoredDuringExecution: nil,
+		},
+	}
+	resources = corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+		},
+	}
+)
