@@ -40,6 +40,9 @@ const (
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
 
+	DefaultJqImageRepo    = "gempesaw/curl-jq"
+	DefaultJqImageVersion = "latest"
+
 	DefaultZkReplicas            = int32(3)
 	DefaultZkStorage             = "5Gi"
 	DefaultZkRepo                = "emccorp/zookeeper"
@@ -102,6 +105,9 @@ type SolrCloudSpec struct {
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// +optional
+	JqImage *ContainerImage `json:"jqImage,omitempty"`
 
 	// +optional
 	SolrJavaMem string `json:"solrJavaMem,omitempty"`
@@ -178,6 +184,12 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.BusyBoxImage = &c
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
+
+	if spec.JqImage == nil {
+		c := ContainerImage{}
+		spec.JqImage = &c
+	}
+	changed = spec.JqImage.withDefaults(DefaultJqImageRepo, DefaultJqImageVersion, DefaultPullPolicy) || changed
 
 	return changed
 }
