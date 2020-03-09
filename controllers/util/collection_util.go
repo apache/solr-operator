@@ -43,7 +43,7 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 		queryParams.Add("router.name", routerName)
 		queryParams.Add("numShards", numShardsParameter)
 	} else {
-		log.Info("router.name must be either compositeId or implicit. Provided: ", routerName)
+		log.Info("router.name must be either compositeId or implicit. Provided: ", "router.name", routerName)
 	}
 
 	resp := &SolrAsyncResponse{}
