@@ -42,8 +42,8 @@ const (
 
 	DefaultZkReplicas            = int32(3)
 	DefaultZkStorage             = "5Gi"
-	DefaultZkRepo                = "emccorp/zookeeper"
-	DefaultZkVersion             = "3.5.4-beta-operator"
+	DefaultZkRepo                = "pravega/zookeeper"
+	DefaultZkVersion             = "0.2.5"
 	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
 	DefaultEtcdReplicas = 3
