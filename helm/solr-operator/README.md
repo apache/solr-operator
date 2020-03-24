@@ -1,37 +1,52 @@
 solr-operator
 =============
-A Helm chart for [Solr Operator]
+A Helm chart for the Solr Operator.
 
 ## Installing the Chart
 
-To install the chart with the release name `my-release`:
+To install the chart with the release name `test`:
 
 ```console
-$ helm install --name my-release
+$ helm install test .
 ```
 
-The command deploys envoy on the Kubernetes cluster with the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
+The command deploys the solr-operator on the Kubernetes cluster with the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
 
-## About CRDs
+**NOTE**: Since by default the `useZkOperator` option is set to `True`, you must have already installed the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) in your kubernetes cluster. A helm chart is [also available](https://github.com/pravega/zookeeper-operator/blob/master/charts/zookeeper-operator/Chart.yaml) for it.
 
-Helm 2:
+## Helm Version Differences
+
+### Helm 2
 
 If you are using Helm 2, CRDs are installed using the crd-install hook. Prior to installing, you'll need to uncomment the last two lines in [kustomization.yaml](../../config/crd/kustomization.yaml), and run `make manifests`
 
-Helm 3:
+You will also need to update the install command to use the name flag, as shown below.
+
+```console
+$ helm install --name test .
+```
+
+### Helm 3
 
 Helm 3 automatically runs CRDs in the /crds directory, no further action is needed.
 
 ## Uninstalling the Chart
 
-To uninstall/delete the `my-release` deployment:
+To uninstall/delete the `solr-operator` deployment:
+
+### Helm 3
 
 ```console
-$ helm delete my-release
+$ helm uninstall test
+```
+
+### Helm 2
+
+```console
+$ helm delete test
 ```
 
 The command removes all the Kubernetes components associated with the chart and deletes the release.
-
 
 
 ## Chart Values
