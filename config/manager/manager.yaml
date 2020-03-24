@@ -20,7 +20,6 @@ spec:
       - args:
         - -zk-operator=true
         - -etcd-operator=false
-        - -ingress-base-domain=ing.local.domain
         image: bloomberg/solr-operator:latest
         imagePullPolicy: IfNotPresent
         name: solr-operator

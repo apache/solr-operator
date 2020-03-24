@@ -35,6 +35,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+func emptyRequests(requests chan reconcile.Request) {
+	for len(requests) > 0 {
+		<-requests
+	}
+}
+
 func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) *appsv1.StatefulSet {
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
@@ -83,6 +89,12 @@ func expectService(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.
 	return service
 }
 
+func expectNoService(g *gomega.GomegaWithT, serviceKey types.NamespacedName, message string) {
+	service := &corev1.Service{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
+		Should(gomega.MatchError("Service \""+serviceKey.Name+"\" not found"), message)
+}
+
 func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, ingressKey types.NamespacedName) *extv1.Ingress {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
@@ -101,7 +113,7 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	return ingress
 }
 
-func expectNoIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, ingressKey types.NamespacedName) {
+func expectNoIngress(g *gomega.GomegaWithT, ingressKey types.NamespacedName) {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.MatchError("Ingress.extensions \"" + ingressKey.Name + "\" not found"))
@@ -130,7 +142,7 @@ func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcil
 	return configMap
 }
 
-func expectNoConfigMap(g *gomega.GomegaWithT, requests chan reconcile.Request, configMapKey types.NamespacedName) {
+func expectNoConfigMap(g *gomega.GomegaWithT, configMapKey types.NamespacedName) {
 	configMap := &corev1.ConfigMap{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
 		Should(gomega.MatchError("ConfigMap \"" + configMapKey.Name + "\" not found"))
@@ -229,6 +241,12 @@ func cleanupTestObjects(g *gomega.GomegaWithT, namespace string, deleteOpts []cl
 }
 
 var (
+	testKubeDomain        = "kube.domain.com"
+	testDomain            = "test.domain.com"
+	testAdditionalDomains = []string{
+		"test1.domain.com",
+		"test2.domain.com",
+	}
 	testPodAnnotations = map[string]string{
 		"testP1": "valueP1",
 		"testP2": "valueP2",

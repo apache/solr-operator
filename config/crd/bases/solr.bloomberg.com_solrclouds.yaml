@@ -3766,6 +3766,96 @@ spec:
               description: The number of solr nodes to run
               format: int32
               type: integer
+            solrAddressability:
+              description: Customize how Solr is addressed both internally and externally
+                in Kubernetes.
+              properties:
+                commonServicePort:
+                  description: CommonServicePort defines the port to have the common
+                    Solr service listen on. Defaults to 80
+                  type: integer
+                external:
+                  description: External defines the way in which this SolrCloud nodes
+                    should be made addressable externally, from outside the Kubernetes
+                    cluster. If none is provided, the Solr Cloud will not be made
+                    addressable externally.
+                  properties:
+                    additionalDomains:
+                      description: Provide additional domainNames that the Ingress
+                        or ExternalDNS should listen on. This option is ignored with
+                        the LoadBalancer method.
+                      items:
+                        type: string
+                      type: array
+                    domainName:
+                      description: "Override the domainName provided as startup parameters
+                        to the operator, used by ingresses and externalDNS. The common
+                        and/or node services will be addressable by unique names under
+                        the given domain. e.g. default-example-solrcloud.given.domain.name.com
+                        \n This options will be required for the Ingress and ExternalDNS
+                        methods once the ingressBaseDomain startup parameter is removed.
+                        \n For the LoadBalancer method, this field is optional and
+                        will only be used when useExternalAddress=true. If used with
+                        the LoadBalancer method, you will need DNS routing to the
+                        LoadBalancer IP address through the url template given above."
+                      type: string
+                    hideCommon:
+                      description: Do not expose the common Solr service externally.
+                        This affects a single service. Defaults to false.
+                      type: boolean
+                    hideNodes:
+                      description: Do not expose each of the Solr Node services externally.
+                        The number of services this affects could range from 1 (a
+                        headless service for ExternalDNS) to the number of Solr pods
+                        your cloud contains (individual node services for Ingress/LoadBalancer).
+                        Defaults to false.
+                      type: boolean
+                    method:
+                      description: The way in which this SolrCloud's service(s) should
+                        be made addressable externally.
+                      enum:
+                      - Ingress
+                      - ExternalDNS
+                      type: string
+                    nodePortOverride:
+                      description: "NodePortOverride defines the port to have all
+                        Solr node service(s) listen on and advertise itself as if
+                        advertising through an Ingress or LoadBalancer. This overrides
+                        the default usage of the podPort. \n This is option is only
+                        used when HideNodes=false, otherwise the the port each Solr
+                        Node will advertise itself with the podPort. This option is
+                        also unavailable with the ExternalDNS method. \n If using
+                        method=Ingress, your ingress controller is required to listen
+                        on this port. If your ingress controller is not listening
+                        on the podPort, then this option is required for solr to be
+                        addressable via an Ingress. \n Defaults to 80 if HideNodes=false
+                        and method=Ingress, otherwise this is optional."
+                      type: integer
+                    useExternalAddress:
+                      description: "Use the external address to advertise the SolrNode,
+                        defaults to false. \n If false, the external address will
+                        be available, however Solr (and clients using the CloudSolrClient
+                        in SolrJ) will only be aware of the internal URLs. If true,
+                        Solr will startup with the hostname of the external address.
+                        \n NOTE: This option cannot be true when hideNodes is set
+                        to true. So it will be auto-set to false if that is the case.
+                        \n Deprecation warning: When an ingress-base-domain is passed
+                        in to the operator, this value defaults to true."
+                      type: boolean
+                  required:
+                  - method
+                  type: object
+                kubeDomain:
+                  description: KubeDomain allows for the specification of an override
+                    of the default "cluster.local" Kubernetes cluster domain. Only
+                    use this option if the Kubernetes cluster has been setup with
+                    a custom domain.
+                  type: string
+                podPort:
+                  description: PodPort defines the port to have the Solr Pod listen
+                    on. Defaults to 8983
+                  type: integer
+              type: object
             solrGCTune:
               description: Set GC Tuning configuration through GC_TUNE environment
                 variable

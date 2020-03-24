@@ -120,9 +120,9 @@ The command removes all the Kubernetes components associated with the chart and 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
-| ingressBaseDomain | string | `""` | If you have a base domain that points to your ingress controllers for this kubernetes cluster, you can provide this. SolrClouds will then begin to use ingresses that utilize this base domain. E.g. `solrcloud-test.<base.domain>` |
 | useZkOperator | string | `"true"` | This option enables the use of provided Zookeeper instances for SolrClouds |
 | useEtcdOperator | string | `"false"` | This option enables the use of provided Zetcd instances for SolrClouds |
+| ingressBaseDomain | string | `""` | **NOTE: This feature is deprecated and will be removed in `v0.3.0`. The option is now provided within the SolrCloud CRD.** If you have a base domain that points to your ingress controllers for this kubernetes cluster, you can provide this. SolrClouds will then begin to use ingresses that utilize this base domain. E.g. `solrcloud-test.<base.domain>` |
 
 ### Running the Solr Operator
 
