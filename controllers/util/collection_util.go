@@ -103,7 +103,7 @@ func DeleteCollection(cloud string, collection string, namespace string) (succes
 			success = true
 		}
 	} else {
-		log.Error(err, "Error deleting collection", "namespace", namespace, "cloud", cloud, "collection")
+		log.Error(err, "Error deleting collection", "namespace", namespace, "cloud", cloud, "collection", collection)
 	}
 
 	return success, err
