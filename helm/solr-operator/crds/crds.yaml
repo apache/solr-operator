@@ -8768,6 +8768,9 @@ spec:
             routerName:
               description: The router name that will be used. The router defines how
                 documents will be distributed
+              enum:
+              - implicit
+              - compositeId
               type: string
             shards:
               description: A comma separated list of shard names, e.g., shard-x,shard-y,shard-z.
