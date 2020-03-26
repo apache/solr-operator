@@ -33,7 +33,7 @@ type SolrCollectionSpec struct {
 
 	// The router name that will be used. The router defines how documents will be distributed
 	// +optional
-	RouterName string `json:"routerName,omitempty"`
+	RouterName CollectionRouterName `json:"routerName,omitempty"`
 
 	// If this parameter is specified, the router will look at the value of the field in an input document
 	// to compute the hash and identify a shard instead of looking at the uniqueKey field.
@@ -61,6 +61,18 @@ type SolrCollectionSpec struct {
 	// +optional
 	AutoAddReplicas bool `json:"autoAddReplicas,omitempty"`
 }
+
+// CollectionRouterName is a string enumeration type that enumerates the ways that documents can be routed for a collection.
+// +kubebuilder:validation:Enum=implicit;compositeId
+type CollectionRouterName string
+
+const (
+	// The Implicit router
+	ImplicitRouter CollectionRouterName = "implicit"
+
+	// The CompositeId router
+	CompositeIdRouter CollectionRouterName = "compositeId"
+)
 
 // SolrCollectionStatus defines the observed state of SolrCollection
 type SolrCollectionStatus struct {

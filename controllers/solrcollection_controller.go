@@ -135,7 +135,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return requeueOrNot, nil
 }
 
-func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName string, routerField string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
+func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName solrv1beta1.CollectionRouterName, routerField string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
 	// Get the solrCloud that this collection is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
 	if err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud); err != nil {
