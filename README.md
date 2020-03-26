@@ -40,6 +40,12 @@ Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
 $ kubectl apply -f example/dependencies
 ```
 
+Install necessary dependencies for building and deploying the operator.
+```bash
+$ export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
+$ ./hack/install_dependencies.sh
+```
+
 Install the Solr CRDs & Operator
 
 ```bash
