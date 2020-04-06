@@ -1,21 +1,26 @@
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrCloud
 metadata:
-  name: example
+  name: example-with-tolerations
 spec:
   dataPvcSpec:
     resources:
       requests:
         storage: "5Gi"
-  backupRestoreVolume:
-    persistentVolumeClaim:
-      claimName: "pvc-test"
-  replicas: 3
+  replicas: 1
   solrImage:
     tag: 8.2.0
   solrJavaMem: "-Xms1g -Xmx3g"
   customSolrKubeOptions:
     podOptions:
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+        beta.kubernetes.io/arch: amd64
+      tolerations:
+        - effect: NoSchedule
+          key: node-restriction.kubernetes.io/workloads
+          operator: Equal
+          value: solrclouds
       resources:
         limits:
           memory: "1G"
@@ -24,7 +29,6 @@ spec:
           memory: "156Mi"
   zookeeperRef:
     provided:
-      chroot: "/this/will/be/auto/created"
       zookeeper:
         persistence:
           spec:
@@ -40,5 +44,3 @@ spec:
             requests:
               cpu: "65m"
               memory: "156Mi"
-  solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
-  solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"

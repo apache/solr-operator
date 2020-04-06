@@ -217,12 +217,20 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if customPodOptions.PodSecurityContext != nil {
 			deployment.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
+
+		if customPodOptions.Tolerations != nil {
+			deployment.Spec.Template.Spec.Tolerations = customPodOptions.Tolerations
+		}
+
+		if customPodOptions.NodeSelector != nil {
+			deployment.Spec.Template.Spec.NodeSelector = customPodOptions.NodeSelector
+		}
 	}
 
 	return deployment
 }
 
-// GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the Solr Prometheus Exporter instance solr-prometheus-exporter.xml
+// GenerateMetricsConfigMap returns a new corev1.ConfigMap pointer generated for the Solr Prometheus Exporter instance solr-prometheus-exporter.xml
 // solrPrometheusExporter: SolrPrometheusExporter instance
 func GenerateMetricsConfigMap(solrPrometheusExporter *solr.SolrPrometheusExporter) *corev1.ConfigMap {
 	labels := solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.GetLabels())
@@ -293,7 +301,6 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 
 // CreateMetricsIngressRule returns a new Ingress Rule generated for the solr metrics endpoint
 // This is not currently used, as an ingress is not created for the metrics endpoint.
-
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
 // ingressBaseDomain: string base domain for the ingress controller
