@@ -188,6 +188,8 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+
+	// Test tolerations and node selectors
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
 	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
