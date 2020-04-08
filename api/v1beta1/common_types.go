@@ -17,8 +17,9 @@ limitations under the License.
 package v1beta1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	"strings"
+
+	corev1 "k8s.io/api/core/v1"
 )
 
 // StatefulSetOptions defines custom options for StatefulSets
@@ -74,6 +75,14 @@ type PodOptions struct {
 	// Labels to be added for pods.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// Tolerations to be added for the StatefulSet.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// Node Selector to be added for the StatefulSet.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

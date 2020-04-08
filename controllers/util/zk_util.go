@@ -382,6 +382,18 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
 	}
 
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Tolerations, from.Spec.Template.Spec.Tolerations) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Tolerations canged from", to.Spec.Template.Spec.Tolerations, "To:", from.Spec.Template.Spec.Tolerations)
+		to.Spec.Template.Spec.Tolerations = from.Spec.Template.Spec.Tolerations
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.NodeSelector, from.Spec.Template.Spec.NodeSelector) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.NodeSelector canged from", to.Spec.Template.Spec.NodeSelector, "To:", from.Spec.Template.Spec.NodeSelector)
+		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
+	}
+
 	return requireUpdate
 }
 

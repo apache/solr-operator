@@ -17,9 +17,10 @@ limitations under the License.
 package controllers
 
 import (
+	"testing"
+
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
-	"testing"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
@@ -171,8 +172,10 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations: testPodAnnotations,
-					Labels:      testPodLabels,
+					Annotations:  testPodAnnotations,
+					Labels:       testPodLabels,
+					Tolerations:  testTolerations,
+					NodeSelector: testNodeSelectors,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations: testSSAnnotations,
@@ -257,6 +260,8 @@ func TestCloudReconcileWithIngress(t *testing.T) {
 	testMapsEqual(t, "statefulSet annotations", util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations), statefulSet.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
 	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
+	testMapsEqual(t, "pod node selectors", testNodeSelectors, statefulSet.Spec.Template.Spec.NodeSelector)
+	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
