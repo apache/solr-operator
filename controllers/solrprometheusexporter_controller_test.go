@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	"testing"
+
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/onsi/gomega"
@@ -28,7 +30,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"testing"
 )
 
 var _ reconcile.Reconciler = &SolrPrometheusExporterReconciler{}
@@ -121,9 +122,11 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 			Config: testExporterConfig,
 			CustomKubeOptions: solr.CustomExporterKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations: testPodAnnotations,
-					Labels:      testPodLabels,
-					Volumes:     extraVolumes,
+					Annotations:  testPodAnnotations,
+					Labels:       testPodLabels,
+					Volumes:      extraVolumes,
+					Tolerations:  testTolerationsPromExporter,
+					NodeSelector: testNodeSelectors,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{
 					Annotations: testDeploymentAnnotations,
@@ -161,6 +164,8 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 		mgrStopped.Wait()
 	}()
 
+	cleanupTest(g, instance.Namespace)
+
 	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
 	err = testClient.Create(context.TODO(), instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
@@ -183,6 +188,10 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+
+	// Test tolerations and node selectors
+	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
+	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
 	// Other Pod Options
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name

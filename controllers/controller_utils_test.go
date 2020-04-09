@@ -17,6 +17,9 @@ limitations under the License.
 package controllers
 
 import (
+	"reflect"
+	"testing"
+
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
@@ -30,7 +33,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"testing"
 )
 
 func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) *appsv1.StatefulSet {
@@ -173,6 +175,10 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
 }
 
+func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, foundTolerations []corev1.Toleration) {
+	assert.True(t, reflect.DeepEqual(expectedTolerations, foundTolerations), "Expected tolerations and found tolerations don't match")
+}
+
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
 	assert.Equal(t, expected, found, "Expected and found %s are not the same", mapName)
 }
@@ -294,6 +300,25 @@ var (
 	testMetricsServiceAnnotations = map[string]string{
 		"testS3": "valueS3",
 		"testS4": "valueS4",
+	}
+	testNodeSelectors = map[string]string{
+		"beta.kubernetes.io/arch": "amd64",
+		"beta.kubernetes.io/os":   "linux",
+		"solrclouds":              "true",
+	}
+	testTolerations = []corev1.Toleration{
+		{
+			Effect:   "NoSchedule",
+			Key:      "node-restriction.kubernetes.io/dedicated",
+			Value:    "solrclouds",
+			Operator: "Exists",
+		},
+	}
+	testTolerationsPromExporter = []corev1.Toleration{
+		{
+			Effect:   "NoSchedule",
+			Operator: "Exists",
+		},
 	}
 	extraVars = []corev1.EnvVar{
 		{

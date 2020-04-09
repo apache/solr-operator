@@ -348,6 +348,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.PodSecurityContext != nil {
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
+
+		if customPodOptions.Tolerations != nil {
+			stateful.Spec.Template.Spec.Tolerations = customPodOptions.Tolerations
+		}
+
+		if customPodOptions.NodeSelector != nil {
+			stateful.Spec.Template.Spec.NodeSelector = customPodOptions.NodeSelector
+		}
 	}
 
 	return stateful
@@ -443,6 +451,18 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
 		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.NodeSelector, from.Spec.Template.Spec.NodeSelector) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.NodeSelector changed from", to.Spec.Template.Spec.NodeSelector, "To:", from.Spec.Template.Spec.NodeSelector)
+		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.Tolerations, from.Spec.Template.Spec.Tolerations) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.Tolerations changed from", to.Spec.Template.Spec.Tolerations, "To:", from.Spec.Template.Spec.Tolerations)
+		to.Spec.Template.Spec.Tolerations = from.Spec.Template.Spec.Tolerations
 	}
 
 	return requireUpdate

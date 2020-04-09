@@ -40,6 +40,12 @@ Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
 $ kubectl apply -f example/dependencies
 ```
 
+Install necessary dependencies for building and deploying the operator.
+```bash
+$ export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
+$ ./hack/install_dependencies.sh
+```
+
 Install the Solr CRDs & Operator
 
 ```bash
@@ -369,16 +375,16 @@ Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomber
 
 #### Building
 
-Building and releasing a test operator image with a custom namespace.
+Building and releasing a test operator image with a custom Docker namespace.
 
 ```bash
-$ NAMESPACE=your-namespace make docker-build docker-push
+$ NAMESPACE=your-namespace/ make docker-build docker-push
 ```
 
 You can test the vendor docker container by running
 
 ```bash
-$ NAMESPACE=your-namespace make docker-vendor-build docker-vendor-push
+$ NAMESPACE=your-namespace/ make docker-vendor-build docker-vendor-push
 ```
 
 ### Docker for Mac Local Development Setup
