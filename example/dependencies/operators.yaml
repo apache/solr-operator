@@ -46,22 +46,13 @@ spec:
       serviceAccountName: zookeeper-operator
       containers:
         - name: zk-operator
-          # Replace this with the built image name
-          image: pravega/zookeeper-operator:0.2.4
+          image: pravega/zookeeper-operator:0.2.6
           ports:
           - containerPort: 60000
             name: metrics
           imagePullPolicy: Always
           command:
           - zookeeper-operator
-          readinessProbe:
-            exec:
-              command:
-                - stat
-                - /tmp/operator-sdk-ready
-            initialDelaySeconds: 4
-            periodSeconds: 10
-            failureThreshold: 1
           env:
           - name: WATCH_NAMESPACE
             value: ""
