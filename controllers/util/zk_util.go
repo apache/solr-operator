@@ -83,6 +83,14 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSp
 		zkCluster.Spec.Pod.Resources = zkSpec.ZookeeperPod.Resources
 	}
 
+	if zkSpec.ZookeeperPod.Tolerations != nil {
+		zkCluster.Spec.Pod.Tolerations = zkSpec.ZookeeperPod.Tolerations
+	}
+
+	if zkSpec.ZookeeperPod.NodeSelector != nil {
+		zkCluster.Spec.Pod.NodeSelector = zkSpec.ZookeeperPod.NodeSelector
+	}
+
 	return zkCluster
 }
 
@@ -152,6 +160,20 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 		requireUpdate = true
 	}
 	to.Spec.Pod.Resources = from.Spec.Pod.Resources
+
+	if !DeepEqualWithNils(to.Spec.Pod.Tolerations, from.Spec.Pod.Tolerations) {
+		log.Info("Updating Zk tolerations")
+		log.Info("Update required because:", "Spec.Pod.Tolerations canged from", to.Spec.Pod.Tolerations, "To:", from.Spec.Pod.Tolerations)
+		requireUpdate = true
+		to.Spec.Pod.Tolerations = from.Spec.Pod.Tolerations
+	}
+
+	if !DeepEqualWithNils(to.Spec.Pod.NodeSelector, from.Spec.Pod.NodeSelector) {
+		log.Info("Updating Zk nodeSelector")
+		log.Info("Update required because:", "Spec.Pod.NodeSelector canged from", to.Spec.Pod.NodeSelector, "To:", from.Spec.Pod.NodeSelector)
+		requireUpdate = true
+		to.Spec.Pod.NodeSelector = from.Spec.Pod.NodeSelector
+	}
 
 	if from.Spec.Pod.Affinity != nil {
 		if !DeepEqualWithNils(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
