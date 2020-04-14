@@ -38,6 +38,14 @@ spec:
                 storage: "5Gi"
         replicas: 1
         zookeeperPodPolicy:
+          nodeSelector:
+            beta.kubernetes.io/os: linux
+            beta.kubernetes.io/arch: amd64
+          tolerations:
+            - effect: NoSchedule
+              key: node-restriction.kubernetes.io/workloads
+              operator: Equal
+              value: zookeeper
           resources:
             limits:
               memory: "1G"

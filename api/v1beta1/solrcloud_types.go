@@ -18,11 +18,12 @@ package v1beta1
 
 import (
 	"fmt"
+	"strings"
+
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
@@ -352,6 +353,14 @@ type ZookeeperPodPolicy struct {
 	// The scheduling constraints on pods.
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
+
+	// Node Selector to be added on pods.
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// Tolerations to be added on pods.
+	// +optional
+	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 
 	// Resources is the resource requirements for the container.
 	// This field cannot be updated once the cluster is created.
