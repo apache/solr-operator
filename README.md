@@ -20,147 +20,26 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 
 ## Menu
 
-- [Getting Started](#getting-started)
-    - [Solr Cloud](#running-a-solr-cloud)
-    - [Solr Collections](#solr-collections)
-    - [Solr Backups](#solr-backups)
-    - [Solr Metrics](#solr-prometheus-exporter)
-- [Contributions](#contributions)
+- [Documentation](#documentation)
 - [Version Compatibility and Upgrade Notes](#version-compatability--upgrade-notes)
+- [Contributions](#contributions)
 - [License](#license)
 - [Code of Conduct](#code-of-conduct)
 - [Security Vulnerability Reporting](#security-vulnerability-reporting)
 
-# Getting Started
+## Documentation
 
-Install the Zookeeper & Etcd Operators, which this operator depends on by default.
-Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
+Please visit the following pages for documentation on using and developing the Solr Operator:
 
-```bash
-$ kubectl apply -f example/dependencies
-```
-
-Install necessary dependencies for building and deploying the operator.
-```bash
-$ export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
-$ ./hack/install_dependencies.sh
-```
-
-Install the Solr CRDs & Operator
-
-```bash
-$ make install deploy
-```
-
-You can also deploy the Solr Operator by using our provided [Helm Chart](helm/solr-operator/README.md).
-
-                        
-## Running a Solr Cloud
-
-### Creating
-
-Make sure that the solr-operator and a zookeeper-operator are running.
-
-Create an example Solr cloud, with the following configuration.
-
-```bash
-$ cat example/test_solrcloud.yaml
-
-apiVersion: solr.bloomberg.com/v1beta1
-kind: SolrCloud
-metadata:
-  name: example
-spec:
-  replicas: 4
-  solrImage:
-    tag: 8.1.1
-```
-
-Apply it to your Kubernetes cluster.
-
-```bash
-$ kubectl apply -f example/test_solrcloud.yaml
-$ kubectl get solrclouds
-
-NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
-example   8.1.1     4              2       1            2m
-
-$ kubectl get solrclouds
-
-NAME      VERSION   DESIREDNODES   NODES   READYNODES   AGE
-example   8.1.1     4              4       4            8m
-```
-
-### Scaling
-
-Increase the number of Solr nodes in your cluster.
-
-```bash
-$ kubectl scale --replicas=5 solrcloud/example
-```
-
-### Deleting
-
-Decrease the number of Solr nodes in your cluster.
-
-```bash
-$ kubectl delete solrcloud example
-```
-  
-## Solr Images
-
-### Official Solr Images
-
-The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
-
-### Build Your Own Private Solr Images
-
-The solr-operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images. 
-
-Using a private image requires you have a K8s secret preconfigured with appropriate access to the image. (type: kubernetes.io/dockerconfigjson)
-
-```
-apiVersion: solr.bloomberg.com/v1beta1
-kind: SolrCloud
-metadata:
-  name: example-private-repo-solr-image
-spec:
-  replicas: 3
-  solrImage:
-    repository: myprivate-repo.jfrog.io/solr
-    tag: 8.2.0
-    imagePullSecret: "k8s-docker-registry-secret"
-```
-
-## Solr Operator
-
-### Solr Operator Docker Images
-
-Two Docker images are published to [DockerHub](https://hub.docker.com/r/bloomberg/solr-operator), both based off of the same base image.
-
-- [Builder Image](build/Dockerfile.build) - Downloads gomod dependencies, builds operator executable (This is not published, only used to build the following images)
-- [Slim Image](build/Dockerfile.slim) - Contains only the operator executable, with the operator as the entry point
-- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all dependencies (at `/solr-operator-vendor-sources`)
-
-
-### Solr Operator Input Args
-
-* **-zookeeper-operator** Whether or not to use the Zookeeper Operator to create dependent Zookeeepers.
-                          Required to use the `ProvidedZookeeper.Zookeeper` option within the Spec.
-                          If _true_, then a Zookeeper Operator must be running for the cluster.
-                          ( _true_ | _false_ , defaults to _false_)
-* **-etcd-operator** Whether or not to use the Etcd Operator to create dependent Zetcd clusters.
-                     Required to use the `ProvidedZookeeper.Zetcd` option within the Spec.
-                     If _true_, then an Etcd Operator must be running for the cluster.
-                     ( _true_ | _false_ , defaults to _false_)
-* **-ingress-base-domain** If you desire to make solr externally addressable via ingresses, a base ingress domain is required.
-                        Solr Clouds will be created with ingress rules at `*.(ingress-base-domain)`.
-                        ( _optional_ , e.g. `ing.base.domain` )
-## Development
-
-### Docker
-
-
+- [Local Tutorial](docs/local_tutorial.md)
+- [Running the Solr Operator](docs/running-the-operator.md)
+- Available Solr Resources
+    - [Solr Clouds](docs/solr-cloud)
+    - [Solr Collections](docs/solr-collection)
+    - [Solr Backups](docs/solr-backup)
+    - [Solr Metrics](docs/solr-prometheus-exporter)
+    - [Solr Collection Aliases](docs/solr-collection-alias)
+- [Development](docs/development.md)
 
 ## Version Compatibility & Upgrade Notes
 

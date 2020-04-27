@@ -58,7 +58,7 @@ Now that we have the prerequisites setup, let us install Solr Operator which wil
 
 ```bash
 # Download the operator
-OPERATOR_VER=0.2.3
+OPERATOR_VER=0.2.5
 curl https://codeload.github.com/bloomberg/solr-operator/tar.gz/v$OPERATOR_VER | tar xz
 ln -s -f solr-operator-$OPERATOR_VER solr-operator
 

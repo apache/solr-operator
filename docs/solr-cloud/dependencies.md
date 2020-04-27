@@ -1,4 +1,4 @@
-### Dependent Kubernetes Resources
+## Dependent Kubernetes Resources
 
 What actually gets created when the Solr Cloud is spun up?
 
