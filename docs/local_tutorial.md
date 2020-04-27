@@ -26,7 +26,7 @@ brew cask install docker-edge
 sed -i -e 's/"kubernetesEnabled" : false/"kubernetesEnabled" : true/g' \
     ~/Library/Group\ Containers/group.com.docker/settings.json
 
-# Start Docker for mac from Finter, or run the command below
+# Start Docker for mac from Finder, or run the command below
 open /Applications/Docker.app
 
 # Install Helm, which we'll use to install the operator, and 'watch'
@@ -39,8 +39,7 @@ Kubernetes services are by default only accessible from within the k8s cluster. 
 
 ```bash
 # Install the nginx ingress controller
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/mandatory.yaml
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/cloud-generic.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/cloud/deploy.yaml
 
 # Inspect that the ingress controller is running by visiting the Kubernetes dashboard 
 # and selecting namespace `ingress-nginx`, or running this command:
@@ -89,9 +88,9 @@ replicaset.apps/zk-operator-674676769c     1         1         1       49d
 
 After inspecting the status of you Kube cluster, you should see a deployment for the Solr Operator as well as the Zookeeper Operator.
 
-## Start an example Solr cluster
+## Start an example Solr Cloud cluster
 
-To start a Solr cluster, we will create a descriptor for the Solr Operator that will tell it what version of solr to install, and how many nodes, with how much memory etc.
+To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
 # Create a spec for a 3-node cluster v8.3 with 300m RAM each:
