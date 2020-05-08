@@ -4,11 +4,11 @@ This page details the steps for developing the Solr Operator, and all necessary 
 
  - [Setup](#setup)
     - [Setup Docker for Mac with K8S](#setup-docker-for-mac-with-k8s-with-an-ingress-controller)
-    - [Install the necessary Dependencies](#installing-the-necessary-dependencies)
+    - [Install the necessary Dependencies](#install-the-necessary-dependencies)
  - [Build the Solr CRDs](#build-the-solr-crds)
- - [Build and Run the Solr Operator](#build-and-run-the-solr-operator)
-    - [Build the Solr Operator](#)
-    - [Running the Solr Operator](#R)
+ - [Build and Run the Solr Operator](#build-and-run-local-versions)
+    - [Build the Solr Operator](#building-the-solr-operator)
+    - [Running the Solr Operator](#running-the-solr-operator)
  - [Steps to take before creating a PR](#before-you-create-a-pr)
  
 ## Setup
@@ -20,7 +20,7 @@ Please follow the instructions from the [local tutorial](local_tutorial.md#setup
 ### Install the necessary dependencies
 
 Install the Zookeeper & Etcd Operators, which this operator depends on by default.
-Each is optional, as described in the [Zookeeper](#zookeeper-reference) section.
+Each is optional, as described in the [Zookeeper Reference](solr-cloud/solr-cloud-crd.md#zookeeper-reference) section in the CRD docs.
 
 ```bash
 $ kubectl apply -f example/dependencies
