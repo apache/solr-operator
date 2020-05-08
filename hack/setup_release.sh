@@ -28,3 +28,7 @@ helm repo index release-artifacts/ --url https://github.com/bloomberg/solr-opera
 mv release-artifacts/index.yaml docs/charts/index.yaml
 
 cp config/crd/bases/* release-artifacts/.
+
+git add helm config docs
+
+git commit -asm "Cutting release version ${VERSION} of the Solr Operator"

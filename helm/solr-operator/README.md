@@ -2,7 +2,15 @@ Solr Operator
 =============
 A Helm chart for the Solr Operator.
 
-## Installing the Chart
+## The Solr Operator
+
+The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
+
+Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/bloomberg/solr-operator).
+
+## Using the Helm Chart
+
+### Installing the Chart
 
 To install the chart with the release name `test`:
 
@@ -10,13 +18,13 @@ To install the chart with the release name `test`:
 $ helm install test .
 ```
 
-The command deploys the solr-operator on the Kubernetes cluster with the default configuration. The [configuration](#configuration) section lists the parameters that can be configured during installation.
+The command deploys the solr-operator on the Kubernetes cluster with the default configuration. The [configuration](#chart-values) section lists the parameters that can be configured during installation.
 
 **NOTE**: Since by default the `useZkOperator` option is set to `True`, you must have already installed the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) in your kubernetes cluster. A helm chart is [also available](https://github.com/pravega/zookeeper-operator/blob/master/charts/zookeeper-operator/Chart.yaml) for it.
 
-## Helm Version Differences
+### Helm Version Differences
 
-### Helm 2
+#### Helm 2
 
 If you are using Helm 2, CRDs are installed using the crd-install hook. Prior to installing, you'll need to uncomment the last two lines in [kustomization.yaml](../../config/crd/kustomization.yaml), and run `make manifests`
 
@@ -26,21 +34,21 @@ You will also need to update the install command to use the name flag, as shown 
 $ helm install --name test .
 ```
 
-### Helm 3
+#### Helm 3
 
 Helm 3 automatically runs CRDs in the /crds directory, no further action is needed.
 
-## Uninstalling the Chart
+### Uninstalling the Chart
 
 To uninstall/delete the `solr-operator` deployment:
 
-### Helm 3
+#### Helm 3
 
 ```console
 $ helm uninstall test
 ```
 
-### Helm 2
+#### Helm 2
 
 ```console
 $ helm delete test

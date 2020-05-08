@@ -37,11 +37,13 @@ This will do the following steps:
 1. Build the CRDs and copy them into the Helm chart.
 1. Package up the helm charts and index them in `docs/charts/index.yaml`.
 1. Create all artifacts that should be included in the Github Release, and place them in the `/release-artifacts` directory.
+1. Commits all necessary changes for the release.
 
 ### Create a release PR and merge into `master`
 
-Once you have created the commit, you can push it to your fork and create a PR against the `master` branch.
-If the Travis tests pass, merge it into master.
+Now you need to merge the release commit into master.
+You can push it to your fork and create a PR against the `master` branch.
+If the Travis tests pass, "Squash and Merge" it into master.
 
 ### Tag and publish the release
 
