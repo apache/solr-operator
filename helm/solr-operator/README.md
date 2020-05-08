@@ -1,4 +1,4 @@
-solr-operator
+Solr Operator
 =============
 A Helm chart for the Solr Operator.
 
