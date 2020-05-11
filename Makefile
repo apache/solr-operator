@@ -32,6 +32,9 @@ clean:
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
+release: manifests
+	VERSION=${VERSION} bash hack/setup_release.sh
+
 ###
 # Building
 ###
