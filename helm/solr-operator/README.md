@@ -1,8 +1,5 @@
 Solr Operator
 =============
-A Helm chart for the Solr Operator.
-
-## The Solr Operator
 
 The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
 
@@ -10,17 +7,46 @@ Documentation around using the Solr Operator can be found in it's [source repo](
 
 ## Using the Helm Chart
 
-### Installing the Chart
+### Installing the Zookeeper Operator
 
-To install the chart with the release name `test`:
+Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
+This is because the Solr Operator, in most instances, relies on the Zookeeper Operator to create the Zookeeper clusters that Solr coordinates through.
+
+If you are setting `useZkOperator=false`, then please disregard this section.
+
+Eventually the Zookeeper Opertor will be a dependency on the Solr Operator helm chart, but for now there are two easy ways to deploy it.
+
+- A helm chart is available [in the Zookeeper Operator repository](https://github.com/pravega/zookeeper-operator/blob/master/charts/zookeeper-operator/).
+- Use the following kubectl command:
+```bash
+kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+```
+
+#### Helm
+
+Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+```
+
+### Adding the Solr Operator Helm Chart Repository
+You should only need to add the solr operator helm chart repository once, by running the following command:
 
 ```console
-$ helm install test .
+$ helm repo add solr-operator https://bloomberg.github.io/solr-operator/charts
+```
+
+### Installing the Chart
+
+To install the Solr Operator with the latest version or with a specific version, run either of the following commands:
+
+```console
+$ helm install solr-operator solr-operator/solr-operator
+$ helm install solr-operator solr-operator/solr-operator --version 0.2.5
 ```
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration. The [configuration](#chart-values) section lists the parameters that can be configured during installation.
-
-**NOTE**: Since by default the `useZkOperator` option is set to `True`, you must have already installed the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) in your kubernetes cluster. A helm chart is [also available](https://github.com/pravega/zookeeper-operator/blob/master/charts/zookeeper-operator/Chart.yaml) for it.
 
 ### Helm Version Differences
 
@@ -31,7 +57,7 @@ If you are using Helm 2, CRDs are installed using the crd-install hook. Prior to
 You will also need to update the install command to use the name flag, as shown below.
 
 ```console
-$ helm install --name test .
+$ helm install --name solr-operator solr-operator/solr-operator
 ```
 
 #### Helm 3
@@ -45,13 +71,13 @@ To uninstall/delete the `solr-operator` deployment:
 #### Helm 3
 
 ```console
-$ helm uninstall test
+$ helm uninstall solr-operator
 ```
 
 #### Helm 2
 
 ```console
-$ helm delete test
+$ helm delete solr-operator
 ```
 
 The command removes all the Kubernetes components associated with the chart and deletes the release.

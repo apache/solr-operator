@@ -2,8 +2,9 @@
 
 This tutorial shows how to setup Solr under Kubernetes on your local mac. The plan is as follows:
 
- 1. [Setup Docker for Mac with K8S](#setup-docker-for-mac-with-k8s)
- 2. [Install an Ingress Controller to reach the cluster on localhost](#install-an-ingress-controller)
+ 1. [Setup Kubernetes and Dependencies](#setup-kubernetes-and-dependencies)
+    1. [Setup Docker for Mac with K8S](#setup-docker-for-mac-with-k8s)
+    2. [Install an Ingress Controller to reach the cluster on localhost](#install-an-ingress-controller)
  3. [Install Solr Operator](#install-solr-operator)
  4. [Start your Solr cluster](#start-your-solr-cluster)
  5. [Create a collection and index some documents](#create-a-collection-and-index-some-documents)
@@ -12,7 +13,9 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
  8. [Install Kubernetes Dashboard (optional)](#install-kubernetes-dashboard-optional)
  9. [Delete the solrCloud cluster named 'example'](#delete-the-solrcloud-cluster-named-example)
 
-## Setup Docker for Mac with K8S
+## Setup Kubernetes and Dependencies
+
+### Setup Docker for Mac with K8s
 
 ```bash
 # Install Homebrew, if you don't have it already
@@ -33,7 +36,7 @@ open /Applications/Docker.app
 brew install helm watch
 ```
 
-## Install an Ingress Controller
+### Install an Ingress Controller
 
 Kubernetes services are by default only accessible from within the k8s cluster. To make them adressable from our laptop, we'll add an ingress controller
 
@@ -51,22 +54,28 @@ kubectl get all --namespace ingress-nginx
 
 Once we have installed Solr to our k8s, this will allow us to address the nodes locally.
 
-## Install Solr Operator
+## Install the Solr Operator
 
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
+Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
+Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
+
 ```bash
-# Download the operator
-OPERATOR_VER=0.2.5
-curl https://codeload.github.com/bloomberg/solr-operator/tar.gz/v$OPERATOR_VER | tar xz
-ln -s -f solr-operator-$OPERATOR_VER solr-operator
+kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+```
 
-# Install the Zookeeper operator (and etcd operator even if we don't use it)
-kubectl apply -f solr-operator/example/dependencies/
+Now add the Solr Operator Helm repository. (You should only need to do this once)
 
+```bash
+$ helm repo add solr-operator https://bloomberg.github.io/solr-operator/charts
+```
+
+Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
+
+```bash
 # Install the operator (specifying ingressBaseDomain to match our ingressController)
-helm install --set-string ingressBaseDomain=ing.local.domain \
-    solr-operator solr-operator/helm/solr-operator
+$ helm install solr-operator solr-operator/solr-operator --set-string ingressBaseDomain=ing.local.domain
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.

@@ -32,7 +32,7 @@ clean:
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
-release: manifests
+release: manifests helm-check
 	VERSION=${VERSION} bash hack/setup_release.sh
 
 ###
@@ -83,6 +83,9 @@ check-license:
 manifests-check:
 	@echo "Check to make sure the manifests are up to date"
 	git diff --exit-code -- config
+
+helm-check:
+	helm lint helm/solr-operator
 
 # Generate code
 generate: controller-gen
