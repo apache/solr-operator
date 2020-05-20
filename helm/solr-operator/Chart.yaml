@@ -4,7 +4,7 @@ name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
 version: 0.2.5
 appVersion: v0.2.5
-kubeVersion: ">= 1.13.0"
+kubeVersion: ">= 1.13.0-0"
 home: https://github.com/bloomberg/solr-operator
 sources:
   - https://github.com/bloomberg/solr-operator

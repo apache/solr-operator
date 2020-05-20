@@ -28,12 +28,15 @@ version:
 
 clean:
 	rm -rf ./bin
+	rm -rf ./release-artifacts
 
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
-release: manifests helm-check
-	VERSION=${VERSION} bash hack/setup_release.sh
+release: clean manifests helm-check
+	VERSION=${VERSION} bash hack/release/update_versions.sh
+	VERSION=${VERSION} bash hack/release/build_helm.sh
+	VERSION=${VERSION} bash hack/release/setup_release.sh
 
 ###
 # Building
