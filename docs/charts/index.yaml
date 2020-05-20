@@ -3,10 +3,10 @@ entries:
   solr-operator:
   - apiVersion: v1
     appVersion: v0.2.5
-    created: "2020-05-14T14:31:51.166349-04:00"
+    created: "2020-05-20T12:28:07.211507-04:00"
     description: The Solr Operator enables easy management of Solr resources within
       Kubernetes.
-    digest: cdc896541390137c0f8aaab7b51f4b944e6cde23f9d8da5ffb0486e20efa5c48
+    digest: 8ccc461fbc1ccd6c149fc34b40f049155f41131c03d291bca1f469cddb0c09dd
     home: https://github.com/bloomberg/solr-operator
     icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
     keywords:
@@ -15,15 +15,14 @@ entries:
     - search
     - lucene
     - operator
-    kubeVersion: '>= 1.13.0'
+    kubeVersion: '>= 1.13.0-0'
     maintainers:
     - email: houston@apache.org
       name: Houston Putman
     name: solr-operator
     sources:
     - https://github.com/bloomberg/solr-operator
-    type: application
     urls:
     - https://github.com/bloomberg/solr-operator/releases/download/v0.2.5/solr-operator-0.2.5.tgz
     version: 0.2.5
-generated: "2020-05-14T14:31:51.161206-04:00"
+generated: "2020-05-20T12:28:07.204853-04:00"
