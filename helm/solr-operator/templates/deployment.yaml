@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "solr-operator.fullname" . }}
-  namespace: {{ .Release.Namespace }}
   labels:
     control-plane: solr-operator
     controller-tools.k8s.io: "1.0"
@@ -20,7 +19,7 @@ spec:
         control-plane: solr-operator
         controller-tools.k8s.io: "1.0"
     spec:
-      serviceAccountName: solr-operator
+      serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
@@ -28,12 +27,24 @@ spec:
         args:
         - -zk-operator={{ .Values.useZkOperator }}
         - -etcd-operator={{ .Values.useEtcdOperator }}
-        - -ingress-base-domain={{ .Values.ingressBaseDomain }}
+        {{- if .Values.ingressBaseDomain }}
+        - --ingress-base-domain={{ .Values.ingressBaseDomain }}
+        {{- end }}
+        {{- if .Values.watchNamespaces }}
+        - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
+        {{- end }}
         env:
-        - name: POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          {{- if .Values.envVars }}
+          {{- toYaml .Values.envVars | nindent 10 }}
+          {{- end }}
         resources:
-            {{- toYaml .Values.resources | nindent 12 }} 
+          {{- toYaml .Values.resources | nindent 10 }}
       terminationGracePeriodSeconds: 10

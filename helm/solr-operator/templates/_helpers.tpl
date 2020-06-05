@@ -30,3 +30,41 @@ Create chart name and version as used by the chart label.
 {{- define "solr-operator.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
+
+{{/*
+Create the name of the service account to use
+*/}}
+{{- define "solr-operator.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+    {{ default (include "solr-operator.fullname" .) .Values.serviceAccount.name }}
+{{- else -}}
+    {{ required "Must provide a serviceAccount.name if serviceAccount.create is set to false" .Values.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Get the namespaces to watch (empty if the operator should watch the entire cluster).
+If .Values.watchNamespaces = true, then use the release namespace.
+If .Values.watchNamespaces is a string, use it.
+If .Values.watchNamespaces is empty or false, return empty.
+*/}}
+{{- define "solr-operator.watchNamespaces" -}}
+{{- if .Values.watchNamespaces -}}
+{{- if kindIs "bool" .Values.watchNamespaces -}}
+{{ .Release.Namespace }}
+{{- else -}}
+{{ .Values.watchNamespaces }}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Determine whether to use ClusterRoles or Roles
+*/}}
+{{- define "solr-operator.roleType" -}}
+{{- if .Values.watchNamespaces -}}
+    Role
+{{- else -}}
+    ClusterRole
+{{- end -}}
+{{- end -}}
