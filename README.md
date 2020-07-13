@@ -83,16 +83,16 @@ This option is backwards compatible, but will be removed in a future version (`v
 
 We :heart: contributions.
 
-Have you had a good experience with <project>? Why not share some love and contribute code, or just let us know about any issues you had with it?
+Have you had a good experience with the **Solr Operator**? Why not share some love and contribute code, or just let us know about any issues you had with it?
 
-We welcome issue reports [here](../../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
+We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
-Before sending a [Pull Request](../../../pulls), please make sure you read our
+Before sending a [Pull Request](../../pulls), please make sure you read our
 [Contribution Guidelines](https://github.com/bloomberg/.github/blob/master/CONTRIBUTING.md).
 
 ## License
 
-Please read the [LICENSE](../LICENSE) file here.
+Please read the [LICENSE](LICENSE) file here.
 
 ## Code of Conduct
 
