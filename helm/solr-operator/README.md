@@ -46,9 +46,43 @@ $ helm install solr-operator solr-operator/solr-operator
 $ helm install solr-operator solr-operator/solr-operator --version 0.2.5
 ```
 
-The command deploys the solr-operator on the Kubernetes cluster with the default configuration. The [configuration](#chart-values) section lists the parameters that can be configured during installation.
+The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
+The [configuration](#chart-values) section lists the parameters that can be configured during installation.
 
-### Helm Version Differences
+#### Namespaces
+
+If you want to specify the namespace for the installation, use the `--namespace` flag.
+All resources will be deployed to the given namespace.
+
+```console
+$ helm install solr-operator solr-operator/solr-operator --namespace solr
+```
+
+If you want to only watch that namespace, or others, then you will have to provide the `watchNamespaces` option.
+
+```console
+// Watch the namespace where the operator is deployed to (just pass the boolean true)
+$ helm install solr-operator solr-operator/solr-operator --namespace solr --set watchNamespaces=true
+// Watch a single namespace different than the one being deployed to
+$ helm install solr-operator solr-operator/solr-operator --namespace solr --set watchNamespaces=other
+// Watch multiple namespaces (commmas must be escaped in the set string)
+$ helm install solr-operator solr-operator/solr-operator --namespace solr --set watchNamespaces="team1\,team2\,team3"
+```
+
+Note: Passing `false` and `""` to the `watchNamespaces` variable will both result in the operator watchting all namespaces in the Kube cluster.
+
+### Managing CRDs
+
+#### Helm 3
+
+Helm 3 automatically runs CRDs in the /crds directory, no further action is needed.
+
+If have solr operator installations in multiple namespaces that are managed separately, you will likely want to skip installing CRDs when installing the chart.
+This can be done with the `--skip-crds` helm option.
+
+```console
+$ helm install solr-operator solr-operator/solr-operator --skip-crds --namespace solr
+```
 
 #### Helm 2
 
@@ -59,10 +93,6 @@ You will also need to update the install command to use the name flag, as shown 
 ```console
 $ helm install --name solr-operator solr-operator/solr-operator
 ```
-
-#### Helm 3
-
-Helm 3 automatically runs CRDs in the /crds directory, no further action is needed.
 
 ### Uninstalling the Chart
 
@@ -85,12 +115,21 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ## Chart Values
 
+### Configuring the Solr Operator
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
+| ingressBaseDomain | string | `""` | If you have a base domain that points to your ingress controllers for this kubernetes cluster, you can provide this. SolrClouds will then begin to use ingresses that utilize this base domain. E.g. `solrcloud-test.<base.domain>` |
+| useZkOperator | string | `"true"` | This option enables the use of provided Zookeeper instances for SolrClouds |
+| useEtcdOperator | string | `"false"` | This option enables the use of provided Zetcd instances for SolrClouds |
+
 ### Running the Solr Operator
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"bloomberg/solr-operator"` | The repository of the Solr Operator image |
-| image.tag | string | `"v0.2.1"` | The tag/version of the Solr Operator to run |
+| image.tag | string | `"v0.2.5"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"Always"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
@@ -99,11 +138,6 @@ The command removes all the Kubernetes components associated with the chart and 
 | resources.limits.memory | string | `"500Mi"` |  |
 | resources.requests.cpu | string | `"100m"` |  |
 | resources.requests.memory | string | `"100Mi"` |  |
-
-### Configuring the Solr Operator
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| ingressBaseDomain | string | `""` | If you have a base domain that points to your ingress controllers for this kubernetes cluster, you can provide this. SolrClouds will then begin to use ingresses that utilize this base domain. E.g. `solrcloud-test.<base.domain>` |
-| useZkOperator | string | `"true"` | This option enables the use of provided Zookeeper instances for SolrClouds |
-| useEtcdOperator | string | `"false"` | This option enables the use of provided Zetcd instances for SolrClouds |
+| rbac.create | boolean | true | Create the necessary RBAC rules, whether cluster-wide or namespaced, for the Solr Operator. |
+| serviceAccount.create | boolean | true | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
+| serviceAccount.name | string | "" | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | 

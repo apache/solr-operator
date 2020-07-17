@@ -1,10 +1,13 @@
+{{- if .Values.rbac.create }}
+{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
 
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: {{ include "solr-operator.roleType" $ }}
 metadata:
   creationTimestamp: null
-  name: solr-operator-role
+  name: {{ include "solr-operator.fullname" $ }}-role
+  namespace: {{ $namespace }}
 rules:
 - apiGroups:
   - ""
@@ -300,3 +303,6 @@ rules:
   - get
   - patch
   - update
+
+{{- end }}
+{{- end }}

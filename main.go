@@ -21,11 +21,12 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"strings"
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers"
 	etcdv1beta2 "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
-	"github.com/coreos/etcd-operator/pkg/util/constants"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -35,9 +36,15 @@ import (
 	// +kubebuilder:scaffold:imports
 )
 
+const (
+	EnvOperatorPodName      = "POD_NAME"
+	EnvOperatorPodNamespace = "POD_NAMESPACE"
+)
+
 var (
-	scheme    = k8sRuntime.NewScheme()
-	setupLog  = ctrl.Log.WithName("setup")
+	scheme   = k8sRuntime.NewScheme()
+	setupLog = ctrl.Log.WithName("setup")
+
 	namespace string
 	name      string
 
@@ -45,6 +52,9 @@ var (
 	Version   string
 	BuildTime string
 	GitSHA    string
+
+	// Operator scope
+	watchNamespaces string
 
 	// External Operator dependencies
 	useEtcdCRD      bool
@@ -65,15 +75,16 @@ func init() {
 	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&ingressBaseDomain, "ingress-base-domain", "", "The operator will use this base domain for host matching in an ingress for the cloud.")
+	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 	flag.Parse()
 }
 
 func main() {
-	namespace = os.Getenv(constants.EnvOperatorPodNamespace)
+	namespace = os.Getenv(EnvOperatorPodNamespace)
 	if len(namespace) == 0 {
 		//log.Fatalf("must set env (%s)", constants.EnvOperatorPodNamespace)
 	}
-	name = os.Getenv(constants.EnvOperatorPodName)
+	name = os.Getenv(EnvOperatorPodName)
 	if len(name) == 0 {
 		//log.Fatalf("must set env (%s)", constants.EnvOperatorPodName)
 	}
@@ -93,11 +104,30 @@ func main() {
 	setupLog.Info(fmt.Sprintf("Go Version: %v", runtime.Version()))
 	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s / %s", runtime.GOOS, runtime.GOARCH))
 
+	// When the operator is started to watch resources in a specific set of namespaces, we use the MultiNamespacedCacheBuilder cache.
+	// In this scenario, it is also suggested to restrict the provided authorization to this namespace by replacing the default
+	// ClusterRole and ClusterRoleBinding to Role and RoleBinding respectively
+	// For further information see the kubernetes documentation about
+	// Using [RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
+	var managerWatchCache cache.NewCacheFunc
+	if watchNamespaces != "" {
+		setupLog.Info(fmt.Sprintf("Managing for Namespaces: %s", watchNamespaces))
+		ns := strings.Split(watchNamespaces, ",")
+		for i := range ns {
+			ns[i] = strings.TrimSpace(ns[i])
+		}
+		managerWatchCache = cache.MultiNamespacedCacheBuilder(ns)
+	} else {
+		setupLog.Info("Managing for the entire cluster.")
+		managerWatchCache = (cache.NewCacheFunc)(nil)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
 		Port:               9443,
+		NewCache:           managerWatchCache,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")

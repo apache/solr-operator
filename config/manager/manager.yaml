@@ -22,13 +22,17 @@ spec:
         - -etcd-operator=false
         - -ingress-base-domain=ing.local.domain
         image: bloomberg/solr-operator:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         name: solr-operator
         env:
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
         resources:
           limits:
             cpu: 200m
