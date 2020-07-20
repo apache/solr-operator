@@ -2,7 +2,7 @@
 
 The Solr Operator supports creating and managing Solr Clouds.
 
-A reference on the available options for the SolrCloud CRD can be found [here](solr-cloud-crd.md).
+To find how to configure the SolrCloud best for your use case, please refer to the [documentation on available SolrCloud CRD options](solr-cloud-crd.md).
 
 This page outlines how to create, update and delete a SolrCloud in Kubernetes.
 

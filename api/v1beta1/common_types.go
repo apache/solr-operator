@@ -83,6 +83,18 @@ type PodOptions struct {
 	// Node Selector to be added for the StatefulSet.
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// Liveness probe parameters
+	// +optional
+	LivenessProbe *corev1.Probe `json:"livenessProbe,omitempty"`
+
+	// Readiness probe parameters
+	// +optional
+	ReadinessProbe *corev1.Probe `json:"readinessProbe,omitempty"`
+
+	// Startup probe parameters
+	// +optional
+	StartupProbe *corev1.Probe `json:"startupProbe,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

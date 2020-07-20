@@ -1,0 +1,36 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: ingress-cloud
+spec:
+  replicas: 3
+  solrImage:
+    tag: 8.2.0
+  solrAddressability:
+    podPort: 10000
+    commonServicePort: 80
+    external:
+      method: Ingress
+      useExternalAddress: false
+      domainName: "kube.example.com"
+      additionalDomainNames:
+        - "another.kube.example.com"
+        - "another.kube.other.com"
+      nodePortOverride: 80
+
+---
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: external-dns-cloud
+spec:
+  replicas: 3
+  solrImage:
+    tag: 8.2.0
+  solrAddressability:
+    podPort: 10000
+    commonServicePort: 80
+    external:
+      method: ExternalDNS
+      useExternalAddress: true
+      domainName: "kube.example.com"

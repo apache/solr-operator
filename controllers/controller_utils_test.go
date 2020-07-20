@@ -31,9 +31,16 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+func emptyRequests(requests chan reconcile.Request) {
+	for len(requests) > 0 {
+		<-requests
+	}
+}
 
 func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) *appsv1.StatefulSet {
 	stateful := &appsv1.StatefulSet{}
@@ -83,6 +90,12 @@ func expectService(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.
 	return service
 }
 
+func expectNoService(g *gomega.GomegaWithT, serviceKey types.NamespacedName, message string) {
+	service := &corev1.Service{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
+		Should(gomega.MatchError("Service \""+serviceKey.Name+"\" not found"), message)
+}
+
 func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, ingressKey types.NamespacedName) *extv1.Ingress {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
@@ -101,7 +114,7 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	return ingress
 }
 
-func expectNoIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, ingressKey types.NamespacedName) {
+func expectNoIngress(g *gomega.GomegaWithT, ingressKey types.NamespacedName) {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.MatchError("Ingress.extensions \"" + ingressKey.Name + "\" not found"))
@@ -130,7 +143,7 @@ func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcil
 	return configMap
 }
 
-func expectNoConfigMap(g *gomega.GomegaWithT, requests chan reconcile.Request, configMapKey types.NamespacedName) {
+func expectNoConfigMap(g *gomega.GomegaWithT, configMapKey types.NamespacedName) {
 	configMap := &corev1.ConfigMap{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
 		Should(gomega.MatchError("ConfigMap \"" + configMapKey.Name + "\" not found"))
@@ -177,6 +190,10 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 
 func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, foundTolerations []corev1.Toleration) {
 	assert.True(t, reflect.DeepEqual(expectedTolerations, foundTolerations), "Expected tolerations and found tolerations don't match")
+}
+
+func testPodProbe(t *testing.T, expectedProbe *corev1.Probe, foundProbe *corev1.Probe) {
+	assert.True(t, reflect.DeepEqual(expectedProbe, foundProbe), "Expected probe and found probe don't match")
 }
 
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
@@ -229,6 +246,12 @@ func cleanupTestObjects(g *gomega.GomegaWithT, namespace string, deleteOpts []cl
 }
 
 var (
+	testKubeDomain        = "kube.domain.com"
+	testDomain            = "test.domain.com"
+	testAdditionalDomains = []string{
+		"test1.domain.com",
+		"test2.domain.com",
+	}
 	testPodAnnotations = map[string]string{
 		"testP1": "valueP1",
 		"testP2": "valueP2",
@@ -305,6 +328,48 @@ var (
 		"beta.kubernetes.io/arch": "amd64",
 		"beta.kubernetes.io/os":   "linux",
 		"solrclouds":              "true",
+	}
+	testProbeLivenessNonDefaults = &corev1.Probe{
+		InitialDelaySeconds: 20,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+		PeriodSeconds:       10,
+		Handler: corev1.Handler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Scheme: corev1.URISchemeHTTP,
+				Path:   "/solr/admin/info/system",
+				Port:   intstr.FromInt(8983),
+			},
+		},
+	}
+	testProbeReadinessNonDefaults = &corev1.Probe{
+		InitialDelaySeconds: 15,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+		PeriodSeconds:       5,
+		Handler: corev1.Handler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Scheme: corev1.URISchemeHTTP,
+				Path:   "/solr/admin/info/system",
+				Port:   intstr.FromInt(8983),
+			},
+		},
+	}
+	testProbeStartup = &corev1.Probe{
+		InitialDelaySeconds: 1,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    5,
+		PeriodSeconds:       5,
+		Handler: corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"ls",
+				},
+			},
+		},
 	}
 	testTolerations = []corev1.Toleration{
 		{
