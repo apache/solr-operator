@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
@@ -101,6 +102,10 @@ type SolrCloudSpec struct {
 	// +optional
 	CustomSolrKubeOptions CustomSolrKubeOptions `json:"customSolrKubeOptions,omitempty"`
 
+	// Customize how Solr is addressed both internally and externally in Kubernetes.
+	// +optional
+	SolrAddressability SolrAddressabilityOptions `json:"solrAddressability,omitempty"`
+
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 
@@ -121,7 +126,7 @@ type SolrCloudSpec struct {
 	SolrGCTune string `json:"solrGCTune,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults() (changed bool) {
+func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -147,6 +152,8 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		changed = true
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
+
+	changed = spec.SolrAddressability.withDefaults(ingressBaseDomain) || changed
 
 	if spec.ZookeeperRef == nil {
 		spec.ZookeeperRef = &ZookeeperRef{}
@@ -212,6 +219,147 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+}
+
+type SolrAddressabilityOptions struct {
+	// External defines the way in which this SolrCloud nodes should be made addressable externally, from outside the Kubernetes cluster.
+	// If none is provided, the Solr Cloud will not be made addressable externally.
+	// +optional
+	External *ExternalAddressability `json:"external,omitempty"`
+
+	// PodPort defines the port to have the Solr Pod listen on.
+	// Defaults to 8983
+	// +optional
+	PodPort int `json:"podPort,omitempty"`
+
+	// CommonServicePort defines the port to have the common Solr service listen on.
+	// Defaults to 80
+	// +optional
+	CommonServicePort int `json:"commonServicePort,omitempty"`
+
+	// KubeDomain allows for the specification of an override of the default "cluster.local" Kubernetes cluster domain.
+	// Only use this option if the Kubernetes cluster has been setup with a custom domain.
+	// +optional
+	KubeDomain string `json:"kubeDomain,omitempty"`
+}
+
+func (opts *SolrAddressabilityOptions) withDefaults(ingressBaseDomain string) (changed bool) {
+	// DEPRECATED: ingressBaseDomain will be removed in v0.3.0
+	if opts.External == nil && ingressBaseDomain != "" {
+		changed = true
+		opts.External = &ExternalAddressability{
+			Method:             Ingress,
+			DomainName:         ingressBaseDomain,
+			UseExternalAddress: true,
+			NodePortOverride:   80,
+		}
+	} else if opts.External != nil {
+		changed = opts.External.withDefaults()
+	}
+	if opts.PodPort == 0 {
+		changed = true
+		opts.PodPort = 8983
+	}
+	if opts.CommonServicePort == 0 {
+		changed = true
+		opts.CommonServicePort = 80
+	}
+	return changed
+}
+
+// ExternalAddressability defines the config for making Solr services available externally to kubernetes.
+// Be careful when using LoadBalanced and includeNodes, as many IP addresses could be created if you are running many large solrClouds.
+type ExternalAddressability struct {
+	// The way in which this SolrCloud's service(s) should be made addressable externally.
+	Method ExternalAddressabilityMethod `json:"method"`
+
+	// Use the external address to advertise the SolrNode, defaults to false.
+	//
+	// If false, the external address will be available, however Solr (and clients using the CloudSolrClient in SolrJ) will only be aware of the internal URLs.
+	// If true, Solr will startup with the hostname of the external address.
+	//
+	// NOTE: This option cannot be true when hideNodes is set to true. So it will be auto-set to false if that is the case.
+	//
+	// Deprecation warning: When an ingress-base-domain is passed in to the operator, this value defaults to true.
+	// +optional
+	UseExternalAddress bool `json:"useExternalAddress"`
+
+	// Do not expose the common Solr service externally. This affects a single service.
+	// Defaults to false.
+	// +optional
+	HideCommon bool `json:"hideCommon,omitempty"`
+
+	// Do not expose each of the Solr Node services externally.
+	// The number of services this affects could range from 1 (a headless service for ExternalDNS) to the number of Solr pods your cloud contains (individual node services for Ingress/LoadBalancer).
+	// Defaults to false.
+	// +optional
+	HideNodes bool `json:"hideNodes,omitempty"`
+
+	// Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS.
+	// The common and/or node services will be addressable by unique names under the given domain.
+	// e.g. default-example-solrcloud.given.domain.name.com
+	//
+	// This options will be required for the Ingress and ExternalDNS methods once the ingressBaseDomain startup parameter is removed.
+	//
+	// For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true.
+	// If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above.
+	// +optional
+	DomainName string `json:"domainName,omitempty"`
+
+	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
+	// This option is ignored with the LoadBalancer method.
+	// +optional
+	AdditionalDomainNames []string `json:"additionalDomains,omitempty"`
+
+	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
+	// This overrides the default usage of the podPort.
+	//
+	// This is option is only used when HideNodes=false, otherwise the the port each Solr Node will advertise itself with the podPort.
+	// This option is also unavailable with the ExternalDNS method.
+	//
+	// If using method=Ingress, your ingress controller is required to listen on this port.
+	// If your ingress controller is not listening on the podPort, then this option is required for solr to be addressable via an Ingress.
+	//
+	// Defaults to 80 if HideNodes=false and method=Ingress, otherwise this is optional.
+	// +optional
+	NodePortOverride int `json:"nodePortOverride,omitempty"`
+}
+
+// ExternalAddressability is a string enumeration type that enumerates
+// all possible ways that a SolrCloud can be made addressable external to the kubernetes cluster.
+// +kubebuilder:validation:Enum=Ingress;ExternalDNS
+type ExternalAddressabilityMethod string
+
+const (
+	// Use an ingress to make the Solr service(s) externally addressable
+	Ingress ExternalAddressabilityMethod = "Ingress"
+
+	// Use ExternalDNS to make the Solr service(s) externally addressable
+	ExternalDNS ExternalAddressabilityMethod = "ExternalDNS"
+
+	// Make Solr service(s) type:LoadBalancer to make them externally addressable
+	// NOTE: This option is not currently supported.
+	LoadBalancer ExternalAddressabilityMethod = "LoadBalancer"
+)
+
+func (opts *ExternalAddressability) withDefaults() (changed bool) {
+	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
+	if opts.UseExternalAddress && opts.HideNodes {
+		changed = true
+		opts.UseExternalAddress = false
+	}
+	// If the Ingress method is used, default the nodePortOverride to 80, since that is the port that most ingress controllers listen on.
+	if !opts.HideNodes && opts.Method == Ingress && opts.NodePortOverride == 0 {
+		changed = true
+		opts.NodePortOverride = 80
+	}
+	// If a headless service is used, aka not using individual node services, then a nodePortOverride is not allowed.
+	if !opts.UsesIndividualNodeServices() && opts.NodePortOverride > 0 {
+		changed = true
+		opts.NodePortOverride = 0
+	}
+
+	return changed
 }
 
 // DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
@@ -620,12 +768,16 @@ type SolrCloud struct {
 }
 
 // WithDefaults set default values when not defined in the spec.
-func (sc *SolrCloud) WithDefaults() bool {
-	return sc.Spec.withDefaults()
+func (sc *SolrCloud) WithDefaults(ingressBaseDomain string) bool {
+	return sc.Spec.withDefaults(ingressBaseDomain)
 }
 
 func (sc *SolrCloud) GetAllSolrNodeNames() []string {
-	nodeNames := make([]string, *sc.Spec.Replicas)
+	replicas := 1
+	if sc.Spec.Replicas != nil {
+		replicas = int(*sc.Spec.Replicas)
+	}
+	nodeNames := make([]string, replicas)
 	statefulSetName := sc.StatefulSetName()
 	for i := range nodeNames {
 		nodeNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
@@ -695,47 +847,139 @@ func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
 	return zkInfo.InternalConnectionString + zkInfo.ChRoot
 }
 
-func (sc *SolrCloud) CommonIngressPrefix() string {
+// UsesHeadlessService returns whether the given solrCloud requires a headless service to be created for it.
+// solrCloud: SolrCloud instance
+func (sc *SolrCloud) UsesHeadlessService() bool {
+	return !sc.Spec.SolrAddressability.External.UsesIndividualNodeServices()
+}
+
+// UsesIndividualNodeServices returns whether the given solrCloud requires a individual node services to be created for it.
+// solrCloud: SolrCloud instance
+func (sc *SolrCloud) UsesIndividualNodeServices() bool {
+	return sc.Spec.SolrAddressability.External.UsesIndividualNodeServices()
+}
+
+func (extOpts *ExternalAddressability) UsesIndividualNodeServices() bool {
+	// LoadBalancer and Ingress will not work with headless services if each pod needs to be exposed externally.
+	return extOpts != nil && !extOpts.HideNodes && (extOpts.Method == Ingress || extOpts.Method == LoadBalancer)
+}
+
+func (sc *SolrCloud) CommonExternalPrefix() string {
 	return fmt.Sprintf("%s-%s-solrcloud", sc.Namespace, sc.Name)
 }
 
-func (sc *SolrCloud) CommonIngressUrl(ingressBaseUrl string) string {
-	return fmt.Sprintf("%s.%s", sc.CommonIngressPrefix(), ingressBaseUrl)
+func (sc *SolrCloud) CommonExternalUrl(domainName string) string {
+	return fmt.Sprintf("%s.%s", sc.CommonExternalPrefix(), domainName)
 }
 
 func (sc *SolrCloud) NodeIngressPrefix(nodeName string) string {
 	return fmt.Sprintf("%s-%s", sc.Namespace, nodeName)
 }
 
-func (sc *SolrCloud) NodeIngressUrl(nodeName string, ingressBaseUrl string) string {
-	return fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), ingressBaseUrl)
+func (sc *SolrCloud) ExternalDnsDomain(domainName string) string {
+	return fmt.Sprintf("%s.%s", sc.Namespace, domainName)
 }
 
-func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) string {
-	url := fmt.Sprintf("%s.%s.%s", nodeName, sc.HeadlessServiceName(), sc.Namespace)
+func (sc *SolrCloud) customKubeDomain() string {
+	if sc.Spec.SolrAddressability.KubeDomain != "" {
+		return ".svc." + sc.Spec.SolrAddressability.KubeDomain
+	} else {
+		return ""
+	}
+}
+
+func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) (url string) {
+	url = fmt.Sprintf("%s.%s.%s", nodeName, sc.HeadlessServiceName(), sc.Namespace) + sc.customKubeDomain()
 	if withPort {
-		url += ":8983"
+		url += sc.NodePortSuffix()
 	}
 	return url
 }
 
-func (sc *SolrCloud) NodeServiceUrl(nodeName string) string {
-	return fmt.Sprintf("%s.%s", nodeName, sc.Namespace)
+func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string) {
+	url = fmt.Sprintf("%s.%s", nodeName, sc.Namespace) + sc.customKubeDomain()
+	if withPort {
+		url += sc.NodePortSuffix()
+	}
+	return url
 }
 
-func (sc *SolrCloud) InternalNodeUrl(nodeName string, useHeadlessService bool, withPort bool) string {
-	if useHeadlessService {
+func (sc *SolrCloud) CommonPortSuffix() string {
+	return PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+}
+
+func (sc *SolrCloud) NodePortSuffix() string {
+	return PortToSuffix(sc.NodePort())
+}
+
+func (sc *SolrCloud) NodePort() int {
+	port := sc.Spec.SolrAddressability.PodPort
+	external := sc.Spec.SolrAddressability.External
+	// The nodePort is different than the podPort ONLY if the nodes are exposed externally and a nodePortOverride has been set.
+	if external.UsesIndividualNodeServices() && external.NodePortOverride > 0 {
+		port = sc.Spec.SolrAddressability.External.NodePortOverride
+	}
+	return port
+}
+
+// PortToSuffix returns the url suffix for a port.
+// Port 80 does not require a suffix, as it is the default port for HTTP.
+func PortToSuffix(port int) string {
+	if port == 80 {
+		return ""
+	}
+	return ":" + strconv.Itoa(port)
+}
+
+func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
+	if sc.UsesHeadlessService() {
 		return sc.NodeHeadlessUrl(nodeName, withPort)
+	} else if sc.UsesIndividualNodeServices() {
+		return sc.NodeServiceUrl(nodeName, withPort)
 	} else {
-		return sc.NodeServiceUrl(nodeName)
+		return ""
 	}
 }
 
-func (sc *SolrCloud) ExternalNodeUrl(nodeName string, ingressBaseDomain string, withPort bool) string {
-	if ingressBaseDomain == "" {
-		return sc.NodeHeadlessUrl(nodeName, withPort)
+func (sc *SolrCloud) InternalCommonUrl(withPort bool) (url string) {
+	url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.Namespace) + sc.customKubeDomain()
+	if withPort {
+		url += sc.NodePortSuffix()
+	}
+	return url
+}
+
+func (sc *SolrCloud) ExternalNodeUrl(nodeName string, domainName string, withPort bool) (url string) {
+	if sc.Spec.SolrAddressability.External.Method == Ingress {
+		url = fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), domainName)
+	} else if sc.Spec.SolrAddressability.External.Method == ExternalDNS {
+		url = fmt.Sprintf("%s.%s", nodeName, sc.ExternalDnsDomain(domainName))
+	}
+	// TODO: Add LoadBalancer stuff here
+	if withPort {
+		url += sc.NodePortSuffix()
+	}
+	return url
+}
+
+func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url string) {
+	if sc.Spec.SolrAddressability.External.Method == Ingress {
+		url = fmt.Sprintf("%s.%s", sc.CommonExternalPrefix(), domainName)
+	} else if sc.Spec.SolrAddressability.External.Method == ExternalDNS {
+		url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.ExternalDnsDomain(domainName))
+	}
+	if withPort {
+		url += sc.CommonPortSuffix()
+	}
+	return url
+}
+
+func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
+	external := sc.Spec.SolrAddressability.External
+	if external != nil && external.UseExternalAddress {
+		return sc.ExternalNodeUrl(nodeName, sc.Spec.SolrAddressability.External.DomainName, false)
 	} else {
-		return sc.NodeIngressUrl(nodeName, ingressBaseDomain)
+		return sc.InternalNodeUrl(nodeName, false)
 	}
 }
 

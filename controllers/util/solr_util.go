@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -35,9 +36,7 @@ import (
 )
 
 const (
-	SolrClientPort        = 8983
 	SolrClientPortName    = "solr-client"
-	ExtSolrClientPort     = 80
 	ExtSolrClientPortName = "ext-solr-client"
 	BackupRestoreVolume   = "backup-restore"
 
@@ -49,9 +48,10 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, ingressBaseDomain string, hostNameIPs map[string]string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
-	fsGroup := int64(SolrClientPort)
+	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
+	fsGroup := int64(solrPodPort)
 	defaultMode := int32(420)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
@@ -164,11 +164,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// if an ingressBaseDomain is provided, the node should be addressable outside of the cluster
-	solrHostName := solrCloud.ExternalNodeUrl("$(POD_HOSTNAME)", ingressBaseDomain, false)
-	solrAdressingPort := 8983
-	if ingressBaseDomain != "" {
-		solrAdressingPort = 80
-	}
+	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
+	solrAdressingPort := solrCloud.NodePort()
 
 	// Environment Variables
 	envVars := []corev1.EnvVar{
@@ -182,7 +179,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 		{
 			Name:  "SOLR_PORT",
-			Value: strconv.Itoa(SolrClientPort),
+			Value: strconv.Itoa(solrPodPort),
 		},
 		{
 			Name: "POD_HOSTNAME",
@@ -274,7 +271,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 							ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
 							Ports: []corev1.ContainerPort{
 								{
-									ContainerPort: SolrClientPort,
+									ContainerPort: int32(solrPodPort),
 									Name:          SolrClientPortName,
 									Protocol:      "TCP",
 								},
@@ -292,7 +289,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 									HTTPGet: &corev1.HTTPGetAction{
 										Scheme: corev1.URISchemeHTTP,
 										Path:   "/solr/admin/info/system",
-										Port:   intstr.FromInt(SolrClientPort),
+										Port:   intstr.FromInt(solrPodPort),
 									},
 								},
 							},
@@ -306,7 +303,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 									HTTPGet: &corev1.HTTPGetAction{
 										Scheme: corev1.URISchemeHTTP,
 										Path:   "/solr/admin/info/system",
-										Port:   intstr.FromInt(SolrClientPort),
+										Port:   intstr.FromInt(solrPodPort),
 									},
 								},
 							},
@@ -540,6 +537,17 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 
 	var annotations map[string]string
 
+	// Add externalDNS annotation if necessary
+	extOpts := solrCloud.Spec.SolrAddressability.External
+	if extOpts != nil && extOpts.Method == solr.ExternalDNS && !extOpts.HideCommon {
+		annotations = make(map[string]string, 1)
+		urls := []string{solrCloud.ExternalDnsDomain(extOpts.DomainName)}
+		for _, domain := range extOpts.AdditionalDomainNames {
+			urls = append(urls, solrCloud.ExternalDnsDomain(domain))
+		}
+		annotations["external-dns.alpha.kubernetes.io/hostname"] = strings.Join(urls, ",")
+	}
+
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.CommonServiceOptions
 	if nil != customOptions {
 		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
@@ -555,7 +563,7 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
+				{Name: ExtSolrClientPortName, Port: int32(solrCloud.Spec.SolrAddressability.CommonServicePort), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			Selector: selectorLabels,
 		},
@@ -576,6 +584,17 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 
 	var annotations map[string]string
 
+	// Add externalDNS annotation if necessary
+	extOpts := solrCloud.Spec.SolrAddressability.External
+	if extOpts != nil && extOpts.Method == solr.ExternalDNS && !extOpts.HideNodes {
+		annotations = make(map[string]string, 1)
+		urls := []string{solrCloud.ExternalDnsDomain(extOpts.DomainName)}
+		for _, domain := range extOpts.AdditionalDomainNames {
+			urls = append(urls, solrCloud.ExternalDnsDomain(domain))
+		}
+		annotations["external-dns.alpha.kubernetes.io/hostname"] = strings.Join(urls, ",")
+	}
+
 	customOptions := solrCloud.Spec.CustomSolrKubeOptions.HeadlessServiceOptions
 	if nil != customOptions {
 		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
@@ -591,7 +610,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: SolrClientPortName, Port: SolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
+				{Name: ExtSolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			Selector:                 selectorLabels,
 			ClusterIP:                corev1.ClusterIPNone,
@@ -632,7 +651,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: ExtSolrClientPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrClientPort)},
+				{Name: ExtSolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			PublishNotReadyAddresses: true,
 		},
@@ -669,11 +688,11 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 	return requireUpdate
 }
 
-// GenerateCommonIngress returns a new Ingress pointer generated for the entire SolrCloud, pointing to all instances
+// GenerateIngress returns a new Ingress pointer generated for the entire SolrCloud, pointing to all instances
 // solrCloud: SolrCloud instance
 // nodeStatuses: []SolrNodeStatus the nodeStatuses
 // ingressBaseDomain: string baseDomain of the ingress
-func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
+func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	var annotations map[string]string
 
@@ -683,28 +702,10 @@ func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingres
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-	rules := []extv1.IngressRule{
-		{
-			Host: solrCloud.CommonIngressUrl(ingressBaseDomain),
-			IngressRuleValue: extv1.IngressRuleValue{
-				HTTP: &extv1.HTTPIngressRuleValue{
-					Paths: []extv1.HTTPIngressPath{
-						{
-							Backend: extv1.IngressBackend{
-								ServiceName: solrCloud.CommonServiceName(),
-								ServicePort: intstr.FromInt(ExtSolrClientPort),
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+	extOpts := solrCloud.Spec.SolrAddressability.External
 
-	for _, nodeName := range nodeNames {
-		ingressRule := CreateNodeIngressRule(solrCloud, nodeName, ingressBaseDomain)
-		rules = append(rules, ingressRule)
-	}
+	// Create advertised domain name and possible additional domain names
+	rules := CreateSolrIngressRules(solrCloud, nodeNames, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
 
 	ingress = &extv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -720,20 +721,63 @@ func GenerateCommonIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingres
 	return ingress
 }
 
-// CreateNodeIngressRule returns a new Ingress Rule generated for a specific Solr Node
+// CreateSolrIngressRules returns all applicable ingress rules for a cloud.
+// solrCloud: SolrCloud instance
+// nodeNames: the names for each of the solr pods
+// domainName: string Domain for the ingress rule to use
+func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) []extv1.IngressRule {
+	var ingressRules []extv1.IngressRule
+	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
+		for _, domainName := range domainNames {
+			ingressRules = append(ingressRules, CreateCommonIngressRule(solrCloud, domainName))
+		}
+	}
+	if !solrCloud.Spec.SolrAddressability.External.HideNodes {
+		for _, nodeName := range nodeNames {
+			for _, domainName := range domainNames {
+				ingressRules = append(ingressRules, CreateNodeIngressRule(solrCloud, nodeName, domainName))
+			}
+		}
+	}
+	return ingressRules
+}
+
+// CreateCommonIngressRule returns a new Ingress Rule generated for a SolrCloud under the given domainName
+// solrCloud: SolrCloud instance
+// domainName: string Domain for the ingress rule to use
+func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule extv1.IngressRule) {
+	ingressRule = extv1.IngressRule{
+		Host: solrCloud.ExternalCommonUrl(domainName, false),
+		IngressRuleValue: extv1.IngressRuleValue{
+			HTTP: &extv1.HTTPIngressRuleValue{
+				Paths: []extv1.HTTPIngressPath{
+					{
+						Backend: extv1.IngressBackend{
+							ServiceName: solrCloud.CommonServiceName(),
+							ServicePort: intstr.FromInt(solrCloud.Spec.SolrAddressability.CommonServicePort),
+						},
+					},
+				},
+			},
+		},
+	}
+	return ingressRule
+}
+
+// CreateNodeIngressRule returns a new Ingress Rule generated for a specific Solr Node under the given domainName
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
-// ingressBaseDomain: string base domain for the ingress controller
-func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, ingressBaseDomain string) (ingressRule extv1.IngressRule) {
+// domainName: string Domain for the ingress rule to use
+func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainName string) (ingressRule extv1.IngressRule) {
 	ingressRule = extv1.IngressRule{
-		Host: solrCloud.NodeIngressUrl(nodeName, ingressBaseDomain),
+		Host: solrCloud.ExternalNodeUrl(nodeName, domainName, false),
 		IngressRuleValue: extv1.IngressRuleValue{
 			HTTP: &extv1.HTTPIngressRuleValue{
 				Paths: []extv1.HTTPIngressPath{
 					{
 						Backend: extv1.IngressBackend{
 							ServiceName: nodeName,
-							ServicePort: intstr.FromInt(ExtSolrClientPort),
+							ServicePort: intstr.FromInt(solrCloud.NodePort()),
 						},
 					},
 				},

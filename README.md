@@ -43,6 +43,13 @@ Please visit the following pages for documentation on using and developing the S
 
 ## Version Compatibility & Upgrade Notes
 
+#### v0.2.6
+- The solr-operator argument `--ingressBaseDomain` has been **DEPRECATED**.
+In order to set the external baseDomain of your clouds, please begin to use `SolrCloud.spec.solrAddressability.external.domainName` instead.
+You will also need to set `SolrCloud.spec.solrAddressability.external.method` to `Ingress`.
+The `--ingressBaseDomain` argument is backwards compatible, and all existing SolrCloud objects will be auto-updated once your operator is upgraded to `v0.2.6`.
+The argument will be removed in a future version (`v0.3.0`).
+
 #### v0.2.4
 - The default supported version of the Zookeeper Operator has been upgraded to `v0.2.6`.  
 If you are using the provided zookeeper option for your SolrClouds, then you will want to upgrade your zookeeper operator version as well as the version and image of the zookeeper that you are running.

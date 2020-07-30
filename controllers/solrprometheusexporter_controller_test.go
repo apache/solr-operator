@@ -93,7 +93,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	expectNoConfigMap(g, requests, metricsCMKey)
+	expectNoConfigMap(g, metricsCMKey)
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 

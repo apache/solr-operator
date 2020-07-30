@@ -100,7 +100,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	changed := instance.WithDefaults()
+	changed := instance.WithDefaults(IngressBaseUrl)
 	if changed {
 		r.Log.Info("Setting default settings for solr-cloud", "namespace", instance.Namespace, "name", instance.Name)
 		if err := r.Update(context.TODO(), instance); err != nil {
@@ -140,7 +140,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			r.Log.Info("Updating Common Service", "namespace", commonService.Namespace, "name", commonService.Name)
 			err = r.Update(context.TODO(), foundCommonService)
 		}
-		newStatus.InternalCommonAddress = "http://" + foundCommonService.Name + "." + foundCommonService.Namespace
 	} else {
 		return requeueOrNot, err
 	}
@@ -149,40 +148,45 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	hostNameIpMap := make(map[string]string)
 	// Generate a service for every Node
-	for _, nodeName := range solrNodeNames {
-		err, ip := reconcileNodeService(r, instance, nodeName)
-		if err != nil {
-			return requeueOrNot, err
-		}
-		if IngressBaseUrl != "" {
-			if ip == "" {
-				// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
-				blockReconciliationOfStatefulSet = true
-			} else {
-				hostNameIpMap[instance.NodeIngressUrl(nodeName, IngressBaseUrl)] = ip
+	if instance.UsesIndividualNodeServices() {
+		for _, nodeName := range solrNodeNames {
+			err, ip := reconcileNodeService(r, instance, nodeName)
+			if err != nil {
+				return requeueOrNot, err
+			}
+			// This IP Address only needs to be used in the hostname map if the SolrCloud is advertising the external address.
+			if instance.Spec.SolrAddressability.External.UseExternalAddress {
+				if ip == "" {
+					// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
+					blockReconciliationOfStatefulSet = true
+				} else {
+					hostNameIpMap[instance.AdvertisedNodeHost(nodeName)] = ip
+				}
 			}
 		}
 	}
 
 	// Generate HeadlessService
-	headless := util.GenerateHeadlessService(instance)
-	if err := controllerutil.SetControllerReference(instance, headless, r.scheme); err != nil {
-		return requeueOrNot, err
-	}
+	if instance.UsesHeadlessService() {
+		headless := util.GenerateHeadlessService(instance)
+		if err := controllerutil.SetControllerReference(instance, headless, r.scheme); err != nil {
+			return requeueOrNot, err
+		}
 
-	// Check if the HeadlessService already exists
-	foundHeadless := &corev1.Service{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
-	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating HeadlessService", "namespace", headless.Namespace, "name", headless.Name)
-		err = r.Create(context.TODO(), headless)
-	} else if err == nil && util.CopyServiceFields(headless, foundHeadless) {
-		// Update the found HeadlessService and write the result back if there are any changes
-		r.Log.Info("Updating HeadlessService", "namespace", headless.Namespace, "name", headless.Name)
-		err = r.Update(context.TODO(), foundHeadless)
-	}
-	if err != nil {
-		return requeueOrNot, err
+		// Check if the HeadlessService already exists
+		foundHeadless := &corev1.Service{}
+		err = r.Get(context.TODO(), types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
+		if err != nil && errors.IsNotFound(err) {
+			r.Log.Info("Creating HeadlessService", "namespace", headless.Namespace, "name", headless.Name)
+			err = r.Create(context.TODO(), headless)
+		} else if err == nil && util.CopyServiceFields(headless, foundHeadless) {
+			// Update the found HeadlessService and write the result back if there are any changes
+			r.Log.Info("Updating HeadlessService", "namespace", headless.Namespace, "name", headless.Name)
+			err = r.Update(context.TODO(), foundHeadless)
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
 	}
 
 	// Generate ConfigMap
@@ -213,7 +217,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, IngressBaseUrl, hostNameIpMap)
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
 			return requeueOrNot, err
 		}
@@ -260,9 +264,10 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return requeueOrNot, err
 	}
 
-	if IngressBaseUrl != "" {
+	extAddressabilityOpts := instance.Spec.SolrAddressability.External
+	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solr.Ingress {
 		// Generate Ingress
-		ingress := util.GenerateCommonIngress(instance, solrNodeNames, IngressBaseUrl)
+		ingress := util.GenerateIngress(instance, solrNodeNames, IngressBaseUrl)
 		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
 			return requeueOrNot, err
 		}
@@ -280,9 +285,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		if err != nil {
 			return requeueOrNot, err
-		} else {
-			address := "http://" + instance.CommonIngressUrl(IngressBaseUrl)
-			newStatus.ExternalCommonAddress = &address
 		}
 	}
 
@@ -323,9 +325,9 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
 		nodeStatus.NodeName = p.Spec.NodeName
-		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.NodeName, IngressBaseUrl == "", true)
-		if IngressBaseUrl != "" {
-			nodeStatus.ExternalAddress = "http://" + solrCloud.NodeIngressUrl(nodeStatus.Name, IngressBaseUrl)
+		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.NodeName, true)
+		if solrCloud.Spec.SolrAddressability.External != nil {
+			nodeStatus.ExternalAddress = "http://" + solrCloud.ExternalNodeUrl(nodeStatus.Name, solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		}
 		ready := false
 		if len(p.Status.ContainerStatuses) > 0 {
@@ -371,6 +373,12 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	} else {
 		newStatus.TargetVersion = ""
 		newStatus.Version = solrCloud.Spec.SolrImage.Tag
+	}
+
+	newStatus.InternalCommonAddress = "http://" + solrCloud.InternalCommonUrl(true)
+	if solrCloud.Spec.SolrAddressability.External != nil {
+		extAddress := "http://" + solrCloud.ExternalCommonUrl(solrCloud.Spec.SolrAddressability.External.DomainName, true)
+		newStatus.ExternalCommonAddress = &extAddress
 	}
 
 	return nil
