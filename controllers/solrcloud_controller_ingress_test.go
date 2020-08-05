@@ -130,6 +130,7 @@ func TestIngressCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=100"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -252,6 +253,7 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=3000"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -375,6 +377,7 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=100"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -496,6 +499,7 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=100"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -621,6 +625,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=100"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -743,6 +748,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=100"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments (Solr advertising port)")
+	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)

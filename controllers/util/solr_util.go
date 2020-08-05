@@ -322,6 +322,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 							Env:                      envVars,
 							TerminationMessagePath:   "/dev/termination-log",
 							TerminationMessagePolicy: "File",
+							Lifecycle: &corev1.Lifecycle{
+								PreStop: &corev1.Handler{
+									Exec: &corev1.ExecAction{
+										Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
+									},
+								},
+							},
 						},
 					},
 				},
@@ -494,7 +501,6 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
-	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	var annotations map[string]string
 
@@ -639,7 +645,6 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 // The PublishNotReadyAddresses option is set as true, because we want each pod to be reachable no matter the readiness of the pod.
 // solrCloud: SolrCloud instance
 func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
-	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["service-type"] = "headless"
 
@@ -689,7 +694,6 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 // solrCloud: SolrCloud instance
 // nodeName: string node
 func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Service {
-	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["service-type"] = "external"
 
