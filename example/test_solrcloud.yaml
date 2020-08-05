@@ -25,20 +25,19 @@ spec:
   zookeeperRef:
     provided:
       chroot: "/this/will/be/auto/created"
-      zookeeper:
-        persistence:
-          spec:
-            storageClassName: "hostpath"
-            resources:
-              requests:
-                storage: "5Gi"
-        replicas: 1
-        zookeeperPodPolicy:
+      persistence:
+        spec:
+          storageClassName: "hostpath"
           resources:
-            limits:
-              memory: "1G"
             requests:
-              cpu: "65m"
-              memory: "156Mi"
+              storage: "5Gi"
+      replicas: 1
+      zookeeperPodPolicy:
+        resources:
+          limits:
+            memory: "1G"
+          requests:
+            cpu: "65m"
+            memory: "156Mi"
   solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
   solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"

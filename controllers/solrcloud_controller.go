@@ -21,7 +21,6 @@ import (
 	"fmt"
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
-	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -48,15 +47,10 @@ type SolrCloudReconciler struct {
 }
 
 var useZkCRD bool
-var useEtcdCRD bool
 var IngressBaseUrl string
 
 func UseZkCRD(useCRD bool) {
 	useZkCRD = useCRD
-}
-
-func UseEtcdCRD(useCRD bool) {
-	useEtcdCRD = useCRD
 }
 
 func SetIngressBaseUrl(ingressBaseUrl string) {
@@ -67,8 +61,6 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 // +kubebuilder:rbac:groups="",resources=pods/status,verbs=get
 // +kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
@@ -79,8 +71,6 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=etcd.database.coreos.com,resources=etcdclusters/status,verbs=get;update;patch
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -399,119 +389,46 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 
 	if zkRef.ConnectionInfo != nil {
 		newStatus.ZookeeperConnectionInfo = *zkRef.ConnectionInfo
-	} else {
+	} else if zkRef.ProvidedZookeeper != nil {
 		pzk := zkRef.ProvidedZookeeper
-		if pzk == nil {
-			return errors.NewBadRequest("No Zookeeper reference information provided.")
+		// Generate ZookeeperCluster
+		if !useZkCRD {
+			return errors.NewBadRequest("Cannot create a Zookeeper Cluster, as the Solr Operator is not configured to use the Zookeeper CRD")
 		}
-		if pzk.Zetcd != nil {
-			if !useEtcdCRD {
-				return errors.NewBadRequest("Cannot create an Etcd Cluster, as the Solr Operator is not configured to use the Etcd CRD")
-			}
-			// Generate EtcdCluster
-			etcdCluster := util.GenerateEtcdCluster(instance, *pzk.Zetcd.EtcdSpec, busyBoxImage)
-			if err := controllerutil.SetControllerReference(instance, etcdCluster, r.scheme); err != nil {
-				return err
-			}
-
-			// Check if the EtcdCluster already exists
-			foundEtcdCluster := &etcd.EtcdCluster{}
-			err := r.Get(context.TODO(), types.NamespacedName{Name: etcdCluster.Name, Namespace: etcdCluster.Namespace}, foundEtcdCluster)
-			if err != nil && errors.IsNotFound(err) {
-				r.Log.Info("Creating EtcdCluster", "namespace", etcdCluster.Namespace, "name", etcdCluster.Name)
-				err = r.Create(context.TODO(), etcdCluster)
-			} else if err == nil && util.CopyEtcdClusterFields(etcdCluster, foundEtcdCluster) {
-				// Update the found EtcdCluster and write the result back if there are any changes
-				r.Log.Info("Updating EtcdCluster", "namespace", etcdCluster.Namespace, "name", etcdCluster.Name)
-				err = r.Update(context.TODO(), foundEtcdCluster)
-			}
-			if err != nil {
-				return err
-			}
-
-			// Generate Zetcd Deployment
-			deployment := util.GenerateZetcdDeployment(instance, *pzk.Zetcd.ZetcdSpec)
-			if err := controllerutil.SetControllerReference(instance, deployment, r.scheme); err != nil {
-				return err
-			}
-
-			// Check if the Zetcd Deployment already exists
-			foundDeployment := &appsv1.Deployment{}
-			err = r.Get(context.TODO(), types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, foundDeployment)
-			if err != nil && errors.IsNotFound(err) {
-				r.Log.Info("Creating Zetcd Deployment", "namespace", deployment.Namespace, "name", deployment.Name)
-				err = r.Create(context.TODO(), foundDeployment)
-			} else if err == nil && util.CopyDeploymentFields(deployment, foundDeployment) {
-				// Update the found Zetcd Deployment and write the result back if there are any changes
-				r.Log.Info("Updating Zetcd Deployment", "namespace", deployment.Namespace, "name", deployment.Name)
-				err = r.Update(context.TODO(), foundDeployment)
-			}
-			if err != nil {
-				return err
-			}
-
-			// Generate Zetcd Service
-			service := util.GenerateZetcdService(instance, *pzk.Zetcd.ZetcdSpec)
-			if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-				return err
-			}
-
-			// Check if the Zetcd Service already exists
-			foundService := &corev1.Service{}
-			err = r.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
-			if err != nil && errors.IsNotFound(err) {
-				r.Log.Info("Creating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
-				err = r.Create(context.TODO(), service)
-			} else if err == nil {
-				if util.CopyServiceFields(service, foundService) {
-					// Update the found Zetcd Service and write the result back if there are any changes
-					r.Log.Info("Updating Zetcd Service", "namespace", service.Namespace, "name", service.Name)
-					err = r.Update(context.TODO(), foundService)
-				}
-				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: service.Name + "." + service.Namespace + ":2181",
-					ChRoot:                   pzk.ChRoot,
-				}
-			}
-			return err
-		} else if pzk.Zookeeper != nil {
-			// Generate ZookeeperCluster
-			if !useZkCRD {
-				return errors.NewBadRequest("Cannot create a Zookeeper Cluster, as the Solr Operator is not configured to use the Zookeeper CRD")
-			}
-			zkCluster := util.GenerateZookeeperCluster(instance, *pzk.Zookeeper)
-			if err := controllerutil.SetControllerReference(instance, zkCluster, r.scheme); err != nil {
-				return err
-			}
-
-			// Check if the ZookeeperCluster already exists
-			foundZkCluster := &zk.ZookeeperCluster{}
-			err := r.Get(context.TODO(), types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
-			if err != nil && errors.IsNotFound(err) {
-				r.Log.Info("Creating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
-				err = r.Create(context.TODO(), zkCluster)
-			} else if err == nil {
-				if util.CopyZookeeperClusterFields(zkCluster, foundZkCluster) {
-					// Update the found ZookeeperCluster and write the result back if there are any changes
-					r.Log.Info("Updating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
-					err = r.Update(context.TODO(), foundZkCluster)
-				}
-				external := &foundZkCluster.Status.ExternalClientEndpoint
-				if "" == *external {
-					external = nil
-				}
-				internal := make([]string, zkCluster.Spec.Replicas)
-				for i, _ := range internal {
-					internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", foundZkCluster.Name, i, foundZkCluster.Name, foundZkCluster.Namespace, foundZkCluster.ZookeeperPorts().Client)
-				}
-				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: strings.Join(internal, ","),
-					ExternalConnectionString: external,
-					ChRoot:                   pzk.ChRoot,
-				}
-			}
+		zkCluster := util.GenerateZookeeperCluster(instance, pzk)
+		if err := controllerutil.SetControllerReference(instance, zkCluster, r.scheme); err != nil {
 			return err
 		}
+
+		// Check if the ZookeeperCluster already exists
+		foundZkCluster := &zk.ZookeeperCluster{}
+		err := r.Get(context.TODO(), types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
+		if err != nil && errors.IsNotFound(err) {
+			r.Log.Info("Creating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
+			err = r.Create(context.TODO(), zkCluster)
+		} else if err == nil {
+			if util.CopyZookeeperClusterFields(zkCluster, foundZkCluster) {
+				// Update the found ZookeeperCluster and write the result back if there are any changes
+				r.Log.Info("Updating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
+				err = r.Update(context.TODO(), foundZkCluster)
+			}
+			external := &foundZkCluster.Status.ExternalClientEndpoint
+			if "" == *external {
+				external = nil
+			}
+			internal := make([]string, zkCluster.Spec.Replicas)
+			for i, _ := range internal {
+				internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", foundZkCluster.Name, i, foundZkCluster.Name, foundZkCluster.Namespace, foundZkCluster.ZookeeperPorts().Client)
+			}
+			newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+				InternalConnectionString: strings.Join(internal, ","),
+				ExternalConnectionString: external,
+				ChRoot:                   pzk.ChRoot,
+			}
+		}
+		return err
+	} else {
+		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}
 	return nil
 }
@@ -531,9 +448,6 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zk.ZookeeperCluster{})
-	}
-	if useEtcdCRD {
-		ctrlBuilder = ctrlBuilder.Owns(&etcd.EtcdCluster{})
 	}
 
 	r.scheme = mgr.GetScheme()

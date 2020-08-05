@@ -18,12 +18,10 @@ package util
 
 import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
-	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"strconv"
 )
@@ -33,7 +31,7 @@ var log = logf.Log.WithName("controller")
 // GenerateZookeeperCluster returns a new ZookeeperCluster pointer generated for the SolrCloud instance
 // object: SolrCloud instance
 // zkSpec: the spec of the ZookeeperCluster to generate
-func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec solr.ZookeeperSpec) *zk.ZookeeperCluster {
+func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperSpec) *zk.ZookeeperCluster {
 	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["technology"] = solr.ZookeeperTechnologyLabel
@@ -154,8 +152,8 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	if !DeepEqualWithNils(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
 		log.Info("Updating Zk pod resources")
 		requireUpdate = true
+		to.Spec.Pod.Resources = from.Spec.Pod.Resources
 	}
-	to.Spec.Pod.Resources = from.Spec.Pod.Resources
 
 	if !DeepEqualWithNils(to.Spec.Pod.Tolerations, from.Spec.Pod.Tolerations) {
 		log.Info("Updating Zk tolerations")
@@ -171,125 +169,14 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 		to.Spec.Pod.NodeSelector = from.Spec.Pod.NodeSelector
 	}
 
-	if from.Spec.Pod.Affinity != nil {
-		if !DeepEqualWithNils(to.Spec.Pod.Affinity.NodeAffinity, from.Spec.Pod.Affinity.NodeAffinity) {
-			log.Info("Updating Zk pod node affinity")
-			log.Info("Update required because:", "Spec.Pod.Affinity.NodeAffinity changed from", to.Spec.Pod.Affinity.NodeAffinity, "To:", from.Spec.Pod.Affinity.NodeAffinity)
-			requireUpdate = true
-		}
-
-		if !DeepEqualWithNils(to.Spec.Pod.Affinity.PodAffinity, from.Spec.Pod.Affinity.PodAffinity) {
-			log.Info("Updating Zk pod node affinity")
-			log.Info("Update required because:", "Spec.Pod.Affinity.PodAffinity changed from", to.Spec.Pod.Affinity.PodAffinity, "To:", from.Spec.Pod.Affinity.PodAffinity)
-			requireUpdate = true
-		}
+	if !DeepEqualWithNils(to.Spec.Pod.Affinity, from.Spec.Pod.Affinity) {
+		log.Info("Updating Zk pod affinity")
+		log.Info("Update required because:", "Spec.Pod.Affinity canged from", to.Spec.Pod.Affinity, "To:", from.Spec.Pod.Affinity)
+		requireUpdate = true
 		to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
 	}
 
 	return requireUpdate
-}
-
-// GenerateEtcdCluster returns a new EtcdCluster pointer generated for the SolrCloud instance
-// object: SolrCloud instance
-// etcdSpec: the spec of the EtcdCluster to generate
-// busyBoxImage: the image of busyBox to use
-func GenerateEtcdCluster(solrCloud *solr.SolrCloud, etcdSpec solr.EtcdSpec, busyBoxImage solr.ContainerImage) *etcd.EtcdCluster {
-	// TODO: Default and Validate these with Webhooks
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["technology"] = solr.ZookeeperTechnologyLabel
-
-	etcdCluster := &etcd.EtcdCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.ProvidedZetcdName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: etcd.ClusterSpec{
-			Version:    etcdSpec.Image.Tag,
-			Repository: etcdSpec.Image.Repository,
-			Size:       *etcdSpec.Replicas,
-			Pod: &etcd.PodPolicy{
-				Labels:       labels,
-				BusyboxImage: busyBoxImage.ToImageName(),
-			},
-		},
-	}
-
-	// Append Pod Policies if provided by user
-	if etcdSpec.EtcdPod.Affinity != nil {
-		etcdCluster.Spec.Pod.Affinity = etcdSpec.EtcdPod.Affinity
-	}
-
-	if etcdSpec.EtcdPod.Resources.Limits != nil || etcdSpec.EtcdPod.Resources.Requests != nil {
-		etcdCluster.Spec.Pod.Resources = etcdSpec.EtcdPod.Resources
-	}
-
-	return etcdCluster
-}
-
-// CopyEtcdClusterFields copies the owned fields from one EtcdCluster to another
-// Returns true if the fields copied from don't match to.
-func CopyEtcdClusterFields(from, to *etcd.EtcdCluster) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	if !DeepEqualWithNils(to.Spec, from.Spec) {
-		requireUpdate = true
-	}
-	to.Spec = from.Spec
-
-	return requireUpdate
-}
-
-// GenerateZetcdDeployment returns a new appsv1.Deployment for Zetcd
-// solrCloud: SolrCloud instance
-// spec: ZetcdSpec
-func GenerateZetcdDeployment(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *appsv1.Deployment {
-	// TODO: Default and Validate these with Webhooks
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	selectorLabels := solrCloud.SharedLabels()
-
-	labels["technology"] = solr.ZookeeperTechnologyLabel
-	selectorLabels["technology"] = solr.ZookeeperTechnologyLabel
-
-	labels["app"] = "zetcd"
-	selectorLabels["app"] = "zetcd"
-
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.ProvidedZetcdName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: spec.Replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: selectorLabels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: labels},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:            "zetcd",
-							Image:           spec.Image.ToImageName(),
-							ImagePullPolicy: spec.Image.PullPolicy,
-							Ports:           []corev1.ContainerPort{{ContainerPort: 2181}},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	if spec.ZetcdPod.Resources.Limits != nil || spec.ZetcdPod.Resources.Requests != nil {
-		deployment.Spec.Template.Spec.Containers[0].Resources = spec.ZetcdPod.Resources
-	}
-
-	if spec.ZetcdPod.Affinity != nil {
-		deployment.Spec.Template.Spec.Affinity = spec.ZetcdPod.Affinity
-	}
-
-	return deployment
 }
 
 // CopyDeploymentFields copies the owned fields from one Deployment to another
@@ -413,34 +300,4 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 	}
 
 	return requireUpdate
-}
-
-// GenerateZetcdService returns a new corev1.Service pointer generated for the Zetcd deployment
-// solrCloud: SolrCloud instance
-// spec: ZetcdSpec
-func GenerateZetcdService(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *corev1.Service {
-	// TODO: Default and Validate these with Webhooks
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	selectorLabels := solrCloud.SharedLabels()
-
-	labels["technology"] = solr.ZookeeperTechnologyLabel
-	selectorLabels["technology"] = solr.ZookeeperTechnologyLabel
-
-	labels["app"] = "zetcd"
-	selectorLabels["app"] = "zetcd"
-
-	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.ProvidedZetcdName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{Port: 2181, TargetPort: intstr.IntOrString{IntVal: 2181, Type: intstr.Int}},
-			},
-			Selector: selectorLabels,
-		},
-	}
-	return service
 }

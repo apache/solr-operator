@@ -3,7 +3,6 @@ module github.com/bloomberg/solr-operator
 go 1.14
 
 require (
-	github.com/coreos/etcd-operator v0.9.3
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
 	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/go-logr/logr v0.2.1

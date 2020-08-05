@@ -19,7 +19,6 @@ spec:
       containers:
       - args:
         - -zk-operator=true
-        - -etcd-operator=false
         image: bloomberg/solr-operator:latest
         imagePullPolicy: IfNotPresent
         name: solr-operator

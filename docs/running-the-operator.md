@@ -66,10 +66,6 @@ In order to run the Solr Operator, you will only need the Slim Image.
                           Required to use the `ProvidedZookeeper.Zookeeper` option within the Spec.
                           If _true_, then a Zookeeper Operator must be running for the cluster.
                           ( _true_ | _false_ , defaults to _false_)
-* **-etcd-operator** Whether or not to use the Etcd Operator to create dependent Zetcd clusters.
-                     Required to use the `ProvidedZookeeper.Zetcd` option within the Spec.
-                     If _true_, then an Etcd Operator must be running for the cluster.
-                     ( _true_ | _false_ , defaults to _false_)
 * **-ingress-base-domain** If you desire to make solr externally addressable via ingresses, a base ingress domain is required.
                         Solr Clouds will be created with ingress rules at `*.(ingress-base-domain)`.
                         ( _optional_ , e.g. `ing.base.domain` )

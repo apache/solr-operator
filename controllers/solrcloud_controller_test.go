@@ -17,6 +17,8 @@ limitations under the License.
 package controllers
 
 import (
+	zookeeperv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	"testing"
 
 	"github.com/bloomberg/solr-operator/controllers/util"
@@ -25,7 +27,6 @@ import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -46,7 +47,6 @@ var (
 
 func TestCloudReconcile(t *testing.T) {
 	SetIngressBaseUrl("")
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
@@ -147,7 +147,6 @@ func TestCloudReconcile(t *testing.T) {
 func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	ingressBaseDomain := "ing.base.domain"
 	SetIngressBaseUrl(ingressBaseDomain)
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	replicas := int32(4)
@@ -291,16 +290,14 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 
 func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	SetIngressBaseUrl("")
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
 			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ProvidedZookeeper{
-					ChRoot:    "a-ch/root",
-					Zookeeper: &solr.ZookeeperSpec{},
+				ProvidedZookeeper: &solr.ZookeeperSpec{
+					ChRoot: "a-ch/root",
 				},
 			},
 		},
@@ -370,7 +367,6 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 	SetIngressBaseUrl("")
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	connString := "host:7271,host2:7271"
@@ -447,20 +443,14 @@ func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 
 func TestDefaults(t *testing.T) {
 	SetIngressBaseUrl("")
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
 			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ProvidedZookeeper{
-					Zookeeper: &solr.ZookeeperSpec{
-						Replicas:                  nil,
-						Image:                     nil,
-						PersistentVolumeClaimSpec: &corev1.PersistentVolumeClaimSpec{},
-						ZookeeperPod:              solr.ZookeeperPodPolicy{},
-					},
+				ProvidedZookeeper: &solr.ZookeeperSpec{
+					Persistence: &zookeeperv1beta1.Persistence{},
 				},
 			},
 		},
@@ -497,7 +487,7 @@ func TestDefaults(t *testing.T) {
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
 	// Solr defaults
-	assert.Equal(t, solr.DefaultSolrReplicas, *instance.Spec.Replicas, "Bad Default - Spec.Replicas")
+	assert.EqualValues(t, solr.DefaultSolrReplicas, *instance.Spec.Replicas, "Bad Default - Spec.Replicas")
 	assert.NotNil(t, instance.Spec.SolrImage, "Bad Default - instance.Spec.SolrImage")
 	assert.Equal(t, solr.DefaultSolrRepo, instance.Spec.SolrImage.Repository, "Bad Default - instance.Spec.SolrImage.Repository")
 	assert.Equal(t, solr.DefaultSolrVersion, instance.Spec.SolrImage.Tag, "Bad Default - instance.Spec.SolrImage.Tag")
@@ -509,37 +499,25 @@ func TestDefaults(t *testing.T) {
 	assert.Nil(t, instance.Spec.SolrAddressability.External, "Bad Default - instance.Spec.SolrAddressability.External")
 
 	// Check the default Zookeeper
-	assert.Equal(t, solr.DefaultZkReplicas, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas, "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
-	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image")
-	assert.Equal(t, solr.DefaultZkRepo, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Repository, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Repository")
-	assert.Equal(t, solr.DefaultZkVersion, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Tag, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Tag")
-	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence")
-	assert.Equal(t, solr.DefaultZkVolumeReclaimPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
-	assert.Equal(t, solr.DefaultZkVolumeReclaimPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
-	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec")
-	assert.Equal(t, 1, len(instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources.Requests), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources length")
-	assert.Equal(t, 1, len(instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.AccessModes), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.AccesModes length")
+	assert.Equal(t, solr.DefaultZkReplicas, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
+	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image")
+	assert.Equal(t, solr.DefaultZkRepo, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image.Repository, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Repository")
+	assert.Equal(t, solr.DefaultZkVersion, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image.Tag, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Tag")
+	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence")
+	assert.Equal(t, solr.DefaultZkVolumeReclaimPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
+	assert.Equal(t, solr.DefaultZkVolumeReclaimPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
+	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec")
+	assert.Equal(t, 1, len(instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.Resources.Requests), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources length")
+	assert.Equal(t, 1, len(instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.AccessModes), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.AccesModes length")
 }
 
 func TestIngressDefaults(t *testing.T) {
 	SetIngressBaseUrl("test.ingress.url")
-	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ProvidedZookeeper{
-					Zookeeper: &solr.ZookeeperSpec{
-						Replicas:                  nil,
-						Image:                     nil,
-						PersistentVolumeClaimSpec: &corev1.PersistentVolumeClaimSpec{},
-						ZookeeperPod:              solr.ZookeeperPodPolicy{},
-					},
-				},
-			},
-		},
+		Spec:       solr.SolrCloudSpec{},
 	}
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
@@ -633,9 +611,84 @@ func TestIngressDefaults(t *testing.T) {
 	assert.Equal(t, 80, instance.Spec.SolrAddressability.External.NodePortOverride, "Bad Default - instance.Spec.SolrAddressability.External.NodePortOverride")
 }
 
+// Deprecated: Will be removed in v0.3.0
+func TestZookeeperDeprecationRemap(t *testing.T) {
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+	reps := int32(2)
+
+	testImage := &solr.ContainerImage{
+		Repository:      "test/repo",
+		Tag:             "latest",
+		PullPolicy:      "Always",
+		ImagePullSecret: "",
+	}
+	testPVCSpec := &corev1.PersistentVolumeClaimSpec{
+		VolumeName: "test",
+	}
+
+	testPodPolicy := solr.ZookeeperPodPolicy{
+		Affinity: &corev1.Affinity{
+			NodeAffinity:    &corev1.NodeAffinity{},
+			PodAntiAffinity: &corev1.PodAntiAffinity{},
+		},
+	}
+
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			ZookeeperRef: &solr.ZookeeperRef{
+				ProvidedZookeeper: &solr.ZookeeperSpec{
+					ZookeeperOutdated: &solr.OldZookeeperSpec{
+						Replicas:                  &reps,
+						Image:                     testImage,
+						PersistentVolumeClaimSpec: testPVCSpec,
+						ZookeeperPod:              testPodPolicy,
+					},
+				},
+			},
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+
+	// Check the default Zookeeper
+	assert.Equal(t, reps, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
+	assert.EqualValues(t, testImage, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Image")
+	assert.EqualValues(t, testPVCSpec.VolumeName, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.VolumeName, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.PersistentVolumeClaimSpec.VolumeName")
+	assert.Equal(t, testPodPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod, "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.ZookeeperPod")
+}
+
 func TestExternalKubeDomainCloudReconcile(t *testing.T) {
 	SetIngressBaseUrl("")
-	UseEtcdCRD(false)
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 

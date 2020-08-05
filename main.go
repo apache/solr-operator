@@ -26,7 +26,6 @@ import (
 
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers"
-	etcdv1beta2 "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -57,7 +56,6 @@ var (
 	watchNamespaces string
 
 	// External Operator dependencies
-	useEtcdCRD      bool
 	useZookeeperCRD bool
 
 	// Addressability Options
@@ -69,10 +67,8 @@ func init() {
 
 	_ = solrv1beta1.AddToScheme(scheme)
 	_ = zkv1beta1.AddToScheme(scheme)
-	_ = etcdv1beta2.AddToScheme(scheme)
 
 	// +kubebuilder:scaffold:scheme
-	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&ingressBaseDomain, "ingress-base-domain", "", "The operator will use this base domain for host matching in an ingress for the cloud.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
@@ -135,7 +131,6 @@ func main() {
 	}
 
 	controllers.SetIngressBaseUrl(ingressBaseDomain)
-	controllers.UseEtcdCRD(useEtcdCRD)
 	controllers.UseZkCRD(useZookeeperCRD)
 
 	if err = (&controllers.SolrCloudReconciler{

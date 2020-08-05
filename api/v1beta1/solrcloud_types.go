@@ -48,14 +48,6 @@ const (
 	DefaultZkVersion             = "0.2.6"
 	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
-	DefaultEtcdReplicas = 3
-	DefaultEtcdRepo     = "quay.io/coreos/etcd"
-	DefaultEtcdVersion  = "3.2.13"
-
-	DefaultZetcdReplicas = int32(1)
-	DefaultZetcdRepo     = "quay.io/etcd-io/zetcd"
-	DefaultZetcdVersion  = "0.0.5"
-
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
 )
@@ -385,16 +377,19 @@ type ZookeeperRef struct {
 	// +optional
 	ConnectionInfo *ZookeeperConnectionInfo `json:"connectionInfo,omitempty"`
 
-	// A zookeeper that is created by the solr operator
+	// Create a new Zookeeper Ensemble with the following spec
 	// Note: This option will not allow the SolrCloud to run across kube-clusters.
+	// Note: Requires
+	//   - The zookeeperOperator flag to be provided to the Solr Operator
+	//   - A zookeeper operator to be running
 	// +optional
-	ProvidedZookeeper *ProvidedZookeeper `json:"provided,omitempty"`
+	ProvidedZookeeper *ZookeeperSpec `json:"provided,omitempty"`
 }
 
 func (ref *ZookeeperRef) withDefaults() (changed bool) {
 	if ref.ProvidedZookeeper == nil && ref.ConnectionInfo == nil {
 		changed = true
-		ref.ProvidedZookeeper = &ProvidedZookeeper{}
+		ref.ProvidedZookeeper = &ZookeeperSpec{}
 	} else if ref.ConnectionInfo != nil {
 		if ref.ProvidedZookeeper != nil {
 			ref.ProvidedZookeeper = nil
@@ -425,37 +420,78 @@ func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 	return changed
 }
 
-// ProvidedZookeeper defines the internal zookeeper ensemble to run
-type ProvidedZookeeper struct {
-	// Create a new Zookeeper Ensemble with the following spec
-	// Note: Requires
-	//   - The zookeeperOperator flag to be provided to the Solr Operator
-	//   - A zookeeper operator to be running
+// ZookeeperSpec defines the internal zookeeper ensemble to run with the given spec
+type ZookeeperSpec struct {
+	// DEPRECATED: Will be removed in v0.3.0
 	// +optional
-	Zookeeper *ZookeeperSpec `json:"zookeeper,omitempty"`
+	ZookeeperOutdated *OldZookeeperSpec `json:"zookeeper,omitempty"`
 
-	// Create a new Etcd Cluster and a Zetcd proxy to connect the cluster to solr
-	// Note: Requires
-	//   - The etcdOperator flag to be provided to the Solr Operator
-	//   - An etcd operator to be running
+	// Number of members to create up for the ZK ensemble
+	// Defaults to 3
 	// +optional
-	Zetcd *FullZetcdSpec `json:"zetcd,inline"`
+	Replicas *int32 `json:"replicas,omitempty"`
+
+	// Image of Zookeeper to run
+	// +optional
+	Image *ContainerImage `json:"image,omitempty"`
+
+	// Persistence is the configuration for zookeeper persistent layer.
+	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
+	// +optional
+	Persistence *zk.Persistence `json:"persistence,omitempty"`
+
+	// Pod resources for zookeeper pod
+	// +optional
+	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
 
 	// The ChRoot to connect solr at
 	// +optional
 	ChRoot string `json:"chroot,omitempty"`
 }
 
-func (z *ProvidedZookeeper) withDefaults() (changed bool) {
-	if z.Zookeeper == nil && z.Zetcd == nil {
+func (z *ZookeeperSpec) withDefaults() (changed bool) {
+	// Fill information from the deprecated section, and then remove it.
+	// This will be removed when the deprecated feature is removed.
+	if z.ZookeeperOutdated != nil {
+		z.ZookeeperOutdated.withDefaults()
+		z.Replicas = z.ZookeeperOutdated.Replicas
+		z.Image = z.ZookeeperOutdated.Image
+		z.Persistence = z.ZookeeperOutdated.Persistence
+		z.ZookeeperPod = z.ZookeeperOutdated.ZookeeperPod
+		z.ZookeeperOutdated = nil
 		changed = true
-		z.Zookeeper = &ZookeeperSpec{}
 	}
-	if z.Zookeeper != nil {
-		changed = z.Zookeeper.withDefaults() || changed
+
+	if z.Replicas == nil {
+		changed = true
+		r := DefaultZkReplicas
+		z.Replicas = &r
 	}
-	if z.Zetcd != nil {
-		changed = z.Zetcd.withDefaults() || changed
+
+	if z.Image == nil {
+		z.Image = &ContainerImage{}
+	}
+	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
+
+	if z.Persistence != nil {
+		if z.Persistence.VolumeReclaimPolicy == "" {
+			z.Persistence.VolumeReclaimPolicy = DefaultZkVolumeReclaimPolicy
+			changed = true
+		}
+
+		if len(z.Persistence.PersistentVolumeClaimSpec.AccessModes) == 0 {
+			z.Persistence.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			}
+			changed = true
+		}
+
+		if len(z.Persistence.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
+			z.Persistence.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
+				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
+			}
+			changed = true
+		}
 	}
 
 	if z.ChRoot == "" {
@@ -469,7 +505,7 @@ func (z *ProvidedZookeeper) withDefaults() (changed bool) {
 }
 
 // ZookeeperSpec defines the internal zookeeper ensemble to run for solr
-type ZookeeperSpec struct {
+type OldZookeeperSpec struct {
 	// Number of members to create up for the ZK ensemble
 	// Defaults to 3
 	// +optional
@@ -480,7 +516,6 @@ type ZookeeperSpec struct {
 	Image *ContainerImage `json:"image,omitempty"`
 
 	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
-	// This field is optional. If no PVC spec is provided, etcd container will use emptyDir as volume.
 	// WARNING: This field is DEPRECATED, please use the Persistence option
 	// +optional
 	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
@@ -516,7 +551,7 @@ type ZookeeperPodPolicy struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
-func (z *ZookeeperSpec) withDefaults() (changed bool) {
+func (z *OldZookeeperSpec) withDefaults() (changed bool) {
 	if z.Replicas == nil {
 		changed = true
 		r := DefaultZkReplicas
@@ -557,116 +592,6 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 			changed = true
 		}
 	}
-	return changed
-}
-
-// FullZetcdSpec defines the internal etcd ensemble and zetcd server to run for solr (spoofing zookeeper)
-type FullZetcdSpec struct {
-	// +optional
-	EtcdSpec *EtcdSpec `json:"etcdSpec,omitempty"`
-
-	// +optional
-	ZetcdSpec *ZetcdSpec `json:"zetcdSpec,omitempty"`
-}
-
-func (z *FullZetcdSpec) withDefaults() (changed bool) {
-	if z.EtcdSpec == nil {
-		z.EtcdSpec = &EtcdSpec{}
-	}
-	changed = z.EtcdSpec.withDefaults() || changed
-
-	if z.ZetcdSpec == nil {
-		z.ZetcdSpec = &ZetcdSpec{}
-	}
-	changed = z.ZetcdSpec.withDefaults() || changed
-
-	return changed
-}
-
-// EtcdSpec defines the internal etcd ensemble to run for solr (spoofing zookeeper)
-type EtcdSpec struct {
-	// The number of EtcdReplicas to create
-	// +optional
-	Replicas *int `json:"replicas,omitempty"`
-
-	// +optional
-	Image *ContainerImage `json:"image,omitempty"`
-
-	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
-	// This field is optional. If no PVC spec, etcd container will use emptyDir as volume
-	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
-
-	// Pod resources for etcd pods
-	// +optional
-	EtcdPod EtcdPodPolicy `json:"etcdPodPolicy,omitempty"`
-}
-
-// EtcdPodPolicy defines the common pod configuration for Pods, including when used
-// in deployments, stateful-sets, etc.
-type EtcdPodPolicy struct {
-	// The scheduling constraints on pods.
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// Resources is the resource requirements for the container.
-	// This field cannot be updated once the cluster is created.
-	// +optional
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
-}
-
-func (s *EtcdSpec) withDefaults() (changed bool) {
-	if s.Replicas == nil {
-		changed = true
-		r := DefaultEtcdReplicas
-		s.Replicas = &r
-	}
-
-	if s.Image == nil {
-		s.Image = &ContainerImage{}
-	}
-	changed = s.Image.withDefaults(DefaultEtcdRepo, DefaultEtcdVersion, DefaultPullPolicy) || changed
-
-	return changed
-}
-
-// ZetcdSpec defines the zetcd proxy to run connection solr and etcd
-type ZetcdSpec struct {
-	// +optional
-	Replicas *int32 `json:"replicas,omitempty"`
-
-	// +optional
-	Image *ContainerImage `json:"image,omitempty"`
-
-	// Pod resources for zetcd pods
-	// +optional
-	ZetcdPod ZetcdPodPolicy `json:"zetcdPodPolicy,omitempty"`
-}
-
-// EtcdPodPolicy defines the common pod configuration for Pods, including when used
-// in deployments, stateful-sets, etc.
-type ZetcdPodPolicy struct {
-	// The scheduling constraints on pods.
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// Resources is the resource requirements for the container.
-	// This field cannot be updated once the cluster is created.
-	// +optional
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
-}
-
-func (s *ZetcdSpec) withDefaults() (changed bool) {
-	if s.Replicas == nil {
-		changed = true
-		r := DefaultZetcdReplicas
-		s.Replicas = &r
-	}
-
-	if s.Image == nil {
-		s.Image = &ContainerImage{}
-	}
-	changed = s.Image.withDefaults(DefaultZetcdRepo, DefaultZetcdVersion, DefaultPullPolicy) || changed
-
 	return changed
 }
 
@@ -824,16 +749,6 @@ func (sc *SolrCloud) ProvidedZookeeperName() string {
 // ProvidedZookeeperAddress returns the client address of the provided zk cluster
 func (sc *SolrCloud) ProvidedZookeeperAddress() string {
 	return fmt.Sprintf("%s-solrcloud-zookeeper-client:2181", sc.GetName())
-}
-
-// ProvidedZetcdName returns the name of the zetcd cluster
-func (sc *SolrCloud) ProvidedZetcdName() string {
-	return fmt.Sprintf("%s-solrcloud-zetcd", sc.GetName())
-}
-
-// IngressName returns the name of the ingress for the cloud
-func (sc *SolrCloud) ProvidedZetcdAddress() string {
-	return fmt.Sprintf("%s-solrcloud-zetcd:2181", sc.GetName())
 }
 
 // ZkConnectionString returns the zkConnectionString for the cloud
