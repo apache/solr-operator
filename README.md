@@ -47,6 +47,10 @@ Please visit the following pages for documentation on using and developing the S
 - The `SolrCloud` and `SolrPrometheusExporter` services' portNames have changed to `"solr-client"` and `"solr-metrics"` from `"ext-solr-client"` and `"ext-solr-metrics"`, respectively.
 This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.
 
+- Support for `etcd`/`zetcd` deployments has been removed.  
+The section for a Zookeeper cluster Spec `SolrCloud.spec.zookeeperRef.provided.zookeeper` has been **DEPRECATED**.
+The same fields (except for the deprecated `persistentVolumeClaimSpec` option) are now available under `SolrCloud.spec.zookeeperRef.provided`.
+
 #### v0.2.6
 - The solr-operator argument `--ingressBaseDomain` has been **DEPRECATED**.
 In order to set the external baseDomain of your clouds, please begin to use `SolrCloud.spec.solrAddressability.external.domainName` instead.

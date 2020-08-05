@@ -26,7 +26,6 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         - -zk-operator={{ .Values.useZkOperator }}
-        - -etcd-operator={{ .Values.useEtcdOperator }}
         {{- if .Values.ingressBaseDomain }}
         - --ingress-base-domain={{ .Values.ingressBaseDomain }}
         {{- end }}

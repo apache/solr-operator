@@ -19,7 +19,7 @@ Please follow the instructions from the [local tutorial](local_tutorial.md#setup
 
 ### Install the necessary dependencies
 
-Install the Zookeeper & Etcd Operators, which this operator depends on by default.
+Install the Zookeeper, which this operator depends on by default.
 Each is optional, as described in the [Zookeeper Reference](solr-cloud/solr-cloud-crd.md#zookeeper-reference) section in the CRD docs.
 
 ```bash

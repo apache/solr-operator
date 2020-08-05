@@ -13,7 +13,6 @@ nameOverride: ""
 fullnameOverride: ""
 
 useZkOperator: "true"
-useEtcdOperator: "false"
 ingressBaseDomain: ""
 
 # A comma-separated list of namespaces that the operator should watch.

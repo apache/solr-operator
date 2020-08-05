@@ -87,8 +87,6 @@ rules:
   - deployments/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - apps
   resources:
@@ -125,26 +123,6 @@ rules:
   - batch
   resources:
   - jobs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - etcd.database.coreos.com
-  resources:
-  - etcdclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - etcd.database.coreos.com
-  resources:
-  - etcdclusters/status
   verbs:
   - get
   - patch
