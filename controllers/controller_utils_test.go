@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -191,6 +192,10 @@ func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, f
 	assert.True(t, reflect.DeepEqual(expectedTolerations, foundTolerations), "Expected tolerations and found tolerations don't match")
 }
 
+func testPodProbe(t *testing.T, expectedProbe *corev1.Probe, foundProbe *corev1.Probe) {
+	assert.True(t, reflect.DeepEqual(expectedProbe, foundProbe), "Expected probe and found probe don't match")
+}
+
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
 	assert.Equal(t, expected, found, "Expected and found %s are not the same", mapName)
 }
@@ -323,6 +328,48 @@ var (
 		"beta.kubernetes.io/arch": "amd64",
 		"beta.kubernetes.io/os":   "linux",
 		"solrclouds":              "true",
+	}
+	testProbeLivenessNonDefaults = &corev1.Probe{
+		InitialDelaySeconds: 20,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+		PeriodSeconds:       10,
+		Handler: corev1.Handler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Scheme: corev1.URISchemeHTTP,
+				Path:   "/solr/admin/info/system",
+				Port:   intstr.FromInt(8983),
+			},
+		},
+	}
+	testProbeReadinessNonDefaults = &corev1.Probe{
+		InitialDelaySeconds: 15,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+		PeriodSeconds:       5,
+		Handler: corev1.Handler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Scheme: corev1.URISchemeHTTP,
+				Path:   "/solr/admin/info/system",
+				Port:   intstr.FromInt(8983),
+			},
+		},
+	}
+	testProbeStartup = &corev1.Probe{
+		InitialDelaySeconds: 1,
+		TimeoutSeconds:      1,
+		SuccessThreshold:    1,
+		FailureThreshold:    5,
+		PeriodSeconds:       5,
+		Handler: corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"ls",
+				},
+			},
+		},
 	}
 	testTolerations = []corev1.Toleration{
 		{

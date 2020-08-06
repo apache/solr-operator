@@ -41,6 +41,24 @@ const (
 	BackupRestoreVolume   = "backup-restore"
 
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
+
+	DefaultLivenessProbeInitialDelaySeconds = 20
+	DefaultLivenessProbeTimeoutSeconds      = 1
+	DefaultLivenessProbeSuccessThreshold    = 1
+	DefaultLivenessProbeFailureThreshold    = 3
+	DefaultLivenessProbePeriodSeconds       = 10
+
+	DefaultReadinessProbeInitialDelaySeconds = 15
+	DefaultReadinessProbeTimeoutSeconds      = 1
+	DefaultReadinessProbeSuccessThreshold    = 1
+	DefaultReadinessProbeFailureThreshold    = 3
+	DefaultReadinessProbePeriodSeconds       = 5
+
+	DefaultStartupProbeInitialDelaySeconds = 20
+	DefaultStartupProbeTimeoutSeconds      = 30
+	DefaultStartupProbeSuccessThreshold    = 1
+	DefaultStartupProbeFailureThreshold    = 15
+	DefaultStartupProbePeriodSeconds       = 10
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -53,6 +71,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(solrPodPort)
 	defaultMode := int32(420)
+	defaultHandler := corev1.Handler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Scheme: corev1.URISchemeHTTP,
+			Path:   "/solr/admin/info/system",
+			Port:   intstr.FromInt(solrPodPort),
+		},
+	}
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	selectorLabels := solrCloud.SharedLabels()
@@ -276,37 +301,25 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 									Protocol:      "TCP",
 								},
 							},
-							VolumeMounts: volumeMounts,
-							Args:         []string{"-DhostPort=" + strconv.Itoa(solrAdressingPort)},
-							Env:          envVars,
 							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 20,
-								TimeoutSeconds:      1,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-								PeriodSeconds:       10,
-								Handler: corev1.Handler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Scheme: corev1.URISchemeHTTP,
-										Path:   "/solr/admin/info/system",
-										Port:   intstr.FromInt(solrPodPort),
-									},
-								},
+								InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+								TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+								SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+								FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+								PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+								Handler:             defaultHandler,
 							},
 							ReadinessProbe: &corev1.Probe{
-								InitialDelaySeconds: 15,
-								TimeoutSeconds:      1,
-								SuccessThreshold:    1,
-								FailureThreshold:    3,
-								PeriodSeconds:       5,
-								Handler: corev1.Handler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Scheme: corev1.URISchemeHTTP,
-										Path:   "/solr/admin/info/system",
-										Port:   intstr.FromInt(solrPodPort),
-									},
-								},
+								InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+								TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+								SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+								FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+								PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+								Handler:             defaultHandler,
 							},
+							VolumeMounts:             volumeMounts,
+							Args:                     []string{"-DhostPort=" + strconv.Itoa(solrAdressingPort)},
+							Env:                      envVars,
 							TerminationMessagePath:   "/dev/termination-log",
 							TerminationMessagePolicy: "File",
 						},
@@ -353,6 +366,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.NodeSelector != nil {
 			stateful.Spec.Template.Spec.NodeSelector = customPodOptions.NodeSelector
 		}
+
+		if customPodOptions.LivenessProbe != nil {
+			stateful.Spec.Template.Spec.Containers[0].LivenessProbe = fillProbe(*customPodOptions.LivenessProbe, DefaultLivenessProbeInitialDelaySeconds, DefaultLivenessProbeTimeoutSeconds, DefaultLivenessProbeSuccessThreshold, DefaultLivenessProbeFailureThreshold, DefaultLivenessProbePeriodSeconds, &defaultHandler)
+		}
+
+		if customPodOptions.ReadinessProbe != nil {
+			stateful.Spec.Template.Spec.Containers[0].ReadinessProbe = fillProbe(*customPodOptions.ReadinessProbe, DefaultReadinessProbeInitialDelaySeconds, DefaultReadinessProbeTimeoutSeconds, DefaultReadinessProbeSuccessThreshold, DefaultReadinessProbeFailureThreshold, DefaultReadinessProbePeriodSeconds, &defaultHandler)
+		}
+
+		if customPodOptions.StartupProbe != nil {
+			stateful.Spec.Template.Spec.Containers[0].StartupProbe = fillProbe(*customPodOptions.StartupProbe, DefaultStartupProbeInitialDelaySeconds, DefaultStartupProbeTimeoutSeconds, DefaultStartupProbeSuccessThreshold, DefaultStartupProbeFailureThreshold, DefaultStartupProbePeriodSeconds, &defaultHandler)
+		}
+
 	}
 
 	return stateful
@@ -524,6 +550,44 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
 	to.Data = from.Data
 
 	return requireUpdate
+}
+
+// fillProbe builds the probe logic used for pod liveness, readiness, startup checks
+func fillProbe(customSolrKubeOptions corev1.Probe, defaultInitialDelaySeconds int32, defaultTimeoutSeconds int32, defaultSuccessThreshold int32, defaultFailureThreshold int32, defaultPeriodSeconds int32, defaultHandler *corev1.Handler) *corev1.Probe {
+	probe := &corev1.Probe{
+		InitialDelaySeconds: defaultInitialDelaySeconds,
+		TimeoutSeconds:      defaultTimeoutSeconds,
+		SuccessThreshold:    defaultSuccessThreshold,
+		FailureThreshold:    defaultFailureThreshold,
+		PeriodSeconds:       defaultPeriodSeconds,
+		Handler:             *defaultHandler,
+	}
+
+	if customSolrKubeOptions.InitialDelaySeconds != 0 {
+		probe.InitialDelaySeconds = customSolrKubeOptions.InitialDelaySeconds
+	}
+
+	if customSolrKubeOptions.TimeoutSeconds != 0 {
+		probe.TimeoutSeconds = customSolrKubeOptions.TimeoutSeconds
+	}
+
+	if customSolrKubeOptions.SuccessThreshold != 0 {
+		probe.SuccessThreshold = customSolrKubeOptions.SuccessThreshold
+	}
+
+	if customSolrKubeOptions.FailureThreshold != 0 {
+		probe.FailureThreshold = customSolrKubeOptions.FailureThreshold
+	}
+
+	if customSolrKubeOptions.PeriodSeconds != 0 {
+		probe.PeriodSeconds = customSolrKubeOptions.PeriodSeconds
+	}
+
+	if customSolrKubeOptions.Handler.Exec != nil || customSolrKubeOptions.Handler.HTTPGet != nil {
+		probe.Handler = customSolrKubeOptions.Handler
+	}
+
+	return probe
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance

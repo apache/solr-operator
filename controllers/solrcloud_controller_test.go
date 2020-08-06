@@ -168,10 +168,13 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations:  testPodAnnotations,
-					Labels:       testPodLabels,
-					Tolerations:  testTolerations,
-					NodeSelector: testNodeSelectors,
+					Annotations:    testPodAnnotations,
+					Labels:         testPodLabels,
+					Tolerations:    testTolerations,
+					NodeSelector:   testNodeSelectors,
+					LivenessProbe:  testProbeLivenessNonDefaults,
+					ReadinessProbe: testProbeReadinessNonDefaults,
+					StartupProbe:   testProbeStartup,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations: testSSAnnotations,
@@ -251,6 +254,8 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
 	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, statefulSet.Spec.Template.Spec.NodeSelector)
+	testPodProbe(t, testProbeLivenessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe)
+	testPodProbe(t, testProbeReadinessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe)
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 
 	// Check the client Service
