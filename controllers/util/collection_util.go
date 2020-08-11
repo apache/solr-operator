@@ -285,27 +285,6 @@ type SolrClusterStatusCluster struct {
 	Collections map[string]interface{} `json:"collections"`
 }
 
-// ContainsString helper function to test string contains
-func ContainsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
-// RemoveString helper function to remove string
-func RemoveString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
-}
-
 // containsCollection helper function to check if collection in list
 func containsCollection(collections []string, collection string) bool {
 	for _, a := range collections {

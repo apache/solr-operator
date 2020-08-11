@@ -48,8 +48,14 @@ Please visit the following pages for documentation on using and developing the S
 This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.
 
 - Support for `etcd`/`zetcd` deployments has been removed.  
-The section for a Zookeeper cluster Spec `SolrCloud.spec.zookeeperRef.provided.zookeeper` has been **DEPRECATED**.
-The same fields (except for the deprecated `persistentVolumeClaimSpec` option) are now available under `SolrCloud.spec.zookeeperRef.provided`.
+  The section for a Zookeeper cluster Spec `SolrCloud.spec.zookeeperRef.provided.zookeeper` has been **DEPRECATED**.
+  The same fields (except for the deprecated `persistentVolumeClaimSpec` option) are now available under `SolrCloud.spec.zookeeperRef.provided`.
+
+- Data Storage options have been expanded, and moved from their old locations.
+  - `SolrCloud.spec.dataPvcSpec` has been **DEPRECATED**.  
+    Please instead use the following instead: `SolrCloud.spec.dataStorage.persistent.pvcTemplate.spec=<spec>`  
+  - `SolrCloud.spec.backupRestoreVolume` has been **DEPRECATED**.  
+    Please instead use the following instead: `SolrCloud.spec.dataStorage.backupRestoreOptions.Volume=<volume-source>`
 
 #### v0.2.6
 - The solr-operator argument `--ingressBaseDomain` has been **DEPRECATED**.

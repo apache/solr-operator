@@ -76,11 +76,21 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrPod SolrPodPolicy `json:"solrPodPolicy,omitempty"`
 
+	// Customize how the cloud data is stored.
+	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
+	//
+	// +optional
+	StorageOptions SolrDataStorageOptions `json:"dataStorage,omitempty"`
+
+	// DEPRECATED: Option now found under dataStorage.persistent.pvcSpec . This option will be removed in v0.3.0
+	//
 	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
 	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
 	// +optional
 	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
 
+	// DEPRECATED: Option now found under dataStorage.BackupRestoreOptions.Volume . This option will be removed in v0.3.0
+	//
 	// Required for backups & restores to be enabled.
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
@@ -157,20 +167,19 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
+	changed = spec.StorageOptions.withDefaults(spec.DataPvcSpec) || changed
 	if spec.DataPvcSpec != nil {
-		spec.DataPvcSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
-			corev1.ReadWriteOnce,
-		}
-		if len(spec.DataPvcSpec.Resources.Requests) == 0 {
-			spec.DataPvcSpec.Resources.Requests = corev1.ResourceList{
-				corev1.ResourceStorage: resource.MustParse(DefaultSolrStorage),
+		changed = true
+		spec.DataPvcSpec = nil
+	}
+	if spec.BackupRestoreVolume != nil {
+		if spec.StorageOptions.BackupRestoreOptions == nil {
+			spec.StorageOptions.BackupRestoreOptions = &SolrBackupRestoreOptions{
+				Volume: *spec.BackupRestoreVolume,
 			}
-			changed = true
 		}
-		if spec.DataPvcSpec.VolumeMode == nil {
-			temp := corev1.PersistentVolumeFilesystem
-			spec.DataPvcSpec.VolumeMode = &temp
-		}
+		spec.BackupRestoreVolume = nil
+		changed = true
 	}
 
 	if spec.BusyBoxImage == nil {
@@ -178,6 +187,34 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 		spec.BusyBoxImage = &c
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
+
+	if spec.SolrPod.Affinity != nil {
+		changed = true
+		if spec.CustomSolrKubeOptions.PodOptions == nil {
+			spec.CustomSolrKubeOptions.PodOptions = &PodOptions{}
+		}
+		if spec.CustomSolrKubeOptions.PodOptions.Affinity == nil {
+			spec.CustomSolrKubeOptions.PodOptions.Affinity = spec.SolrPod.Affinity
+		}
+		spec.SolrPod.Affinity = nil
+	}
+
+	if len(spec.SolrPod.Resources.Requests) > 0 || len(spec.SolrPod.Resources.Limits) > 0 {
+		changed = true
+		if spec.CustomSolrKubeOptions.PodOptions == nil {
+			spec.CustomSolrKubeOptions.PodOptions = &PodOptions{}
+		}
+		if len(spec.CustomSolrKubeOptions.PodOptions.Resources.Requests) == 0 &&
+			len(spec.SolrPod.Resources.Requests) > 0 {
+			spec.CustomSolrKubeOptions.PodOptions.Resources.Requests = spec.SolrPod.Resources.Requests
+		}
+		if len(spec.CustomSolrKubeOptions.PodOptions.Resources.Limits) == 0 &&
+			len(spec.SolrPod.Resources.Limits) > 0 {
+			spec.CustomSolrKubeOptions.PodOptions.Resources.Limits = spec.SolrPod.Resources.Limits
+		}
+		spec.SolrPod.Resources.Requests = nil
+		spec.SolrPod.Resources.Limits = nil
+	}
 
 	return changed
 }
@@ -211,6 +248,103 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+}
+
+type SolrDataStorageOptions struct {
+
+	// PersistentStorage is the specification for how the persistent Solr data storage should be configured.
+	//
+	// This option cannot be used with the "ephemeral" option.
+	//
+	// +optional
+	PersistentStorage *SolrPersistentDataStorageOptions `json:"persistent,omitempty"`
+
+	// EphemeralStorage is the specification for how the ephemeral Solr data storage should be configured.
+	//
+	// This option cannot be used with the "persistent" option.
+	// Ephemeral storage is used by default if neither "persistent" or "ephemeral" is provided.
+	//
+	// +optional
+	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
+
+	// Options required for backups & restores to be enabled for this solrCloud.
+	// +optional
+	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
+}
+
+func (opts *SolrDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
+	if pvcSpec != nil && opts.PersistentStorage == nil {
+		opts.PersistentStorage = &SolrPersistentDataStorageOptions{}
+	}
+	if opts.PersistentStorage != nil {
+		changed = changed || opts.PersistentStorage.withDefaults(pvcSpec)
+	}
+
+	return changed
+}
+
+type SolrPersistentDataStorageOptions struct {
+
+	// VolumeReclaimPolicy determines how the Solr Cloud's PVCs will be treated after the cloud is deleted.
+	//   - Retain: This is the default Kubernetes policy, where PVCs created for StatefulSets are not deleted when the StatefulSet is deleted.
+	//   - Delete: The PVCs will be deleted by the Solr Operator after the SolrCloud object is deleted.
+	// The default value is Retain, so no data will be deleted unless explicitly configured.
+	// +optional
+	VolumeReclaimPolicy VolumeReclaimPolicy `json:"reclaimPolicy,omitempty"`
+
+	// PersistentVolumeClaimTemplate is the PVC object for the solr node to store its data.
+	// Within metadata, the Name, Labels and Annotations are able to be specified, but defaults will be provided if necessary.
+	// The entire Spec is customizable, however there will be defaults provided if necessary.
+	// This field is optional. If no PVC spec is provided, then a default will be provided.
+	// +optional
+	PersistentVolumeClaimTemplate corev1.PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
+}
+
+func (opts *SolrPersistentDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
+	if opts.VolumeReclaimPolicy == "" {
+		changed = true
+		opts.VolumeReclaimPolicy = VolumeReclaimPolicyRetain
+	}
+
+	if pvcSpec != nil {
+		// DEPRECATED: old pvcDataSpec option will be removed in v0.3.0
+		opts.PersistentVolumeClaimTemplate.Spec = *pvcSpec
+		changed = true
+	}
+	return changed
+}
+
+// VolumeReclaimPolicy is a string enumeration type that enumerates
+// all possible ways that a SolrCloud can treat it's PVCs after its death
+// +kubebuilder:validation:Enum=Retain;Delete
+type VolumeReclaimPolicy string
+
+const (
+	// All pod PVCs are retained after the SolrCloud is deleted.
+	VolumeReclaimPolicyRetain VolumeReclaimPolicy = "Retain"
+
+	// All pod PVCs are deleted after the SolrCloud is deleted.
+	VolumeReclaimPolicyDelete VolumeReclaimPolicy = "Delete"
+)
+
+type SolrEphemeralDataStorageOptions struct {
+	//EmptyDirVolumeSource is an optional config for the emptydir volume that will store Solr data.
+	// +optional
+	EmptyDir corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+}
+
+type SolrBackupRestoreOptions struct {
+	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
+	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
+	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
+	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
+	// Other options are to use a NFS volume.
+	Volume corev1.VolumeSource `json:"volume"`
+
+	// Select a custom directory name to mount the backup/restore data from the given volume.
+	// If not specified, then the name of the solrcloud will be used by default.
+	// +optional
+	Directory string `json:"directory,omitempty"`
 }
 
 type SolrAddressabilityOptions struct {
@@ -454,7 +588,7 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	if z.Image == nil {
 		z.Image = &ContainerImage{}
 	}
-	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
+	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, corev1.PullIfNotPresent) || changed
 
 	if z.Persistence != nil {
 		if z.Persistence.VolumeReclaimPolicy == "" {
@@ -544,7 +678,7 @@ func (z *OldZookeeperSpec) withDefaults() (changed bool) {
 	if z.Image == nil {
 		z.Image = &ContainerImage{}
 	}
-	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, DefaultPullPolicy) || changed
+	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, corev1.PullIfNotPresent) || changed
 
 	// Backwards compatibility with old ZK Persistence options.
 	// This will be removed eventually
@@ -871,6 +1005,10 @@ func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
 	} else {
 		return sc.InternalNodeUrl(nodeName, false)
 	}
+}
+
+func (sc *SolrCloud) UsesPersistentStorage() bool {
+	return sc.Spec.StorageOptions.PersistentStorage != nil
 }
 
 func (sc *SolrCloud) SharedLabels() map[string]string {

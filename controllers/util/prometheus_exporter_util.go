@@ -213,23 +213,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		}
 	}
 
-	// DEPRECATED: Replaced by the options below
-	if solrPrometheusExporter.Spec.PodPolicy.Affinity != nil {
-		deployment.Spec.Template.Spec.Affinity = solrPrometheusExporter.Spec.PodPolicy.Affinity
-	}
-
-	// DEPRECATED: Replaced by the options below
-	if solrPrometheusExporter.Spec.PodPolicy.Resources.Limits != nil || solrPrometheusExporter.Spec.PodPolicy.Resources.Requests != nil {
-		deployment.Spec.Template.Spec.Containers[0].Resources = solrPrometheusExporter.Spec.PodPolicy.Resources
-	}
-
 	if nil != customPodOptions {
 		if customPodOptions.Affinity != nil {
 			deployment.Spec.Template.Spec.Affinity = customPodOptions.Affinity
 		}
 
-		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
-			deployment.Spec.Template.Spec.Containers[0].Resources = customPodOptions.Resources
+		if customPodOptions.Resources.Requests != nil {
+			deployment.Spec.Template.Spec.Containers[0].Resources.Requests = customPodOptions.Resources.Requests
+		}
+
+		if customPodOptions.Resources.Limits != nil {
+			deployment.Spec.Template.Spec.Containers[0].Resources.Limits = customPodOptions.Resources.Limits
 		}
 
 		if customPodOptions.PodSecurityContext != nil {

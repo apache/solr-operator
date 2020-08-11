@@ -3,6 +3,38 @@
 The SolrCloud CRD allows users to spin up a Solr cloud in a very configurable way.
 Those configuration options are layed out on this page.
 
+## Data Storage
+
+The SolrCloud CRD gives the option for users to use either
+persistent storage, through [PVCs](https://kubernetes.io/docs/concepts/storage/persistent-volumes/),
+or ephemeral storage, through [emptyDir volumes](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir),
+to store Solr data.
+Ephemeral and persistent storage cannot be used together, if both are provided, the `persistent` options take precedence.
+If neither is provided, ephemeral storage will be used by default.
+
+These options can be found in `SolrCloud.spec.dataStorage`
+
+- **`persistent`**
+  - **`reclaimPolicy`** - Either `Retain`, the default, or `Delete`.
+    This describes the lifecycle of PVCs that are deleted after the SolrCloud is deleted, or the SolrCloud is scaled down and the pods that the PVCs map to no longer exist.
+    `Retain` is used by default, as that is the default Kubernetes policy, to leave PVCs in case pods, or StatefulSets are deleted accidentally.
+    
+    Note: If reclaimPolicy is set to `Delete`, PVCs will not be deleted if pods are merely deleted. They will only be deleted once the `SolrCloud.spec.replicas` is scaled down or deleted.
+  - **`pvcTemplate`** - The template of the PVC to use for the solr data PVCs. By default the name will be "data".
+    Only the `pvcTemplate.spec` field is required, metadata is optional.
+    
+    Note: This template cannot be changed unless the SolrCloud is deleted and recreated.
+    This is a [limitation of StatefulSets and PVCs in Kubernetes](https://github.com/kubernetes/enhancements/issues/661).
+- **`ephemeral`**
+  - **`emptyDir`** - An [`emptyDir` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) that describes the desired emptyDir volume to use in each SolrCloud pod to store data.
+  This option is optional, and if not provided an empty `emptyDir` volume source will be used.
+    
+- **`backupRestoreOptions`** (Required for integration with [`SolrBackups`](../solr-backup/README.md))
+  - **`volume`** - This is a [volume source](https://kubernetes.io/docs/concepts/storage/volumes/), that supports `ReadWriteMany` access.
+  This is critical because this single volume will be loaded into all pods at the same path.
+  - **`directory`** - A custom directory to store backup/restore data, within the volume described above.
+  This is optional, and defaults to the name of the SolrCloud.
+  Only use this option when you require restoring the same backup to multiple SolrClouds.
 
 ## Addressability
 

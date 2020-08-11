@@ -39,7 +39,13 @@ const (
 	SolrClientPortName  = "solr-client"
 	BackupRestoreVolume = "backup-restore"
 
+	SolrStorageFinalizer             = "storage.finalizers.solr.apache.org"
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
+	SolrPVCTechnologyLabel           = "solr.apache.org/technology"
+	SolrCloudPVCTechnology           = "solr-cloud"
+	SolrPVCStorageLabel              = "solr.apache.org/storage"
+	SolrCloudPVCDataStorage          = "data"
+	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 
 	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
@@ -127,28 +133,63 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 	var pvcs []corev1.PersistentVolumeClaim
-	if solrCloud.Spec.DataPvcSpec != nil {
+	if solrCloud.UsesPersistentStorage() {
+		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
+
+		// Set the default name of the pvc
+		if pvc.Name == "" {
+			pvc.Name = solrDataVolumeName
+		}
+		pvc.Namespace = ""
+
+		// Set some defaults in the PVC Spec
+		if len(pvc.Spec.AccessModes) == 0 {
+			pvc.Spec.AccessModes = []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			}
+		}
+		if pvc.Spec.VolumeMode == nil {
+			temp := corev1.PersistentVolumeFilesystem
+			pvc.Spec.VolumeMode = &temp
+		}
+
+		//  Add internally-used labels.
+		internalLabels := map[string]string{
+			SolrPVCTechnologyLabel: SolrCloudPVCTechnology,
+			SolrPVCStorageLabel:    SolrCloudPVCDataStorage,
+			SolrPVCInstanceLabel:   solrCloud.Name,
+		}
+		pvc.Labels = MergeLabelsOrAnnotations(internalLabels, pvc.ObjectMeta.Labels)
+
 		pvcs = []corev1.PersistentVolumeClaim{
 			{
-				ObjectMeta: metav1.ObjectMeta{Name: solrDataVolumeName},
-				Spec:       *solrCloud.Spec.DataPvcSpec,
+				ObjectMeta: pvc.ObjectMeta,
+				Spec:       pvc.Spec,
 			},
 		}
 	} else {
-		solrVolumes = append(solrVolumes, corev1.Volume{
+		emptyDirVolume := corev1.Volume{
 			Name: solrDataVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
-		})
+		}
+		if solrCloud.Spec.StorageOptions.EphemeralStorage != nil {
+			emptyDirVolume.VolumeSource.EmptyDir = &solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir
+		}
+		solrVolumes = append(solrVolumes, emptyDirVolume)
 	}
 	// Add backup volumes
-	if solrCloud.Spec.BackupRestoreVolume != nil {
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
 		solrVolumes = append(solrVolumes, corev1.Volume{
 			Name:         BackupRestoreVolume,
-			VolumeSource: *solrCloud.Spec.BackupRestoreVolume,
+			VolumeSource: solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume,
 		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: BackupRestoreVolume, MountPath: BaseBackupRestorePath, SubPath: BackupRestoreSubPathForCloud(solrCloud.Name)})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      BackupRestoreVolume,
+			MountPath: BaseBackupRestorePath,
+			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+		})
 	}
 
 	if nil != customPodOptions {
@@ -386,16 +427,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	// DEPRECATED: Replaced by the options below
-	if solrCloud.Spec.SolrPod.Affinity != nil {
-		stateful.Spec.Template.Spec.Affinity = solrCloud.Spec.SolrPod.Affinity
-	}
-
-	// DEPRECATED: Replaced by the options below
-	if solrCloud.Spec.SolrPod.Resources.Limits != nil || solrCloud.Spec.SolrPod.Resources.Requests != nil {
-		stateful.Spec.Template.Spec.Containers[0].Resources = solrCloud.Spec.SolrPod.Resources
-	}
-
 	if nil != customPodOptions {
 		if customPodOptions.Affinity != nil {
 			stateful.Spec.Template.Spec.Affinity = customPodOptions.Affinity
@@ -454,20 +485,37 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	requireVolumeUpdate := false
-	if len(from.Spec.VolumeClaimTemplates) != len(to.Spec.VolumeClaimTemplates) {
-		requireVolumeUpdate = true
-		log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", to.Spec.VolumeClaimTemplates, "To:", from.Spec.VolumeClaimTemplates)
-	}
-	for i, fromVct := range from.Spec.VolumeClaimTemplates {
-		if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
-			requireVolumeUpdate = true
-			log.Info("Update required because:", "Spec.VolumeClaimTemplates.Spec changed from", to.Spec.VolumeClaimTemplates[i].Spec, "To:", fromVct.Spec)
+	/*
+			Kubernetes does not support modification of VolumeClaimTemplates currently. See:
+		    https://github.com/kubernetes/enhancements/issues/661
+		if len(from.Spec.VolumeClaimTemplates) > len(to.Spec.VolumeClaimTemplates) {
+			requireUpdate = true
+			log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", to.Spec.VolumeClaimTemplates, "To:", from.Spec.VolumeClaimTemplates)
+			to.Spec.VolumeClaimTemplates = from.Spec.VolumeClaimTemplates
 		}
-	}
-	if requireVolumeUpdate {
-		to.Spec.Template.Labels = from.Spec.Template.Labels
-	}
+		for i, fromVct := range from.Spec.VolumeClaimTemplates {
+			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Name, fromVct.Name) {
+				requireUpdate = true
+				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Name changed from", to.Spec.VolumeClaimTemplates[i].Name, "To:", fromVct.Name)
+				to.Spec.VolumeClaimTemplates[i].Name = fromVct.Name
+			}
+			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Labels, fromVct.Labels) {
+				requireUpdate = true
+				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Labels changed from", to.Spec.VolumeClaimTemplates[i].Labels, "To:", fromVct.Labels)
+				to.Spec.VolumeClaimTemplates[i].Labels = fromVct.Labels
+			}
+			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Annotations, fromVct.Annotations) {
+				requireUpdate = true
+				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Annotations changed from", to.Spec.VolumeClaimTemplates[i].Annotations, "To:", fromVct.Annotations)
+				to.Spec.VolumeClaimTemplates[i].Annotations = fromVct.Annotations
+			}
+			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
+				requireUpdate = true
+				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Spec changed from", to.Spec.VolumeClaimTemplates[i].Spec, "To:", fromVct.Spec)
+				to.Spec.VolumeClaimTemplates[i].Spec = fromVct.Spec
+			}
+		}
+	*/
 
 	if !DeepEqualWithNils(to.Spec.Template.Labels, from.Spec.Template.Labels) {
 		requireUpdate = true
