@@ -27,6 +27,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sort"
 	"strings"
+	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -67,6 +69,7 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 // +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
@@ -204,6 +207,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		blockReconciliationOfStatefulSet = true
 	}
 
+	pvcLabelSelector := make(map[string]string, 0)
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
 		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap)
@@ -217,6 +221,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err != nil && errors.IsNotFound(err) {
 			r.Log.Info("Creating StatefulSet", "namespace", statefulSet.Namespace, "name", statefulSet.Name)
 			err = r.Create(context.TODO(), statefulSet)
+			// Find which labels the PVCs will be using, to use for the finalizer
+			pvcLabelSelector = statefulSet.Spec.Selector.MatchLabels
 		} else if err == nil {
 			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) {
 				// Update the found StatefulSet and write the result back if there are any changes
@@ -225,9 +231,19 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 			newStatus.Replicas = foundStatefulSet.Status.Replicas
 			newStatus.ReadyReplicas = foundStatefulSet.Status.ReadyReplicas
+			// Find which labels the PVCs will be using, to use for the finalizer
+			pvcLabelSelector = foundStatefulSet.Spec.Selector.MatchLabels
 		}
 		if err != nil {
 			return requeueOrNot, err
+		}
+	}
+
+	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
+	// Otherwise it will delete all PVCs possibly
+	if len(pvcLabelSelector) > 0 {
+		if err := r.reconcileStorageFinalizer(instance, pvcLabelSelector); err != nil {
+			return reconcile.Result{RequeueAfter: time.Second * 10}, nil
 		}
 	}
 
@@ -319,7 +335,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		nodeStatusMap[nodeStatus.Name] = nodeStatus
 
 		// Get Volumes for backup/restore
-		if solrCloud.Spec.BackupRestoreVolume != nil {
+		if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
 			for _, volume := range p.Spec.Volumes {
 				if volume.Name == util.BackupRestoreVolume {
 					backupRestoreReadyPods += 1
@@ -431,6 +447,121 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}
 	return nil
+}
+
+// Logic derived from:
+// - https://book.kubebuilder.io/reference/using-finalizers.html
+// - https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629
+func (r *SolrCloudReconciler) reconcileStorageFinalizer(cloud *solr.SolrCloud, pvcLabelSelector map[string]string) error {
+	// If persistentStorage is being used by the cloud, and the reclaim policy is set to "Delete",
+	// then set a finalizer for the storage on the cloud, and delete the PVCs if the solrcloud has been deleted.
+
+	if cloud.Spec.StorageOptions.PersistentStorage != nil && cloud.Spec.StorageOptions.PersistentStorage.VolumeReclaimPolicy == solr.VolumeReclaimPolicyDelete {
+		if cloud.ObjectMeta.DeletionTimestamp.IsZero() {
+			// The object is not being deleted, so if it does not have our finalizer,
+			// then lets add the finalizer and update the object
+			if !util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
+				cloud.ObjectMeta.Finalizers = append(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
+				if err := r.Update(context.Background(), cloud); err != nil {
+					return err
+				}
+			}
+			return r.cleanupOrphanPVCs(cloud, pvcLabelSelector)
+		} else if util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
+			// The object is being deleted
+			r.Log.Info("Deleting PVCs for SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace)
+
+			// Our finalizer is present, so let's delete all existing PVCs
+			if err := r.cleanUpAllPVCs(cloud, pvcLabelSelector); err != nil {
+				return err
+			}
+			r.Log.Info("Deleted PVCs for SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace)
+
+			// remove our finalizer from the list and update it.
+			cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
+			if err := r.Update(context.Background(), cloud); err != nil {
+				return err
+			}
+		}
+	} else if util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
+		// remove our finalizer from the list and update it, because there is no longer a need to delete PVCs after the cloud is deleted.
+		r.Log.Info("Removing  SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace)
+		cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
+		if err := r.Update(context.Background(), cloud); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *SolrCloudReconciler) getPVCCount(cloud *solr.SolrCloud, pvcLabelSelector map[string]string) (pvcCount int, err error) {
+	pvcList, err := r.getPVCList(cloud, pvcLabelSelector)
+	if err != nil {
+		return -1, err
+	}
+	pvcCount = len(pvcList.Items)
+	return pvcCount, nil
+}
+
+func (r *SolrCloudReconciler) cleanupOrphanPVCs(cloud *solr.SolrCloud, pvcLabelSelector map[string]string) (err error) {
+	// this check should make sure we do not delete the PVCs before the STS has scaled down
+	if cloud.Status.ReadyReplicas == cloud.Status.Replicas {
+		pvcList, err := r.getPVCList(cloud, pvcLabelSelector)
+		if err != nil {
+			return err
+		}
+		r.Log.Info("Checking for PVC Orphans in SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace, "PVC Count", len(pvcList.Items), "ReadyReplicas Count", cloud.Status.ReadyReplicas)
+		if len(pvcList.Items) > int(*cloud.Spec.Replicas) {
+			if err != nil {
+				return err
+			}
+			for _, pvcItem := range pvcList.Items {
+				// delete only Orphan PVCs
+				if util.IsPVCOrphan(pvcItem.Name, *cloud.Spec.Replicas) {
+					r.deletePVC(cloud, pvcItem)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *SolrCloudReconciler) getPVCList(cloud *solr.SolrCloud, pvcLabelSelector map[string]string) (pvList corev1.PersistentVolumeClaimList, err error) {
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: pvcLabelSelector,
+	})
+	pvclistOps := &client.ListOptions{
+		Namespace:     cloud.Namespace,
+		LabelSelector: selector,
+	}
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	err = r.Client.List(context.TODO(), pvcList, pvclistOps)
+	return *pvcList, err
+}
+
+func (r *SolrCloudReconciler) cleanUpAllPVCs(cloud *solr.SolrCloud, pvcLabelSelector map[string]string) (err error) {
+	pvcList, err := r.getPVCList(cloud, pvcLabelSelector)
+	if err != nil {
+		return err
+	}
+	for _, pvcItem := range pvcList.Items {
+		r.deletePVC(cloud, pvcItem)
+	}
+	return nil
+}
+
+func (r *SolrCloudReconciler) deletePVC(cloud *solr.SolrCloud, pvcItem corev1.PersistentVolumeClaim) {
+	pvcDelete := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcItem.Name,
+			Namespace: pvcItem.Namespace,
+		},
+	}
+	r.Log.Info("Deleting PVC for SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace, "PVC", pvcItem.Name)
+	err := r.Client.Delete(context.TODO(), pvcDelete)
+	if err != nil {
+		r.Log.Error(err, "Error deleting PVC for SolrCloud", "cloud", cloud.Name, "namespace", cloud.Namespace, "PVC", pvcDelete.Name)
+	}
 }
 
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {

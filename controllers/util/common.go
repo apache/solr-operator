@@ -19,6 +19,8 @@ package util
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"strconv"
+	"strings"
 )
 
 // CopyLabelsAndAnnotations copies the labels and annotations from one object to another.
@@ -84,4 +86,40 @@ func DeepEqualWithNils(x, y interface{}) bool {
 		}
 	}
 	return reflect.DeepEqual(x, y)
+}
+
+// ContainsString helper function to test string contains
+func ContainsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// RemoveString helper function to remove string
+func RemoveString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
+}
+
+// IsPVCOrphan determines whether the given name represents a PVC that is an orphan, or no longer has a pod associated with it.
+func IsPVCOrphan(pvcName string, replicas int32) bool {
+	index := strings.LastIndexAny(pvcName, "-")
+	if index == -1 {
+		return false
+	}
+
+	ordinal, err := strconv.Atoi(pvcName[index+1:])
+	if err != nil {
+		return false
+	}
+
+	return int32(ordinal) >= replicas
 }

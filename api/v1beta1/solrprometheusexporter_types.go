@@ -77,6 +77,34 @@ func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bo
 		changed = true
 	}
 
+	if ps.PodPolicy.Affinity != nil {
+		changed = true
+		if ps.CustomKubeOptions.PodOptions == nil {
+			ps.CustomKubeOptions.PodOptions = &PodOptions{}
+		}
+		if ps.CustomKubeOptions.PodOptions.Affinity == nil {
+			ps.CustomKubeOptions.PodOptions.Affinity = ps.PodPolicy.Affinity
+		}
+		ps.PodPolicy.Affinity = nil
+	}
+
+	if len(ps.PodPolicy.Resources.Requests) > 0 || len(ps.PodPolicy.Resources.Limits) > 0 {
+		changed = true
+		if ps.CustomKubeOptions.PodOptions == nil {
+			ps.CustomKubeOptions.PodOptions = &PodOptions{}
+		}
+		if len(ps.CustomKubeOptions.PodOptions.Resources.Requests) == 0 &&
+			len(ps.PodPolicy.Resources.Requests) > 0 {
+			ps.CustomKubeOptions.PodOptions.Resources.Requests = ps.PodPolicy.Resources.Requests
+		}
+		if len(ps.CustomKubeOptions.PodOptions.Resources.Limits) == 0 &&
+			len(ps.PodPolicy.Resources.Limits) > 0 {
+			ps.CustomKubeOptions.PodOptions.Resources.Limits = ps.PodPolicy.Resources.Limits
+		}
+		ps.PodPolicy.Resources.Requests = nil
+		ps.PodPolicy.Resources.Limits = nil
+	}
+
 	return changed
 }
 

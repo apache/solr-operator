@@ -3,13 +3,18 @@ kind: SolrCloud
 metadata:
   name: example
 spec:
-  dataPvcSpec:
-    resources:
-      requests:
-        storage: "5Gi"
-  backupRestoreVolume:
-    persistentVolumeClaim:
-      claimName: "pvc-test"
+  dataStorage:
+    persistent:
+      reclaimPolicy: Delete
+      pvcTemplate:
+        spec:
+          resources:
+            requests:
+              storage: "5Gi"
+    backupRestoreOptions:
+      volume:
+        persistentVolumeClaim:
+          claimName: "pvc-test"
   replicas: 3
   solrImage:
     tag: 8.2.0

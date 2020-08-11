@@ -41,16 +41,19 @@ const (
 	JobTTLSeconds = int32(60)
 )
 
-func BackupRestoreSubPathForCloud(cloud string) string {
-	return "cloud/" + cloud
+func BackupRestoreSubPathForCloud(directoryOverride string, cloud string) string {
+	if directoryOverride == "" {
+		directoryOverride = cloud
+	}
+	return "cloud/" + directoryOverride
 }
 
-func BackupSubPathForCloud(cloud string, backupName string) string {
-	return BackupRestoreSubPathForCloud(cloud) + "/backups/" + backupName
+func BackupSubPathForCloud(directoryOverride string, cloud string, backupName string) string {
+	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/backups/" + backupName
 }
 
-func RestoreSubPathForCloud(cloud string, restoreName string) string {
-	return BackupRestoreSubPathForCloud(cloud) + "/restores/" + restoreName
+func RestoreSubPathForCloud(directoryOverride string, cloud string, restoreName string) string {
+	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/restores/" + restoreName
 }
 
 func BackupPath(backupName string) string {
@@ -88,7 +91,17 @@ func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) 
 }
 
 func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
-	return GenerateBackupPersistenceJob(backup, *solrCloud.Spec.BackupRestoreVolume, BackupSubPathForCloud(solrCloud.Name, backup.Name))
+	var backupVolume corev1.VolumeSource
+	var solrCloudBackupDirectoryOverride string
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions == nil {
+		if solrCloud.Spec.BackupRestoreVolume != nil {
+			backupVolume = *solrCloud.Spec.BackupRestoreVolume
+		}
+	} else {
+		backupVolume = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
+		solrCloudBackupDirectoryOverride = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory
+	}
+	return GenerateBackupPersistenceJob(backup, backupVolume, BackupSubPathForCloud(solrCloudBackupDirectoryOverride, solrCloud.Name, backup.Name))
 }
 
 // GenerateBackupPersistenceJob creates a Job that will persist backup data and purge the backup from the solrBackupVolume
