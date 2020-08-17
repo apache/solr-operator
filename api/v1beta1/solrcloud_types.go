@@ -747,6 +747,7 @@ type ZookeeperConnectionInfo struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // SolrCloud is the Schema for the solrclouds API
 // +kubebuilder:resource:shortName=solr

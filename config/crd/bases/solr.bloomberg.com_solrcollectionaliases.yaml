@@ -14,7 +14,7 @@ spec:
     listKind: SolrCollectionAliasList
     plural: solrcollectionaliases
     singular: solrcollectionalias
-  scope: ""
+  scope: Namespaced
   validation:
     openAPIV3Schema:
       description: SolrCollectionAlias is the Schema for the solrcollectionaliases

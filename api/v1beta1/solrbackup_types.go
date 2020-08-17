@@ -281,6 +281,8 @@ func (sb *SolrBackup) PersistenceJobName() string {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
+
 // SolrBackup is the Schema for the solrbackups API
 // +kubebuilder:categories=all
 // +kubebuilder:subresource:status

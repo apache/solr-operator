@@ -169,6 +169,7 @@ type SolrPrometheusExporterStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // SolrPrometheusExporter is the Schema for the solrprometheusexporters API
 // +kubebuilder:resource:shortName=solrmetrics

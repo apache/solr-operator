@@ -14,7 +14,7 @@ spec:
     listKind: SolrCollectionList
     plural: solrcollections
     singular: solrcollection
-  scope: ""
+  scope: Namespaced
   validation:
     openAPIV3Schema:
       description: SolrCollection is the Schema for the solrcollections API
