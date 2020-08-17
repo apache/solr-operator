@@ -48,6 +48,7 @@ type SolrCollectionAliasStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // SolrCollectionAlias is the Schema for the solrcollectionaliases API
 type SolrCollectionAlias struct {

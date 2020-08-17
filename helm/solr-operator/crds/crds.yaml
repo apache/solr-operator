@@ -28,7 +28,7 @@ spec:
     listKind: SolrBackupList
     plural: solrbackups
     singular: solrbackup
-  scope: ""
+  scope: Namespaced
   subresources:
     status: {}
   validation:
@@ -9160,7 +9160,7 @@ spec:
     listKind: SolrCollectionAliasList
     plural: solrcollectionaliases
     singular: solrcollectionalias
-  scope: ""
+  scope: Namespaced
   validation:
     openAPIV3Schema:
       description: SolrCollectionAlias is the Schema for the solrcollectionaliases
@@ -9241,7 +9241,7 @@ spec:
     listKind: SolrCollectionList
     plural: solrcollections
     singular: solrcollection
-  scope: ""
+  scope: Namespaced
   validation:
     openAPIV3Schema:
       description: SolrCollection is the Schema for the solrcollections API

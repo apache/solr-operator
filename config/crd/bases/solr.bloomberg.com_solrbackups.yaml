@@ -30,7 +30,7 @@ spec:
     listKind: SolrBackupList
     plural: solrbackups
     singular: solrbackup
-  scope: ""
+  scope: Namespaced
   subresources:
     status: {}
   validation:

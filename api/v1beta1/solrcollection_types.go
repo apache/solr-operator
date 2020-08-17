@@ -90,6 +90,7 @@ type SolrCollectionStatus struct {
 }
 
 // +kubebuilder:object:root=true
+// +kubebuilder:resource:scope=Namespaced
 
 // SolrCollection is the Schema for the solrcollections API
 type SolrCollection struct {
