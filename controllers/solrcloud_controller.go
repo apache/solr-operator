@@ -518,8 +518,12 @@ func reconcileZk(r *SolrCloudReconciler, request reconcile.Request, instance *so
 				if "" == *external {
 					external = nil
 				}
+				internal := make([]string, zkCluster.Spec.Replicas)
+				for i, _ := range internal {
+					internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", foundZkCluster.Name, i, foundZkCluster.Name, foundZkCluster.Namespace, foundZkCluster.ZookeeperPorts().Client)
+				}
 				newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-					InternalConnectionString: fmt.Sprintf("%s:%d", foundZkCluster.GetClientServiceName(), foundZkCluster.ZookeeperPorts().Client),
+					InternalConnectionString: strings.Join(internal, ","),
 					ExternalConnectionString: external,
 					ChRoot:                   pzk.ChRoot,
 				}

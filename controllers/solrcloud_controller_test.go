@@ -344,7 +344,8 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
 	// Check that the ZkConnectionInformation is correct
-	assert.Equal(t, instance.ProvidedZookeeperName()+"-client:2181", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
+	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default:2181"
+	assert.Equal(t, expectedZkConnStr, instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
 	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
 	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
 
