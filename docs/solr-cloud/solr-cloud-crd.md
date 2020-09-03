@@ -1,7 +1,7 @@
 # The SolrCloud CRD
 
 The SolrCloud CRD allows users to spin up a Solr cloud in a very configurable way.
-Those configuration options are layed out on this page.
+Those configuration options are laid out on this page.
 
 
 ## Addressability
