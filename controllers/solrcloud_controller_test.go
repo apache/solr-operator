@@ -349,8 +349,23 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
 	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
 
-	// Check that the statefulSet has not been created, because the ZkChRoot is not able to be created or verified
-	expectNoStatefulSet(g, cloudSsKey)
+	// Check that the statefulSet has been created, using the given chRoot
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	expectedZKHost := expectedZkConnStr + "/a-ch/root"
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":   expectedZKHost,
+		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + cloudHsKey.Namespace,
+		"ZK_SERVER": expectedZkConnStr,
+		"ZK_CHROOT": "/a-ch/root",
+		"SOLR_PORT": "8983",
+		"GC_TUNE":   "",
+	}
+	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
+	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
 }
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
@@ -358,13 +373,14 @@ func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 	UseEtcdCRD(false)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
+	connString := "host:7271,host2:7271"
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
 					ChRoot:                   "a-ch/root",
-					InternalConnectionString: "host:7271,host2:7271",
+					ExternalConnectionString: &connString,
 				},
 			},
 		},
@@ -406,12 +422,27 @@ func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 
 	// Check that the ZkConnectionInformation is correct
 	assert.Equal(t, "host:7271,host2:7271", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong internal zkConnectionString in status")
-	assert.Equal(t, "host:7271,host2:7271", instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong external zkConnectionString in status")
+	assert.Equal(t, "host:7271,host2:7271", *instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Wrong external zkConnectionString in status")
 	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
 	assert.Equal(t, "host:7271,host2:7271/a-ch/root", instance.Status.ZookeeperConnectionInfo.ZkConnectionString(), "Wrong zkConnectionString())")
 
-	// Check that the statefulSet has not been created, because the ZkChRoot is not able to be created or verified
-	expectNoStatefulSet(g, cloudSsKey)
+	// Check that the statefulSet has been created, using the given chRoot
+	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+
+	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	expectedZKHost := "host:7271,host2:7271/a-ch/root"
+	expectedEnvVars := map[string]string{
+		"ZK_HOST":   expectedZKHost,
+		"ZK_SERVER": "host:7271,host2:7271",
+		"ZK_CHROOT": "/a-ch/root",
+		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + cloudHsKey.Namespace,
+		"SOLR_PORT": "8983",
+		"GC_TUNE":   "",
+	}
+	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
+	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
+	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
 }
 
 func TestDefaults(t *testing.T) {
@@ -675,6 +706,7 @@ func TestExternalKubeDomainCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.ElementsMatch(t, []string{"-DhostPort=2000"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments")
+	assert.Nil(t, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart, "Post-start command should be nil since there is no chRoot to ensure exists.")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)

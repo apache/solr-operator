@@ -17,19 +17,15 @@ limitations under the License.
 package util
 
 import (
-	"strconv"
-	"strings"
-	"time"
-
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	etcd "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
-	zkCli "github.com/samuel/go-zookeeper/zk"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
+	"strconv"
 )
 
 var log = logf.Log.WithName("controller")
@@ -447,41 +443,4 @@ func GenerateZetcdService(solrCloud *solr.SolrCloud, spec solr.ZetcdSpec) *corev
 		},
 	}
 	return service
-}
-
-func CreateChRootIfNecessary(info solr.ZookeeperConnectionInfo) error {
-	if info.InternalConnectionString != "" && info.ChRoot != "/" {
-		zkClient, _, err := zkCli.Connect(strings.Split(info.InternalConnectionString, ","), time.Second)
-		if err != nil {
-			log.Error(err, "Could not connect to Zookeeper", "connectionString", info.InternalConnectionString)
-			return err
-		}
-
-		pathParts := strings.Split(strings.TrimPrefix(info.ChRoot, "/"), "/")
-		pathToCreate := ""
-		// Loop through each parent of the ZNode, and make sure that they exist recursively
-		for _, part := range pathParts {
-			if part == "" {
-				continue
-			}
-			pathToCreate += "/" + part
-
-			// Make sure that this part of the chRoot exists
-			exists, _, err := zkClient.Exists(pathToCreate)
-			if err != nil {
-				log.Error(err, "Could not check existence of Znode", "path", pathToCreate)
-				return err
-			} else if !exists {
-				log.Info("Creating Znode for chRoot of SolrCloud", "path", pathToCreate)
-				_, err = zkClient.Create(pathToCreate, []byte(""), 0, zkCli.WorldACL(zkCli.PermAll))
-
-				if err != nil {
-					log.Error(err, "Could not create Znode for chRoot of SolrCloud", "path", pathToCreate)
-					return err
-				}
-			}
-		}
-		return err
-	}
-	return nil
 }

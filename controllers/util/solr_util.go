@@ -191,6 +191,18 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
+	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
+
+	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
+	var postStart *corev1.Handler
+	if len(zkChroot) > 1 {
+		postStart = &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
+			},
+		}
+	}
+
 	// Environment Variables
 	envVars := []corev1.EnvVar{
 		{
@@ -220,7 +232,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 		{
 			Name:  "ZK_HOST",
-			Value: solrCloudStatus.ZkConnectionString(),
+			Value: zkConnectionStr,
+		},
+		{
+			Name:  "ZK_SERVER",
+			Value: zkServer,
+		},
+		{
+			Name:  "ZK_CHROOT",
+			Value: zkChroot,
 		},
 		{
 			Name:  "SOLR_LOG_LEVEL",
@@ -322,6 +342,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 							TerminationMessagePath:   "/dev/termination-log",
 							TerminationMessagePolicy: "File",
 							Lifecycle: &corev1.Lifecycle{
+								PostStart: postStart,
 								PreStop: &corev1.Handler{
 									Exec: &corev1.ExecAction{
 										Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
