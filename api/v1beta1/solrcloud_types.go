@@ -843,6 +843,14 @@ func (sc *SolrCloud) ZkConnectionString() string {
 func (scs SolrCloudStatus) ZkConnectionString() string {
 	return scs.ZookeeperConnectionInfo.ZkConnectionString()
 }
+func (scs SolrCloudStatus) DissectZkInfo() (zkConnectionString string, zkServer string, zkChRoot string) {
+	zkConnectionString = scs.ZookeeperConnectionInfo.ZkConnectionString()
+	zkParts := strings.SplitN(zkConnectionString, "/", 2)
+	zkServer = zkParts[0]
+	zkChRoot = "/" + zkParts[1]
+
+	return zkConnectionString, zkServer, zkChRoot
+}
 
 func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
 	return zkInfo.InternalConnectionString + zkInfo.ChRoot
