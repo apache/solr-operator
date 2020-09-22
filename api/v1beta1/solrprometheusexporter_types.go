@@ -111,7 +111,7 @@ type SolrCloudReference struct {
 	// +optional
 	Namespace string `json:"namespace,omitempty"`
 
-	// The ZK Connection information for a cloud, could be used for solr's outside of the kube cluster
+	// The ZK Connection information for a cloud, could be used for solr's running outside of the kube cluster
 	// +optional
 	ZookeeperConnectionInfo *ZookeeperConnectionInfo `json:"zkConnectionInfo,omitempty"`
 }

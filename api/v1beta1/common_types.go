@@ -187,3 +187,60 @@ func ImageVersion(image string) (version string) {
 		return split[1]
 	}
 }
+
+// SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
+// and internal and external addresses
+type ZookeeperConnectionInfo struct {
+	// The connection string to connect to the ensemble from within the Kubernetes cluster
+	// +optional
+	InternalConnectionString string `json:"internalConnectionString,omitempty"`
+
+	// The connection string to connect to the ensemble from outside of the Kubernetes cluster
+	// If external and no internal connection string is provided, the external cnx string will be used as the internal cnx string
+	// +optional
+	ExternalConnectionString *string `json:"externalConnectionString,omitempty"`
+
+	// The ChRoot to connect solr at
+	// +optional
+	ChRoot string `json:"chroot,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK.
+	// This ACL should have ALL permission in the given chRoot.
+	// +optional
+	AllACL *ZookeeperACL `json:"acl,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK for reading operations.
+	// This ACL should have READ permission in the given chRoot.
+	// +optional
+	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
+}
+
+func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
+	if ci.InternalConnectionString == "" {
+		if ci.ExternalConnectionString != nil {
+			changed = true
+			ci.InternalConnectionString = *ci.ExternalConnectionString
+		}
+	}
+	if ci.ChRoot == "" {
+		changed = true
+		ci.ChRoot = "/"
+	} else if !strings.HasPrefix(ci.ChRoot, "/") {
+		changed = true
+		ci.ChRoot = "/" + ci.ChRoot
+	}
+	return changed
+}
+
+// ZookeeperSpec defines the internal zookeeper ensemble to run for solr
+type ZookeeperACL struct {
+	// The name of the Kubernetes Secret that stores the username and password for the ACL.
+	// This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+	SecretRef string `json:"secret"`
+
+	// The name of the key in the given secret that contains the ACL username
+	UsernameKey string `json:"usernameKey"`
+
+	// The name of the key in the given secret that contains the ACL password
+	PasswordKey string `json:"passwordKey"`
+}

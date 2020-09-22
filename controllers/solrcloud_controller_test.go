@@ -115,12 +115,15 @@ func TestCloudReconcile(t *testing.T) {
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.HeadlessServiceName() + "." + instance.Namespace,
 		"SOLR_JAVA_MEM":  "-Xmx4G",
 		"SOLR_PORT":      "8983",
+		"SOLR_NODE_PORT": "8983",
 		"SOLR_LOG_LEVEL": "DEBUG",
-		"SOLR_OPTS":      "extra-opts",
+		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
 	}
 	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-	testPodEnvVariables(t, expectedEnvVars, foundEnv[:len(foundEnv)-2])
-	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-2:], "Extra Env Vars are not the same as the ones provided in podOptions")
+	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-3:len(foundEnv)-1], "Extra Env Vars are not the same as the ones provided in podOptions")
+	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+	// TODO: Make this not invalidate foundEnv
+	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-3], foundEnv[len(foundEnv)-1]))
 
 	// Other Pod Options Checks
 	assert.Equal(t, podSecurityContext, *statefulSet.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
@@ -241,10 +244,12 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":   "host:7271/",
-		"SOLR_HOST": "default-$(POD_HOSTNAME).ing.base.domain",
-		"SOLR_PORT": "8983",
-		"GC_TUNE":   "gc Options",
+		"ZK_HOST":        "host:7271/",
+		"SOLR_HOST":      "default-$(POD_HOSTNAME).ing.base.domain",
+		"SOLR_PORT":      "8983",
+		"SOLR_NODE_PORT": "80",
+		"GC_TUNE":        "gc Options",
+		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
 	}
 	expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"technology": "solr-cloud"})
 	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/"}
@@ -256,7 +261,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, statefulSet.Spec.Template.Spec.NodeSelector)
 	testPodProbe(t, testProbeLivenessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe)
 	testPodProbe(t, testProbeReadinessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe)
-	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
+	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
@@ -755,12 +760,13 @@ func TestExternalKubeDomainCloudReconcile(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":   "host:7271/",
-		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace + ".svc." + testKubeDomain,
-		"SOLR_PORT": "2000",
+		"ZK_HOST":        "host:7271/",
+		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace + ".svc." + testKubeDomain,
+		"SOLR_PORT":      "2000",
+		"SOLR_NODE_PORT": "2000",
+		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.ElementsMatch(t, []string{"-DhostPort=2000"}, statefulSet.Spec.Template.Spec.Containers[0].Args, "Wrong Solr container arguments")
 	assert.Nil(t, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart, "Post-start command should be nil since there is no chRoot to ensure exists.")
 
 	// Check the client Service

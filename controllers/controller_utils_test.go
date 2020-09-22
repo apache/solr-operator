@@ -178,6 +178,14 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 }
 
 func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
+	testGenericPodEnvVariables(t, expectedEnvVars, foundEnvVars, "SOLR_OPTS")
+}
+
+func testMetricsPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
+	testGenericPodEnvVariables(t, expectedEnvVars, foundEnvVars, "JAVA_OPTS")
+}
+
+func testGenericPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string) {
 	matchCount := 0
 	for _, envVar := range foundEnvVars {
 		if expectedVal, match := expectedEnvVars[envVar.Name]; match {
@@ -186,6 +194,7 @@ func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundE
 		}
 	}
 	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
+	assert.Equal(t, lastVarName, foundEnvVars[len(foundEnvVars)-1].Name, lastVarName+" must be the last envVar set, as it uses other envVars.")
 }
 
 func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, foundTolerations []corev1.Toleration) {

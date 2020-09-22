@@ -403,23 +403,6 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 	return changed
 }
 
-func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
-	if ci.InternalConnectionString == "" {
-		if ci.ExternalConnectionString != nil {
-			changed = true
-			ci.InternalConnectionString = *ci.ExternalConnectionString
-		}
-	}
-	if ci.ChRoot == "" {
-		changed = true
-		ci.ChRoot = "/"
-	} else if !strings.HasPrefix(ci.ChRoot, "/") {
-		changed = true
-		ci.ChRoot = "/" + ci.ChRoot
-	}
-	return changed
-}
-
 // ZookeeperSpec defines the internal zookeeper ensemble to run with the given spec
 type ZookeeperSpec struct {
 	// DEPRECATED: Will be removed in v0.3.0
@@ -652,23 +635,6 @@ type SolrNodeStatus struct {
 
 	// The version of solr that the node is running
 	Version string `json:"version"`
-}
-
-// SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
-// and internal and external addresses
-type ZookeeperConnectionInfo struct {
-	// The connection string to connect to the ensemble from within the Kubernetes cluster
-	// +optional
-	InternalConnectionString string `json:"internalConnectionString,omitempty"`
-
-	// The connection string to connect to the ensemble from outside of the Kubernetes cluster
-	// If external and no internal connection string is provided, the external cnx string will be used as the internal cnx string
-	// +optional
-	ExternalConnectionString *string `json:"externalConnectionString,omitempty"`
-
-	// The ChRoot to connect solr at
-	// +optional
-	ChRoot string `json:"chroot,omitempty"`
 }
 
 // +kubebuilder:object:root=true
