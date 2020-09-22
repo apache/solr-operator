@@ -24,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"strconv"
+	"strings"
 )
 
 var log = logf.Log.WithName("controller")
@@ -306,4 +307,77 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 	}
 
 	return requireUpdate
+}
+
+// AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
+// info: Zookeeper Connection Information
+func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []corev1.EnvVar) {
+	if info == nil || (info.AllACL == nil && info.ReadOnlyACL == nil) {
+		return false, envVars
+	}
+	f := false
+	var zkDigests []string
+	if info.AllACL != nil {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name: "ZK_ALL_ACL_USERNAME",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: info.AllACL.SecretRef,
+						},
+						Key:      info.AllACL.UsernameKey,
+						Optional: &f,
+					},
+				},
+			},
+			corev1.EnvVar{
+				Name: "ZK_ALL_ACL_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: info.AllACL.SecretRef,
+						},
+						Key:      info.AllACL.PasswordKey,
+						Optional: &f,
+					},
+				},
+			})
+		zkDigests = append(zkDigests, "-DzkDigestUsername=$(ZK_ALL_ACL_USERNAME)", "-DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)")
+	}
+	if info.ReadOnlyACL != nil {
+		envVars = append(envVars,
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_USERNAME",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: info.ReadOnlyACL.SecretRef,
+						},
+						Key:      info.ReadOnlyACL.UsernameKey,
+						Optional: &f,
+					},
+				},
+			},
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: info.ReadOnlyACL.SecretRef,
+						},
+						Key:      info.ReadOnlyACL.PasswordKey,
+						Optional: &f,
+					},
+				},
+			})
+		zkDigests = append(zkDigests, "-DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME)", "-DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)")
+	}
+	envVars = append(envVars,
+		corev1.EnvVar{
+			Name:  "SOLR_ZK_CREDS_AND_ACLS",
+			Value: "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider " + strings.Join(zkDigests, " "),
+		})
+
+	return true, envVars
 }

@@ -4481,6 +4481,23 @@ spec:
                 connectionInfo:
                   description: A zookeeper ensemble that is run independently of the solr operator If an externalConnectionString is provided, but no internalConnectionString is, the external will be used as the internal
                   properties:
+                    acl:
+                      description: ZooKeeper ACL to use when connecting with ZK. This ACL should have ALL permission in the given chRoot.
+                      properties:
+                        passwordKey:
+                          description: The name of the key in the given secret that contains the ACL password
+                          type: string
+                        secret:
+                          description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                          type: string
+                        usernameKey:
+                          description: The name of the key in the given secret that contains the ACL username
+                          type: string
+                      required:
+                      - passwordKey
+                      - secret
+                      - usernameKey
+                      type: object
                     chroot:
                       description: The ChRoot to connect solr at
                       type: string
@@ -4490,6 +4507,23 @@ spec:
                     internalConnectionString:
                       description: The connection string to connect to the ensemble from within the Kubernetes cluster
                       type: string
+                    readOnlyAcl:
+                      description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                      properties:
+                        passwordKey:
+                          description: The name of the key in the given secret that contains the ACL password
+                          type: string
+                        secret:
+                          description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                          type: string
+                        usernameKey:
+                          description: The name of the key in the given secret that contains the ACL username
+                          type: string
+                      required:
+                      - passwordKey
+                      - secret
+                      - usernameKey
+                      type: object
                   type: object
                 provided:
                   description: 'Create a new Zookeeper Ensemble with the following spec Note: This option will not allow the SolrCloud to run across kube-clusters. Note: Requires   - The zookeeperOperator flag to be provided to the Solr Operator   - A zookeeper operator to be running'
@@ -5660,6 +5694,23 @@ spec:
             zookeeperConnectionInfo:
               description: ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
               properties:
+                acl:
+                  description: ZooKeeper ACL to use when connecting with ZK. This ACL should have ALL permission in the given chRoot.
+                  properties:
+                    passwordKey:
+                      description: The name of the key in the given secret that contains the ACL password
+                      type: string
+                    secret:
+                      description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                      type: string
+                    usernameKey:
+                      description: The name of the key in the given secret that contains the ACL username
+                      type: string
+                  required:
+                  - passwordKey
+                  - secret
+                  - usernameKey
+                  type: object
                 chroot:
                   description: The ChRoot to connect solr at
                   type: string
@@ -5669,6 +5720,23 @@ spec:
                 internalConnectionString:
                   description: The connection string to connect to the ensemble from within the Kubernetes cluster
                   type: string
+                readOnlyAcl:
+                  description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                  properties:
+                    passwordKey:
+                      description: The name of the key in the given secret that contains the ACL password
+                      type: string
+                    secret:
+                      description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                      type: string
+                    usernameKey:
+                      description: The name of the key in the given secret that contains the ACL username
+                      type: string
+                  required:
+                  - passwordKey
+                  - secret
+                  - usernameKey
+                  type: object
               type: object
           required:
           - backupRestoreReady
@@ -8127,8 +8195,25 @@ spec:
                       description: The namespace of a solr cloud running within the kubernetes cluster
                       type: string
                     zkConnectionInfo:
-                      description: The ZK Connection information for a cloud, could be used for solr's outside of the kube cluster
+                      description: The ZK Connection information for a cloud, could be used for solr's running outside of the kube cluster
                       properties:
+                        acl:
+                          description: ZooKeeper ACL to use when connecting with ZK. This ACL should have ALL permission in the given chRoot.
+                          properties:
+                            passwordKey:
+                              description: The name of the key in the given secret that contains the ACL password
+                              type: string
+                            secret:
+                              description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                              type: string
+                            usernameKey:
+                              description: The name of the key in the given secret that contains the ACL username
+                              type: string
+                          required:
+                          - passwordKey
+                          - secret
+                          - usernameKey
+                          type: object
                         chroot:
                           description: The ChRoot to connect solr at
                           type: string
@@ -8138,6 +8223,23 @@ spec:
                         internalConnectionString:
                           description: The connection string to connect to the ensemble from within the Kubernetes cluster
                           type: string
+                        readOnlyAcl:
+                          description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                          properties:
+                            passwordKey:
+                              description: The name of the key in the given secret that contains the ACL password
+                              type: string
+                            secret:
+                              description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                              type: string
+                            usernameKey:
+                              description: The name of the key in the given secret that contains the ACL username
+                              type: string
+                          required:
+                          - passwordKey
+                          - secret
+                          - usernameKey
+                          type: object
                       type: object
                   type: object
                 standalone:

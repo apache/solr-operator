@@ -33,7 +33,12 @@ Solr Clouds require an Apache Zookeeper to connect to.
 
 The Solr operator gives a few options.
 
-**Note** - Both options below come with options to specify a `chroot`, or a ZNode path for solr to use as it's base "directory" in Zookeeper.
+- Connecting to an already running zookeeper ensemble via [connection strings](#zk-connection-info)
+- [Spinning up a provided](#provided-instance) Zookeeper Ensemble in the same namespace via the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator)
+
+#### Chroot
+
+Both options below come with options to specify a `chroot`, or a ZNode path for solr to use as it's base "directory" in Zookeeper.
 Before the operator creates or updates a StatefulSet with a given `chroot`, it will first ensure that the given ZNode path exists and if it doesn't the operator will create all necessary ZNodes in the path.
 If no chroot is given, a default of `/` will be used, which doesn't require the existence check previously mentioned.
 If a chroot is provided without a prefix of `/`, the operator will add the prefix, as it is required by Zookeeper.
@@ -42,6 +47,22 @@ If a chroot is provided without a prefix of `/`, the operator will add the prefi
 
 This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
 If you provide an external connection string, you do not _have_ to provide an internal one as well.
+
+#### ACLs
+
+The Solr Operator allows for users to specify ZK ACL references in their Solr Cloud CRDs.
+The user must specify the name of a secret that resides in the same namespace as the cloud, that contains an ACL username value and an ACL password value.
+This ACL must have admin permissions for the [chroot](#chroot) given.
+
+The ACL information can be provided through an ADMIN acl and a READ ONLY acl.  
+- Admin: `SolrCloud.spec.zookeeperRef.connectionInfo.acl`
+- Read Only: `SolrCloud.spec.zookeeperRef.connectionInfo.readOnlyAcl`
+
+All ACL fields are **required** if an ACL is used.
+
+- **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the admin ACL username and password.
+- **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
+- **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL password.
 
 ### Provided Instance
 

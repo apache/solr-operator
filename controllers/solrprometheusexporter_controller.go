@@ -162,13 +162,14 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 		solrConnectionInfo.StandaloneAddress = prometheusExporter.Spec.SolrReference.Standalone.Address
 	}
 	if prometheusExporter.Spec.SolrReference.Cloud != nil {
-		if prometheusExporter.Spec.SolrReference.Cloud.ZookeeperConnectionInfo != nil {
-			solrConnectionInfo.CloudZkConnnectionString = prometheusExporter.Spec.SolrReference.Cloud.ZookeeperConnectionInfo.ZkConnectionString()
-		} else if prometheusExporter.Spec.SolrReference.Cloud.Name != "" {
+		cloudRef := prometheusExporter.Spec.SolrReference.Cloud
+		if cloudRef.ZookeeperConnectionInfo != nil {
+			solrConnectionInfo.CloudZkConnnectionInfo = cloudRef.ZookeeperConnectionInfo
+		} else if cloudRef.Name != "" {
 			solrCloud := &solrv1beta1.SolrCloud{}
 			err = r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: prometheusExporter.Spec.SolrReference.Cloud.Namespace}, solrCloud)
 			if err == nil {
-				solrConnectionInfo.CloudZkConnnectionString = solrCloud.Status.ZookeeperConnectionInfo.ZkConnectionString()
+				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
 			}
 		}
 	}

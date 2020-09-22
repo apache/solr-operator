@@ -203,6 +203,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
+	// Keep track of the SolrOpts that the Solr Operator needs to set
+	// These will be added to the SolrOpts given by the user.
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+
 	// Environment Variables
 	envVars := []corev1.EnvVar{
 		{
@@ -214,8 +218,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Value: "/var/solr/data",
 		},
 		{
+			// This is the port that jetty will listen on
 			Name:  "SOLR_PORT",
 			Value: strconv.Itoa(solrPodPort),
+		},
+		{
+			// This is the port that the Solr Node will advertise itself as listening on in live_nodes
+			Name:  "SOLR_NODE_PORT",
+			Value: strconv.Itoa(solrAdressingPort),
 		},
 		{
 			Name: "POD_HOSTNAME",
@@ -247,19 +257,33 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Value: solrCloud.Spec.SolrLogLevel,
 		},
 		{
-			Name:  "SOLR_OPTS",
-			Value: solrCloud.Spec.SolrOpts,
-		},
-		{
 			Name:  "GC_TUNE",
 			Value: solrCloud.Spec.SolrGCTune,
 		},
+	}
+
+	// Add ACL information, if given, through Env Vars
+	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
+		envVars = append(envVars, aclEnvs...)
+
+		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
+		allSolrOpts = append(allSolrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
 	}
 
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
 	}
+
+	if solrCloud.Spec.SolrOpts != "" {
+		allSolrOpts = append(allSolrOpts, solrCloud.Spec.SolrOpts)
+	}
+
+	// Add SOLR_OPTS last, so that it can use values from all of the other ENV_VARS
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "SOLR_OPTS",
+		Value: strings.Join(allSolrOpts, " "),
+	})
 
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
@@ -337,7 +361,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 								Handler:             defaultHandler,
 							},
 							VolumeMounts:             volumeMounts,
-							Args:                     []string{"-DhostPort=" + strconv.Itoa(solrAdressingPort)},
 							Env:                      envVars,
 							TerminationMessagePath:   "/dev/termination-log",
 							TerminationMessagePolicy: "File",

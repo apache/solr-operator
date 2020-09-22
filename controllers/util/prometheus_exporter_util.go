@@ -16,6 +16,7 @@ package util
 
 import (
 	"strconv"
+	"strings"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -36,8 +37,8 @@ const (
 // SolrConnectionInfo defines how to connect to a cloud or standalone solr instance.
 // One, and only one, of Cloud or Standalone must be provided.
 type SolrConnectionInfo struct {
-	CloudZkConnnectionString string
-	StandaloneAddress        string
+	CloudZkConnnectionInfo *solr.ZookeeperConnectionInfo
+	StandaloneAddress      string
 }
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
@@ -69,6 +70,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		podAnnotations = customPodOptions.Annotations
 	}
 
+	var envVars []corev1.EnvVar
+	var allJavaOpts []string
+
 	var solrVolumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
 	exporterArgs := []string{
@@ -81,8 +85,16 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Setup the solrConnectionInfo
-	if solrConnectionInfo.CloudZkConnnectionString != "" {
-		exporterArgs = append(exporterArgs, "-z", solrConnectionInfo.CloudZkConnnectionString)
+	if solrConnectionInfo.CloudZkConnnectionInfo != nil {
+		exporterArgs = append(exporterArgs, "-z", solrConnectionInfo.CloudZkConnnectionInfo.ZkConnectionString())
+
+		// Add ACL information, if given, through Env Vars
+		if hasACLs, aclEnvs := AddACLsToEnv(solrConnectionInfo.CloudZkConnnectionInfo); hasACLs {
+			envVars = append(envVars, aclEnvs...)
+
+			// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running the Prometheus Exporter, it must be added to the JAVA_OPTS.
+			allJavaOpts = append(allJavaOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
+		}
 	} else if solrConnectionInfo.StandaloneAddress != "" {
 		exporterArgs = append(exporterArgs, "-b", solrConnectionInfo.StandaloneAddress)
 	}
@@ -119,7 +131,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Add Custom EnvironmentVariables to the solr container
-	var envVars []corev1.EnvVar
 	if nil != customPodOptions {
 		// Add environment variables to container
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -134,6 +145,14 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				VolumeSource: volume.Source,
 			})
 		}
+	}
+
+	// Add JAVA_OPTS last, so that it can use values from all of the other ENV_VARS
+	if len(allJavaOpts) > 0 {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "JAVA_OPTS",
+			Value: strings.Join(allJavaOpts, " "),
+		})
 	}
 
 	deployment := &appsv1.Deployment{
