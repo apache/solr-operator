@@ -353,8 +353,8 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
 		nodeStatus.NodeName = p.Spec.NodeName
-		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.NodeName, true)
-		if solrCloud.Spec.SolrAddressability.External != nil {
+		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.Name, true)
+		if solrCloud.Spec.SolrAddressability.External != nil && !solrCloud.Spec.SolrAddressability.External.HideNodes {
 			nodeStatus.ExternalAddress = "http://" + solrCloud.ExternalNodeUrl(nodeStatus.Name, solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		}
 		ready := false
@@ -404,7 +404,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	}
 
 	newStatus.InternalCommonAddress = "http://" + solrCloud.InternalCommonUrl(true)
-	if solrCloud.Spec.SolrAddressability.External != nil {
+	if solrCloud.Spec.SolrAddressability.External != nil && !solrCloud.Spec.SolrAddressability.External.HideCommon {
 		extAddress := "http://" + solrCloud.ExternalCommonUrl(solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		newStatus.ExternalCommonAddress = &extAddress
 	}

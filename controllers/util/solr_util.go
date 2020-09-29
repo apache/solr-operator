@@ -43,9 +43,8 @@ import (
 )
 
 const (
-	SolrClientPortName    = "solr-client"
-	ExtSolrClientPortName = "ext-solr-client"
-	BackupRestoreVolume   = "backup-restore"
+	SolrClientPortName  = "solr-client"
+	BackupRestoreVolume = "backup-restore"
 
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
 
@@ -658,7 +657,7 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: int32(solrCloud.Spec.SolrAddressability.CommonServicePort), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{Name: SolrClientPortName, Port: int32(solrCloud.Spec.SolrAddressability.CommonServicePort), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			Selector: selectorLabels,
 		},
@@ -704,7 +703,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{Name: SolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			Selector:                 selectorLabels,
 			ClusterIP:                corev1.ClusterIPNone,
@@ -744,7 +743,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{Name: SolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
 			},
 			PublishNotReadyAddresses: true,
 		},

@@ -112,6 +112,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 
 	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
+	assert.EqualValues(t, "solr-metrics", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 }
 
 func TestMetricsReconcileWithExporterConfig(t *testing.T) {
@@ -207,4 +208,5 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
 	testMapsEqual(t, "service labels", util.MergeLabelsOrAnnotations(expectedServiceLabels, testMetricsServiceLabels), service.Labels)
 	testMapsEqual(t, "service annotations", util.MergeLabelsOrAnnotations(expectedServiceAnnotations, testMetricsServiceAnnotations), service.Annotations)
+	assert.EqualValues(t, "solr-metrics", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 }
