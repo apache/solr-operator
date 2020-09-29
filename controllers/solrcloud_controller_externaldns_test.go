@@ -122,6 +122,7 @@ func TestEDSCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
@@ -131,6 +132,7 @@ func TestEDSCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -143,6 +145,12 @@ func TestEDSCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
+	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestEDSNoNodesCloudReconcile(t *testing.T) {
@@ -234,12 +242,14 @@ func TestEDSNoNodesCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 5000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
 	// Check the headless Service
 	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
 	testMapsEqual(t, "headless service annotations", testHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -252,6 +262,12 @@ func TestEDSNoNodesCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":5000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
+	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":5000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestEDSNoCommonCloudReconcile(t *testing.T) {
@@ -340,6 +356,7 @@ func TestEDSNoCommonCloudReconcile(t *testing.T) {
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
 	testMapsEqual(t, "common service annotations", testCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
@@ -349,6 +366,7 @@ func TestEDSNoCommonCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -361,6 +379,11 @@ func TestEDSNoCommonCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":2000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.Nil(t, instance.Status.ExternalCommonAddress, "External common address in status should be nil")
 }
 
 func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
@@ -452,6 +475,7 @@ func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
@@ -461,6 +485,7 @@ func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -473,6 +498,12 @@ func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
+	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestEDSExtraDomainsCloudReconcile(t *testing.T) {
@@ -569,6 +600,7 @@ func TestEDSExtraDomainsCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
 	})
 	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
@@ -578,6 +610,7 @@ func TestEDSExtraDomainsCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
 	})
 	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -590,6 +623,12 @@ func TestEDSExtraDomainsCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
+	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestEDSKubeDomainCloudReconcile(t *testing.T) {
@@ -682,12 +721,14 @@ func TestEDSKubeDomainCloudReconcile(t *testing.T) {
 		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
 	})
 	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 5000, service.Spec.Ports[0].Port, "Wrong port on common Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
 	// Check the headless Service
 	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
 	testMapsEqual(t, "headless service annotations", testHeadlessServiceAnnotations, service.Annotations)
+	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
 	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
 	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
@@ -700,4 +741,10 @@ func TestEDSKubeDomainCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+".svc."+testKubeDomain+":5000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
+	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":5000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
