@@ -26,10 +26,9 @@ import (
 )
 
 const (
-	SolrMetricsPort        = 8080
-	SolrMetricsPortName    = "solr-metrics"
-	ExtSolrMetricsPort     = 80
-	ExtSolrMetricsPortName = "ext-solr-metrics"
+	SolrMetricsPort     = 8080
+	SolrMetricsPortName = "solr-metrics"
+	ExtSolrMetricsPort  = 80
 
 	DefaultPrometheusExporterEntrypoint = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
 )
@@ -291,7 +290,7 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: ExtSolrMetricsPortName, Port: ExtSolrMetricsPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrMetricsPort)},
+				{Name: SolrMetricsPortName, Port: ExtSolrMetricsPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrMetricsPort)},
 			},
 			Selector: selectorLabels,
 		},

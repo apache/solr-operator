@@ -43,6 +43,10 @@ Please visit the following pages for documentation on using and developing the S
 
 ## Version Compatibility & Upgrade Notes
 
+#### v0.2.7
+- The `SolrCloud` and `SolrPrometheusExporter` services' portNames have changed to `"solr-client"` and `"solr-metrics"` from `"ext-solr-client"` and `"ext-solr-metrics"`, respectively.
+This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.
+
 #### v0.2.6
 - The solr-operator argument `--ingressBaseDomain` has been **DEPRECATED**.
 In order to set the external baseDomain of your clouds, please begin to use `SolrCloud.spec.solrAddressability.external.domainName` instead.

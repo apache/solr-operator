@@ -945,7 +945,7 @@ func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
 func (sc *SolrCloud) InternalCommonUrl(withPort bool) (url string) {
 	url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.Namespace) + sc.customKubeDomain()
 	if withPort {
-		url += sc.NodePortSuffix()
+		url += sc.CommonPortSuffix()
 	}
 	return url
 }
