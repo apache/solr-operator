@@ -58,6 +58,9 @@ const (
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
+
+	DefaultKeyStorePath = "/var/solr/tls"
+	DefaultKeyStoreFile = "keystore.p12"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -124,9 +127,13 @@ type SolrCloudSpec struct {
 	// Set GC Tuning configuration through GC_TUNE environment variable
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
+
+	// Options to enable TLS between Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool) {
+func (spec *SolrCloudSpec) withDefaults(instanceName string, ingressBaseDomain string) (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -154,6 +161,10 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 	}
 
 	changed = spec.SolrAddressability.withDefaults(ingressBaseDomain) || changed
+
+	if spec.SolrTLS != nil {
+		changed = spec.SolrTLS.withDefaults(instanceName) || changed
+	}
 
 	if spec.ZookeeperRef == nil {
 		spec.ZookeeperRef = &ZookeeperRef{}
@@ -357,6 +368,129 @@ func (opts *ExternalAddressability) withDefaults() (changed bool) {
 	if !opts.UsesIndividualNodeServices() && opts.NodePortOverride > 0 {
 		changed = true
 		opts.NodePortOverride = 0
+	}
+
+	return changed
+}
+
+type CertificateIssuerRef struct {
+	// Name of the resource being referred to.
+	Name string `json:"name"`
+	// Kind of the resource being referred to.
+	// +optional
+	Kind string `json:"kind,omitempty"`
+}
+
+type CreateCertificate struct {
+	// Name of the certificate to create for Solr TLS; defaults to the name of the SolrCloud + "-solr-tls"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Subject distinguished name for the auto-generated cert;
+	// use format: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country
+	// If not provided, then the operator uses the SolrCloud instance name as the Organization
+	// +optional
+	SubjectDistinguishedName string `json:"subjectDName,omitempty"`
+
+	// Specify the cert-manager Issuer or ClusterIssuer to use to issue the certificate;
+	// for creating a self-signed cert, don't supply an issuerRef.
+	// +optional
+	IssuerRef *CertificateIssuerRef `json:"issuerRef,omitempty"`
+}
+
+type ClientAuthType string
+
+const (
+	None ClientAuthType = "None"
+	Want ClientAuthType = "Want"
+	Need ClientAuthType = "Need"
+)
+
+type SolrTLSOptions struct {
+	// Solr operator should just create a TLS cert automatically using the specified Issuer
+	// If issuerRef is not specified, the operator generates a self-signed certificate which is only
+	// useful for dev / test environments and should not be used in production.
+	// +optional
+	AutoCreate *CreateCertificate `json:"autoCreate,omitempty"`
+
+	// Specify secret and key that contains the key store password;
+	// password is used for both the keystore and the truststore
+	// +optional
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
+
+	// Specify a reference (name and key) to a secret that contains the pkcs12 cert created by cert-manager
+	// Required unless autoCreate is requested; if using autoCreate, then supplying this secret in the config is not necessary
+	// +optional
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
+
+	// Determines the client authentication method, either none, want, or need
+	// sets the SOLR_SSL_WANT_CLIENT_AUTH and SOLR_SSL_NEED_CLIENT_AUTH env vars accordingly.
+	// This can affect K8s ability to call liveness / readiness probes so use cautiously.
+	// +optional
+	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
+
+	// Verify client's hostname during SSL handshake
+	// +optional
+	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
+
+	// TLS certificates contain host/ip "peer name" information that is validated by default. Setting
+	// this to false can be useful to disable these checks when re-using a certificate on many hosts
+	// sets the SOLR_SSL_CHECK_PEER_NAME env var
+	// +optional
+	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Set at runtime during reconcile, once the TLS secret is issued
+	TLSSecretVersion string `json:"-"`
+}
+
+func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
+
+	if opts.AutoCreate != nil {
+		// User wants us to create a Certificate and Keystore password on-the-fly for them
+		// Fill-in any missing information with defaults so that the reconciliation process
+		// doesn't have to account for missing values with defaults
+		if opts.AutoCreate.Name == "" {
+			opts.AutoCreate.Name = fmt.Sprintf("%s-solr-tls", instanceName)
+			changed = true
+		}
+
+		if opts.AutoCreate.SubjectDistinguishedName == "" {
+			opts.AutoCreate.SubjectDistinguishedName = "O=" + instanceName
+			changed = true
+		}
+
+		if opts.KeyStorePasswordSecret == nil {
+			secretName := fmt.Sprintf("%s-pkcs12-keystore", instanceName)
+			opts.KeyStorePasswordSecret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: secretName,
+				},
+				Key: "password-key",
+			}
+			changed = true
+		}
+
+		if opts.PKCS12Secret == nil {
+			var issuerName string
+			if opts.AutoCreate.IssuerRef != nil {
+				issuerName = strings.Replace(opts.AutoCreate.IssuerRef.Name, "-issuer", "", -1)
+			} else {
+				issuerName = "selfsigned"
+			}
+			certSecretName := fmt.Sprintf("%s-%s-%s", instanceName, issuerName, "solr-tls")
+			opts.PKCS12Secret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: certSecretName,
+				},
+				Key: DefaultKeyStoreFile,
+			}
+			changed = true
+		}
+	}
+
+	if opts.ClientAuth == "" {
+		opts.ClientAuth = None
+		changed = true
 	}
 
 	return changed
@@ -770,7 +904,7 @@ type SolrCloud struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sc *SolrCloud) WithDefaults(ingressBaseDomain string) bool {
-	return sc.Spec.withDefaults(ingressBaseDomain)
+	return sc.Spec.withDefaults(sc.Name, ingressBaseDomain)
 }
 
 func (sc *SolrCloud) GetAllSolrNodeNames() []string {

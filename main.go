@@ -27,6 +27,7 @@ import (
 	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers"
 	etcdv1beta2 "github.com/coreos/etcd-operator/pkg/apis/etcd/v1beta2"
+	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -70,6 +71,7 @@ func init() {
 	_ = solrv1beta1.AddToScheme(scheme)
 	_ = zkv1beta1.AddToScheme(scheme)
 	_ = etcdv1beta2.AddToScheme(scheme)
+	_ = certv1.AddToScheme(scheme)
 
 	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useEtcdCRD, "etcd-operator", true, "The operator will not use the etcd operator & crd when this flag is set to false.")
