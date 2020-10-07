@@ -4,7 +4,7 @@ apiVersion: apiextensions.k8s.io/v1beta1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.2.2
+    controller-gen.kubebuilder.io/version: v0.2.5
   creationTimestamp: null
   name: solrcollections.solr.bloomberg.com
 spec:
@@ -20,14 +20,10 @@ spec:
       description: SolrCollection is the Schema for the solrcollections API
       properties:
         apiVersion:
-          description: 'APIVersion defines the versioned schema of this representation
-            of an object. Servers should convert recognized schemas to the latest
-            internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+          description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
           type: string
         kind:
-          description: 'Kind is a string value representing the REST resource this
-            object represents. Servers may infer this from the endpoint the client
-            submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
           type: string
         metadata:
           type: object
@@ -35,15 +31,13 @@ spec:
           description: SolrCollectionSpec defines the desired state of SolrCollection
           properties:
             autoAddReplicas:
-              description: When set to true, enables automatic addition of replicas
-                when the number of active replicas falls below the value set for replicationFactor
+              description: When set to true, enables automatic addition of replicas when the number of active replicas falls below the value set for replicationFactor
               type: boolean
             collection:
               description: The name of the collection to perform the action on
               type: string
             collectionConfigName:
-              description: Define a configset to use for the collection. Use '_default'
-                if you don't have a custom configset
+              description: Define a configset to use for the collection. Use '_default' if you don't have a custom configset
               type: string
             maxShardsPerNode:
               description: Max shards per node
@@ -58,21 +52,16 @@ spec:
               format: int64
               type: integer
             routerField:
-              description: If this parameter is specified, the router will look at
-                the value of the field in an input document to compute the hash and
-                identify a shard instead of looking at the uniqueKey field. If the
-                field specified is null in the document, the document will be rejected.
+              description: If this parameter is specified, the router will look at the value of the field in an input document to compute the hash and identify a shard instead of looking at the uniqueKey field. If the field specified is null in the document, the document will be rejected.
               type: string
             routerName:
-              description: The router name that will be used. The router defines how
-                documents will be distributed
+              description: The router name that will be used. The router defines how documents will be distributed
               enum:
               - implicit
               - compositeId
               type: string
             shards:
-              description: A comma separated list of shard names, e.g., shard-x,shard-y,shard-z.
-                This is a required parameter when the router.name is implicit
+              description: A comma separated list of shard names, e.g., shard-x,shard-y,shard-z. This is a required parameter when the router.name is implicit
               type: string
             solrCloud:
               description: A reference to the SolrCloud to create a collection for

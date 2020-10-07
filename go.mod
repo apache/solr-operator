@@ -1,6 +1,6 @@
 module github.com/bloomberg/solr-operator
 
-go 1.13
+go 1.14
 
 require (
 	github.com/coreos/etcd-operator v0.9.3
@@ -8,7 +8,7 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
-	github.com/jetstack/cert-manager v1.0.0
+	github.com/jetstack/cert-manager v1.0.2
 	github.com/onsi/gomega v1.10.1
 	github.com/pravega/zookeeper-operator v0.2.6
 	github.com/samuel/go-zookeeper v0.0.0-20190923202752-2cc03de413da
