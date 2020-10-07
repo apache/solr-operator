@@ -1,11 +1,11 @@
 # Build the manager binary
-FROM golang:1.13 as builder
+FROM golang:1.14 as builder
 
 WORKDIR /workspace
 ARG GO111MODULE=on
 
 # Download necessary libraries
-RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
