@@ -56,15 +56,15 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests
-	kustomize build config/crd | kubectl apply -f -
+	kubectl apply -k config/crd
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
-	kustomize build config/default | kubectl apply -f -
+	kubectl apply -k config/default
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: mod-tidy controller-gen
+manifests: controller-gen mod-tidy
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	./hack/helm/copy_crds_roles_helm.sh
 
@@ -98,7 +98,7 @@ generate: controller-gen
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5
     CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
 else
     CONTROLLER_GEN=$(shell which controller-gen)
