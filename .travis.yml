@@ -3,7 +3,7 @@ services:
   - docker
 
 go:
-  - "1.13"
+  - "1.14"
   - master
 
 script:
