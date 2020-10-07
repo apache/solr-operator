@@ -64,7 +64,7 @@ deploy: manifests
 	kubectl apply -k config/default
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: mod-tidy controller-gen
+manifests: controller-gen mod-tidy
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	./hack/helm/copy_crds_roles_helm.sh
 
