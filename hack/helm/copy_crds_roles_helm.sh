@@ -9,7 +9,7 @@ set -u
 echo "Copying CRDs and Role to helm repo"
 
 # Build and package CRDs
-kustomize build config/crd > helm/solr-operator/crds/crds.yaml
+kubectl kustomize config/crd > helm/solr-operator/crds/crds.yaml
 
 # Copy Kube Role for Solr Operator permissions to Helm
 rm helm/solr-operator/templates/role.yaml

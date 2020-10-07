@@ -9,12 +9,16 @@ os=$(go env GOOS)
 arch=$(go env GOARCH)
 
 # Install go modules 
-GO111MODULE=on go mod tidy 
+GO111MODULE=on go mod tidy
 
 #Install Kustomize
-GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4
+(which kustomize || (cd /usr/local/bin && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash))
 
 # Install Kubebuilder
-curl -sL https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch} | tar -xz -C /tmp/
-sudo mv /tmp/kubebuilder_${kubebuilder_version}_${os}_${arch} /usr/local/kubebuilder
-export PATH=$PATH:/usr/local/kubebuilder/bin
+if !(which kubebuilder && (kubebuilder version | grep ${kubebuilder_version})); then
+  curl -sL "https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch}" | tar -xz -C /tmp/
+  sudo rm -rf /usr/local/kubebuilder
+  sudo mv "/tmp/kubebuilder_${kubebuilder_version}_${os}_${arch}" /usr/local/kubebuilder
+  export PATH=$PATH:/usr/local/kubebuilder/bin
+  kubebuilder version
+fi

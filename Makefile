@@ -56,12 +56,12 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests
-	kustomize build config/crd | kubectl apply -f -
+	kubectl apply -k config/crd
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
 	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
-	kustomize build config/default | kubectl apply -f -
+	kubectl apply -k config/default
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: mod-tidy controller-gen
