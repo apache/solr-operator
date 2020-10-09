@@ -73,6 +73,7 @@ func TestAutoCreateSelfSignedTLS(t *testing.T) {
 				AutoCreate: &solr.CreateCertificate{
 					SubjectDistinguishedName: "CN=testCN, O=testO, OU=testOU",
 				},
+				RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
 			},
 		},
 	}
@@ -169,19 +170,22 @@ func verifyReconcileSelfSignedTLS(t *testing.T, instance *solr.SolrCloud) {
 					Type:       corev1.SecretTypeOpaque,
 				}
 				_ = testClient.Create(ctx, &mockTLSSecret)
-				time.Sleep(6 * time.Second) // wait a full TLS reconcile cycle ...
+				time.Sleep(2 * time.Second) // wait a full TLS reconcile cycle ...
 				wg.Done()
 				return
 			} else {
 				time.Sleep(1 * time.Second)
 			}
 		}
+		// timed out waiting to see the secret get deleted after cert config changed, the test will fail
+		wg.Done()
 	}()
 
 	err = testClient.Update(ctx, instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
-	g.Eventually(requests, 6*time.Second).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	wg.Wait() // waits to make sure the TLS secret was created in the background
 
 	// was the cert updated after the subject changed?
@@ -191,6 +195,7 @@ func verifyReconcileSelfSignedTLS(t *testing.T, instance *solr.SolrCloud) {
 	err = testClient.Get(ctx, findByName, foundCert)
 	verifySelfSignedCert(t, foundCert, instance.Name)
 	// was the change to the subject picked up?
+	assert.NotNil(t, foundCert.Spec.Subject.Provinces, "Update cert subject not applied!")
 	assert.Equal(t, "testS", foundCert.Spec.Subject.Provinces[0])
 
 	// ensure the STS was updated after the cert changed

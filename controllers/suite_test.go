@@ -21,6 +21,8 @@ import (
 	stdlog "log"
 	"os"
 	"path/filepath"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sync"
 	"testing"
 	"time"
@@ -48,6 +50,7 @@ var additionalLables = map[string]string{
 }
 
 func TestMain(m *testing.M) {
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),

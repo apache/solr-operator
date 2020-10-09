@@ -223,8 +223,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				if err != nil {
 					r.Log.Error(err, "Reconcile TLS Certificate failed")
 				} else {
-					r.Log.Info("Certificate is not ready, will requeue after waiting 5 seconds")
-					requeueOrNot.RequeueAfter = 5 * time.Second
+					wait := 30 * time.Second
+					if instance.Spec.SolrTLS.AutoCreate.IssuerRef == nil {
+						// this is a self-signed cert, so no need to wait very long for it to issue
+						wait = 2 * time.Second
+					}
+					r.Log.Info("Certificate is not ready, will requeue after brief wait")
+					requeueOrNot.RequeueAfter = wait
 				}
 				return requeueOrNot, err
 			}
@@ -233,7 +238,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			foundTLSSecret := &corev1.Secret{}
 			lookupErr := r.Get(context.TODO(), types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
 			if lookupErr == nil {
-				instance.Spec.SolrTLS.TLSSecretVersion = foundTLSSecret.ResourceVersion
+				// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+				// capture the resourceVersion of the secret and stash in an envVar so that the STS gets updates when the cert changes
+				if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+					instance.Spec.SolrTLS.TLSSecretVersion = foundTLSSecret.ResourceVersion
+				}
 			}
 		}
 	}
@@ -584,7 +593,8 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&extv1.Ingress{}).
-		Owns(&appsv1.Deployment{})
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Secret{})
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zk.ZookeeperCluster{})
@@ -739,7 +749,7 @@ func (r *SolrCloudReconciler) afterCertificateReady(ctx context.Context, instanc
 		// cert exists, is ready and has no changes
 
 		// let's add our controller ref to it so it gets cleaned up
-		if len(foundTLSSecret.OwnerReferences) == 0 {
+		if foundTLSSecret.OwnerReferences == nil || len(foundTLSSecret.OwnerReferences) == 0 {
 			if err := controllerutil.SetControllerReference(instance, foundTLSSecret, r.scheme); err != nil {
 				return false, err
 			}
@@ -750,7 +760,9 @@ func (r *SolrCloudReconciler) afterCertificateReady(ctx context.Context, instanc
 		}
 
 		// stash the version of the TLS secret we're using which triggers a statefulset reconcile when the secret changes
-		instance.Spec.SolrTLS.TLSSecretVersion = foundTLSSecret.ResourceVersion
+		if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+			instance.Spec.SolrTLS.TLSSecretVersion = foundTLSSecret.ResourceVersion
+		}
 
 		return true, nil
 	}

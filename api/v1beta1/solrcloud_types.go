@@ -408,24 +408,20 @@ const (
 
 type SolrTLSOptions struct {
 	// Solr operator should just create a TLS cert automatically using the specified Issuer
-	// If issuerRef is not specified, the operator generates a self-signed certificate which is only
-	// useful for dev / test environments and should not be used in production.
+	// If issuerRef is not specified, the operator generates a self-signed certificate.
 	// +optional
 	AutoCreate *CreateCertificate `json:"autoCreate,omitempty"`
 
-	// Specify secret and key that contains the key store password;
-	// password is used for both the keystore and the truststore
+	// Secret containing the key store password
 	// +optional
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
-	// Specify a reference (name and key) to a secret that contains the pkcs12 cert created by cert-manager
-	// Required unless autoCreate is requested; if using autoCreate, then supplying this secret in the config is not necessary
+	// TLS Secret containing a pkcs12 keystore created by cert-manager; required unless autoCreate is requested.
 	// +optional
 	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
 
-	// Determines the client authentication method, either none, want, or need
-	// sets the SOLR_SSL_WANT_CLIENT_AUTH and SOLR_SSL_NEED_CLIENT_AUTH env vars accordingly.
-	// This can affect K8s ability to call liveness / readiness probes so use cautiously.
+	// Determines the client authentication method, either None, Want, or Need;
+	// this affects K8s ability to call liveness / readiness probes so use cautiously.
 	// +optional
 	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
 
@@ -433,11 +429,13 @@ type SolrTLSOptions struct {
 	// +optional
 	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
 
-	// TLS certificates contain host/ip "peer name" information that is validated by default. Setting
-	// this to false can be useful to disable these checks when re-using a certificate on many hosts
-	// sets the SOLR_SSL_CHECK_PEER_NAME env var
+	// TLS certificates contain host/ip "peer name" information that is validated by default.
 	// +optional
 	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// +optional
+	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 
 	// Set at runtime during reconcile, once the TLS secret is issued
 	TLSSecretVersion string `json:"-"`

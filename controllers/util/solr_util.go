@@ -1113,7 +1113,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions) []corev1.EnvVar {
 		},
 	}
 
-	if opts.TLSSecretVersion != "" {
+	if opts.RestartOnTLSSecretUpdate && opts.TLSSecretVersion != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_TLS_SECRET_VERS", Value: opts.TLSSecretVersion})
 	}
 
