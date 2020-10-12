@@ -406,6 +406,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			stateful.Spec.Template.Spec.Containers[0].StartupProbe = fillProbe(*customPodOptions.StartupProbe, DefaultStartupProbeInitialDelaySeconds, DefaultStartupProbeTimeoutSeconds, DefaultStartupProbeSuccessThreshold, DefaultStartupProbeFailureThreshold, DefaultStartupProbePeriodSeconds, &defaultHandler)
 		}
 
+		if customPodOptions.PriorityClassName != "" {
+			stateful.Spec.Template.Spec.PriorityClassName = customPodOptions.PriorityClassName
+		}
 	}
 
 	return stateful
@@ -507,6 +510,12 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.Template.Spec.NodeSelector changed from", to.Spec.Template.Spec.NodeSelector, "To:", from.Spec.Template.Spec.NodeSelector)
 		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
+	}
+
+	if !DeepEqualWithNils(to.Spec.Template.Spec.PriorityClassName, from.Spec.Template.Spec.PriorityClassName) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.PriorityClassName changed from", to.Spec.Template.Spec.PriorityClassName, "To:", from.Spec.Template.Spec.PriorityClassName)
+		to.Spec.Template.Spec.PriorityClassName = from.Spec.Template.Spec.PriorityClassName
 	}
 
 	if !DeepEqualWithNils(to.Spec.Template.Spec.Tolerations, from.Spec.Template.Spec.Tolerations) {
