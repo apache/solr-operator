@@ -224,6 +224,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if customPodOptions.NodeSelector != nil {
 			deployment.Spec.Template.Spec.NodeSelector = customPodOptions.NodeSelector
 		}
+
+		if customPodOptions.PriorityClassName != "" {
+			deployment.Spec.Template.Spec.PriorityClassName = customPodOptions.PriorityClassName
+		}
 	}
 
 	return deployment

@@ -123,11 +123,12 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 			Config: testExporterConfig,
 			CustomKubeOptions: solr.CustomExporterKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations:  testPodAnnotations,
-					Labels:       testPodLabels,
-					Volumes:      extraVolumes,
-					Tolerations:  testTolerationsPromExporter,
-					NodeSelector: testNodeSelectors,
+					Annotations:       testPodAnnotations,
+					Labels:            testPodLabels,
+					Volumes:           extraVolumes,
+					Tolerations:       testTolerationsPromExporter,
+					NodeSelector:      testNodeSelectors,
+					PriorityClassName: testPriorityClass,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{
 					Annotations: testDeploymentAnnotations,
@@ -189,6 +190,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+	assert.EqualValues(t, testPriorityClass, deployment.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
 	// Test tolerations and node selectors
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)

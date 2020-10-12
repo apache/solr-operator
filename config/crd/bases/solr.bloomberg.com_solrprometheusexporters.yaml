@@ -686,6 +686,9 @@ spec:
                               type: string
                           type: object
                       type: object
+                    priorityClassName:
+                      description: PriorityClassName for the pod
+                      type: string
                     readinessProbe:
                       description: Readiness probe parameters
                       properties:

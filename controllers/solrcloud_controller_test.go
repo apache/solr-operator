@@ -167,13 +167,14 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations:    testPodAnnotations,
-					Labels:         testPodLabels,
-					Tolerations:    testTolerations,
-					NodeSelector:   testNodeSelectors,
-					LivenessProbe:  testProbeLivenessNonDefaults,
-					ReadinessProbe: testProbeReadinessNonDefaults,
-					StartupProbe:   testProbeStartup,
+					Annotations:       testPodAnnotations,
+					Labels:            testPodLabels,
+					Tolerations:       testTolerations,
+					NodeSelector:      testNodeSelectors,
+					LivenessProbe:     testProbeLivenessNonDefaults,
+					ReadinessProbe:    testProbeReadinessNonDefaults,
+					StartupProbe:      testProbeStartup,
+					PriorityClassName: testPriorityClass,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations: testSSAnnotations,
@@ -257,6 +258,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testPodProbe(t, testProbeReadinessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe)
 	assert.ElementsMatch(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
+	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)

@@ -299,5 +299,11 @@ func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
 		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
 	}
 
+	if !DeepEqualWithNils(to.Spec.Template.Spec.PriorityClassName, from.Spec.Template.Spec.PriorityClassName) {
+		requireUpdate = true
+		log.Info("Update required because:", "Spec.Template.Spec.PriorityClassName changed from", to.Spec.Template.Spec.PriorityClassName, "To:", from.Spec.Template.Spec.PriorityClassName)
+		to.Spec.Template.Spec.PriorityClassName = from.Spec.Template.Spec.PriorityClassName
+	}
+
 	return requireUpdate
 }

@@ -95,6 +95,10 @@ type PodOptions struct {
 	// Startup probe parameters
 	// +optional
 	StartupProbe *corev1.Probe `json:"startupProbe,omitempty"`
+
+	// PriorityClassName for the pod
+	// +optional
+	PriorityClassName string `json:"priorityClassName,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

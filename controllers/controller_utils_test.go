@@ -385,7 +385,8 @@ var (
 			Operator: "Exists",
 		},
 	}
-	extraVars = []corev1.EnvVar{
+	testPriorityClass = "p4"
+	extraVars         = []corev1.EnvVar{
 		{
 			Name:  "VAR_1",
 			Value: "VAL_1",
