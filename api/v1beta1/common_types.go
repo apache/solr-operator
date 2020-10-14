@@ -156,15 +156,15 @@ type ContainerImage struct {
 }
 
 func (c *ContainerImage) withDefaults(repo string, version string, policy corev1.PullPolicy) (changed bool) {
-	if c.Repository == "" {
+	if c.Repository == "" && repo != "" {
 		changed = true
 		c.Repository = repo
 	}
-	if c.Tag == "" {
+	if c.Tag == "" && version != "" {
 		changed = true
 		c.Tag = version
 	}
-	if c.PullPolicy == "" {
+	if c.PullPolicy == "" && policy != "" {
 		changed = true
 		c.PullPolicy = policy
 	}
