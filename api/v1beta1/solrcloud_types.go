@@ -28,7 +28,7 @@ import (
 )
 
 const (
-	DefaultPullPolicy = corev1.PullIfNotPresent
+	DefaultPullPolicy = "" // This will use the default pullPolicy of Always when the tag is "latest" and IfNotPresent for all other tags.
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
