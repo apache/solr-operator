@@ -59,8 +59,9 @@ const (
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
 
-	DefaultKeyStorePath = "/var/solr/tls"
-	DefaultKeyStoreFile = "keystore.p12"
+	DefaultKeyStorePath         = "/var/solr/tls"
+	DefaultKeyStoreFile         = "keystore.p12"
+	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -835,6 +836,9 @@ type SolrCloudStatus struct {
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
 	BackupRestoreReady bool `json:"backupRestoreReady"`
+
+	// Flag to mark that we've set this cluster-wide property so we don't reconnect to ZK for every loop
+	UrlSchemeClusterProperty bool `json:"urlSchemeClusterProperty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status

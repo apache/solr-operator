@@ -4947,6 +4947,9 @@ spec:
             targetVersion:
               description: The version of solr that the cloud is meant to be running. Will only be provided when the cloud is migrating between versions
               type: string
+            urlSchemeClusterProperty:
+              description: Flag to mark that we've set this cluster-wide property so we don't reconnect to ZK for every loop
+              type: boolean
             version:
               description: The version of solr that the cloud is running
               type: string
@@ -4969,6 +4972,7 @@ spec:
           - readyReplicas
           - replicas
           - solrNodes
+          - urlSchemeClusterProperty
           - version
           - zookeeperConnectionInfo
           type: object

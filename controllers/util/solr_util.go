@@ -72,7 +72,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, createPkcs12InitContainer bool) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(solrPodPort)
@@ -136,14 +136,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS)...)
+		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 	}
 
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		volumeMounts = append(volumeMounts, tlsVolumeMounts()...)
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(createPkcs12InitContainer)...)
 	}
 
 	var pvcs []corev1.PersistentVolumeClaim
@@ -278,7 +278,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Append TLS related env vars if enabled
 	if solrCloud.Spec.SolrTLS != nil {
-		envVars = append(envVars, TLSEnvVars(solrCloud.Spec.SolrTLS)...)
+		envVars = append(envVars, TLSEnvVars(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 	}
 
 	// Add Custom EnvironmentVariables to the solr container
@@ -380,6 +380,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeClaimTemplates: pvcs,
 		},
+	}
+
+	if createPkcs12InitContainer {
+		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, generatePkcs12InitContainer(solrCloud))
 	}
 
 	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
@@ -1081,7 +1085,7 @@ func GenerateSelfSignedIssuer(solrCloud *solr.SolrCloud, issuerName string) cert
 	}
 }
 
-func TLSEnvVars(opts *solr.SolrTLSOptions) []corev1.EnvVar {
+func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.EnvVar {
 
 	// Determine the correct values for the SOLR_SSL_WANT_CLIENT_AUTH and SOLR_SSL_NEED_CLIENT_AUTH vars
 	wantClientAuth := "false"
@@ -1092,7 +1096,17 @@ func TLSEnvVars(opts *solr.SolrTLSOptions) []corev1.EnvVar {
 		wantClientAuth = "true"
 	}
 
-	keystorePath := solr.DefaultKeyStorePath + "/" + solr.DefaultKeyStoreFile
+	// the keystore path depends on whether we're just loading it from the secret or whether
+	// our initContainer has to generate it from the TLS secret using openssl
+	// this complexity is due to the secret mount directory not being writable
+	var keystorePath string
+	if createPkcs12InitContainer {
+		keystorePath = solr.DefaultWritableKeyStorePath
+	} else {
+		keystorePath = solr.DefaultKeyStorePath
+	}
+	keystorePath += ("/" + solr.DefaultKeyStoreFile)
+
 	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 
 	envVars := []corev1.EnvVar{
@@ -1141,7 +1155,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions) []corev1.EnvVar {
 	return envVars
 }
 
-func tlsVolumeMounts() []corev1.VolumeMount {
+func tlsVolumeMounts(createPkcs12InitContainer bool) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{
 		{
 			Name:      "keystore",
@@ -1149,29 +1163,44 @@ func tlsVolumeMounts() []corev1.VolumeMount {
 			MountPath: solr.DefaultKeyStorePath,
 		},
 	}
+
+	// We need an initContainer to convert a TLS cert into the pkcs12 format Java wants (using openssl)
+	// but openssl cannot write to the /var/solr/tls directory because of the way secret mounts work
+	// so we need to mount an empty directory to write pkcs12 keystore into
+	if createPkcs12InitContainer {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "pkcs12",
+			ReadOnly:  false,
+			MountPath: solr.DefaultWritableKeyStorePath,
+		})
+	}
+
 	return mounts
 }
 
-func tlsVolumes(opts *solr.SolrTLSOptions) []corev1.Volume {
+func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.Volume {
 	optional := false
-	defaultMode := int32(440)
+	defaultMode := int32(0664)
 	vols := []corev1.Volume{
 		{
 			Name: "keystore",
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName: opts.PKCS12Secret.Name,
-					Items: []corev1.KeyToPath{
-						{
-							Key:  opts.PKCS12Secret.Key,
-							Path: solr.DefaultKeyStoreFile,
-						},
-					},
+					SecretName:  opts.PKCS12Secret.Name,
 					DefaultMode: &defaultMode,
 					Optional:    &optional,
 				},
 			},
 		},
+	}
+
+	if createPkcs12InitContainer {
+		vols = append(vols, corev1.Volume{
+			Name: "pkcs12",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
 	}
 
 	return vols
@@ -1253,4 +1282,29 @@ func CopyCreateCertificateFields(from, to *certv1.Certificate) bool {
 	}
 
 	return requireUpdate
+}
+
+func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {
+	// get the keystore password from the env for generating the keystore using openssl
+	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret}
+	envVars := []corev1.EnvVar{
+		{
+			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
+			ValueFrom: passwordValueFrom,
+		},
+	}
+
+	cmd := "openssl pkcs12 -export -in " + solr.DefaultKeyStorePath + "/tls.crt -in " + solr.DefaultKeyStorePath +
+		"/ca.crt -inkey " + solr.DefaultKeyStorePath + "/tls.key -out " + solr.DefaultKeyStorePath +
+		"/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+	return corev1.Container{
+		Name:                     "gen-pkcs12-keystore",
+		Image:                    solrCloud.Spec.SolrImage.ToImageName(),
+		ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
+		TerminationMessagePath:   "/dev/termination-log",
+		TerminationMessagePolicy: "File",
+		Command:                  []string{"sh", "-c", cmd},
+		VolumeMounts:             tlsVolumeMounts(true),
+		Env:                      envVars,
+	}
 }
