@@ -254,8 +254,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
 				needsPkcs12InitContainer = true
 			}
-
-			r.Log.Info("Found TLS secret", "secret", instance.Spec.SolrTLS.PKCS12Secret.Name, "needsPkcs12InitContainer", needsPkcs12InitContainer)
 		}
 
 		// see if we need to set the urlScheme cluster prop for enabling TLS
