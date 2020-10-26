@@ -8296,9 +8296,6 @@ spec:
                 description: UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
                 format: int32
                 type: integer
-              urlSchemeClusterProperty:
-                description: Flag to mark that we've set this cluster-wide property so we don't reconnect to ZK for every loop
-                type: boolean
               version:
                 description: The version of solr that the cloud is running
                 type: string

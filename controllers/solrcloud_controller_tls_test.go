@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
+	kbatch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -44,6 +46,7 @@ var _ reconcile.Reconciler = &SolrCloudReconciler{}
 
 var (
 	expectedCloudWithTLSRequest = reconcile.Request{NamespacedName: types.NamespacedName{Name: "foo-tls", Namespace: "default"}}
+	expectedIngressWithTLS      = types.NamespacedName{Name: "foo-tls-solrcloud-common", Namespace: "default"}
 )
 
 func TestAutoCreateSelfSignedTLS(t *testing.T) {
@@ -152,6 +155,8 @@ func verifyReconcileSelfSignedTLS(t *testing.T, instance *solr.SolrCloud) {
 	verifySelfSignedCert(t, foundCert, instance.Name)
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
+	expectIngressTLSConfig(t, g)
+	expectUrlSchemeJob(t, g, instance)
 
 	// trigger an update to the TLS secret (since cert-manager is not actually issuing the cert for us during testing)
 
@@ -501,4 +506,22 @@ func FilterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.Env
 		}
 	}
 	return filtered
+}
+
+func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT) {
+	ingress := &extv1.Ingress{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
+	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1)
+	assert.Equal(t, "foo-tls-selfsigned-solr-tls", ingress.Spec.TLS[0].SecretName)
+	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"])
+}
+
+func expectUrlSchemeJob(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud) {
+	expectedJobName := types.NamespacedName{Name: sc.Name + "-set-https-scheme", Namespace: sc.Namespace}
+	job := &kbatch.Job{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedJobName, job) }, timeout).Should(gomega.Succeed())
+	assert.True(t, job.Spec.Template.Spec.Containers != nil && len(job.Spec.Template.Spec.Containers) == 1)
+	assert.Equal(t, "run-zkcli", job.Spec.Template.Spec.Containers[0].Name)
+	assert.True(t, len(job.Spec.Template.Spec.Containers[0].Command) == 3)
+	assert.True(t, len(job.Spec.Template.Spec.Containers[0].Env) == 3)
 }
