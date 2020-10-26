@@ -22,9 +22,17 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	b64 "encoding/base64"
+	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
+	certmetav1 "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
+	"math/rand"
+	"regexp"
 
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
+	kbatch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -75,14 +83,20 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string, createPkcs12InitContainer bool) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
 	defaultMode := int32(420)
+
+	probeScheme := corev1.URISchemeHTTP
+	if solrCloud.Spec.SolrTLS != nil {
+		probeScheme = corev1.URISchemeHTTPS
+	}
+
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
-			Scheme: corev1.URISchemeHTTP,
+			Scheme: probeScheme,
 			Path:   "/solr/admin/info/system",
 			Port:   intstr.FromInt(solrPodPort),
 		},
@@ -138,8 +152,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
+	if solrCloud.Spec.SolrTLS != nil {
+		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
+	}
+
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
+
+	if solrCloud.Spec.SolrTLS != nil {
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(createPkcs12InitContainer)...)
+	}
+
 	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.UsesPersistentStorage() {
 		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
@@ -323,6 +346,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		allSolrOpts = append(allSolrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
 	}
 
+	// Append TLS related env vars if enabled
+	if solrCloud.Spec.SolrTLS != nil {
+		envVars = append(envVars, TLSEnvVars(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
+	}
+
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -450,6 +478,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeClaimTemplates: pvcs,
 		},
+	}
+
+	if createPkcs12InitContainer {
+		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, generatePkcs12InitContainer(solrCloud))
 	}
 
 	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
@@ -771,6 +803,18 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseD
 	// Create advertised domain name and possible additional domain names
 	rules := CreateSolrIngressRules(solrCloud, nodeNames, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
 
+	var ingressTLS []extv1.IngressTLS
+	if solrCloud.Spec.SolrTLS != nil {
+		if annotations == nil {
+			annotations = make(map[string]string, 1)
+		}
+		_, ok := annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+		if !ok {
+			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
+		}
+		ingressTLS = append(ingressTLS, extv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
+	}
+
 	ingress = &extv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.CommonIngressName(),
@@ -780,6 +824,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseD
 		},
 		Spec: extv1.IngressSpec{
 			Rules: rules,
+			TLS:   ingressTLS,
 		},
 	}
 	return ingress
@@ -853,4 +898,413 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 		},
 	}
 	return ingressRule
+}
+
+func GenerateCertificate(solrCloud *solr.SolrCloud) certv1.Certificate {
+
+	dnsNames := findDNSNamesForCertificate(solrCloud)
+
+	// convert something like: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country
+	// into an X509Subject to be used during cert creation
+	subjectMap := parseSubjectDName(solrCloud.Spec.SolrTLS.AutoCreate.SubjectDistinguishedName)
+	subject := toX509Subject(subjectMap)
+	commonName := subjectMap["CN"]
+
+	var issuerRef certmetav1.ObjectReference
+	if solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef != nil {
+		issuerRef = certmetav1.ObjectReference{
+			Name: solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef.Name,
+			Kind: solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef.Kind,
+		}
+	} else {
+		issuerRef = certmetav1.ObjectReference{
+			Name: fmt.Sprintf("%s-selfsigned-issuer", solrCloud.Name),
+			Kind: "Issuer",
+		}
+	}
+
+	cert := certv1.Certificate{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Spec.SolrTLS.AutoCreate.Name,
+			Namespace: solrCloud.Namespace,
+		},
+		Spec: certv1.CertificateSpec{
+			Subject:    subject,
+			CommonName: commonName,
+			SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name,
+			DNSNames:   dnsNames,
+			Keystores: &certv1.CertificateKeystores{
+				PKCS12: &certv1.PKCS12Keystore{
+					Create: true,
+					PasswordSecretRef: certmetav1.SecretKeySelector{
+						Key: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Key,
+						LocalObjectReference: certmetav1.LocalObjectReference{
+							Name: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Name,
+						},
+					},
+				},
+			},
+			IssuerRef: issuerRef,
+		},
+	}
+
+	return cert
+}
+
+func toX509Subject(subjectMap map[string]string) *certv1.X509Subject {
+	var provinces []string
+	// sometimes it's ST and other times it's S ... handle both
+	if subjectMap["ST"] != "" {
+		provinces = append(provinces, subjectMap["ST"])
+	}
+	if subjectMap["S"] != "" {
+		provinces = append(provinces, subjectMap["S"])
+	}
+	return &certv1.X509Subject{
+		Organizations:       toX509SubjectField(subjectMap["O"]),
+		Countries:           toX509SubjectField(subjectMap["C"]),
+		OrganizationalUnits: toX509SubjectField(subjectMap["OU"]),
+		Localities:          toX509SubjectField(subjectMap["L"]),
+		Provinces:           provinces,
+		StreetAddresses:     toX509SubjectField(subjectMap["STREET"]),
+		PostalCodes:         toX509SubjectField(subjectMap["PC"]),
+		SerialNumber:        subjectMap["SERIALNUMBER"],
+	}
+}
+
+func toX509SubjectField(fieldValue string) []string {
+	if fieldValue != "" {
+		return []string{fieldValue}
+	} else {
+		return nil
+	}
+}
+
+func parseSubjectDName(dname string) map[string]string {
+	parsed := make(map[string]string)
+	fields := []string{"CN", "O", "OU", "L", "ST", "S", "C", "SERIALNUMBER", "STREET", "PC"}
+	for _, f := range fields {
+		regex := fmt.Sprintf("(?i)%s=([^,]+)", f)
+		match := regexp.MustCompile(regex).FindStringSubmatch(dname)
+		if len(match) == 2 {
+			parsed[f] = match[1]
+		}
+	}
+	return parsed
+}
+
+// used to generate a random password to be used for the keystore
+func randomPasswordB64() []byte {
+	rand.Seed(time.Now().UnixNano())
+	lower := "abcdefghijklmnpqrstuvwxyz" // no 'o'
+	chars := lower + strings.ToUpper(lower) + "0123456789()[]~%$!#"
+	pass := make([]byte, 12)
+	perm := rand.Perm(len(chars))
+	for i := 0; i < len(pass); i++ {
+		pass[i] = chars[perm[i]]
+	}
+	return []byte(b64.StdEncoding.EncodeToString(pass))
+}
+
+func GenerateKeystoreSecret(solrCloud *solr.SolrCloud) corev1.Secret {
+	secretName := solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Name
+	data := map[string][]byte{}
+	data["password-key"] = randomPasswordB64()
+	return corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: solrCloud.Namespace},
+		Data:       data,
+		Type:       corev1.SecretTypeOpaque,
+	}
+}
+
+func GenerateSelfSignedIssuer(solrCloud *solr.SolrCloud, issuerName string) certv1.Issuer {
+	return certv1.Issuer{
+		ObjectMeta: metav1.ObjectMeta{Name: issuerName, Namespace: solrCloud.Namespace},
+		Spec: certv1.IssuerSpec{
+			IssuerConfig: certv1.IssuerConfig{
+				SelfSigned: &certv1.SelfSignedIssuer{},
+			},
+		},
+	}
+}
+
+func GenerateUrlSchemeJob(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) kbatch.Job {
+	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
+	envVars := []corev1.EnvVar{
+		{
+			Name:  "ZK_HOST",
+			Value: zkConnectionStr,
+		},
+		{
+			Name:  "ZK_CHROOT",
+			Value: zkChroot,
+		},
+		{
+			Name:  "ZK_SERVER",
+			Value: zkServer,
+		},
+	}
+
+	/*
+		TODO: Once the ZK ACL PR is merged, add this env var:
+		{
+			Name:      "SOLR_ZK_CREDS_AND_ACLS",
+			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)",
+			ValueFrom: nil,
+		},
+	*/
+
+	// have to create the chroot here as the postStart script is too late for the zkcli.sh we need to set the urlScheme
+	cmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"
+	cmd += "; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https"
+	cmd += "; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json"
+	return kbatch.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: solrCloud.Name + "-set-https-scheme", Namespace: solrCloud.Namespace},
+		Spec: kbatch.JobSpec{
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					RestartPolicy: corev1.RestartPolicyOnFailure,
+					Containers: []corev1.Container{
+						{
+							Name:                     "run-zkcli",
+							Image:                    solrCloud.Spec.SolrImage.ToImageName(),
+							ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
+							Env:                      envVars,
+							TerminationMessagePath:   "/dev/termination-log",
+							TerminationMessagePolicy: "File",
+							Command:                  []string{"sh", "-c", cmd},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.EnvVar {
+
+	// Determine the correct values for the SOLR_SSL_WANT_CLIENT_AUTH and SOLR_SSL_NEED_CLIENT_AUTH vars
+	wantClientAuth := "false"
+	needClientAuth := "false"
+	if opts.ClientAuth == solr.Need {
+		needClientAuth = "true"
+	} else if opts.ClientAuth == solr.Want {
+		wantClientAuth = "true"
+	}
+
+	// the keystore path depends on whether we're just loading it from the secret or whether
+	// our initContainer has to generate it from the TLS secret using openssl
+	// this complexity is due to the secret mount directory not being writable
+	var keystorePath string
+	if createPkcs12InitContainer {
+		keystorePath = solr.DefaultWritableKeyStorePath
+	} else {
+		keystorePath = solr.DefaultKeyStorePath
+	}
+	keystorePath += ("/" + solr.DefaultKeyStoreFile)
+
+	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
+
+	envVars := []corev1.EnvVar{
+		{
+			Name:  "SOLR_SSL_ENABLED",
+			Value: "true",
+		},
+		{
+			Name:  "SOLR_SSL_KEY_STORE",
+			Value: keystorePath,
+		},
+		{
+			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
+			ValueFrom: passwordValueFrom,
+		},
+		{
+			Name:  "SOLR_SSL_TRUST_STORE",
+			Value: keystorePath,
+		},
+		{
+			Name:      "SOLR_SSL_TRUST_STORE_PASSWORD",
+			ValueFrom: passwordValueFrom,
+		},
+		{
+			Name:  "SOLR_SSL_WANT_CLIENT_AUTH",
+			Value: wantClientAuth,
+		},
+		{
+			Name:  "SOLR_SSL_NEED_CLIENT_AUTH",
+			Value: needClientAuth,
+		},
+		{
+			Name:  "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION",
+			Value: strconv.FormatBool(opts.VerifyClientHostname),
+		},
+		{
+			Name:  "SOLR_SSL_CHECK_PEER_NAME",
+			Value: strconv.FormatBool(opts.CheckPeerName),
+		},
+	}
+
+	if opts.RestartOnTLSSecretUpdate && opts.TLSSecretVersion != "" {
+		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_TLS_SECRET_VERS", Value: opts.TLSSecretVersion})
+	}
+
+	return envVars
+}
+
+func tlsVolumeMounts(createPkcs12InitContainer bool) []corev1.VolumeMount {
+	mounts := []corev1.VolumeMount{
+		{
+			Name:      "keystore",
+			ReadOnly:  true,
+			MountPath: solr.DefaultKeyStorePath,
+		},
+	}
+
+	// We need an initContainer to convert a TLS cert into the pkcs12 format Java wants (using openssl)
+	// but openssl cannot write to the /var/solr/tls directory because of the way secret mounts work
+	// so we need to mount an empty directory to write pkcs12 keystore into
+	if createPkcs12InitContainer {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "pkcs12",
+			ReadOnly:  false,
+			MountPath: solr.DefaultWritableKeyStorePath,
+		})
+	}
+
+	return mounts
+}
+
+func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.Volume {
+	optional := false
+	defaultMode := int32(0664)
+	vols := []corev1.Volume{
+		{
+			Name: "keystore",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  opts.PKCS12Secret.Name,
+					DefaultMode: &defaultMode,
+					Optional:    &optional,
+				},
+			},
+		},
+	}
+
+	if createPkcs12InitContainer {
+		vols = append(vols, corev1.Volume{
+			Name: "pkcs12",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+	}
+
+	return vols
+}
+
+func findDNSNamesForCertificate(solrCloud *solr.SolrCloud) []string {
+	var dnsNames []string
+	extOpts := solrCloud.Spec.SolrAddressability.External
+	if extOpts != nil {
+		wildCardDNS := ""
+		if extOpts.DomainName != "" {
+			wildCardDNS = "." + extOpts.DomainName
+			dnsNames = append(dnsNames, extOpts.DomainName, "*."+extOpts.DomainName)
+		}
+		rules := CreateSolrIngressRules(solrCloud, []string{}, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
+		for _, rule := range rules {
+			if wildCardDNS == "" || !strings.HasSuffix(rule.Host, wildCardDNS) {
+				dnsNames = append(dnsNames, rule.Host)
+			} // else this host is already captured by the wildCardDNS
+		}
+	} else {
+		dnsNames = append(dnsNames, solrCloud.AdvertisedNodeHost("*"))
+	}
+	if len(dnsNames) > 1 {
+		dnsNames = deDupeDNSNames(dnsNames)
+		sort.Strings(dnsNames)
+	}
+	return dnsNames
+}
+
+func deDupeDNSNames(dnsNames []string) []string {
+	keys := make(map[string]bool)
+	var set []string
+	for _, name := range dnsNames {
+		if _, exists := keys[name]; !exists {
+			keys[name] = true
+			set = append(set, name)
+		}
+	}
+	return set
+}
+
+func CopyCreateCertificateFields(from, to *certv1.Certificate) bool {
+	requireUpdate := false
+
+	// from is the desired state, built using the user-supplied config
+	// to is the current state, returned from an API Get call
+	// for changed fields, we take the value in the "from" object and send the "to" object back to the API update call
+
+	if from.Name != to.Name {
+		to.Name = from.Name
+		requireUpdate = true
+	}
+
+	if from.Spec.CommonName != to.Spec.CommonName {
+		to.Spec.CommonName = from.Spec.CommonName
+		requireUpdate = true
+	}
+
+	if from.Spec.SecretName != to.Spec.SecretName {
+		to.Spec.SecretName = from.Spec.SecretName
+		requireUpdate = true
+	}
+
+	if !DeepEqualWithNils(from.Spec.Subject, to.Spec.Subject) {
+		to.Spec.Subject = from.Spec.Subject
+		requireUpdate = true
+	}
+
+	if !DeepEqualWithNils(from.Spec.IssuerRef, to.Spec.IssuerRef) {
+		to.Spec.IssuerRef = from.Spec.IssuerRef
+		requireUpdate = true
+	}
+
+	if !DeepEqualWithNils(from.Spec.DNSNames, to.Spec.DNSNames) {
+		to.Spec.DNSNames = from.Spec.DNSNames
+		requireUpdate = true
+	}
+
+	if !DeepEqualWithNils(from.Spec.Keystores, to.Spec.Keystores) {
+		to.Spec.Keystores = from.Spec.Keystores
+		requireUpdate = true
+	}
+
+	return requireUpdate
+}
+
+func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {
+	// get the keystore password from the env for generating the keystore using openssl
+	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret}
+	envVars := []corev1.EnvVar{
+		{
+			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
+			ValueFrom: passwordValueFrom,
+		},
+	}
+
+	cmd := "openssl pkcs12 -export -in " + solr.DefaultKeyStorePath + "/tls.crt -in " + solr.DefaultKeyStorePath +
+		"/ca.crt -inkey " + solr.DefaultKeyStorePath + "/tls.key -out " + solr.DefaultKeyStorePath +
+		"/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+	return corev1.Container{
+		Name:                     "gen-pkcs12-keystore",
+		Image:                    solrCloud.Spec.SolrImage.ToImageName(),
+		ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
+		TerminationMessagePath:   "/dev/termination-log",
+		TerminationMessagePolicy: "File",
+		Command:                  []string{"sh", "-c", cmd},
+		VolumeMounts:             tlsVolumeMounts(true),
+		Env:                      envVars,
+	}
 }

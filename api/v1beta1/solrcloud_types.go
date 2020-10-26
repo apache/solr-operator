@@ -52,6 +52,10 @@ const (
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
+
+	DefaultKeyStorePath         = "/var/solr/tls"
+	DefaultKeyStoreFile         = "keystore.p12"
+	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -132,9 +136,13 @@ type SolrCloudSpec struct {
 	// Set GC Tuning configuration through GC_TUNE environment variable
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
+
+	// Options to enable TLS between Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool) {
+func (spec *SolrCloudSpec) withDefaults(instanceName string, ingressBaseDomain string) (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -164,6 +172,10 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 	changed = spec.SolrAddressability.withDefaults(ingressBaseDomain) || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
+
+	if spec.SolrTLS != nil {
+		changed = spec.SolrTLS.withDefaults(instanceName) || changed
+	}
 
 	if spec.ZookeeperRef == nil {
 		spec.ZookeeperRef = &ZookeeperRef{}
@@ -602,6 +614,127 @@ type ManagedUpdateOptions struct {
 	MaxShardReplicasUnavailable *intstr.IntOrString `json:"maxShardReplicasUnavailable,omitempty"`
 }
 
+type CertificateIssuerRef struct {
+	// Name of the resource being referred to.
+	Name string `json:"name"`
+	// Kind of the resource being referred to.
+	// +optional
+	Kind string `json:"kind,omitempty"`
+}
+
+type CreateCertificate struct {
+	// Name of the certificate to create for Solr TLS; defaults to the name of the SolrCloud + "-solr-tls"
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Subject distinguished name for the auto-generated cert;
+	// use format: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country
+	// If not provided, then the operator uses the SolrCloud instance name as the Organization
+	// +optional
+	SubjectDistinguishedName string `json:"subjectDName,omitempty"`
+
+	// Specify the cert-manager Issuer or ClusterIssuer to use to issue the certificate;
+	// for creating a self-signed cert, don't supply an issuerRef.
+	// +optional
+	IssuerRef *CertificateIssuerRef `json:"issuerRef,omitempty"`
+}
+
+type ClientAuthType string
+
+const (
+	None ClientAuthType = "None"
+	Want ClientAuthType = "Want"
+	Need ClientAuthType = "Need"
+)
+
+type SolrTLSOptions struct {
+	// Solr operator should just create a TLS cert automatically using the specified Issuer
+	// If issuerRef is not specified, the operator generates a self-signed certificate.
+	// +optional
+	AutoCreate *CreateCertificate `json:"autoCreate,omitempty"`
+
+	// Secret containing the key store password
+	// +optional
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
+
+	// TLS Secret containing a pkcs12 keystore created by cert-manager; required unless autoCreate is requested.
+	// +optional
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
+
+	// Determines the client authentication method, either None, Want, or Need;
+	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// +optional
+	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
+
+	// Verify client's hostname during SSL handshake
+	// +optional
+	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
+
+	// TLS certificates contain host/ip "peer name" information that is validated by default.
+	// +optional
+	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// +optional
+	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
+
+	// Set at runtime during reconcile, once the TLS secret is issued
+	TLSSecretVersion string `json:"-"`
+}
+
+func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
+
+	if opts.AutoCreate != nil {
+		// User wants us to create a Certificate and Keystore password on-the-fly for them
+		// Fill-in any missing information with defaults so that the reconciliation process
+		// doesn't have to account for missing values with defaults
+		if opts.AutoCreate.Name == "" {
+			opts.AutoCreate.Name = fmt.Sprintf("%s-solr-tls", instanceName)
+			changed = true
+		}
+
+		if opts.AutoCreate.SubjectDistinguishedName == "" {
+			opts.AutoCreate.SubjectDistinguishedName = "O=" + instanceName
+			changed = true
+		}
+
+		if opts.KeyStorePasswordSecret == nil {
+			secretName := fmt.Sprintf("%s-pkcs12-keystore", instanceName)
+			opts.KeyStorePasswordSecret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: secretName,
+				},
+				Key: "password-key",
+			}
+			changed = true
+		}
+
+		if opts.PKCS12Secret == nil {
+			var issuerName string
+			if opts.AutoCreate.IssuerRef != nil {
+				issuerName = strings.Replace(opts.AutoCreate.IssuerRef.Name, "-issuer", "", -1)
+			} else {
+				issuerName = "selfsigned"
+			}
+			certSecretName := fmt.Sprintf("%s-%s-%s", instanceName, issuerName, "solr-tls")
+			opts.PKCS12Secret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: certSecretName,
+				},
+				Key: DefaultKeyStoreFile,
+			}
+			changed = true
+		}
+	}
+
+	if opts.ClientAuth == "" {
+		opts.ClientAuth = None
+		changed = true
+	}
+
+	return changed
+}
+
 // DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
 //
 // SolrPodPolicy defines the common pod configuration for Pods, including when used
@@ -863,6 +996,9 @@ type SolrCloudStatus struct {
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
 	BackupRestoreReady bool `json:"backupRestoreReady"`
+
+	// Flag to mark that we've set this cluster-wide property so we don't reconnect to ZK for every loop
+	UrlSchemeClusterProperty bool `json:"urlSchemeClusterProperty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
@@ -918,7 +1054,7 @@ type SolrCloud struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sc *SolrCloud) WithDefaults(ingressBaseDomain string) bool {
-	return sc.Spec.withDefaults(ingressBaseDomain)
+	return sc.Spec.withDefaults(sc.Name, ingressBaseDomain)
 }
 
 func (sc *SolrCloud) GetAllSolrNodeNames() []string {

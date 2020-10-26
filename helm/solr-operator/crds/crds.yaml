@@ -6981,6 +6981,74 @@ spec:
                         type: object
                     type: object
                 type: object
+              solrTLS:
+                description: Options to enable TLS between Solr pods
+                properties:
+                  autoCreate:
+                    description: Solr operator should just create a TLS cert automatically using the specified Issuer If issuerRef is not specified, the operator generates a self-signed certificate.
+                    properties:
+                      issuerRef:
+                        description: Specify the cert-manager Issuer or ClusterIssuer to use to issue the certificate; for creating a self-signed cert, don't supply an issuerRef.
+                        properties:
+                          kind:
+                            description: Kind of the resource being referred to.
+                            type: string
+                          name:
+                            description: Name of the resource being referred to.
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      name:
+                        description: Name of the certificate to create for Solr TLS; defaults to the name of the SolrCloud + "-solr-tls"
+                        type: string
+                      subjectDName:
+                        description: 'Subject distinguished name for the auto-generated cert; use format: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country If not provided, then the operator uses the SolrCloud instance name as the Organization'
+                        type: string
+                    type: object
+                  checkPeerName:
+                    description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                    type: boolean
+                  clientAuth:
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                    type: string
+                  keyStorePasswordSecret:
+                    description: Secret containing the key store password
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  pkcs12Secret:
+                    description: TLS Secret containing a pkcs12 keystore created by cert-manager; required unless autoCreate is requested.
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  restartOnTLSSecretUpdate:
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                    type: boolean
+                  verifyClientHostname:
+                    description: Verify client's hostname during SSL handshake
+                    type: boolean
+                type: object
               updateStrategy:
                 description: Define how Solr rolling updates are executed.
                 properties:
@@ -8228,6 +8296,9 @@ spec:
                 description: UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
                 format: int32
                 type: integer
+              urlSchemeClusterProperty:
+                description: Flag to mark that we've set this cluster-wide property so we don't reconnect to ZK for every loop
+                type: boolean
               version:
                 description: The version of solr that the cloud is running
                 type: string
@@ -8284,6 +8355,7 @@ spec:
             - readyReplicas
             - replicas
             - solrNodes
+            - urlSchemeClusterProperty
             - version
             - zookeeperConnectionInfo
             type: object

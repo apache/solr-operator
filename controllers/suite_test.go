@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -56,9 +57,11 @@ func TestMain(m *testing.M) {
 			filepath.Join("..", "config", "crd", "bases"),
 			filepath.Join("..", "example", "dependencies"),
 		},
+		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
 	zkOp.AddToScheme(scheme.Scheme)
+	certv1.AddToScheme(scheme.Scheme)
 
 	var err error
 	if testCfg, err = t.Start(); err != nil {

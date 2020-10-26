@@ -20,19 +20,19 @@ package main
 import (
 	"flag"
 	"fmt"
-	"os"
-	"runtime"
-	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"strings"
-
 	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers"
+	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"os"
+	"runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"strings"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -68,6 +68,7 @@ func init() {
 
 	_ = solrv1beta1.AddToScheme(scheme)
 	_ = zkv1beta1.AddToScheme(scheme)
+	_ = certv1.AddToScheme(scheme)
 
 	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
