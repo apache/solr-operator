@@ -27,7 +27,7 @@ import (
 	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	kbatch "k8s.io/api/batch/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -87,6 +87,7 @@ func SetIngressBaseUrl(ingressBaseUrl string) {
 // +kubebuilder:rbac:groups="cert-manager.io",resources=issuers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="cert-manager.io",resources=clusterissuers,verbs=get;list
 // +kubebuilder:rbac:groups="cert-manager.io",resources=certificates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -270,7 +271,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 						// this is a self-signed cert, so no need to wait very long for it to issue
 						wait = 2 * time.Second
 					}
-					r.Log.Info("Certificate is not ready, will requeue after brief wait")
 					requeueOrNot.RequeueAfter = wait
 				}
 				return requeueOrNot, err
@@ -298,7 +298,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		// create a job to set the cluster property but we need a ZK connection first
 		urlSchemeJob := util.GenerateUrlSchemeJob(instance, &newStatus)
-		foundJob := &kbatch.Job{}
+		foundJob := &batchv1.Job{}
 		err := r.Get(ctx, types.NamespacedName{Name: urlSchemeJob.Name, Namespace: instance.Namespace}, foundJob)
 		if err != nil && errors.IsNotFound(err) {
 			r.Log.Info("Creating one-time job to set urlScheme cluster property to 'https'", "job", urlSchemeJob.Name)
@@ -766,7 +766,8 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&corev1.Service{}).
 		Owns(&extv1.Ingress{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&corev1.Secret{})
+		Owns(&corev1.Secret{}).
+		Owns(&batchv1.Job{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
@@ -882,9 +883,23 @@ func (r *SolrCloudReconciler) reconcileAutoCreateTLS(ctx context.Context, instan
 		if err != nil {
 			return false, err
 		}
-	} // else is a ClusterIssuer
+	} else {
+		// real problems arise if we create the Certificate and the Issuer doesn't exist so make we have a good config here
+		if instance.Spec.SolrTLS.AutoCreate.IssuerRef.Kind == "Issuer" {
+			foundIssuer := &certv1.Issuer{}
+			err = r.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.AutoCreate.IssuerRef.Name, Namespace: instance.Namespace}, foundIssuer)
+			if err != nil {
+				if errors.IsNotFound(err) {
+					r.Log.Info("cert-manager Issuer not found in namespace, cannot create a TLS certificate without an Issuer",
+						"issuer", instance.Spec.SolrTLS.AutoCreate.IssuerRef.Name, "ns", instance.Namespace)
+				}
+				return false, err
+			}
+		} // else assume ClusterIssuer and good luck
+	}
 
-	// Reconcile the Certificate to use for TLS
+	// Reconcile the Certificate to use for TLS ... A Certificate is a request to Issue the cert, the
+	// actual cert lives in a TLS secret created by the Issuer
 	cert := util.GenerateCertificate(instance)
 	err = r.Get(ctx, types.NamespacedName{Name: cert.Name, Namespace: cert.Namespace}, foundCert)
 	if err != nil && errors.IsNotFound(err) {
@@ -950,12 +965,16 @@ func (r *SolrCloudReconciler) afterCertificateReady(ctx context.Context, instanc
 	var err error
 	if util.CopyCreateCertificateFields(cert, foundCert) {
 		r.Log.Info("Certificate fields changed, updating", "cert", foundCert)
-		// tricky ~ we have to delete the TLS secret or the cert won't get re-issued
-		err = r.Delete(ctx, foundTLSSecret)
-		if err != nil {
-			return false, err
+		if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate && instance.Spec.SolrTLS.TLSSecretVersion != "" {
+			// tricky ~ we have to delete the TLS secret or the cert won't get re-issued
+			// but we only do this if we track the version
+			r.Log.Info("Deleting TLS secret because the Certificate changed", "TLSSecretVersion", instance.Spec.SolrTLS.TLSSecretVersion)
+			err = r.Delete(ctx, foundTLSSecret)
+			if err != nil {
+				return false, err
+			}
+			r.Log.Info("Deleted TLS secret so it gets re-created after cert update", "secret", foundTLSSecret.Name)
 		}
-		r.Log.Info("Deleted TLS secret so it gets re-created after cert update", "secret", foundTLSSecret.Name)
 
 		// now update the existing Certificate to trigger the cert-manager to re-issue it
 		err = r.Update(ctx, foundCert)
@@ -973,6 +992,7 @@ func (r *SolrCloudReconciler) afterCertificateReady(ctx context.Context, instanc
 			if err := controllerutil.SetControllerReference(instance, foundTLSSecret, r.scheme); err != nil {
 				return false, err
 			}
+
 			// have to update the secret because we didn't create it (the Issuer did)
 			if err := r.Update(ctx, foundTLSSecret); err != nil {
 				return false, err

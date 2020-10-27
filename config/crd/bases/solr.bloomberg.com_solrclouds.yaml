@@ -7226,7 +7226,6 @@ spec:
             - readyReplicas
             - replicas
             - solrNodes
-            - urlSchemeClusterProperty
             - version
             - zookeeperConnectionInfo
             type: object

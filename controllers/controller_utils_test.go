@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -233,6 +234,7 @@ func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
 		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
+		&certv1.Certificate{}, &certv1.Issuer{}, &corev1.Secret{},
 	}
 	cleanupTestObjects(g, namespace, deleteOpts, cleanupObjects)
 
