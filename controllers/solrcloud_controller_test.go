@@ -70,6 +70,8 @@ func TestCloudReconcile(t *testing.T) {
 					Volumes:            extraVolumes,
 					Affinity:           affinity,
 					Resources:          resources,
+					SidecarContainers:  extraContainers1,
+					InitContainers:     extraContainers2,
 				},
 			},
 		},
@@ -106,7 +108,12 @@ func TestCloudReconcile(t *testing.T) {
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+	// Check extra containers
+	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires the solr container plus the desired sidecars.")
+	assert.EqualValues(t, extraContainers1, statefulSet.Spec.Template.Spec.Containers[1:])
+
+	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.InitContainers), "Solr StatefulSet requires a default initContainer plus the additional specified.")
+	assert.EqualValues(t, extraContainers2, statefulSet.Spec.Template.Spec.InitContainers[1:])
 
 	// Host Alias Tests
 	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
@@ -134,7 +141,7 @@ func TestCloudReconcile(t *testing.T) {
 	assert.Equal(t, resources.Requests, statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests, "Resources.Requests is not the same as the one provided in podOptions")
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
-	assert.Equal(t, extraVolumes[0].DefaultContainerMount, statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, *extraVolumes[0].DefaultContainerMount, statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
 	assert.Equal(t, len(extraVolumes)+2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, statefulSet.Spec.Template.Spec.Volumes[2].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")

@@ -422,7 +422,7 @@ var (
 			Source: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
-			DefaultContainerMount: corev1.VolumeMount{
+			DefaultContainerMount: &corev1.VolumeMount{
 				Name:      "ignore",
 				ReadOnly:  false,
 				MountPath: "/test/mount/path",
@@ -446,6 +446,38 @@ var (
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+		},
+	}
+	extraContainers1 = []corev1.Container{
+		{
+			Name:                     "container1",
+			Image:                    "image1",
+			TerminationMessagePolicy: "File",
+			TerminationMessagePath:   "/dev/termination-log",
+			ImagePullPolicy:          "Always",
+		},
+		{
+			Name:                     "container2",
+			Image:                    "image2",
+			TerminationMessagePolicy: "File",
+			TerminationMessagePath:   "/dev/termination-log",
+			ImagePullPolicy:          "Always",
+		},
+	}
+	extraContainers2 = []corev1.Container{
+		{
+			Name:                     "container3",
+			Image:                    "image3",
+			TerminationMessagePolicy: "File",
+			TerminationMessagePath:   "/dev/termination-log",
+			ImagePullPolicy:          "Always",
+		},
+		{
+			Name:                     "container4",
+			Image:                    "image4",
+			TerminationMessagePolicy: "File",
+			TerminationMessagePath:   "/dev/termination-log",
+			ImagePullPolicy:          "Always",
 		},
 	}
 )

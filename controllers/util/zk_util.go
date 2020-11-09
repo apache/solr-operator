@@ -19,11 +19,9 @@ package util
 import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
-	"strconv"
 	"strings"
 )
 
@@ -175,135 +173,6 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 		log.Info("Update required because:", "Spec.Pod.Affinity canged from", to.Spec.Pod.Affinity, "To:", from.Spec.Pod.Affinity)
 		requireUpdate = true
 		to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
-	}
-
-	return requireUpdate
-}
-
-// CopyDeploymentFields copies the owned fields from one Deployment to another
-// Returns true if the fields copied from don't match to.
-func CopyDeploymentFields(from, to *appsv1.Deployment) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
-		to.Spec.Replicas = from.Spec.Replicas
-	}
-
-	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
-		to.Spec.Selector = from.Spec.Selector
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Labels, from.Spec.Template.Labels) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
-		to.Spec.Template.Labels = from.Spec.Template.Labels
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
-		to.Spec.Template.Annotations = from.Spec.Template.Annotations
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
-		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
-	}
-
-	if len(to.Spec.Template.Spec.Containers) != len(from.Spec.Template.Spec.Containers) {
-		requireUpdate = true
-		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
-	} else if !DeepEqualWithNils(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
-		for i := 0; i < len(to.Spec.Template.Spec.Containers); i++ {
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Name, from.Spec.Template.Spec.Containers[i].Name) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Name changed from", to.Spec.Template.Spec.Containers[i].Name, "To:", from.Spec.Template.Spec.Containers[i].Name)
-				to.Spec.Template.Spec.Containers[i].Name = from.Spec.Template.Spec.Containers[i].Name
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Image, from.Spec.Template.Spec.Containers[i].Image) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Image changed from", to.Spec.Template.Spec.Containers[i].Image, "To:", from.Spec.Template.Spec.Containers[i].Image)
-				to.Spec.Template.Spec.Containers[i].Image = from.Spec.Template.Spec.Containers[i].Image
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].ImagePullPolicy, from.Spec.Template.Spec.Containers[i].ImagePullPolicy) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].ImagePullPolicy changed from", to.Spec.Template.Spec.Containers[i].ImagePullPolicy, "To:", from.Spec.Template.Spec.Containers[i].ImagePullPolicy)
-				to.Spec.Template.Spec.Containers[i].ImagePullPolicy = from.Spec.Template.Spec.Containers[i].ImagePullPolicy
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Command, from.Spec.Template.Spec.Containers[i].Command) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Command changed from", to.Spec.Template.Spec.Containers[i].Command, "To:", from.Spec.Template.Spec.Containers[i].Command)
-				to.Spec.Template.Spec.Containers[i].Command = from.Spec.Template.Spec.Containers[i].Command
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Args, from.Spec.Template.Spec.Containers[i].Args) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Args changed from", to.Spec.Template.Spec.Containers[i].Args, "To:", from.Spec.Template.Spec.Containers[i].Args)
-				to.Spec.Template.Spec.Containers[i].Args = from.Spec.Template.Spec.Containers[i].Args
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Env, from.Spec.Template.Spec.Containers[i].Env) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Env changed from", to.Spec.Template.Spec.Containers[i].Env, "To:", from.Spec.Template.Spec.Containers[i].Env)
-				to.Spec.Template.Spec.Containers[i].Env = from.Spec.Template.Spec.Containers[i].Env
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].Resources, from.Spec.Template.Spec.Containers[i].Resources) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].Resources changed from", to.Spec.Template.Spec.Containers[i].Resources, "To:", from.Spec.Template.Spec.Containers[i].Resources)
-				to.Spec.Template.Spec.Containers[i].Resources = from.Spec.Template.Spec.Containers[i].Resources
-			}
-
-			if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[i].VolumeMounts, from.Spec.Template.Spec.Containers[i].VolumeMounts) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.Template.Spec.Containers["+strconv.Itoa(i)+")].VolumeMounts changed from", to.Spec.Template.Spec.Containers[i].VolumeMounts, "To:", from.Spec.Template.Spec.Containers[i].VolumeMounts)
-				to.Spec.Template.Spec.Containers[i].VolumeMounts = from.Spec.Template.Spec.Containers[i].VolumeMounts
-			}
-		}
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
-		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
-		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
-		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Tolerations, from.Spec.Template.Spec.Tolerations) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Tolerations canged from", to.Spec.Template.Spec.Tolerations, "To:", from.Spec.Template.Spec.Tolerations)
-		to.Spec.Template.Spec.Tolerations = from.Spec.Template.Spec.Tolerations
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.NodeSelector, from.Spec.Template.Spec.NodeSelector) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.NodeSelector canged from", to.Spec.Template.Spec.NodeSelector, "To:", from.Spec.Template.Spec.NodeSelector)
-		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.PriorityClassName, from.Spec.Template.Spec.PriorityClassName) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.PriorityClassName changed from", to.Spec.Template.Spec.PriorityClassName, "To:", from.Spec.Template.Spec.PriorityClassName)
-		to.Spec.Template.Spec.PriorityClassName = from.Spec.Template.Spec.PriorityClassName
 	}
 
 	return requireUpdate

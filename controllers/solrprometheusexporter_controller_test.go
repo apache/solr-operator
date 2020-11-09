@@ -56,6 +56,8 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 					Volumes:            extraVolumes,
 					Affinity:           affinity,
 					Resources:          resources,
+					SidecarContainers:  extraContainers2,
+					InitContainers:     extraContainers1,
 				},
 			},
 			ExporterEntrypoint: "/test/entry-point",
@@ -98,6 +100,13 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 
+	// Check extra containers
+	assert.Equal(t, 3, len(deployment.Spec.Template.Spec.Containers), "PrometheusExporter deployment requires the exporter container plus the desired sidecars.")
+	assert.EqualValues(t, extraContainers2, deployment.Spec.Template.Spec.Containers[1:])
+
+	assert.Equal(t, 2, len(deployment.Spec.Template.Spec.InitContainers), "PrometheusExporter deployment requires the additional specified init containers.")
+	assert.EqualValues(t, extraContainers1, deployment.Spec.Template.Spec.InitContainers)
+
 	// Pod Options Checks
 	assert.Equal(t, extraVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
 	assert.Equal(t, podSecurityContext, *deployment.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
@@ -106,7 +115,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.Equal(t, resources.Requests, deployment.Spec.Template.Spec.Containers[0].Resources.Requests, "Resources.Requests is not the same as the one provided in podOptions")
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes), len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
-	assert.Equal(t, extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[0], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[0], "Additional Volume from podOptions not mounted into container properly.")
 	assert.Equal(t, len(extraVolumes), len(deployment.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[0].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[0].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
@@ -200,7 +209,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	// Other Pod Options
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
-	assert.Equal(t, extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.EqualValues(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[1].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[1].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
@@ -373,7 +382,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	// Other Pod Options
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
-	assert.Equal(t, extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
+	assert.Equal(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[1].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[1].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")

@@ -345,7 +345,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		return err
 	}
 
-	otherVersions := []string{}
+	otherVersions := make([]string, 0)
 	nodeNames := make([]string, len(foundPods.Items))
 	nodeStatusMap := map[string]solr.SolrNodeStatus{}
 	backupRestoreReadyPods := 0

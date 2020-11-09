@@ -197,7 +197,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		// Add Custom Volumes to pod
 		for _, volume := range customPodOptions.Volumes {
 			volume.DefaultContainerMount.Name = volume.Name
-			volumeMounts = append(volumeMounts, volume.DefaultContainerMount)
+
+			// Only add the container mount if one has been provided.
+			if volume.DefaultContainerMount != nil {
+				volumeMounts = append(volumeMounts, *volume.DefaultContainerMount)
+			}
 
 			solrVolumes = append(solrVolumes, corev1.Volume{
 				Name:         volume.Name,
@@ -336,6 +340,76 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
+	initContainers := []corev1.Container{
+		{
+			Name:            "cp-solr-xml",
+			Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
+			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
+			Command:         []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "solr-xml",
+					MountPath: "/tmp",
+				},
+				{
+					Name:      solrDataVolumeName,
+					MountPath: "/tmp-config",
+				},
+			},
+		},
+	}
+
+	// Add user defined additional init containers
+	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
+		initContainers = append(initContainers, customPodOptions.InitContainers...)
+	}
+
+	containers := []corev1.Container{
+		{
+			Name:            "solrcloud-node",
+			Image:           solrCloud.Spec.SolrImage.ToImageName(),
+			ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
+			Ports: []corev1.ContainerPort{
+				{
+					ContainerPort: int32(solrPodPort),
+					Name:          SolrClientPortName,
+					Protocol:      "TCP",
+				},
+			},
+			LivenessProbe: &corev1.Probe{
+				InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+				SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+				FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+				PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+				Handler:             defaultHandler,
+			},
+			ReadinessProbe: &corev1.Probe{
+				InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+				SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+				FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+				PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+				Handler:             defaultHandler,
+			},
+			VolumeMounts: volumeMounts,
+			Env:          envVars,
+			Lifecycle: &corev1.Lifecycle{
+				PostStart: postStart,
+				PreStop: &corev1.Handler{
+					Exec: &corev1.ExecAction{
+						Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
+					},
+				},
+			},
+		},
+	}
+
+	// Add user defined additional sidecar containers
+	if customPodOptions != nil && len(customPodOptions.SidecarContainers) > 0 {
+		containers = append(containers, customPodOptions.SidecarContainers...)
+	}
+
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -361,70 +435,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &fsGroup,
 					},
-					Volumes: solrVolumes,
-					InitContainers: []corev1.Container{
-						{
-							Name:                     "cp-solr-xml",
-							Image:                    solrCloud.Spec.BusyBoxImage.ToImageName(),
-							ImagePullPolicy:          solrCloud.Spec.BusyBoxImage.PullPolicy,
-							TerminationMessagePath:   "/dev/termination-log",
-							TerminationMessagePolicy: "File",
-							Command:                  []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "solr-xml",
-									MountPath: "/tmp",
-								},
-								{
-									Name:      solrDataVolumeName,
-									MountPath: "/tmp-config",
-								},
-							},
-						},
-					},
-					HostAliases: hostAliases,
-					Containers: []corev1.Container{
-						{
-							Name:            "solrcloud-node",
-							Image:           solrCloud.Spec.SolrImage.ToImageName(),
-							ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
-							Ports: []corev1.ContainerPort{
-								{
-									ContainerPort: int32(solrPodPort),
-									Name:          SolrClientPortName,
-									Protocol:      "TCP",
-								},
-							},
-							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-								TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-								SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-								FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-								PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-								Handler:             defaultHandler,
-							},
-							ReadinessProbe: &corev1.Probe{
-								InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-								TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-								SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-								FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-								PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-								Handler:             defaultHandler,
-							},
-							VolumeMounts:             volumeMounts,
-							Env:                      envVars,
-							TerminationMessagePath:   "/dev/termination-log",
-							TerminationMessagePolicy: "File",
-							Lifecycle: &corev1.Lifecycle{
-								PostStart: postStart,
-								PreStop: &corev1.Handler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
-									},
-								},
-							},
-						},
-					},
+					Volumes:        solrVolumes,
+					InitContainers: initContainers,
+					HostAliases:    hostAliases,
+					Containers:     containers,
 				},
 			},
 			VolumeClaimTemplates: pvcs,
@@ -478,136 +492,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	return stateful
 }
 
-// CopyStatefulSetFields copies the owned fields from one StatefulSet to another
-// Returns true if the fields copied from don't match to.
-func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Replicas changed from", to.Spec.Replicas, "To:", from.Spec.Replicas)
-		to.Spec.Replicas = from.Spec.Replicas
-	}
-
-	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
-		to.Spec.Selector = from.Spec.Selector
-	}
-
-	/*
-			Kubernetes does not support modification of VolumeClaimTemplates currently. See:
-		    https://github.com/kubernetes/enhancements/issues/661
-		if len(from.Spec.VolumeClaimTemplates) > len(to.Spec.VolumeClaimTemplates) {
-			requireUpdate = true
-			log.Info("Update required because:", "Spec.VolumeClaimTemplates changed from", to.Spec.VolumeClaimTemplates, "To:", from.Spec.VolumeClaimTemplates)
-			to.Spec.VolumeClaimTemplates = from.Spec.VolumeClaimTemplates
-		}
-		for i, fromVct := range from.Spec.VolumeClaimTemplates {
-			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Name, fromVct.Name) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Name changed from", to.Spec.VolumeClaimTemplates[i].Name, "To:", fromVct.Name)
-				to.Spec.VolumeClaimTemplates[i].Name = fromVct.Name
-			}
-			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Labels, fromVct.Labels) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Labels changed from", to.Spec.VolumeClaimTemplates[i].Labels, "To:", fromVct.Labels)
-				to.Spec.VolumeClaimTemplates[i].Labels = fromVct.Labels
-			}
-			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Annotations, fromVct.Annotations) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Annotations changed from", to.Spec.VolumeClaimTemplates[i].Annotations, "To:", fromVct.Annotations)
-				to.Spec.VolumeClaimTemplates[i].Annotations = fromVct.Annotations
-			}
-			if !DeepEqualWithNils(to.Spec.VolumeClaimTemplates[i].Spec, fromVct.Spec) {
-				requireUpdate = true
-				log.Info("Update required because:", "Spec.VolumeClaimTemplates["+strconv.Itoa(i)+"].Spec changed from", to.Spec.VolumeClaimTemplates[i].Spec, "To:", fromVct.Spec)
-				to.Spec.VolumeClaimTemplates[i].Spec = fromVct.Spec
-			}
-		}
-	*/
-
-	if !DeepEqualWithNils(to.Spec.Template.Labels, from.Spec.Template.Labels) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Labels changed from", to.Spec.Template.Labels, "To:", from.Spec.Template.Labels)
-		to.Spec.Template.Labels = from.Spec.Template.Labels
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Annotations, from.Spec.Template.Annotations) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Annotations changed from", to.Spec.Template.Annotations, "To:", from.Spec.Template.Annotations)
-		to.Spec.Template.Annotations = from.Spec.Template.Annotations
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Containers, from.Spec.Template.Spec.Containers) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Containers changed from", to.Spec.Template.Spec.Containers, "To:", from.Spec.Template.Spec.Containers)
-		to.Spec.Template.Spec.Containers = from.Spec.Template.Spec.Containers
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.InitContainers, from.Spec.Template.Spec.InitContainers) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.InitContainers changed from", to.Spec.Template.Spec.InitContainers, "To:", from.Spec.Template.Spec.InitContainers)
-		to.Spec.Template.Spec.InitContainers = from.Spec.Template.Spec.InitContainers
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.HostAliases, from.Spec.Template.Spec.HostAliases) {
-		requireUpdate = true
-		to.Spec.Template.Spec.HostAliases = from.Spec.Template.Spec.HostAliases
-		log.Info("Update required because:", "Spec.Template.Spec.HostAliases changed from", to.Spec.Template.Spec.HostAliases, "To:", from.Spec.Template.Spec.HostAliases)
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Volumes, from.Spec.Template.Spec.Volumes) {
-		requireUpdate = true
-		to.Spec.Template.Spec.Volumes = from.Spec.Template.Spec.Volumes
-		log.Info("Update required because:", "Spec.Template.Spec.Volumes changed from", to.Spec.Template.Spec.Volumes, "To:", from.Spec.Template.Spec.Volumes)
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.ImagePullSecrets, from.Spec.Template.Spec.ImagePullSecrets) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.ImagePullSecrets changed from", to.Spec.Template.Spec.ImagePullSecrets, "To:", from.Spec.Template.Spec.ImagePullSecrets)
-		to.Spec.Template.Spec.ImagePullSecrets = from.Spec.Template.Spec.ImagePullSecrets
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Containers[0].Resources, from.Spec.Template.Spec.Containers[0].Resources) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Containers[0].Resources changed from", to.Spec.Template.Spec.Containers[0].Resources, "To:", from.Spec.Template.Spec.Containers[0].Resources)
-		to.Spec.Template.Spec.Containers[0].Resources = from.Spec.Template.Spec.Containers[0].Resources
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Affinity, from.Spec.Template.Spec.Affinity) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Affinity changed from", to.Spec.Template.Spec.Affinity, "To:", from.Spec.Template.Spec.Affinity)
-		to.Spec.Template.Spec.Affinity = from.Spec.Template.Spec.Affinity
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.SecurityContext, from.Spec.Template.Spec.SecurityContext) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.SecurityContext changed from", to.Spec.Template.Spec.SecurityContext, "To:", from.Spec.Template.Spec.SecurityContext)
-		to.Spec.Template.Spec.SecurityContext = from.Spec.Template.Spec.SecurityContext
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.NodeSelector, from.Spec.Template.Spec.NodeSelector) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.NodeSelector changed from", to.Spec.Template.Spec.NodeSelector, "To:", from.Spec.Template.Spec.NodeSelector)
-		to.Spec.Template.Spec.NodeSelector = from.Spec.Template.Spec.NodeSelector
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.PriorityClassName, from.Spec.Template.Spec.PriorityClassName) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.PriorityClassName changed from", to.Spec.Template.Spec.PriorityClassName, "To:", from.Spec.Template.Spec.PriorityClassName)
-		to.Spec.Template.Spec.PriorityClassName = from.Spec.Template.Spec.PriorityClassName
-	}
-
-	if !DeepEqualWithNils(to.Spec.Template.Spec.Tolerations, from.Spec.Template.Spec.Tolerations) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Template.Spec.Tolerations changed from", to.Spec.Template.Spec.Tolerations, "To:", from.Spec.Template.Spec.Tolerations)
-		to.Spec.Template.Spec.Tolerations = from.Spec.Template.Spec.Tolerations
-	}
-
-	return requireUpdate
-}
-
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
@@ -652,20 +536,6 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	}
 
 	return configMap
-}
-
-// CopyConfigMapFields copies the owned fields from one ConfigMap to another
-func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
-
-	if !DeepEqualWithNils(to.Data, from.Data) {
-		requireUpdate = true
-	}
-	to.Data = from.Data
-
-	return requireUpdate
 }
 
 // fillProbe builds the probe logic used for pod liveness, readiness, startup checks
@@ -837,35 +707,6 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 	return service
 }
 
-// CopyServiceFields copies the owned fields from one Service to another
-func CopyServiceFields(from, to *corev1.Service) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
-
-	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
-		requireUpdate = true
-	}
-	to.Spec.Selector = from.Spec.Selector
-
-	if !DeepEqualWithNils(to.Spec.Ports, from.Spec.Ports) {
-		requireUpdate = true
-	}
-	to.Spec.Ports = from.Spec.Ports
-
-	if !DeepEqualWithNils(to.Spec.ExternalName, from.Spec.ExternalName) {
-		requireUpdate = true
-	}
-	to.Spec.ExternalName = from.Spec.ExternalName
-
-	if !DeepEqualWithNils(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
-		requireUpdate = true
-	}
-	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
-
-	return requireUpdate
-}
-
 // GenerateIngress returns a new Ingress pointer generated for the entire SolrCloud, pointing to all instances
 // solrCloud: SolrCloud instance
 // nodeStatuses: []SolrNodeStatus the nodeStatuses
@@ -963,20 +804,6 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 		},
 	}
 	return ingressRule
-}
-
-// CopyIngressFields copies the owned fields from one Ingress to another
-func CopyIngressFields(from, to *extv1.Ingress) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
-
-	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
-
-	if !DeepEqualWithNils(to.Spec.Rules, from.Spec.Rules) {
-		requireUpdate = true
-	}
-	to.Spec.Rules = from.Spec.Rules
-
-	return requireUpdate
 }
 
 func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {

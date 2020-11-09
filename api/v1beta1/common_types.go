@@ -99,6 +99,15 @@ type PodOptions struct {
 	// PriorityClassName for the pod
 	// +optional
 	PriorityClassName string `json:"priorityClassName,omitempty"`
+
+	// Sidecar containers to run in the pod. These are in addition to the Solr Container
+	// +optional
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
+
+	// Additional init containers to run in the pod.
+	// These will run along with the init container that sets up the "solr.xml".
+	// +optional
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
 // ServiceOptions defines custom options for services
@@ -144,10 +153,13 @@ type AdditionalVolume struct {
 	Name string `json:"name"`
 
 	// Source is the source of the Volume to be loaded into the solrCloud Pod
-	Source corev1.VolumeSource `json:"source,omitempty"`
+	Source corev1.VolumeSource `json:"source"`
 
 	// DefaultContainerMount defines how to mount this volume into the default container.
-	DefaultContainerMount corev1.VolumeMount `json:"defaultContainerMount"`
+	// If this volume is to be used only with sidecar or non-default init containers,
+	// then this option is not necessary.
+	// +optional
+	DefaultContainerMount *corev1.VolumeMount `json:"defaultContainerMount,omitempty"`
 }
 
 // ContainerImage defines the fields needed for a Docker repository image. The
