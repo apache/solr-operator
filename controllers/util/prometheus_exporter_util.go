@@ -138,7 +138,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		// Add Custom Volumes to pod
 		for _, volume := range customPodOptions.Volumes {
 			volume.DefaultContainerMount.Name = volume.Name
-			volumeMounts = append(volumeMounts, volume.DefaultContainerMount)
+
+			// Only add the container mount if one has been provided.
+			if volume.DefaultContainerMount != nil {
+				volumeMounts = append(volumeMounts, *volume.DefaultContainerMount)
+			}
 
 			solrVolumes = append(solrVolumes, corev1.Volume{
 				Name:         volume.Name,
@@ -153,6 +157,42 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Name:  "JAVA_OPTS",
 			Value: strings.Join(allJavaOpts, " "),
 		})
+	}
+
+	containers := []corev1.Container{
+		{
+			Name:            "solr-prometheus-exporter",
+			Image:           solrPrometheusExporter.Spec.Image.ToImageName(),
+			ImagePullPolicy: solrPrometheusExporter.Spec.Image.PullPolicy,
+			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName}},
+			VolumeMounts:    volumeMounts,
+			Command:         []string{entrypoint},
+			Args:            exporterArgs,
+			Env:             envVars,
+
+			LivenessProbe: &corev1.Probe{
+				InitialDelaySeconds: 20,
+				PeriodSeconds:       10,
+				Handler: corev1.Handler{
+					HTTPGet: &corev1.HTTPGetAction{
+						Scheme: corev1.URISchemeHTTP,
+						Path:   "/metrics",
+						Port:   intstr.FromInt(SolrMetricsPort),
+					},
+				},
+			},
+		},
+	}
+	var initContainers []corev1.Container
+
+	if customPodOptions != nil {
+		if len(customPodOptions.SidecarContainers) > 0 {
+			containers = append(containers, customPodOptions.SidecarContainers...)
+		}
+
+		if len(customPodOptions.InitContainers) > 0 {
+			initContainers = customPodOptions.InitContainers
+		}
 	}
 
 	deployment := &appsv1.Deployment{
@@ -177,31 +217,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &fsGroup,
 					},
-					Volumes: solrVolumes,
-					Containers: []corev1.Container{
-						{
-							Name:            "solr-prometheus-exporter",
-							Image:           solrPrometheusExporter.Spec.Image.ToImageName(),
-							ImagePullPolicy: solrPrometheusExporter.Spec.Image.PullPolicy,
-							Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName}},
-							VolumeMounts:    volumeMounts,
-							Command:         []string{entrypoint},
-							Args:            exporterArgs,
-							Env:             envVars,
-
-							LivenessProbe: &corev1.Probe{
-								InitialDelaySeconds: 20,
-								PeriodSeconds:       10,
-								Handler: corev1.Handler{
-									HTTPGet: &corev1.HTTPGetAction{
-										Scheme: corev1.URISchemeHTTP,
-										Path:   "/metrics",
-										Port:   intstr.FromInt(SolrMetricsPort),
-									},
-								},
-							},
-						},
-					},
+					Volumes:        solrVolumes,
+					InitContainers: initContainers,
+					Containers:     containers,
 				},
 			},
 		},

@@ -59,7 +59,7 @@ install: manifests
 	kubectl create -k config/crd || kubectl replace -k config/crd
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
-deploy: install
+deploy: manifests install
 	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
 	kubectl apply -k config/default
 
