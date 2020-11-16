@@ -104,6 +104,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Volumes & Mounts
+	kubeNodeInfoVolumeName := "kube-node-info"
 	solrVolumes := []corev1.Volume{
 		{
 			Name: "solr-xml",
@@ -122,10 +123,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				},
 			},
 		},
+		{
+			Name:         kubeNodeInfoVolumeName,
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
 	}
 
 	solrDataVolumeName := "data"
-	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
+	nodeInfoPath := "/kubernetes/etc/node"
+	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}, {Name: kubeNodeInfoVolumeName, MountPath: nodeInfoPath}}
 	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.Spec.DataPvcSpec != nil {
 		pvcs = []corev1.PersistentVolumeClaim{
@@ -260,6 +266,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:  "GC_TUNE",
 			Value: solrCloud.Spec.SolrGCTune,
 		},
+		{
+			Name:  "SOLR_INCLUDE",
+			Value: nodeInfoPath + "/node.sh",
+		},
 	}
 
 	// Add ACL information, if given, through Env Vars
@@ -327,6 +337,29 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 								{
 									Name:      solrDataVolumeName,
 									MountPath: "/tmp-config",
+								},
+							},
+						},
+						{
+							Name:            "kube-node-labels",
+							Image:           solrCloud.Spec.JqImage.ToImageName(),
+							ImagePullPolicy: solrCloud.Spec.JqImage.PullPolicy,
+							Command:         []string{"sh", "-c", "curl -s \"https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}/api/v1/nodes/${NODE_NAME}\" -H \"Authorization: Bearer $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)\" --cacert '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt' | jq -r '.metadata.labels | to_entries | map(\"-D\"+.key+\"=\"+.value)| \"export SOLR_OPTS=\\\"${SOLR_OPTS} \" + join(\" \") + \"\\\"\"' > /node-data/node.sh"},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      kubeNodeInfoVolumeName,
+									MountPath: "/node-data",
+								},
+							},
+							Env: []corev1.EnvVar{
+								{
+									Name: "NODE_NAME",
+									ValueFrom: &corev1.EnvVarSource{
+										FieldRef: &corev1.ObjectFieldSelector{
+											APIVersion: "v1",
+											FieldPath:  "spec.nodeName",
+										},
+									},
 								},
 							},
 						},

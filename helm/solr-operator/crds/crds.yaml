@@ -4035,6 +4035,22 @@ spec:
                   description: VolumeName is the binding reference to the PersistentVolume backing this claim.
                   type: string
               type: object
+            jqImage:
+              description: ContainerImage defines the fields needed for a Docker repository
+                image. The format here matches the predominant format used in Helm
+                charts.
+              properties:
+                imagePullSecret:
+                  type: string
+                pullPolicy:
+                  description: PullPolicy describes a policy for if/when to pull a
+                    container image
+                  type: string
+                repository:
+                  type: string
+                tag:
+                  type: string
+              type: object
             replicas:
               description: The number of solr nodes to run
               format: int32
