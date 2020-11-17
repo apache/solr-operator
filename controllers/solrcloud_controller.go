@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
@@ -28,14 +29,19 @@ import (
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"sort"
 	"strings"
 	"time"
@@ -181,25 +187,60 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	// Generate ConfigMap
-	configMap := util.GenerateConfigMap(instance)
-	if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
-		return requeueOrNot, err
-	}
+	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml ... but the provided ConfigMap
+	// might be for the Prometheus exporter, so we only care if they provide a solr.xml in the CM
+	solrXmlConfigMapName := instance.ConfigMapName()
+	solrXmlMd5 := ""
+	if instance.Spec.CustomSolrKubeOptions.ConfigMapOptions != nil && instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
+		foundConfigMap := &corev1.ConfigMap{}
+		nn := types.NamespacedName{Name: instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: instance.Namespace}
+		err = r.Get(context.TODO(), nn, foundConfigMap)
+		if err != nil {
+			return requeueOrNot, err // if they passed a providedConfigMap name, then it must exist
+		}
 
-	// Check if the ConfigMap already exists
-	foundConfigMap := &corev1.ConfigMap{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
-	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
-		err = r.Create(context.TODO(), configMap)
-	} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap) {
-		// Update the found ConfigMap and write the result back if there are any changes
-		r.Log.Info("Updating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
-		err = r.Update(context.TODO(), foundConfigMap)
-	}
-	if err != nil {
-		return requeueOrNot, err
+		// ConfigMap doesn't have to have a solr.xml, but if it does, then it needs to be valid!
+		if foundConfigMap.Data != nil {
+			solrXml, ok := foundConfigMap.Data["solr.xml"]
+			if ok {
+				if !strings.Contains(solrXml, "${hostPort:") {
+					return requeueOrNot,
+						fmt.Errorf("Custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
+							instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+				}
+				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
+				solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
+				solrXmlConfigMapName = foundConfigMap.Name
+			} else {
+				return requeueOrNot, fmt.Errorf("Required 'solr.xml' key not found in provided ConfigMap %s",
+					instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+			}
+		} else {
+			return requeueOrNot, fmt.Errorf("Provided ConfigMap %s has no data",
+				instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+		}
+	} else {
+		configMap := util.GenerateConfigMap(instance)
+		if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
+			return requeueOrNot, err
+		}
+
+		// Check if the ConfigMap already exists
+		foundConfigMap := &corev1.ConfigMap{}
+		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
+		if err != nil && errors.IsNotFound(err) {
+			r.Log.Info("Creating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			err = r.Create(context.TODO(), configMap)
+			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
+		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap) {
+			// Update the found ConfigMap and write the result back if there are any changes
+			r.Log.Info("Updating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			err = r.Update(context.TODO(), foundConfigMap)
+			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data["solr.xml"])))
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -210,7 +251,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	pvcLabelSelector := make(map[string]string, 0)
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap)
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, solrXmlConfigMapName, solrXmlMd5)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
 			return requeueOrNot, err
 		}
@@ -574,8 +615,13 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
-		Owns(&extv1.Ingress{}).
-		Owns(&appsv1.Deployment{})
+		Owns(&extv1.Ingress{})
+
+	var err error
+	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zk.ZookeeperCluster{})
@@ -583,4 +629,45 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 
 	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(reconciler)
+}
+
+func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, ".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		solrCloud := rawObj.(*solr.SolrCloud)
+		if solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions == nil {
+			return nil
+		}
+		if solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap == "" {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.ConfigMap{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				foundClouds := &solr.SolrCloudList{}
+				listOps := &client.ListOptions{
+					FieldSelector: fields.OneTermEqualSelector(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", a.Meta.GetName()),
+					Namespace:     a.Meta.GetNamespace(),
+				}
+				r.List(context.TODO(), foundClouds, listOps)
+				requests := make([]reconcile.Request, len(foundClouds.Items))
+				for i, item := range foundClouds.Items {
+					requests[i] = reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					}
+				}
+				return requests
+			}),
+		},
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }

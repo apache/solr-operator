@@ -132,6 +132,10 @@ type ConfigMapOptions struct {
 	// Labels to be added for the ConfigMap.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// Name of a user provided ConfigMap in the same namespace containing a custom solr.xml
+	// +optional
+	ProvidedConfigMap string `json:"providedConfigMap,omitempty"`
 }
 
 // AdditionalVolume provides information on additional volumes that should be loaded into pods

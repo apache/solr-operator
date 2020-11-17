@@ -46,6 +46,7 @@ const (
 	SolrPVCStorageLabel              = "solr.apache.org/storage"
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
+	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
 
 	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
@@ -71,7 +72,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(solrPodPort)
@@ -116,7 +117,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: solrCloud.ConfigMapName(),
+						Name: solrXmlConfigMapName,
 					},
 					Items: []corev1.KeyToPath{
 						{
@@ -314,6 +315,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
+	}
+
+	// track the MD5 of the custom solr.xml in the pod spec annotations,
+	// so we get a rolling restart when the configMap changes
+	if solrXmlMd5 != "" {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		podAnnotations[SolrXmlMd5Annotation] = solrXmlMd5
 	}
 
 	if solrCloud.Spec.SolrOpts != "" {

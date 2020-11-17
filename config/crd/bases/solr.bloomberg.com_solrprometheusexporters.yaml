@@ -62,6 +62,9 @@ spec:
                         type: string
                       description: Labels to be added for the ConfigMap.
                       type: object
+                    providedConfigMap:
+                      description: Name of a user provided ConfigMap in the same namespace containing a custom solr.xml
+                      type: string
                   type: object
                 deploymentOptions:
                   description: DeploymentOptions defines the custom options for the solrPrometheusExporter Deployment.
