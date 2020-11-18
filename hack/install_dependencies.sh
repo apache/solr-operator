@@ -5,6 +5,7 @@ set -o nounset
 set -o pipefail
 
 kubebuilder_version=2.3.1
+kustomize_version=3.8.7
 os=$(go env GOOS)
 arch=$(go env GOARCH)
 
@@ -13,7 +14,7 @@ GO111MODULE=on go mod tidy
 
 #Install Kustomize
 if !(which kustomize); then
-  (cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash)
+  (cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- ${kustomize_version})
   sudo mv "/tmp/kustomize" /usr/local/bin
   echo "Installed kustomize at /usr/local/bin/kustomize, version: $(kustomize version --short)"
 else
