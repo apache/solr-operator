@@ -119,8 +119,8 @@ EOF
 kubectl apply -f solrCloud-example.yaml
 
 # The solr-operator has created a new resource type 'solrclouds' which we can query
-# Check the status live with the 'watch' command. Hit Control-C when done
-watch -dc kubectl get solrclouds
+# Check the status live as the deploy happens
+kubectl get solrclouds -w
 
 # Open a web browser to see a solr node:
 # Note that this is the service level, so will round-robin between the nodes
@@ -177,7 +177,7 @@ You will see how the new Solr nodes are added.
 You can also watch the status via the `kubectl get solrclouds` command:
 
 ```bash
-watch -dc kubectl get solrclouds
+kubectl get solrclouds -w
 
 # Hit Control-C when done
 ```
@@ -199,7 +199,7 @@ metadata:
 spec:
   replicas: 5
   solrImage:
-    tag: "8.4"
+    tag: "8.7"
   solrJavaMem: "-Xms300m -Xmx300m"
 EOF
 
@@ -208,7 +208,7 @@ EOF
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column
 # You can also watch the status with the 'kubectl get solrclouds' command
 kubectl apply -f solrCloud-example.yaml
-watch -dc kubectl get solrclouds
+kubectl get solrclouds -w
 
 # Hit Control-C when done
 ```
@@ -219,7 +219,7 @@ Kubernetes Dashboard is a web interface that gives a better overview of your k8s
 
 ```
 # Install the Dashboard
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.0-beta8/aio/deploy/recommended.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.4/aio/deploy/recommended.yaml
 
 # You need to authenticate with the dashboard. Get a token:
 kubectl -n kubernetes-dashboard describe secret \
