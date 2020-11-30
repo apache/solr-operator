@@ -54,8 +54,8 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 			StorageOptions: solr.SolrDataStorageOptions{
 				PersistentStorage: &solr.SolrPersistentDataStorageOptions{
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyRetain,
-					PersistentVolumeClaimTemplate: corev1.PersistentVolumeClaimTemplate{
-						ObjectMeta: metav1.ObjectMeta{
+					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
+						ObjectMeta: solr.TemplateMeta{
 							Name:   "other-data",
 							Labels: map[string]string{"base": "here"},
 						},
@@ -113,11 +113,11 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	assert.Equal(t, 2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
-	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "Technology label doesn't match")
-	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "Storage label doesn't match")
-	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "Instance label doesn't match")
-	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Labels["base"], "Instance label doesn't match")
+	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
+	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "PVC Technology label doesn't match")
+	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "PVC Storage label doesn't match")
+	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "PVC Instance label doesn't match")
+	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Labels["base"], "Additional PVC label doesn't match")
 }
 
 func TestPersistentStorageVolumesDelete(t *testing.T) {
@@ -139,10 +139,10 @@ func TestPersistentStorageVolumesDelete(t *testing.T) {
 			StorageOptions: solr.SolrDataStorageOptions{
 				PersistentStorage: &solr.SolrPersistentDataStorageOptions{
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyDelete,
-					PersistentVolumeClaimTemplate: corev1.PersistentVolumeClaimTemplate{
-						ObjectMeta: metav1.ObjectMeta{
-							Name:   "other-data",
-							Labels: map[string]string{"base": "here"},
+					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
+						ObjectMeta: solr.TemplateMeta{
+							Name:        "other-data",
+							Annotations: map[string]string{"base": "here"},
 						},
 					},
 				},
@@ -201,11 +201,11 @@ func TestPersistentStorageVolumesDelete(t *testing.T) {
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 
 	assert.Equal(t, 2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
-	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "Technology label doesn't match")
-	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "Storage label doesn't match")
-	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "Instance label doesn't match")
-	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Labels["base"], "Instance label doesn't match")
+	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
+	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "PVC Technology label doesn't match")
+	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "PVC Storage label doesn't match")
+	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "PVC Instance label doesn't match")
+	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Annotations["base"], "Additional PVC label doesn't match")
 
 	// Explicitly delete, make sure that finalizers are removed from the object so that kubernetes can delete it.
 	testClient.Delete(context.TODO(), instance)

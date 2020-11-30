@@ -44,6 +44,11 @@ Please visit the following pages for documentation on using and developing the S
 ## Version Compatibility & Upgrade Notes
 
 #### v0.2.7
+- Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
+  
+  **This means that Kubernetes support is now limited to 1.16+.**
+  If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.
+
 - The `SolrCloud` and `SolrPrometheusExporter` services' portNames have changed to `"solr-client"` and `"solr-metrics"` from `"ext-solr-client"` and `"ext-solr-metrics"`, respectively.
 This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.
 
@@ -94,11 +99,9 @@ This option is backwards compatible, but will be removed in a future version (`v
 
 ### Compatibility with Kubernetes Versions
 
-#### Fully Compatible - v1.13+
+#### Fully Compatible - v1.16+
 
-#### Feature Gates required for older versions
-
-- *v1.10* - CustomResourceSubresources
+If you require compatibility with previous versions, please install version `v0.2.6` of the Solr Operator.
 
 ## Contributions
 
