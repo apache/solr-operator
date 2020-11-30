@@ -19,6 +19,7 @@ package v1beta1
 import (
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -31,6 +32,11 @@ type StatefulSetOptions struct {
 	// Labels to be added for the StatefulSet.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// PodManagementPolicy defines the policy for creating pods under a stateful set.
+	// Override the default value.
+	// +optional
+	PodManagementPolicy appsv1.PodManagementPolicyType `json:"podManagementPolicy,omitempty"`
 }
 
 // DeploymentOptions defines custom options for Deployments

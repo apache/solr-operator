@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	"github.com/bloomberg/solr-operator/controllers/util/solr_api"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -314,10 +315,10 @@ func StartBackupForCollection(cloud string, collection string, backupName string
 	queryParams.Add("location", BackupPath(backupName))
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backupName))
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to start collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -335,10 +336,10 @@ func CheckBackupForCollection(cloud string, collection string, backupName string
 	queryParams.Add("action", "REQUESTSTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to check on collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -364,38 +365,15 @@ func DeleteAsyncInfoForBackup(cloud string, collection string, backupName string
 	queryParams.Add("action", "DELETESTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to delete async info for backup command.", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 	if err != nil {
 		log.Error(err, "Error deleting async data for collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
 	}
 
 	return err
-}
-
-type SolrAsyncResponse struct {
-	ResponseHeader SolrResponseHeader `json:"responseHeader"`
-
-	// +optional
-	RequestId string `json:"requestId"`
-
-	// +optional
-	Status SolrAsyncStatus `json:"status"`
-}
-
-type SolrResponseHeader struct {
-	Status int `json:"status"`
-
-	QTime int `json:"QTime"`
-}
-
-type SolrAsyncStatus struct {
-	// Possible states can be found here: https://github.com/apache/lucene-solr/blob/1d85cd783863f75cea133fb9c452302214165a4d/solr/solrj/src/java/org/apache/solr/client/solrj/response/RequestStatusState.java
-	AsyncState string `json:"state"`
-
-	Message string `json:"msg"`
 }
 
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backup string, config *rest.Config) (err error) {

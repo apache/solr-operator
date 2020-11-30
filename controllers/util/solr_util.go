@@ -17,11 +17,6 @@ limitations under the License.
 package util
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +25,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -47,6 +41,8 @@ const (
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
+
+	DefaultStatefulSetPodManagementPolicy = appsv1.OrderedReadyPodManagement
 
 	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
@@ -410,6 +406,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		containers = append(containers, customPodOptions.SidecarContainers...)
 	}
 
+	// Decide which update strategy to use
+	updateStrategy := appsv1.OnDeleteStatefulSetStrategyType
+	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate {
+		// Only use the rolling update strategy if the StatefulSetUpdate method is specified.
+		updateStrategy = appsv1.RollingUpdateStatefulSetStrategyType
+	}
+
+	// Determine which podManagementPolicy to use for the statefulSet
+	podManagementPolicy := DefaultStatefulSetPodManagementPolicy
+	if solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions.PodManagementPolicy != "" {
+		podManagementPolicy = solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions.PodManagementPolicy
+	}
+
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -422,8 +431,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Selector: &metav1.LabelSelector{
 				MatchLabels: selectorLabels,
 			},
-			ServiceName: solrCloud.HeadlessServiceName(),
-			Replicas:    solrCloud.Spec.Replicas,
+			ServiceName:         solrCloud.HeadlessServiceName(),
+			Replicas:            solrCloud.Spec.Replicas,
+			PodManagementPolicy: podManagementPolicy,
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: updateStrategy,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      podLabels,
@@ -804,30 +817,4 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 		},
 	}
 	return ingressRule
-}
-
-func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
-
-	urlParams.Set("wt", "json")
-
-	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
-
-	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	if err == nil && resp.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(resp.Body)
-		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
-	}
-
-	if err == nil {
-		json.NewDecoder(resp.Body).Decode(&response)
-	}
-
-	return err
 }

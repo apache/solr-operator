@@ -29,6 +29,10 @@ spec:
     description: Number of solr nodes connected to the cloud
     name: ReadyNodes
     type: integer
+  - JSONPath: .status.upToDateNodes
+    description: Number of solr nodes running the latest SolrCloud pod spec
+    name: UpToDateNodes
+    type: integer
   - JSONPath: .metadata.creationTimestamp
     name: Age
     type: date
@@ -4273,6 +4277,9 @@ spec:
                         type: string
                       description: Labels to be added for the StatefulSet.
                       type: object
+                    podManagementPolicy:
+                      description: PodManagementPolicy defines the policy for creating pods under a stateful set. Override the default value.
+                      type: string
                   type: object
               type: object
             dataPvcSpec:
@@ -5834,6 +5841,33 @@ spec:
                       type: object
                   type: object
               type: object
+            updateStrategy:
+              description: Define how Solr rolling updates are executed.
+              properties:
+                managed:
+                  description: Options for Solr Operator Managed rolling updates.
+                  properties:
+                    maxPodsUnavailable:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: "The maximum number of pods that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of the desired number of pods (ex: 10%). Absolute number is calculated from percentage by rounding down. If the provided number is 0 or negative, then all pods will be allowed to be updated in unison. \n Defaults to 25%."
+                      x-kubernetes-int-or-string: true
+                    maxShardReplicasUnavailable:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      description: "The maximum number of replicas for each shard that can be unavailable during the update. Value can be an absolute number (ex: 5) or a percentage of replicas in a shard (ex: 25%). Absolute number is calculated from percentage by rounding down. If the provided number is 0 or negative, then all replicas will be allowed to be updated in unison. \n Defaults to 1."
+                      x-kubernetes-int-or-string: true
+                  type: object
+                method:
+                  description: Method defines the way in which SolrClouds should be updated when the podSpec changes.
+                  enum:
+                  - Managed
+                  - StatefulSet
+                  - Manual
+                  type: string
+              type: object
             zookeeperRef:
               description: The information for the Zookeeper this SolrCloud should connect to Can be a zookeeper that is running, or one that is created by the solr operator
               properties:
@@ -7033,6 +7067,9 @@ spec:
                   ready:
                     description: Is the node up and running
                     type: boolean
+                  specUpToDate:
+                    description: This Solr Node pod is using the latest version of solrcloud pod spec.
+                    type: boolean
                   version:
                     description: The version of solr that the node is running
                     type: string
@@ -7041,12 +7078,17 @@ spec:
                 - name
                 - nodeName
                 - ready
+                - specUpToDate
                 - version
                 type: object
               type: array
             targetVersion:
               description: The version of solr that the cloud is meant to be running. Will only be provided when the cloud is migrating between versions
               type: string
+            upToDateNodes:
+              description: UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+              format: int32
+              type: integer
             version:
               description: The version of solr that the cloud is running
               type: string
@@ -7103,6 +7145,7 @@ spec:
           - readyReplicas
           - replicas
           - solrNodes
+          - upToDateNodes
           - version
           - zookeeperConnectionInfo
           type: object

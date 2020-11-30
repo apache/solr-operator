@@ -20,6 +20,7 @@ import (
 	stdlog "log"
 	"os"
 	"path/filepath"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ import (
 	zkOp "github.com/pravega/zookeeper-operator/pkg/apis"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -47,6 +49,7 @@ var additionalLables = map[string]string{
 }
 
 func TestMain(m *testing.M) {
+	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),

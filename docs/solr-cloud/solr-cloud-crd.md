@@ -36,10 +36,33 @@ These options can be found in `SolrCloud.spec.dataStorage`
   This is optional, and defaults to the name of the SolrCloud.
   Only use this option when you require restoring the same backup to multiple SolrClouds.
 
+## Update Strategy
+
+The SolrCloud CRD provides users the ability to define how it is addressed, through `SolrCloud.Spec.updateStrategy`.
+This provides the following options:
+
+Under `SolrCloud.Spec.updateStrategy`:
+
+- **`method`** - The method in which Solr pods should be updated. Enum options are as follows:
+  - `Managed` - (Default) The Solr Operator will take control over deleting pods for updates. This process is [documented here](managed-updates.md).
+  - `StatefulSet` - Use the default StatefulSet rolling update logic, one pod at a time waiting for all pods to be "ready".
+  - `Manual` - Neither the StatefulSet or the Solr Operator will delete pods in need of an update. The user will take responsibility over this.
+- **`managed`** - Options for rolling updates managed by the Solr Operator.
+  - **`maxPodsUnavailable`** - (Defaults to `"25%"`) The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart.
+  More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.  
+  - **`maxShardReplicasUnavailable`** - (Defaults to `1`) The number of replicas for each shard allowed to be unavailable during the restart.
+  
+**Note:** Both `maxPodsUnavailable` and `maxShardReplicasUnavailable` are intOrString fields. So either an int or string can be provided for the field.
+- **int** - The parameter is treated as an absolute value, unless the value is <= 0 which is interpreted as unlimited.
+- **string** - Only percentage string values (`"0%"` - `"100%"`) are accepted, all other values will be ignored.
+  - **`maxPodsUnavailable`** - The `maximumPodsUnavailable` is calculated as the percentage of the total pods configured for that Solr Cloud.
+  - **`maxShardReplicasUnavailable`** - The `maxShardReplicasUnavailable` is calculated independently for each shard, as the percentage of the number of replicas for that shard.
+
 ## Addressability
 
-The SolrCloud CRD provides users the ability to define how it is addressed, through `SolrCloud.spec.solrAddressability`.
-This provides the following options:
+The SolrCloud CRD provides users the ability to define how it is addressed, through the following options:
+
+Under `SolrCloud.Spec.solrAddressability`:
 
 - **`podPort`** - The port on which the pod is listening. This is also that the port that the Solr Jetty service will listen on. (Defaults to `8983`)
 - **`commonServicePort`** - The port on which the common service is exposed. (Defaults to `80`)
