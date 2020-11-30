@@ -5403,7 +5403,10 @@ spec:
                         description: Labels to be added for the StatefulSet.
                         type: object
                       podManagementPolicy:
-                        description: PodManagementPolicy defines the policy for creating pods under a stateful set. Override the default value.
+                        description: PodManagementPolicy defines the policy for creating pods under a stateful set. Override the default value of OrderedReady. This cannot be updated on an existing StatefulSet, the StatefulSet must be deleted and recreated for a change in this field to take effect.
+                        enum:
+                        - OrderedReady
+                        - Parallel
                         type: string
                     type: object
                 type: object
