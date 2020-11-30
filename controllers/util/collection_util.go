@@ -18,6 +18,7 @@ package util
 
 import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	"github.com/bloomberg/solr-operator/controllers/util/solr_api"
 	"net/url"
 	"strconv"
 	"strings"
@@ -50,10 +51,10 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 		queryParams.Add("router.field", routerField)
 	}
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to create collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -74,10 +75,10 @@ func CreateCollectionAlias(cloud string, alias string, aliasType string, collect
 	queryParams.Add("name", alias)
 	queryParams.Add("collections", collectionsArray)
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to create alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -97,10 +98,10 @@ func DeleteCollection(cloud string, collection string, namespace string) (succes
 	queryParams.Add("action", "DELETE")
 	queryParams.Add("name", collection)
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to delete collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -119,10 +120,10 @@ func DeleteCollectionAlias(cloud string, alias string, namespace string) (succes
 	queryParams.Add("action", "DELETEALIAS")
 	queryParams.Add("name", alias)
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to delete collection alias", "namespace", namespace, "cloud", cloud, "alias", alias)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -147,10 +148,10 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 	queryParams.Add("autoAddReplicas", strconv.FormatBool(autoAddReplicas))
 	queryParams.Add("collection.configName", collectionConfigName)
 
-	resp := &SolrAsyncResponse{}
+	resp := &solr_api.SolrAsyncResponse{}
 
 	log.Info("Calling to modify collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -173,27 +174,27 @@ func CheckIfCollectionModificationRequired(cloud string, collection string, repl
 	queryParams.Add("action", "CLUSTERSTATUS")
 	queryParams.Add("collection", collection)
 
-	resp := &SolrClusterStatusResponse{}
+	resp := &solr_api.SolrClusterStatusResponse{}
 
-	err = CallCollectionsApi(cloud, namespace, queryParams, &resp)
+	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, &resp)
 
-	if collectionResp, ok := resp.Cluster.Collections[collection].(map[string]interface{}); ok {
+	if collectionResp, ok := resp.ClusterStatus.Collections[collection]; ok {
 		// Check modifiable collection parameters
-		if collectionResp["autoAddReplicas"] != autoAddReplicasParameter {
+		if collectionResp.AutoAddReplicas != autoAddReplicasParameter {
 			log.Info("Collection modification required, autoAddReplicas changed", "autoAddReplicas", autoAddReplicasParameter)
 			success = true
 		}
 
-		if collectionResp["maxShardsPerNode"] != maxShardsPerNodeParameter {
+		if collectionResp.MaxShardsPerNode != maxShardsPerNodeParameter {
 			log.Info("Collection modification required, maxShardsPerNode changed", "maxShardsPerNode", maxShardsPerNodeParameter)
 			success = true
 		}
 
-		if collectionResp["replicationFactor"] != replicationFactorParameter {
+		if collectionResp.ReplicationFactor != replicationFactorParameter {
 			log.Info("Collection modification required, replicationFactor changed", "replicationFactor", replicationFactorParameter)
 			success = true
 		}
-		if collectionResp["configName"] != collectionConfigName {
+		if collectionResp.ConfigName != collectionConfigName {
 			log.Info("Collection modification required, configName changed", "configName", collectionConfigName)
 			success = true
 		}
@@ -212,7 +213,7 @@ func CheckIfCollectionExists(cloud string, collection string, namespace string) 
 	resp := &SolrCollectionsListResponse{}
 
 	log.Info("Calling to list collections", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err := CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err := solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		if containsCollection(resp.Collections, collection) {
@@ -232,7 +233,7 @@ func CurrentCollectionAliasDetails(cloud string, alias string, namespace string)
 
 	resp := &SolrCollectionAliasDetailsResponse{}
 
-	err := CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err := solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
 
 	if err == nil {
 		success, collections := containsAlias(resp.Aliases, alias)
@@ -245,44 +246,22 @@ func CurrentCollectionAliasDetails(cloud string, alias string, namespace string)
 }
 
 type SolrCollectionAliasDetailsResponse struct {
-	SolrResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
+	SolrResponseHeader solr_api.SolrResponseHeader `json:"responseHeader"`
 
 	// +optional
 	Aliases map[string]string `json:"aliases"`
 }
 
-type SolrCollectionResponseHeader struct {
-	Status int `json:"status"`
-
-	QTime int `json:"QTime"`
-}
-
-type SolrCollectionAsyncStatus struct {
-	AsyncState string `json:"state"`
-
-	Message string `json:"msg"`
-}
-
 type SolrCollectionsListResponse struct {
-	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
+	ResponseHeader solr_api.SolrResponseHeader `json:"responseHeader"`
 
 	// +optional
 	RequestId string `json:"requestId"`
 
 	// +optional
-	Status SolrCollectionAsyncStatus `json:"status"`
+	Status solr_api.SolrAsyncStatus `json:"status"`
 
 	Collections []string `json:"collections"`
-}
-
-type SolrClusterStatusResponse struct {
-	ResponseHeader SolrCollectionResponseHeader `json:"responseHeader"`
-
-	Cluster SolrClusterStatusCluster `json:"cluster"`
-}
-
-type SolrClusterStatusCluster struct {
-	Collections map[string]interface{} `json:"collections"`
 }
 
 // containsCollection helper function to check if collection in list
