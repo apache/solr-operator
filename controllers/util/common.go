@@ -195,23 +195,27 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet) bool {
 		to.Spec.Replicas = from.Spec.Replicas
 	}
 
-	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
-		to.Spec.Selector = from.Spec.Selector
-	}
-
 	if !DeepEqualWithNils(to.Spec.UpdateStrategy, from.Spec.UpdateStrategy) {
 		requireUpdate = true
 		log.Info("Update required because:", "Spec.UpdateStrategy changed from", to.Spec.UpdateStrategy, "To:", from.Spec.UpdateStrategy)
 		to.Spec.UpdateStrategy = from.Spec.UpdateStrategy
 	}
 
-	if !DeepEqualWithNils(to.Spec.PodManagementPolicy, from.Spec.PodManagementPolicy) {
-		requireUpdate = true
-		log.Info("Update required because:", "Spec.PodManagementPolicy changed from", to.Spec.PodManagementPolicy, "To:", from.Spec.PodManagementPolicy)
-		to.Spec.PodManagementPolicy = from.Spec.PodManagementPolicy
-	}
+	/*
+			Kubernetes does not currently support updates to these fields: Selector and PodManagementPolicy
+
+		if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
+			requireUpdate = true
+			log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
+			to.Spec.Selector = from.Spec.Selector
+		}
+
+		if !DeepEqualWithNils(to.Spec.PodManagementPolicy, from.Spec.PodManagementPolicy) {
+			requireUpdate = true
+			log.Info("Update required because:", "Spec.PodManagementPolicy changed from", to.Spec.PodManagementPolicy, "To:", from.Spec.PodManagementPolicy)
+			to.Spec.PodManagementPolicy = from.Spec.PodManagementPolicy
+		}
+	*/
 
 	/*
 			Kubernetes does not support modification of VolumeClaimTemplates currently. See:

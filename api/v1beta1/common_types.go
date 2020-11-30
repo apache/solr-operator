@@ -34,8 +34,11 @@ type StatefulSetOptions struct {
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// PodManagementPolicy defines the policy for creating pods under a stateful set.
-	// Override the default value.
+	// Override the default value of OrderedReady.
+	// This cannot be updated on an existing StatefulSet, the StatefulSet must be deleted and recreated for a change in this field to take effect.
+	//
 	// +optional
+	// +kubebuilder:validation:Enum=OrderedReady;Parallel
 	PodManagementPolicy appsv1.PodManagementPolicyType `json:"podManagementPolicy,omitempty"`
 }
 
