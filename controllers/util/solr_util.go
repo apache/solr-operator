@@ -134,10 +134,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
 
 		// Set the default name of the pvc
-		if pvc.Name == "" {
-			pvc.Name = solrDataVolumeName
+		if pvc.ObjectMeta.Name == "" {
+			pvc.ObjectMeta.Name = solrDataVolumeName
 		}
-		pvc.Namespace = ""
 
 		// Set some defaults in the PVC Spec
 		if len(pvc.Spec.AccessModes) == 0 {
@@ -156,12 +155,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			SolrPVCStorageLabel:    SolrCloudPVCDataStorage,
 			SolrPVCInstanceLabel:   solrCloud.Name,
 		}
-		pvc.Labels = MergeLabelsOrAnnotations(internalLabels, pvc.ObjectMeta.Labels)
+		pvc.ObjectMeta.Labels = MergeLabelsOrAnnotations(internalLabels, pvc.ObjectMeta.Labels)
 
 		pvcs = []corev1.PersistentVolumeClaim{
 			{
-				ObjectMeta: pvc.ObjectMeta,
-				Spec:       pvc.Spec,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        pvc.ObjectMeta.Name,
+					Labels:      pvc.ObjectMeta.Labels,
+					Annotations: pvc.ObjectMeta.Annotations,
+				},
+				Spec: pvc.Spec,
 			},
 		}
 	} else {

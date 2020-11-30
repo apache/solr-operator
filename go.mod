@@ -11,6 +11,7 @@ require (
 	github.com/pravega/zookeeper-operator v0.2.6
 	github.com/stretchr/testify v1.6.1
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
+	golang.org/x/tools v0.0.0-20200616195046-dc31b401abb5 // indirect
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
 	k8s.io/client-go v0.19.0

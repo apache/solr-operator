@@ -304,7 +304,7 @@ type SolrPersistentDataStorageOptions struct {
 	// The entire Spec is customizable, however there will be defaults provided if necessary.
 	// This field is optional. If no PVC spec is provided, then a default will be provided.
 	// +optional
-	PersistentVolumeClaimTemplate corev1.PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
+	PersistentVolumeClaimTemplate PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
 }
 
 func (opts *SolrPersistentDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
@@ -333,6 +333,51 @@ const (
 	// All pod PVCs are deleted after the SolrCloud is deleted.
 	VolumeReclaimPolicyDelete VolumeReclaimPolicy = "Delete"
 )
+
+// PersistentVolumeClaimTemplate is used to produce
+// PersistentVolumeClaim objects as part of an EphemeralVolumeSource.
+type PersistentVolumeClaimTemplate struct {
+	// May contain labels and annotations that will be copied into the PVC
+	// when creating it. No other fields are allowed and will be rejected during
+	// validation.
+	//
+	// +optional
+	ObjectMeta TemplateMeta `json:"metadata,omitempty"`
+
+	// The specification for the PersistentVolumeClaim. The entire content is
+	// copied unchanged into the PVC that gets created from this
+	// template. The same fields as in a PersistentVolumeClaim
+	// are also valid here.
+	//
+	// +optional
+	Spec corev1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
+}
+
+// TemplateMeta is metadata for templated resources.
+type TemplateMeta struct {
+	// Name must be unique within a namespace. Is required when creating resources, although
+	// some resources may allow a client to request the generation of an appropriate name
+	// automatically. Name is primarily intended for creation idempotence and configuration
+	// definition.
+	// Cannot be updated.
+	// More info: http://kubernetes.io/docs/user-guide/identifiers#names
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Map of string keys and values that can be used to organize and categorize
+	// (scope and select) objects. May match selectors of replication controllers
+	// and services.
+	// More info: http://kubernetes.io/docs/user-guide/labels
+	// +optional
+	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
+
+	// Annotations is an unstructured key value map stored with a resource that may be
+	// set by external tools to store and retrieve arbitrary metadata. They are not
+	// queryable and should be preserved when modifying objects.
+	// More info: http://kubernetes.io/docs/user-guide/annotations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" protobuf:"bytes,12,rep,name=annotations"`
+}
 
 type SolrEphemeralDataStorageOptions struct {
 	//EmptyDirVolumeSource is an optional config for the emptydir volume that will store Solr data.

@@ -9,6 +9,7 @@ VERSION ?= $(shell git describe --tags HEAD)
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
+CONTROLLER_GEN_VERSION=v0.4.1
 GO111MODULE ?= on
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -56,7 +57,7 @@ run: generate fmt vet manifests
 
 # Install CRDs into a cluster
 install: manifests
-	kubectl create -k config/crd || kubectl replace -k config/crd
+	kubectl replace -k config/crd || kubectl create -k config/crd
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests install
@@ -90,7 +91,7 @@ helm-check:
 	helm lint helm/solr-operator
 
 # Generate code
-generate: controller-gen
+generate: controller-gen mod-tidy
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 
@@ -98,11 +99,13 @@ generate: controller-gen
 # download controller-gen if necessary
 controller-gen:
 ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.5
-    CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
-else
-    CONTROLLER_GEN=$(shell which controller-gen)
+	go get "sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)"
+else ifneq (Version: $(CONTROLLER_GEN_VERSION), $(shell controller-gen --version))
+	rm "$(shell which controller-gen)"
+	go get "sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)"
 endif
+CONTROLLER_GEN=$(shell which controller-gen)
+
 
 ###
 # Docker Building & Pushing
