@@ -31,7 +31,6 @@ var log = logf.Log.WithName("controller")
 // object: SolrCloud instance
 // zkSpec: the spec of the ZookeeperCluster to generate
 func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperSpec) *zk.ZookeeperCluster {
-	// TODO: Default and Validate these with Webhooks
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["technology"] = solr.ZookeeperTechnologyLabel
 
@@ -168,12 +167,14 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 		to.Spec.Pod.NodeSelector = from.Spec.Pod.NodeSelector
 	}
 
-	if !DeepEqualWithNils(to.Spec.Pod.Affinity, from.Spec.Pod.Affinity) {
+	// The Zookeeper operator defaults the pod affinity, so we only want to require an update if the requested affinity is not null
+	// But always change it so that the change will be picked up if another change is done.
+	if !DeepEqualWithNils(to.Spec.Pod.Affinity, from.Spec.Pod.Affinity) && from.Spec.Pod.Affinity != nil {
 		log.Info("Updating Zk pod affinity")
 		log.Info("Update required because:", "Spec.Pod.Affinity canged from", to.Spec.Pod.Affinity, "To:", from.Spec.Pod.Affinity)
 		requireUpdate = true
-		to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
 	}
+	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
 
 	return requireUpdate
 }
