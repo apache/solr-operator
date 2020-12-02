@@ -135,6 +135,7 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap) bool {
 
 	if !DeepEqualWithNils(to.Data, from.Data) {
 		requireUpdate = true
+		log.Info("Update required because:", "Data changed from", to.Data, "To:", from.Data)
 	}
 	to.Data = from.Data
 
@@ -149,21 +150,25 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 
 	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Selector changed from", to.Spec.Selector, "To:", from.Spec.Selector)
 	}
 	to.Spec.Selector = from.Spec.Selector
 
 	if !DeepEqualWithNils(to.Spec.Ports, from.Spec.Ports) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Ports changed from", to.Spec.Ports, "To:", from.Spec.Ports)
 	}
 	to.Spec.Ports = from.Spec.Ports
 
 	if !DeepEqualWithNils(to.Spec.ExternalName, from.Spec.ExternalName) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.ExternalName changed from", to.Spec.ExternalName, "To:", from.Spec.ExternalName)
 	}
 	to.Spec.ExternalName = from.Spec.ExternalName
 
 	if !DeepEqualWithNils(to.Spec.PublishNotReadyAddresses, from.Spec.PublishNotReadyAddresses) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.PublishNotReadyAddresses changed from", to.Spec.PublishNotReadyAddresses, "To:", from.Spec.PublishNotReadyAddresses)
 	}
 	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
 
@@ -174,10 +179,9 @@ func CopyServiceFields(from, to *corev1.Service) bool {
 func CopyIngressFields(from, to *extv1.Ingress) bool {
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
 
-	// Don't copy the entire Spec, because we can't overwrite the clusterIp field
-
 	if !DeepEqualWithNils(to.Spec.Rules, from.Spec.Rules) {
 		requireUpdate = true
+		log.Info("Update required because:", "Spec.Rules changed from", to.Spec.Rules, "To:", from.Spec.Rules)
 	}
 	to.Spec.Rules = from.Spec.Rules
 
