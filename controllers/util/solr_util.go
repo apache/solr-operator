@@ -781,6 +781,7 @@ func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domai
 // solrCloud: SolrCloud instance
 // domainName: string Domain for the ingress rule to use
 func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule extv1.IngressRule) {
+	pathType := extv1.PathTypeImplementationSpecific
 	ingressRule = extv1.IngressRule{
 		Host: solrCloud.ExternalCommonUrl(domainName, false),
 		IngressRuleValue: extv1.IngressRuleValue{
@@ -791,6 +792,7 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 							ServiceName: solrCloud.CommonServiceName(),
 							ServicePort: intstr.FromInt(solrCloud.Spec.SolrAddressability.CommonServicePort),
 						},
+						PathType: &pathType,
 					},
 				},
 			},
@@ -804,6 +806,7 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 // nodeName: string Name of the node
 // domainName: string Domain for the ingress rule to use
 func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainName string) (ingressRule extv1.IngressRule) {
+	pathType := extv1.PathTypeImplementationSpecific
 	ingressRule = extv1.IngressRule{
 		Host: solrCloud.ExternalNodeUrl(nodeName, domainName, false),
 		IngressRuleValue: extv1.IngressRuleValue{
@@ -814,6 +817,7 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 							ServiceName: nodeName,
 							ServicePort: intstr.FromInt(solrCloud.NodePort()),
 						},
+						PathType: &pathType,
 					},
 				},
 			},

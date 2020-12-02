@@ -19,6 +19,7 @@ package controllers
 import (
 	"crypto/md5"
 	"fmt"
+	"time"
 
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
@@ -970,6 +971,7 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	// Check the annotation on the pod template to make sure a rolling restart will take place
 	updateSolrXml = foundConfigMap.Data["solr.xml"]
 	updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(updateSolrXml)))
+	time.Sleep(time.Millisecond * 250)
 	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	assert.Equal(t, updateSolrXmlMd5, stateful.Spec.Template.Annotations[util.SolrXmlMd5Annotation], "Custom solr.xml MD5 annotation should be updated on the pod template.")
