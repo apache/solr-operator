@@ -34,14 +34,19 @@ const (
 
 // DeterminePodsSafeToUpdate takes a list of solr Pods and returns a list of pods that are safe to upgrade now.
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
+//
+// NOTE: It is assumed that the list of pods provided are all started.
+// If an out of date pod has a solr container that is not started, it should be accounted for in outOfDatePodsNotStartedCount not outOfDatePods.
+//
 // TODO:
 //  - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
 //    - Might be too much complexity for very little gain.
-func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, totalPods int, readyPods int, availableUpdatedPodCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, retryLater bool) {
+func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, totalPods int, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, retryLater bool) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
-	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, totalPods, len(outOfDatePods), availableUpdatedPodCount)
+	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, totalPods, len(outOfDatePods), outOfDatePodsNotStartedCount, availableUpdatedPodCount)
 	if maxPodsToUpdate <= 0 {
-		logger.Info("Pod update selection canceled. The number of updated pods unavailable equals or exceeds the calculated maxPodsUnavailable.", "unavailableUpdatedPods", unavailableUpdatedPodCount, "maxPodsUnavailable", maxPodsUnavailable)
+		logger.Info("Pod update selection canceled. The number of updated pods unavailable equals or exceeds the calculated maxPodsUnavailable.",
+			"unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", outOfDatePodsNotStartedCount, "maxPodsUnavailable", maxPodsUnavailable)
 	} else {
 		clusterResp := &solr_api.SolrClusterStatusResponse{}
 		overseerResp := &solr_api.SolrOverseerStatusResponse{}
@@ -68,7 +73,7 @@ func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod
 		}
 		// If the update logic already wants to retry later, then do not pick any pods
 		if !retryLater {
-			logger.Info("Pod update selection started.", "outOfDatePods", len(outOfDatePods), "maxPodsUnavailable", maxPodsUnavailable, "unavailableUpdatedPods", unavailableUpdatedPodCount, "maxPodsToUpdate", maxPodsToUpdate)
+			logger.Info("Pod update selection started.", "outOfDatePods", len(outOfDatePods), "maxPodsUnavailable", maxPodsUnavailable, "unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", outOfDatePodsNotStartedCount, "maxPodsToUpdate", maxPodsToUpdate)
 			podsToUpdate = pickPodsToUpdate(cloud, outOfDatePods, clusterResp.ClusterStatus, overseerResp.Leader, totalPods, maxPodsToUpdate, logger)
 
 			// If there are no pods to upgrade, even though the maxPodsToUpdate is >0, then retry later because the issue stems from cluster state
@@ -82,12 +87,16 @@ func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod
 }
 
 // calculateMaxPodsToUpdate determines the maximum number of additional pods that can be updated.
-func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, totalPods int, outOfDatePodCount int, availableUpdatedPodCount int) (maxPodsUnavailable int, unavailableUpdatedPodCount int, maxPodsToUpdate int) {
+func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, totalPods int, outOfDatePodCount int, outOfDatePodsNotStartedCount int, availableUpdatedPodCount int) (maxPodsUnavailable int, unavailableUpdatedPodCount int, maxPodsToUpdate int) {
 	// In order to calculate the number of updated pods that are unavailable take all pods, take the total pods and subtract those that are available and updated, and those that are not updated.
-	unavailableUpdatedPodCount = totalPods - availableUpdatedPodCount - outOfDatePodCount
+	unavailableUpdatedPodCount = totalPods - availableUpdatedPodCount - outOfDatePodCount - outOfDatePodsNotStartedCount
 	// If the maxBatchNodeUpgradeSpec is passed as a decimal between 0 and 1, then calculate as a percentage of the number of nodes.
 	maxPodsUnavailable, _ = ResolveMaxPodsUnavailable(cloud.Spec.UpdateStrategy.ManagedUpdateOptions.MaxPodsUnavailable, totalPods)
-	return maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsUnavailable - unavailableUpdatedPodCount
+	// Subtract:
+	//   - unavailableUpdatedPodCount, because those pods are already unavailable
+	//   - outOfDatePodsNotStartedCount, because those pods will always be deleted first and affect the number of unavailable pods
+	maxPodsToUpdate = maxPodsUnavailable - unavailableUpdatedPodCount - outOfDatePodsNotStartedCount
+	return maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate
 }
 
 func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, clusterStatus solr_api.SolrClusterStatus,
@@ -186,8 +195,6 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 	return podsToUpdate
 }
 
-// TODO: Check to see if any of the podsToUpgrade are down. If so go ahead and update them? (Need to think more on this). This may be taken care of by the check of "live".
-// TODO: Think on where the liveness check should be in the ordering.
 func sortNodePodsBySafety(outOfDatePods []corev1.Pod, nodeMap map[string]*SolrNodeContents, solrCloud *solr.SolrCloud) {
 	sort.SliceStable(outOfDatePods, func(i, j int) bool {
 		// First sort by if the node is in the ClusterState
@@ -204,6 +211,11 @@ func sortNodePodsBySafety(outOfDatePods []corev1.Pod, nodeMap map[string]*SolrNo
 			return true
 		}
 
+		// If the nodes have the same number of replicas, then prioritize if one node is not live.
+		if nodeI.live != nodeJ.live {
+			return !nodeI.live
+		}
+
 		// If both nodes are in the ClusterState and not overseerLeader, then prioritize the one with less leaders.
 		if nodeI.leaders != nodeJ.leaders {
 			return nodeI.leaders < nodeJ.leaders
@@ -217,11 +229,6 @@ func sortNodePodsBySafety(outOfDatePods []corev1.Pod, nodeMap map[string]*SolrNo
 		// If the nodes have the same number of not-down replicas, then prioritize by the total number of replicas.
 		if nodeI.replicas != nodeJ.replicas {
 			return nodeI.replicas < nodeJ.replicas
-		}
-
-		// If the nodes have the same number of replicas, then prioritize if one node is not live.
-		if nodeI.live != nodeJ.live {
-			return !nodeI.live
 		}
 
 		// Lastly break any ties by a comparison of the name

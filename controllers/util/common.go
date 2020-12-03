@@ -189,7 +189,7 @@ func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
 		to.Spec.Rules = from.Spec.Rules
 	} else {
 		for i := range from.Spec.Rules {
-			ruleBase := "Spec.Rules["+strconv.Itoa(i)+"]."
+			ruleBase := "Spec.Rules[" + strconv.Itoa(i) + "]."
 			fromRule := &from.Spec.Rules[i]
 			toRule := &to.Spec.Rules[i]
 
@@ -209,7 +209,7 @@ func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
 				toRule.HTTP.Paths = fromRule.HTTP.Paths
 			} else {
 				for j := range fromRule.HTTP.Paths {
-					pathBase := ruleBase+"HTTP.Paths["+strconv.Itoa(j)+"]."
+					pathBase := ruleBase + "HTTP.Paths[" + strconv.Itoa(j) + "]."
 					fromPath := &fromRule.HTTP.Paths[j]
 					toPath := &toRule.HTTP.Paths[j]
 
@@ -427,7 +427,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 		*toPtr = from
 	} else {
 		for i := 0; i < len(from); i++ {
-			containerBasePath := basePath+"["+strconv.Itoa(i)+"]."
+			containerBasePath := basePath + "[" + strconv.Itoa(i) + "]."
 			if !DeepEqualWithNils(to[i].Name, from[i].Name) {
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"Name", "from", to[i].Name, "to", from[i].Name)

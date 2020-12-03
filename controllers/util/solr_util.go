@@ -33,6 +33,8 @@ const (
 	SolrClientPortName  = "solr-client"
 	BackupRestoreVolume = "backup-restore"
 
+	SolrNodeContainer = "solrcloud-node"
+
 	SolrStorageFinalizer             = "storage.finalizers.solr.apache.org"
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
 	SolrPVCTechnologyLabel           = "solr.apache.org/technology"
@@ -42,7 +44,7 @@ const (
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
 
-	DefaultStatefulSetPodManagementPolicy = appsv1.OrderedReadyPodManagement
+	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
 	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
@@ -365,7 +367,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	containers := []corev1.Container{
 		{
-			Name:            "solrcloud-node",
+			Name:            SolrNodeContainer,
 			Image:           solrCloud.Spec.SolrImage.ToImageName(),
 			ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
 			Ports: []corev1.ContainerPort{

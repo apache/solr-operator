@@ -23,6 +23,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
 	"testing"
 )
 
@@ -98,7 +99,7 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	// Test the maxBatchNodeUpgradeSpec
 	maxshardReplicasUnavailable = intstr.FromInt(1)
 	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterStatus, overseerLeader, 6, 1, log))
-	assert.ElementsMatch(t, []string{"pod-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Only 1 node should be upgraded when maxBatchNodeUpgradeSpec=1")
+	assert.ElementsMatch(t, []string{"pod-4"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Only 1 node should be upgraded when maxBatchNodeUpgradeSpec=1, and it should be the non-live node.")
 
 	// Test the maxShardReplicasDownSpec
 	maxshardReplicasUnavailable = intstr.FromInt(2)
@@ -163,17 +164,9 @@ func TestPodUpgradeOrdering(t *testing.T) {
 		},
 	}
 
-	pods := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-0"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-1"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-2"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-3"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-4"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-5"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-6"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-7"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-8"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "pod-9"}, Spec: corev1.PodSpec{}},
+	pods := make([]corev1.Pod, 13)
+	for i := range pods {
+		pods[i] = corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod-" + strconv.Itoa(i)}, Spec: corev1.PodSpec{}}
 	}
 
 	nodeMap := map[string]*SolrNodeContents{
@@ -252,17 +245,25 @@ func TestPodUpgradeOrdering(t *testing.T) {
 			overseerLeader:  false,
 			live:            true,
 		},
-		SolrNodeName(solrCloud, pods[9]): {
-			nodeName:        SolrNodeName(solrCloud, pods[9]),
-			leaders:         3,
-			replicas:        20,
-			notDownReplicas: 9,
+		SolrNodeName(solrCloud, pods[10]): {
+			nodeName:        SolrNodeName(solrCloud, pods[10]),
+			leaders:         0,
+			replicas:        0,
+			notDownReplicas: 0,
+			overseerLeader:  false,
+			live:            false,
+		},
+		SolrNodeName(solrCloud, pods[11]): {
+			nodeName:        SolrNodeName(solrCloud, pods[11]),
+			leaders:         0,
+			replicas:        0,
+			notDownReplicas: 0,
 			overseerLeader:  false,
 			live:            true,
 		},
 	}
 
-	expectedOrdering := []string{"pod-2", "pod-9", "pod-3", "pod-6", "pod-8", "pod-7", "pod-5", "pod-1", "pod-4", "pod-0"}
+	expectedOrdering := []string{"pod-12", "pod-9", "pod-10", "pod-6", "pod-1", "pod-11", "pod-2", "pod-3", "pod-8", "pod-7", "pod-5", "pod-4", "pod-0"}
 
 	sortNodePodsBySafety(pods, nodeMap, solrCloud)
 	foundOrdering := make([]string, len(pods))
@@ -434,28 +435,38 @@ func TestCalculateMaxPodsToUpgrade(t *testing.T) {
 		},
 	}
 
-	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate := calculateMaxPodsToUpdate(solrCloud, 10, 4, 4)
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate := calculateMaxPodsToUpdate(solrCloud, 10, 4, 0, 4)
 	assert.Equal(t, 2, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromInt(2)")
 	assert.Equal(t, 2, foundUnavailableUpdatedPodCount, "Incorrect value of unavailableUpdatedPodCount")
 	assert.Equal(t, 0, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
 
-	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 4, 3)
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 4, 0, 3)
 	assert.Equal(t, 2, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromInt(2)")
 	assert.Equal(t, 3, foundUnavailableUpdatedPodCount, "Incorrect value of unavailableUpdatedPodCount")
 	assert.Equal(t, -1, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
 
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 1, 3)
+	assert.Equal(t, 2, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromInt(2)")
+	assert.Equal(t, 3, foundUnavailableUpdatedPodCount, "Incorrect value of unavailableUpdatedPodCount")
+	assert.Equal(t, -2, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
+
 	maxPodsUnavailable = intstr.FromString("45%")
-	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 5)
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 0, 5)
 	assert.Equal(t, 4, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromString(\"45%\")")
 	assert.Equal(t, 2, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
 
+	maxPodsUnavailable = intstr.FromString("45%")
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 1, 2, 5)
+	assert.Equal(t, 4, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromString(\"45%\")")
+	assert.Equal(t, 0, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
+
 	maxPodsUnavailable = intstr.FromString("70%")
-	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 2)
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 0, 2)
 	assert.Equal(t, 7, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromString(\"70%\")")
 	assert.Equal(t, 2, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
 
 	solrCloud.Spec.UpdateStrategy.ManagedUpdateOptions.MaxPodsUnavailable = nil
-	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 2)
+	foundMaxPodsUnavailable, foundUnavailableUpdatedPodCount, foundMaxPodsToUpdate = calculateMaxPodsToUpdate(solrCloud, 10, 3, 0, 2)
 	assert.Equal(t, 2, foundMaxPodsUnavailable, "Incorrect value of maxPodsUnavailable given fromString(\"25%\")")
 	assert.Equal(t, -3, foundMaxPodsToUpdate, "Incorrect value of maxPodsToUpdate")
 }
