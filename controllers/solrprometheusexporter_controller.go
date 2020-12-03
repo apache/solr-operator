@@ -52,7 +52,8 @@ type SolrPrometheusExporterReconciler struct {
 
 func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
-	_ = r.Log.WithValues("solrprometheusexporter", req.NamespacedName)
+
+	logger := r.Log.WithValues("namespace", req.Namespace, "solrPrometheusExporter", req.Name)
 
 	// Fetch the SolrPrometheusExporter instance
 	prometheusExporter := &solrv1beta1.SolrPrometheusExporter{}
@@ -69,7 +70,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	changed := prometheusExporter.WithDefaults()
 	if changed {
-		r.Log.Info("Setting default settings for Solr PrometheusExporter", "namespace", prometheusExporter.Namespace, "name", prometheusExporter.Name)
+		logger.Info("Setting default settings for Solr PrometheusExporter")
 		if err := r.Update(context.TODO(), prometheusExporter); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -84,14 +85,15 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		}
 
 		// Check if the ConfigMap already exists
+		configMapLogger := logger.WithValues("configMap", configMap.Name)
 		foundConfigMap := &corev1.ConfigMap{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 		if err != nil && errors.IsNotFound(err) {
-			r.Log.Info("Creating PrometheusExporter ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
-		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap) {
+		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
-			r.Log.Info("Updating PrometheusExporter ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
 		}
 		if err != nil {
@@ -106,14 +108,15 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	}
 
 	// Check if the Metrics Service already exists
+	serviceLogger := logger.WithValues("service", metricsService.Name)
 	foundMetricsService := &corev1.Service{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: metricsService.Name, Namespace: metricsService.Namespace}, foundMetricsService)
 	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating PrometheusExporter Service", "namespace", metricsService.Namespace, "name", metricsService.Name)
+		serviceLogger.Info("Creating Service")
 		err = r.Create(context.TODO(), metricsService)
-	} else if err == nil && util.CopyServiceFields(metricsService, foundMetricsService) {
+	} else if err == nil && util.CopyServiceFields(metricsService, foundMetricsService, serviceLogger) {
 		// Update the found Metrics Service and write the result back if there are any changes
-		r.Log.Info("Updating PrometheusExporter Service", "namespace", metricsService.Namespace, "name", metricsService.Name)
+		serviceLogger.Info("Updating Service")
 		err = r.Update(context.TODO(), foundMetricsService)
 	}
 	if err != nil {
@@ -131,27 +134,31 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, err
 	}
 
+	ready := false
+	// Check if the Metrics Deployment already exists
+	deploymentLogger := logger.WithValues("service", metricsService.Name)
 	foundDeploy := &appsv1.Deployment{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeploy)
 	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating PrometheusExporter Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
+		deploymentLogger.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
 		err = r.Create(context.TODO(), deploy)
 	} else if err == nil {
-		if util.CopyDeploymentFields(deploy, foundDeploy) {
-			r.Log.Info("Updating PrometheusExporter Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
+		if util.CopyDeploymentFields(deploy, foundDeploy, deploymentLogger) {
+			deploymentLogger.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
 			err = r.Update(context.TODO(), foundDeploy)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
 		}
-		ready := foundDeploy.Status.ReadyReplicas > 0
-
-		if ready != prometheusExporter.Status.Ready {
-			prometheusExporter.Status.Ready = ready
-			r.Log.Info("Updating status for solr-prometheus-exporter", "namespace", prometheusExporter.Namespace, "name", prometheusExporter.Name)
-			err = r.Status().Update(context.TODO(), prometheusExporter)
-		}
+		ready = foundDeploy.Status.ReadyReplicas > 0
 	}
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if ready != prometheusExporter.Status.Ready {
+		prometheusExporter.Status.Ready = ready
+		logger.Info("Updating status for solr-prometheus-exporter", "namespace", prometheusExporter.Namespace, "name", prometheusExporter.Name)
+		err = r.Status().Update(context.TODO(), prometheusExporter)
+	}
+
 	return ctrl.Result{}, err
 }
 

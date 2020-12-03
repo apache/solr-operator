@@ -112,11 +112,9 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	newStatus := solr.SolrCloudStatus{}
 
-	busyBoxImage := *instance.Spec.BusyBoxImage
-
 	blockReconciliationOfStatefulSet := false
 
-	if err := reconcileZk(r, logger, instance, busyBoxImage, &newStatus); err != nil {
+	if err := reconcileZk(r, logger, instance, &newStatus); err != nil {
 		return requeueOrNot, err
 	}
 
@@ -127,18 +125,18 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Check if the Common Service already exists
+	commonServiceLogger := logger.WithValues("service", commonService.Name)
 	foundCommonService := &corev1.Service{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: commonService.Name, Namespace: commonService.Namespace}, foundCommonService)
 	if err != nil && errors.IsNotFound(err) {
-		logger.Info("Creating Common Service", "service", commonService.Name)
+		commonServiceLogger.Info("Creating Common Service")
 		err = r.Create(context.TODO(), commonService)
-	} else if err == nil {
-		if util.CopyServiceFields(commonService, foundCommonService) {
-			// Update the found Service and write the result back if there are any changes
-			logger.Info("Updating Common Service", "service", commonService.Name)
-			err = r.Update(context.TODO(), foundCommonService)
-		}
-	} else {
+	} else if err == nil && util.CopyServiceFields(commonService, foundCommonService, commonServiceLogger) {
+		// Update the found Service and write the result back if there are any changes
+		commonServiceLogger.Info("Updating Common Service")
+		err = r.Update(context.TODO(), foundCommonService)
+	}
+	if err != nil {
 		return requeueOrNot, err
 	}
 
@@ -172,14 +170,15 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		// Check if the HeadlessService already exists
+		headlessServiceLogger := logger.WithValues("service", headless.Name)
 		foundHeadless := &corev1.Service{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
 		if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating HeadlessService", "service", headless.Name)
+			headlessServiceLogger.Info("Creating HeadlessService")
 			err = r.Create(context.TODO(), headless)
-		} else if err == nil && util.CopyServiceFields(headless, foundHeadless) {
+		} else if err == nil && util.CopyServiceFields(headless, foundHeadless, headlessServiceLogger) {
 			// Update the found HeadlessService and write the result back if there are any changes
-			logger.Info("Updating HeadlessService", "service", headless.Name)
+			headlessServiceLogger.Info("Updating HeadlessService")
 			err = r.Update(context.TODO(), foundHeadless)
 		}
 		if err != nil {
@@ -226,15 +225,16 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		// Check if the ConfigMap already exists
+		configMapLogger := logger.WithValues("configMap", configMap.Name)
 		foundConfigMap := &corev1.ConfigMap{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 		if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
 			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
-		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap) {
+		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
-			logger.Info("Updating ConfigMap", "namespace", configMap.Namespace, "name", configMap.Name)
+			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
 			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data["solr.xml"])))
 		}
@@ -259,18 +259,19 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		// Check if the StatefulSet already exists
+		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
 		foundStatefulSet := &appsv1.StatefulSet{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 		if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating StatefulSet", "statefulSet", statefulSet.Name)
+			statefulSetLogger.Info("Creating StatefulSet")
 			err = r.Create(context.TODO(), statefulSet)
 			// Find which labels the PVCs will be using, to use for the finalizer
 			pvcLabelSelector = statefulSet.Spec.Selector.MatchLabels
 		} else if err == nil {
 			statefulSetStatus = foundStatefulSet.Status
-			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet) {
+			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet, statefulSetLogger) {
 				// Update the found StatefulSet and write the result back if there are any changes
-				logger.Info("Updating StatefulSet", "statefulSet", statefulSet.Name)
+				statefulSetLogger.Info("Updating StatefulSet")
 				err = r.Update(context.TODO(), foundStatefulSet)
 			}
 			// Find which labels the PVCs will be using, to use for the finalizer
@@ -341,14 +342,15 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 
 		// Check if the Ingress already exists
+		ingressLogger := logger.WithValues("ingress", ingress.Name)
 		foundIngress := &extv1.Ingress{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
 		if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating Common Ingress", "ingress", ingress.Name)
+			ingressLogger.Info("Creating Ingress")
 			err = r.Create(context.TODO(), ingress)
-		} else if err == nil && util.CopyIngressFields(ingress, foundIngress) {
+		} else if err == nil && util.CopyIngressFields(ingress, foundIngress, ingressLogger) {
 			// Update the found Ingress and write the result back if there are any changes
-			logger.Info("Updating Common Ingress", "ingress", ingress.Name)
+			ingressLogger.Info("Updating Ingress")
 			err = r.Update(context.TODO(), foundIngress)
 		}
 		if err != nil {
@@ -481,16 +483,17 @@ func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *
 		return err, ip
 	}
 
-	// Check if the Ingress already exists
+	// Check if the Node Service already exists
+	nodeServiceLogger := logger.WithValues("service", service.Name)
 	foundService := &corev1.Service{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && errors.IsNotFound(err) {
-		logger.Info("Creating Node Service", "service", service.Name)
+		nodeServiceLogger.Info("Creating Node Service")
 		err = r.Create(context.TODO(), service)
 	} else if err == nil {
-		if util.CopyServiceFields(service, foundService) {
-			// Update the found Ingress and write the result back if there are any changes
-			logger.Info("Updating Node Service", "service", service.Name)
+		if util.CopyServiceFields(service, foundService, nodeServiceLogger) {
+			// Update the found Node service because there are differences between our version and the existing version
+			nodeServiceLogger.Info("Updating Node Service")
 			err = r.Update(context.TODO(), foundService)
 		}
 		ip = foundService.Spec.ClusterIP
@@ -502,7 +505,7 @@ func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *
 	return nil, ip
 }
 
-func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, busyBoxImage solr.ContainerImage, newStatus *solr.SolrCloudStatus) error {
+func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, newStatus *solr.SolrCloudStatus) error {
 	zkRef := instance.Spec.ZookeeperRef
 
 	if zkRef.ConnectionInfo != nil {
@@ -519,15 +522,16 @@ func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.Solr
 		}
 
 		// Check if the ZookeeperCluster already exists
+		zkLogger := logger.WithValues("zookeeperCluster", zkCluster.Name)
 		foundZkCluster := &zk.ZookeeperCluster{}
 		err := r.Get(context.TODO(), types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
 		if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
+			zkLogger.Info("Creating Zookeeer Cluster")
 			err = r.Create(context.TODO(), zkCluster)
 		} else if err == nil {
-			if util.CopyZookeeperClusterFields(zkCluster, foundZkCluster) {
+			if util.CopyZookeeperClusterFields(zkCluster, foundZkCluster, zkLogger) {
 				// Update the found ZookeeperCluster and write the result back if there are any changes
-				logger.Info("Updating Zookeeer Cluster", "namespace", zkCluster.Namespace, "name", zkCluster.Name)
+				zkLogger.Info("Updating Zookeeer Cluster")
 				err = r.Update(context.TODO(), foundZkCluster)
 			}
 			external := &foundZkCluster.Status.ExternalClientEndpoint
@@ -612,7 +616,6 @@ func (r *SolrCloudReconciler) cleanupOrphanPVCs(cloud *solr.SolrCloud, pvcLabelS
 		if err != nil {
 			return err
 		}
-		logger.Info("Checking for PVC Orphans in SolrCloud", "PVC Count", len(pvcList.Items), "ReadyReplicas Count", cloud.Status.ReadyReplicas)
 		if len(pvcList.Items) > int(*cloud.Spec.Replicas) {
 			if err != nil {
 				return err
