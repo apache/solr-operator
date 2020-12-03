@@ -10,11 +10,17 @@ The operator will find all pods that have not been updated yet and choose the ne
 
 The logic goes as follows:
 
-1. Find the pods that are not up-to-date
+1. Find the pods that are out-of-date
+1. Update all out-of-date pods that do not have a started Solr container.
+    - This allows for updating a pod that cannot start, even if other pods are not available.
+    - This step does not respect the `maxPodsUnavailable` option, because these pods have not even started the Solr process.
 1. Retrieve the cluster state of the SolrCloud if there are any `ready` pods.
     - If no pods are ready, then there is no endpoint to retrieve the cluster state from.
 1. Sort the pods in order of safety for being restarted. [Sorting order reference](#pod-update-sorting-order)
 1. Iterate through the sorted pods, greedily choosing which pods to update. [Selection logic reference](#pod-update-selection-logic)
+    - The maximum number of pods that can be updated are determined by starting with `maxPodsUnavailable`,
+    then subtracting the number of updated pods that are unavailable as well as the number of not-yet-started, out-of-date pods that were updated in a previous step.
+    This check makes sure that any pods taken down during this step do not violate the `maxPodsUnavailable` constraint.
     
 
 ### Pod Update Sorting Order

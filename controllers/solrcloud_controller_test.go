@@ -119,7 +119,7 @@ func TestCloudReconcile(t *testing.T) {
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.OrderedReadyPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
 
 	// Host Alias Tests
 	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
@@ -200,7 +200,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
 					Labels:              testSSLabels,
-					PodManagementPolicy: appsv1.ParallelPodManagement,
+					PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 				},
 				CommonServiceOptions: &solr.ServiceOptions{
 					Annotations: testCommonServiceAnnotations,
@@ -286,7 +286,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+	assert.EqualValues(t, appsv1.OrderedReadyPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
@@ -399,7 +399,7 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.OrderedReadyPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
 }
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {

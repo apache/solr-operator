@@ -48,6 +48,11 @@ Please visit the following pages for documentation on using and developing the S
   
   **This means that Kubernetes support is now limited to 1.16+.**
   If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.
+  
+- The default `PodManagementPolicy` for StatefulSets has been changed to `Parallel` from `OrderedReady`.
+This change will not affect existing StatefulSets, as `PodManagementPolicy` cannot be updated.
+In order to continue using `OrderedReady` on new SolrClouds, please use the following setting:  
+`SolrCloud.spec.customSolrKubeOptions.statefulSetOptions.podManagementPolicy`
 
 - The `SolrCloud` and `SolrPrometheusExporter` services' portNames have changed to `"solr-client"` and `"solr-metrics"` from `"ext-solr-client"` and `"ext-solr-metrics"`, respectively.
 This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.

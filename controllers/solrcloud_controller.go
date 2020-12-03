@@ -302,20 +302,28 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	var outOfDatePods []corev1.Pod
+	var outOfDatePods, outOfDatePodsNotStarted []corev1.Pod
 	var availableUpdatedPodCount int
-	outOfDatePods, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, &newStatus, statefulSetStatus)
+	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, &newStatus, statefulSetStatus)
 	if err != nil {
 		return requeueOrNot, err
 	}
 
 	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
-	totalPodCount := int(newStatus.Replicas)
-	if instance.Spec.UpdateStrategy.Method == solr.ManagedUpdate && len(outOfDatePods) > 0 && totalPodCount > 0 {
+	totalPodCount := int(*instance.Spec.Replicas)
+	if instance.Spec.UpdateStrategy.Method == solr.ManagedUpdate && len(outOfDatePods)+len(outOfDatePodsNotStarted) > 0 {
+		updateLogger := logger.WithName("ManagedUpdateSelector")
+
+		// The out of date pods that have not been started, should all be updated immediately.
+		// There is no use "safely" updating pods which have not been started yet.
+		podsToUpdate := outOfDatePodsNotStarted
+		for _, pod := range outOfDatePodsNotStarted {
+			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
+		}
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		updateLogger := logger.WithName("ManagedUpdateSelector")
-		podsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, updateLogger)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {
 			err = r.Delete(context.Background(), &pod, client.Preconditions{
@@ -370,7 +378,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return requeueOrNot, nil
 }
 
-func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, availableUpdatedPodCount int, err error) {
+func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -383,7 +391,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 
 	err = r.List(context.TODO(), foundPods, listOps)
 	if err != nil {
-		return outOfDatePods, availableUpdatedPodCount, err
+		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
 	}
 
 	var otherVersions []string
@@ -442,7 +450,23 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 				availableUpdatedPodCount += 1
 			}
 		} else {
-			outOfDatePods = append(outOfDatePods, p)
+			containerNotStarted := false
+			if !nodeStatus.Ready {
+				containerNotStarted = true
+				// Gather whether the solr container has started or not.
+				// If it hasn't, then the pod can safely be deleted irrespective of maxNodesUnavailable.
+				// This is useful for podTemplate updates that override pod specs that failed to start, such as containers with images that do not exist.
+				for _, containerStatus := range p.Status.ContainerStatuses {
+					if containerStatus.Name == util.SolrNodeContainer {
+						containerNotStarted = containerStatus.Started == nil || !*containerStatus.Started
+					}
+				}
+			}
+			if containerNotStarted {
+				outOfDatePodsNotStarted = append(outOfDatePodsNotStarted, p)
+			} else {
+				outOfDatePods = append(outOfDatePods, p)
+			}
 		}
 
 		nodeStatusMap[nodeStatus.Name] = nodeStatus
@@ -473,7 +497,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		newStatus.ExternalCommonAddress = &extAddress
 	}
 
-	return outOfDatePods, availableUpdatedPodCount, nil
+	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
 }
 
 func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, nodeName string) (err error, ip string) {
