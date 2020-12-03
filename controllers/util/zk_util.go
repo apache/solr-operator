@@ -18,6 +18,7 @@ package util
 
 import (
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -88,53 +89,66 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 
 // CopyZookeeperClusterFields copies the owned fields from one ZookeeperCluster to another
 // Returns true if the fields copied from don't match to.
-func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
-	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta)
+func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logger) bool {
+	logger = logger.WithValues("kind", "zookeeperCluster")
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
 
 	if !DeepEqualWithNils(to.Spec.Replicas, from.Spec.Replicas) {
-		log.Info("Updating Zk replicas")
+		logger.Info("Update required because field changed", "field", "Spec.Replicas", "from", to.Spec.Replicas, "to", from.Spec.Replicas)
 		requireUpdate = true
 	}
 	to.Spec.Replicas = from.Spec.Replicas
 
 	if !DeepEqualWithNils(to.Spec.Image.Repository, from.Spec.Image.Repository) {
-		log.Info("Updating Zk image repository")
+		logger.Info("Update required because field changed", "field", "Spec.Image.Repository", "from", to.Spec.Image.Repository, "to", from.Spec.Image.Repository)
 		requireUpdate = true
 	}
 	to.Spec.Image.Repository = from.Spec.Image.Repository
 
 	if !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
-		log.Info("Updating Zk image tag")
+		logger.Info("Update required because field changed", "field", "Spec.Image.Tag", "from", to.Spec.Image.Tag, "to", from.Spec.Image.Tag)
 		requireUpdate = true
 	}
 	to.Spec.Image.Tag = from.Spec.Image.Tag
 
+	if !DeepEqualWithNils(to.Spec.Image.PullPolicy, from.Spec.Image.PullPolicy) {
+		logger.Info("Update required because field changed", "field", "Spec.Image.PullPolicy", "from", to.Spec.Image.PullPolicy, "to", from.Spec.Image.PullPolicy)
+		requireUpdate = true
+	}
+	to.Spec.Image.PullPolicy = from.Spec.Image.PullPolicy
+
 	if from.Spec.Persistence != nil {
 		if to.Spec.Persistence == nil {
-			log.Info("Updating Zk Persistence")
+			logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", to.Spec.Persistence, "to", from.Spec.Persistence)
 			requireUpdate = true
 			to.Spec.Persistence = from.Spec.Persistence
 		} else {
 			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
-				log.Info("Updating Zk Persistence PVC Requests")
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests)
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
 			}
 
+			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits) {
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits)
+				requireUpdate = true
+				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits
+			}
+
 			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
-				log.Info("Updating Zk Persistence PVC AccessModes")
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.AccessModes", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes)
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes = from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes
 			}
 
 			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
-				log.Info("Updating Zk Persistence PVC StorageClassName")
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName)
 				requireUpdate = true
 				to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName = from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName
 			}
 
 			if !DeepEqualWithNils(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
-				log.Info("Updating Zk Persistence VolumeReclaimPolicy")
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.VolumeReclaimPolicy", "from", to.Spec.Persistence.VolumeReclaimPolicy, "to", from.Spec.Persistence.VolumeReclaimPolicy)
 				requireUpdate = true
 				to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
 			}
@@ -148,21 +162,19 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	}*/
 
 	if !DeepEqualWithNils(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
-		log.Info("Updating Zk pod resources")
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Resources", "from", to.Spec.Pod.Resources, "to", from.Spec.Pod.Resources)
 		requireUpdate = true
 		to.Spec.Pod.Resources = from.Spec.Pod.Resources
 	}
 
 	if !DeepEqualWithNils(to.Spec.Pod.Tolerations, from.Spec.Pod.Tolerations) {
-		log.Info("Updating Zk tolerations")
-		log.Info("Update required because:", "Spec.Pod.Tolerations canged from", to.Spec.Pod.Tolerations, "To:", from.Spec.Pod.Tolerations)
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Tolerations", "from", to.Spec.Pod.Tolerations, "to", from.Spec.Pod.Tolerations)
 		requireUpdate = true
 		to.Spec.Pod.Tolerations = from.Spec.Pod.Tolerations
 	}
 
 	if !DeepEqualWithNils(to.Spec.Pod.NodeSelector, from.Spec.Pod.NodeSelector) {
-		log.Info("Updating Zk nodeSelector")
-		log.Info("Update required because:", "Spec.Pod.NodeSelector canged from", to.Spec.Pod.NodeSelector, "To:", from.Spec.Pod.NodeSelector)
+		logger.Info("Update required because field changed", "field", "Spec.Pod.NodeSelector", "from", to.Spec.Pod.NodeSelector, "to", from.Spec.Pod.NodeSelector)
 		requireUpdate = true
 		to.Spec.Pod.NodeSelector = from.Spec.Pod.NodeSelector
 	}
@@ -170,8 +182,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster) bool {
 	// The Zookeeper operator defaults the pod affinity, so we only want to require an update if the requested affinity is not null
 	// But always change it so that the change will be picked up if another change is done.
 	if !DeepEqualWithNils(to.Spec.Pod.Affinity, from.Spec.Pod.Affinity) && from.Spec.Pod.Affinity != nil {
-		log.Info("Updating Zk pod affinity")
-		log.Info("Update required because:", "Spec.Pod.Affinity canged from", to.Spec.Pod.Affinity, "To:", from.Spec.Pod.Affinity)
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Affinity", "from", to.Spec.Pod.Affinity, "to", from.Spec.Pod.Affinity)
 		requireUpdate = true
 	}
 	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
