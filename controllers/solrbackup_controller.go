@@ -91,7 +91,7 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	if allCollectionsComplete && collectionActionTaken {
 		// Requeue immediately to start the persisting job
 		// From here on in the backup lifecycle, requeueing will not happen for the backup.
-		requeueOrNot = reconcile.Result{Requeue: true}
+		requeueOrNot = reconcile.Result{RequeueAfter: time.Second * 10}
 	} else if solrCloud == nil {
 		requeueOrNot = reconcile.Result{}
 	} else {
@@ -102,9 +102,9 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 			// We will count on the Job updates to be notifified
 			requeueOrNot = reconcile.Result{}
 			err = persistSolrCloudBackups(r, backup, solrCloud)
-		}
-		if err != nil {
-			r.Log.Error(err, "Error while persisting SolrCloud backup")
+			if err != nil {
+				r.Log.Error(err, "Error while persisting SolrCloud backup")
+			}
 		}
 	}
 

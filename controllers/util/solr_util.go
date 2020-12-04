@@ -17,6 +17,7 @@ limitations under the License.
 package util
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -34,6 +35,9 @@ const (
 	BackupRestoreVolume = "backup-restore"
 
 	SolrNodeContainer = "solrcloud-node"
+
+	DefaultSolrUser  = 8983
+	DefaultSolrGroup = 8983
 
 	SolrStorageFinalizer             = "storage.finalizers.solr.apache.org"
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
@@ -73,7 +77,7 @@ const (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
-	fsGroup := int64(solrPodPort)
+	fsGroup := int64(DefaultSolrGroup)
 	defaultMode := int32(420)
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
@@ -107,6 +111,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
 		podAnnotations = customPodOptions.Annotations
 	}
+
+	// Keep track of the SolrOpts that the Solr Operator needs to set
+	// These will be added to the SolrOpts given by the user.
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -191,6 +199,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:      BackupRestoreVolume,
 			MountPath: BaseBackupRestorePath,
 			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+			ReadOnly:  false,
 		})
 	}
 
@@ -249,10 +258,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 		}
 	}
-
-	// Keep track of the SolrOpts that the Solr Operator needs to set
-	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Environment Variables
 	envVars := []corev1.EnvVar{
@@ -341,24 +346,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := []corev1.Container{
-		{
-			Name:            "cp-solr-xml",
-			Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
-			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
-			Command:         []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "solr-xml",
-					MountPath: "/tmp",
-				},
-				{
-					Name:      solrDataVolumeName,
-					MountPath: "/tmp-config",
-				},
-			},
-		},
-	}
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrDataVolumeName)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -508,6 +496,44 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	return stateful
+}
+
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrDataVolumeName string) []corev1.Container {
+	// The setup of the solr.xml will always be necessary
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "solr-xml",
+			MountPath: "/tmp",
+		},
+		{
+			Name:      solrDataVolumeName,
+			MountPath: "/tmp-config",
+		},
+	}
+	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
+
+	// Add prep for backup-restore volume
+	// This entails setting the correct permissions for the directory
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      BackupRestoreVolume,
+			MountPath: "/backup-restore",
+			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+			ReadOnly:  false,
+		})
+
+		setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+	}
+
+	volumePrepInitContainer := corev1.Container{
+		Name:            "cp-solr-xml",
+		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
+		ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
+		Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
+		VolumeMounts:    volumeMounts,
+	}
+
+	return []corev1.Container{volumePrepInitContainer}
 }
 
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
