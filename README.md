@@ -48,7 +48,12 @@ Please visit the following pages for documentation on using and developing the S
   
   **This means that Kubernetes support is now limited to 1.16+.**
   If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.
-  
+
+- The location of backup-restore volume mounts in Solr containers has changed from `/var/solr/solr-backup-restore` to `/var/solr/data/backup-restore`.
+This change was made to ensure that there were no issues using the backup API with solr 8.6+, which restricts the locations that backup data can be saved to and read from.
+This change should be transparent if you are merely using the SolrBackup CRD.
+All files permissions issues with SolrBackups should now be addressed.
+
 - The default `PodManagementPolicy` for StatefulSets has been changed to `Parallel` from `OrderedReady`.
 This change will not affect existing StatefulSets, as `PodManagementPolicy` cannot be updated.
 In order to continue using `OrderedReady` on new SolrClouds, please use the following setting:  
