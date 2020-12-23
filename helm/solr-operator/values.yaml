@@ -9,6 +9,9 @@ image:
   tag: v0.2.7
   pullPolicy: Always
 
+nodeSelector:
+  beta.kubernetes.io/os: linux
+  
 nameOverride: ""
 fullnameOverride: ""
 
