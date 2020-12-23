@@ -47,3 +47,7 @@ spec:
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
       terminationGracePeriodSeconds: 10
+      {{- if .Values.nodeSelector }}
+      nodeSelector:
+      {{ toYaml .Values.nodeSelector | indent 8 }}
+      {{- end }}
