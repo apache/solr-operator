@@ -8218,7 +8218,6 @@ spec:
                   - name
                   - nodeName
                   - ready
-                  - specUpToDate
                   - version
                   type: object
                 type: array
@@ -8285,7 +8284,6 @@ spec:
             - readyReplicas
             - replicas
             - solrNodes
-            - upToDateNodes
             - version
             - zookeeperConnectionInfo
             type: object
