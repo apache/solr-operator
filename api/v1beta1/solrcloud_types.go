@@ -837,6 +837,7 @@ type SolrCloudStatus struct {
 	ReadyReplicas int32 `json:"readyReplicas"`
 
 	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+	// +optional
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -887,6 +888,7 @@ type SolrNodeStatus struct {
 	Version string `json:"version"`
 
 	// This Solr Node pod is using the latest version of solrcloud pod spec.
+	// +optional
 	SpecUpToDate bool `json:"specUpToDate"`
 }
 
