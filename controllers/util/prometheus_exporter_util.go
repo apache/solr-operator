@@ -164,15 +164,13 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Name:            "solr-prometheus-exporter",
 			Image:           solrPrometheusExporter.Spec.Image.ToImageName(),
 			ImagePullPolicy: solrPrometheusExporter.Spec.Image.PullPolicy,
-			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName}},
+			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName, Protocol: corev1.ProtocolTCP}},
 			VolumeMounts:    volumeMounts,
 			Command:         []string{entrypoint},
 			Args:            exporterArgs,
 			Env:             envVars,
 
 			LivenessProbe: &corev1.Probe{
-				InitialDelaySeconds: 20,
-				PeriodSeconds:       10,
 				Handler: corev1.Handler{
 					HTTPGet: &corev1.HTTPGetAction{
 						Scheme: corev1.URISchemeHTTP,
@@ -180,6 +178,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 						Port:   intstr.FromInt(SolrMetricsPort),
 					},
 				},
+				InitialDelaySeconds: 20,
+				TimeoutSeconds:      1,
+				PeriodSeconds:       10,
+				SuccessThreshold:    1,
+				FailureThreshold:    3,
 			},
 		},
 	}

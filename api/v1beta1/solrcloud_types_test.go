@@ -33,8 +33,8 @@ func TestPVCSpecBackCompat(t *testing.T) {
 			StorageOptions: SolrDataStorageOptions{
 				PersistentStorage: &SolrPersistentDataStorageOptions{
 					VolumeReclaimPolicy: VolumeReclaimPolicyRetain,
-					PersistentVolumeClaimTemplate: corev1.PersistentVolumeClaimTemplate{
-						ObjectMeta: metav1.ObjectMeta{
+					PersistentVolumeClaimTemplate: PersistentVolumeClaimTemplate{
+						ObjectMeta: TemplateMeta{
 							Name:   "other-data",
 							Labels: map[string]string{"base": "here"},
 						},

@@ -44,6 +44,21 @@ Please visit the following pages for documentation on using and developing the S
 ## Version Compatibility & Upgrade Notes
 
 #### v0.2.7
+- Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
+  
+  **This means that Kubernetes support is now limited to 1.16+.**
+  If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.
+
+- The location of backup-restore volume mounts in Solr containers has changed from `/var/solr/solr-backup-restore` to `/var/solr/data/backup-restore`.
+This change was made to ensure that there were no issues using the backup API with solr 8.6+, which restricts the locations that backup data can be saved to and read from.
+This change should be transparent if you are merely using the SolrBackup CRD.
+All files permissions issues with SolrBackups should now be addressed.
+
+- The default `PodManagementPolicy` for StatefulSets has been changed to `Parallel` from `OrderedReady`.
+This change will not affect existing StatefulSets, as `PodManagementPolicy` cannot be updated.
+In order to continue using `OrderedReady` on new SolrClouds, please use the following setting:  
+`SolrCloud.spec.customSolrKubeOptions.statefulSetOptions.podManagementPolicy`
+
 - The `SolrCloud` and `SolrPrometheusExporter` services' portNames have changed to `"solr-client"` and `"solr-metrics"` from `"ext-solr-client"` and `"ext-solr-metrics"`, respectively.
 This is due to a bug in Kubernetes where `portName` and `targetPort` must match for services.
 
@@ -94,11 +109,9 @@ This option is backwards compatible, but will be removed in a future version (`v
 
 ### Compatibility with Kubernetes Versions
 
-#### Fully Compatible - v1.13+
+#### Fully Compatible - v1.16+
 
-#### Feature Gates required for older versions
-
-- *v1.10* - CustomResourceSubresources
+If you require compatibility with previous versions, please install version `v0.2.6` of the Solr Operator.
 
 ## Contributions
 

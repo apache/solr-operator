@@ -128,7 +128,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"bloomberg/solr-operator"` | The repository of the Solr Operator image |
-| image.tag | string | `"v0.2.6"` | The tag/version of the Solr Operator to run |
+| image.tag | string | `"v0.2.7"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"Always"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |

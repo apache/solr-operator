@@ -19,6 +19,8 @@ package controllers
 import (
 	"crypto/md5"
 	"fmt"
+	"time"
+
 	solr "github.com/bloomberg/solr-operator/api/v1beta1"
 	"github.com/bloomberg/solr-operator/controllers/util"
 	"github.com/onsi/gomega"
@@ -115,6 +117,10 @@ func TestCloudReconcile(t *testing.T) {
 	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.InitContainers), "Solr StatefulSet requires a default initContainer plus the additional specified.")
 	assert.EqualValues(t, extraContainers2, statefulSet.Spec.Template.Spec.InitContainers[1:])
 
+	// Check the update strategy
+	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
+	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+
 	// Host Alias Tests
 	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
 
@@ -176,6 +182,9 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					InternalConnectionString: "host:7271",
 				},
 			},
+			UpdateStrategy: solr.SolrUpdateStrategy{
+				Method: solr.StatefulSetUpdate,
+			},
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
@@ -189,8 +198,9 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					PriorityClassName: testPriorityClass,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
-					Annotations: testSSAnnotations,
-					Labels:      testSSLabels,
+					Annotations:         testSSAnnotations,
+					Labels:              testSSLabels,
+					PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 				},
 				CommonServiceOptions: &solr.ServiceOptions{
 					Annotations: testCommonServiceAnnotations,
@@ -274,6 +284,10 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
+	// Check the update strategy
+	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
+	assert.EqualValues(t, appsv1.OrderedReadyPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Selector.MatchLabels)
 	expectedCommonServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "common"})
@@ -315,6 +329,9 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 				ProvidedZookeeper: &solr.ZookeeperSpec{
 					ChRoot: "a-ch/root",
 				},
+			},
+			UpdateStrategy: solr.SolrUpdateStrategy{
+				Method: solr.ManualUpdate,
 			},
 		},
 	}
@@ -379,6 +396,10 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
 	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
+
+	// Check the update strategy
+	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
+	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
 }
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
@@ -950,6 +971,7 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	// Check the annotation on the pod template to make sure a rolling restart will take place
 	updateSolrXml = foundConfigMap.Data["solr.xml"]
 	updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(updateSolrXml)))
+	time.Sleep(time.Millisecond * 250)
 	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	assert.Equal(t, updateSolrXmlMd5, stateful.Spec.Template.Annotations[util.SolrXmlMd5Annotation], "Custom solr.xml MD5 annotation should be updated on the pod template.")

@@ -17,11 +17,7 @@ limitations under the License.
 package util
 
 import (
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +26,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -38,6 +33,11 @@ import (
 const (
 	SolrClientPortName  = "solr-client"
 	BackupRestoreVolume = "backup-restore"
+
+	SolrNodeContainer = "solrcloud-node"
+
+	DefaultSolrUser  = 8983
+	DefaultSolrGroup = 8983
 
 	SolrStorageFinalizer             = "storage.finalizers.solr.apache.org"
 	SolrZKConnectionStringAnnotation = "solr.apache.org/zkConnectionString"
@@ -47,6 +47,8 @@ const (
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
+
+	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
 	DefaultLivenessProbeInitialDelaySeconds = 20
 	DefaultLivenessProbeTimeoutSeconds      = 1
@@ -75,7 +77,7 @@ const (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
-	fsGroup := int64(solrPodPort)
+	fsGroup := int64(DefaultSolrGroup)
 	defaultMode := int32(420)
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
@@ -110,6 +112,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		podAnnotations = customPodOptions.Annotations
 	}
 
+	// Keep track of the SolrOpts that the Solr Operator needs to set
+	// These will be added to the SolrOpts given by the user.
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
 		{
@@ -138,10 +144,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
 
 		// Set the default name of the pvc
-		if pvc.Name == "" {
-			pvc.Name = solrDataVolumeName
+		if pvc.ObjectMeta.Name == "" {
+			pvc.ObjectMeta.Name = solrDataVolumeName
 		}
-		pvc.Namespace = ""
 
 		// Set some defaults in the PVC Spec
 		if len(pvc.Spec.AccessModes) == 0 {
@@ -160,12 +165,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			SolrPVCStorageLabel:    SolrCloudPVCDataStorage,
 			SolrPVCInstanceLabel:   solrCloud.Name,
 		}
-		pvc.Labels = MergeLabelsOrAnnotations(internalLabels, pvc.ObjectMeta.Labels)
+		pvc.ObjectMeta.Labels = MergeLabelsOrAnnotations(internalLabels, pvc.ObjectMeta.Labels)
 
 		pvcs = []corev1.PersistentVolumeClaim{
 			{
-				ObjectMeta: pvc.ObjectMeta,
-				Spec:       pvc.Spec,
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        pvc.ObjectMeta.Name,
+					Labels:      pvc.ObjectMeta.Labels,
+					Annotations: pvc.ObjectMeta.Annotations,
+				},
+				Spec: pvc.Spec,
 			},
 		}
 	} else {
@@ -190,6 +199,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:      BackupRestoreVolume,
 			MountPath: BaseBackupRestorePath,
 			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+			ReadOnly:  false,
 		})
 	}
 
@@ -248,10 +258,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 		}
 	}
-
-	// Keep track of the SolrOpts that the Solr Operator needs to set
-	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Environment Variables
 	envVars := []corev1.EnvVar{
@@ -340,24 +346,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := []corev1.Container{
-		{
-			Name:            "cp-solr-xml",
-			Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
-			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
-			Command:         []string{"sh", "-c", "cp /tmp/solr.xml /tmp-config/solr.xml"},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "solr-xml",
-					MountPath: "/tmp",
-				},
-				{
-					Name:      solrDataVolumeName,
-					MountPath: "/tmp-config",
-				},
-			},
-		},
-	}
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrDataVolumeName)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -366,7 +355,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	containers := []corev1.Container{
 		{
-			Name:            "solrcloud-node",
+			Name:            SolrNodeContainer,
 			Image:           solrCloud.Spec.SolrImage.ToImageName(),
 			ImagePullPolicy: solrCloud.Spec.SolrImage.PullPolicy,
 			Ports: []corev1.ContainerPort{
@@ -410,6 +399,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		containers = append(containers, customPodOptions.SidecarContainers...)
 	}
 
+	// Decide which update strategy to use
+	updateStrategy := appsv1.OnDeleteStatefulSetStrategyType
+	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate {
+		// Only use the rolling update strategy if the StatefulSetUpdate method is specified.
+		updateStrategy = appsv1.RollingUpdateStatefulSetStrategyType
+	}
+
+	// Determine which podManagementPolicy to use for the statefulSet
+	podManagementPolicy := DefaultStatefulSetPodManagementPolicy
+	if solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions.PodManagementPolicy != "" {
+		podManagementPolicy = solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions.PodManagementPolicy
+	}
+
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -422,8 +424,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Selector: &metav1.LabelSelector{
 				MatchLabels: selectorLabels,
 			},
-			ServiceName: solrCloud.HeadlessServiceName(),
-			Replicas:    solrCloud.Spec.Replicas,
+			ServiceName:         solrCloud.HeadlessServiceName(),
+			Replicas:            solrCloud.Spec.Replicas,
+			PodManagementPolicy: podManagementPolicy,
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: updateStrategy,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      podLabels,
@@ -490,6 +496,44 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	return stateful
+}
+
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrDataVolumeName string) []corev1.Container {
+	// The setup of the solr.xml will always be necessary
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "solr-xml",
+			MountPath: "/tmp",
+		},
+		{
+			Name:      solrDataVolumeName,
+			MountPath: "/tmp-config",
+		},
+	}
+	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
+
+	// Add prep for backup-restore volume
+	// This entails setting the correct permissions for the directory
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      BackupRestoreVolume,
+			MountPath: "/backup-restore",
+			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+			ReadOnly:  false,
+		})
+
+		setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+	}
+
+	volumePrepInitContainer := corev1.Container{
+		Name:            "cp-solr-xml",
+		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
+		ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
+		Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
+		VolumeMounts:    volumeMounts,
+	}
+
+	return []corev1.Container{volumePrepInitContainer}
 }
 
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
@@ -765,6 +809,7 @@ func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domai
 // solrCloud: SolrCloud instance
 // domainName: string Domain for the ingress rule to use
 func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule extv1.IngressRule) {
+	pathType := extv1.PathTypeImplementationSpecific
 	ingressRule = extv1.IngressRule{
 		Host: solrCloud.ExternalCommonUrl(domainName, false),
 		IngressRuleValue: extv1.IngressRuleValue{
@@ -775,6 +820,7 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 							ServiceName: solrCloud.CommonServiceName(),
 							ServicePort: intstr.FromInt(solrCloud.Spec.SolrAddressability.CommonServicePort),
 						},
+						PathType: &pathType,
 					},
 				},
 			},
@@ -788,6 +834,7 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 // nodeName: string Name of the node
 // domainName: string Domain for the ingress rule to use
 func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainName string) (ingressRule extv1.IngressRule) {
+	pathType := extv1.PathTypeImplementationSpecific
 	ingressRule = extv1.IngressRule{
 		Host: solrCloud.ExternalNodeUrl(nodeName, domainName, false),
 		IngressRuleValue: extv1.IngressRuleValue{
@@ -798,36 +845,11 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 							ServiceName: nodeName,
 							ServicePort: intstr.FromInt(solrCloud.NodePort()),
 						},
+						PathType: &pathType,
 					},
 				},
 			},
 		},
 	}
 	return ingressRule
-}
-
-func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
-
-	urlParams.Set("wt", "json")
-
-	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
-
-	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	if err == nil && resp.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(resp.Body)
-		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
-	}
-
-	if err == nil {
-		json.NewDecoder(resp.Body).Decode(&response)
-	}
-
-	return err
 }

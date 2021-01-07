@@ -231,7 +231,7 @@ func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
-		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{},
+		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
 	}
 	cleanupTestObjects(g, namespace, deleteOpts, cleanupObjects)
 

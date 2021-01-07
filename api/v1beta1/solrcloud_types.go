@@ -18,6 +18,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
 
@@ -108,6 +109,10 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrAddressability SolrAddressabilityOptions `json:"solrAddressability,omitempty"`
 
+	// Define how Solr rolling updates are executed.
+	// +optional
+	UpdateStrategy SolrUpdateStrategy `json:"updateStrategy,omitempty"`
+
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 
@@ -156,6 +161,8 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 	}
 
 	changed = spec.SolrAddressability.withDefaults(ingressBaseDomain) || changed
+
+	changed = spec.UpdateStrategy.withDefaults() || changed
 
 	if spec.ZookeeperRef == nil {
 		spec.ZookeeperRef = &ZookeeperRef{}
@@ -297,7 +304,7 @@ type SolrPersistentDataStorageOptions struct {
 	// The entire Spec is customizable, however there will be defaults provided if necessary.
 	// This field is optional. If no PVC spec is provided, then a default will be provided.
 	// +optional
-	PersistentVolumeClaimTemplate corev1.PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
+	PersistentVolumeClaimTemplate PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
 }
 
 func (opts *SolrPersistentDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
@@ -326,6 +333,51 @@ const (
 	// All pod PVCs are deleted after the SolrCloud is deleted.
 	VolumeReclaimPolicyDelete VolumeReclaimPolicy = "Delete"
 )
+
+// PersistentVolumeClaimTemplate is used to produce
+// PersistentVolumeClaim objects as part of an EphemeralVolumeSource.
+type PersistentVolumeClaimTemplate struct {
+	// May contain labels and annotations that will be copied into the PVC
+	// when creating it. No other fields are allowed and will be rejected during
+	// validation.
+	//
+	// +optional
+	ObjectMeta TemplateMeta `json:"metadata,omitempty"`
+
+	// The specification for the PersistentVolumeClaim. The entire content is
+	// copied unchanged into the PVC that gets created from this
+	// template. The same fields as in a PersistentVolumeClaim
+	// are also valid here.
+	//
+	// +optional
+	Spec corev1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
+}
+
+// TemplateMeta is metadata for templated resources.
+type TemplateMeta struct {
+	// Name must be unique within a namespace. Is required when creating resources, although
+	// some resources may allow a client to request the generation of an appropriate name
+	// automatically. Name is primarily intended for creation idempotence and configuration
+	// definition.
+	// Cannot be updated.
+	// More info: http://kubernetes.io/docs/user-guide/identifiers#names
+	// +optional
+	Name string `json:"name,omitempty"`
+
+	// Map of string keys and values that can be used to organize and categorize
+	// (scope and select) objects. May match selectors of replication controllers
+	// and services.
+	// More info: http://kubernetes.io/docs/user-guide/labels
+	// +optional
+	Labels map[string]string `json:"labels,omitempty" protobuf:"bytes,11,rep,name=labels"`
+
+	// Annotations is an unstructured key value map stored with a resource that may be
+	// set by external tools to store and retrieve arbitrary metadata. They are not
+	// queryable and should be preserved when modifying objects.
+	// More info: http://kubernetes.io/docs/user-guide/annotations
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty" protobuf:"bytes,12,rep,name=annotations"`
+}
 
 type SolrEphemeralDataStorageOptions struct {
 	//EmptyDirVolumeSource is an optional config for the emptydir volume that will store Solr data.
@@ -486,6 +538,67 @@ func (opts *ExternalAddressability) withDefaults() (changed bool) {
 	}
 
 	return changed
+}
+
+type SolrUpdateStrategy struct {
+	// Method defines the way in which SolrClouds should be updated when the podSpec changes.
+	// +optional
+	Method SolrUpdateMethod `json:"method,omitempty"`
+
+	// Options for Solr Operator Managed rolling updates.
+	// +optional
+	ManagedUpdateOptions ManagedUpdateOptions `json:"managed,omitempty"`
+}
+
+// SolrUpdateMethod is a string enumeration type that enumerates
+// all possible ways that a SolrCloud can having rolling updates managed.
+// +kubebuilder:validation:Enum=Managed;StatefulSet;Manual
+type SolrUpdateMethod string
+
+const (
+	// Let the Solr Operator manage rolling updates to keep collections/shards available while updating pods in parallel.
+	// This is the default option.
+	ManagedUpdate SolrUpdateMethod = "Managed"
+
+	// Use the default StatefulSet rolling updates logic. One pod at a time, starting with the highest ordinal.
+	StatefulSetUpdate SolrUpdateMethod = "StatefulSet"
+
+	// The Solr Operator and Kubernetes will not delete pods for updates. The user will be responsible for this.
+	ManualUpdate SolrUpdateMethod = "Manual"
+)
+
+func (opts *SolrUpdateStrategy) withDefaults() (changed bool) {
+	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
+	if opts.Method == "" {
+		changed = true
+		opts.Method = ManagedUpdate
+	}
+
+	return changed
+}
+
+// Spec to control the desired behavior of managed rolling update.
+type ManagedUpdateOptions struct {
+
+	// The maximum number of pods that can be unavailable during the update.
+	// Value can be an absolute number (ex: 5) or a percentage of the desired number of pods (ex: 10%).
+	// Absolute number is calculated from percentage by rounding down.
+	// If the provided number is 0 or negative, then all pods will be allowed to be updated in unison.
+	//
+	// Defaults to 25%.
+	//
+	// +optional
+	MaxPodsUnavailable *intstr.IntOrString `json:"maxPodsUnavailable,omitempty"`
+
+	// The maximum number of replicas for each shard that can be unavailable during the update.
+	// Value can be an absolute number (ex: 5) or a percentage of replicas in a shard (ex: 25%).
+	// Absolute number is calculated from percentage by rounding down.
+	// If the provided number is 0 or negative, then all replicas will be allowed to be updated in unison.
+	//
+	// Defaults to 1.
+	//
+	// +optional
+	MaxShardReplicasUnavailable *intstr.IntOrString `json:"maxShardReplicasUnavailable,omitempty"`
 }
 
 // DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
@@ -723,6 +836,9 @@ type SolrCloudStatus struct {
 	// ReadyReplicas is the number of number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
 
+	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+	UpToDateNodes int32 `json:"upToDateNodes"`
+
 	// The version of solr that the cloud is running
 	Version string `json:"version"`
 
@@ -769,6 +885,9 @@ type SolrNodeStatus struct {
 
 	// The version of solr that the node is running
 	Version string `json:"version"`
+
+	// This Solr Node pod is using the latest version of solrcloud pod spec.
+	SpecUpToDate bool `json:"specUpToDate"`
 }
 
 // +kubebuilder:object:root=true
@@ -784,6 +903,7 @@ type SolrNodeStatus struct {
 // +kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
 // +kubebuilder:printcolumn:name="Nodes",type="integer",JSONPath=".status.replicas",description="Number of solr nodes running"
 // +kubebuilder:printcolumn:name="ReadyNodes",type="integer",JSONPath=".status.readyReplicas",description="Number of solr nodes connected to the cloud"
+// +kubebuilder:printcolumn:name="UpToDateNodes",type="integer",JSONPath=".status.upToDateNodes",description="Number of solr nodes running the latest SolrCloud pod spec"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrCloud struct {
 	metav1.TypeMeta   `json:",inline"`
