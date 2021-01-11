@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   repository: bloomberg/solr-operator
-  tag: v0.2.7
+  tag: v0.2.8
   pullPolicy: Always
 
 nameOverride: ""
