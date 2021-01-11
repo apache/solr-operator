@@ -7,11 +7,11 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
-	github.com/jetstack/cert-manager v1.0.2
+	github.com/jetstack/cert-manager v1.1.0
 	github.com/onsi/gomega v1.10.1
 	github.com/pravega/zookeeper-operator v0.2.6
 	github.com/stretchr/testify v1.6.1
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381
+	golang.org/x/net v0.0.0-20200822124328-c89045814202
 	golang.org/x/tools v0.0.0-20200616195046-dc31b401abb5 // indirect
 	k8s.io/api v0.19.0
 	k8s.io/apimachinery v0.19.0
