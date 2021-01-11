@@ -46,7 +46,7 @@ type SolrConnectionInfo struct {
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -103,13 +103,18 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Only add the config if it is passed in from the user. Otherwise, use the default.
-	if solrPrometheusExporter.Spec.Config != "" {
+	if solrPrometheusExporter.Spec.Config != "" ||
+		(solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "") {
+		configMapName := solrPrometheusExporter.MetricsConfigMapName()
+		if solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
+			configMapName = solrPrometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap
+		}
 		solrVolumes = []corev1.Volume{{
 			Name: "solr-prometheus-exporter-xml",
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: solrPrometheusExporter.MetricsConfigMapName(),
+						Name: configMapName,
 					},
 					Items: []corev1.KeyToPath{
 						{
@@ -199,6 +204,15 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if len(customPodOptions.InitContainers) > 0 {
 			initContainers = customPodOptions.InitContainers
 		}
+	}
+
+	// track the MD5 of the custom exporter config in the pod spec annotations,
+	// so we get a rolling restart when the configMap changes
+	if configXmlMd5 != "" {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		podAnnotations["solr.apache.org/exporterConfigXmlMd5"] = configXmlMd5
 	}
 
 	deployment := &appsv1.Deployment{

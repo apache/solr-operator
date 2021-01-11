@@ -19,18 +19,25 @@ package controllers
 
 import (
 	"context"
+	"crypto/md5"
+	"fmt"
 	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SolrPrometheusExporterReconciler reconciles a SolrPrometheusExporter object
@@ -78,6 +85,31 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	configMapKey := "solr-prometheus-exporter.xml"
+	configXmlMd5 := ""
+	if prometheusExporter.Spec.Config == "" && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
+		foundConfigMap := &corev1.ConfigMap{}
+		nn := types.NamespacedName{Name: prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: prometheusExporter.Namespace}
+		err = r.Get(context.TODO(), nn, foundConfigMap)
+		if err != nil {
+			return ctrl.Result{}, err // if they passed a providedConfigMap name, then it must exist
+		}
+
+		if foundConfigMap.Data != nil {
+			configXml, ok := foundConfigMap.Data[configMapKey]
+			if ok {
+				configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
+				logger.Info("Provided configMap has MD5", "configMap", foundConfigMap.Name, "md5", configXmlMd5)
+			} else {
+				return ctrl.Result{}, fmt.Errorf("required '%s' key not found in provided ConfigMap %s",
+					configMapKey, prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+			}
+		} else {
+			return ctrl.Result{}, fmt.Errorf("provided ConfigMap %s has no data",
+				prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+		}
+	}
+
 	if prometheusExporter.Spec.Config != "" {
 		// Generate ConfigMap
 		configMap := util.GenerateMetricsConfigMap(prometheusExporter)
@@ -92,10 +124,18 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
+
+			// capture the MD5 for the config XML
+			configXml, _ := configMap.Data[configMapKey]
+			configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
 			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
+
+			// capture the MD5 for the config XML
+			configXml, _ := foundConfigMap.Data[configMapKey]
+			configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 		}
 		if err != nil {
 			return ctrl.Result{}, err
@@ -130,7 +170,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, err
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo)
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5)
 	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -195,6 +235,60 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManagerAndReconciler(mgr ctr
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.Deployment{})
 
+	var err error
+	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
 	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(reconciler)
+}
+
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	providedConfigMapField := ".spec.customKubeOptions.configMapOptions.providedConfigMap"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, providedConfigMapField, func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
+		if exporter.Spec.CustomKubeOptions.ConfigMapOptions == nil {
+			return nil
+		}
+		if exporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap == "" {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{exporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.ConfigMap{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+				listOps := &client.ListOptions{
+					FieldSelector: fields.OneTermEqualSelector(providedConfigMapField, a.Meta.GetName()),
+					Namespace:     a.Meta.GetNamespace(),
+				}
+				err := r.List(context.TODO(), foundExporters, listOps)
+				if err != nil {
+					// if no exporters found, just no-op this
+					return []reconcile.Request{}
+				}
+
+				requests := make([]reconcile.Request, len(foundExporters.Items))
+				for i, item := range foundExporters.Items {
+					requests[i] = reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					}
+				}
+				return requests
+			}),
+		},
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
