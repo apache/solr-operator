@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	"crypto/md5"
 	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -252,17 +253,14 @@ func verifyReconcileSelfSignedTLS(t *testing.T, instance *solr.SolrCloud) {
 	assert.Equal(t, "testS", foundCert.Spec.Subject.Provinces[0])
 
 	// ensure the STS was updated after the cert changed
-	mainContainer := expectStatefulSetTLSConfig(t, g, instance, false)
+	statefulSet := expectStatefulSetTLSConfig(t, g, instance, false)
+	tlsCertMd5FromSts := statefulSet.Spec.Template.Annotations[util.SolrTlsCertMd5Annotation]
 
-	// make sure the env var that tracks the TLS secret version was updated ...
-	secretVersion := filterVarsByName(mainContainer.Env, func(n string) bool {
-		return n == "SOLR_TLS_SECRET_VERS"
-	})
-	assert.NotNil(t, secretVersion)
 	foundTLSSecret := &corev1.Secret{}
 	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	assert.Equal(t, foundTLSSecret.ResourceVersion, secretVersion[0].Value)
+	foundTlsCertMd5 := fmt.Sprintf("%x", md5.Sum([]byte(foundTLSSecret.Data["tls.crt"])))
+	assert.Equal(t, foundTlsCertMd5, tlsCertMd5FromSts)
 }
 
 func verifyAutoCreateSelfSignedTLSConfig(t *testing.T, sc *solr.SolrCloud) {
@@ -286,8 +284,10 @@ func verifySelfSignedCert(t *testing.T, cert *certv1.Certificate, solrCloudName 
 	assert.NotNil(t, cert.Spec.Subject)
 	assert.Equal(t, "testO", cert.Spec.Subject.Organizations[0])
 	assert.Equal(t, "testOU", cert.Spec.Subject.OrganizationalUnits[0])
+
 	assert.Equal(t, "*.test.domain.com", cert.Spec.DNSNames[0])
-	assert.Equal(t, "test.domain.com", cert.Spec.DNSNames[1])
+	assert.Equal(t, "foo-tls-solrcloud-common.default", cert.Spec.DNSNames[1])
+	assert.Equal(t, "test.domain.com", cert.Spec.DNSNames[2])
 	assert.Equal(t, fmt.Sprintf("%s-selfsigned-solr-tls", solrCloudName), cert.Spec.SecretName)
 	assert.NotNil(t, cert.Spec.Keystores)
 	assert.NotNil(t, cert.Spec.Keystores.PKCS12)
@@ -357,7 +357,7 @@ func verifyUserSuppliedTLSConfig(t *testing.T, sc *solr.SolrCloud, expectedKeyst
 }
 
 // ensures the TLS settings are applied correctly to the STS
-func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud, needsPkcs12InitContainer bool) *corev1.Container {
+func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud, needsPkcs12InitContainer bool) *appsv1.StatefulSet {
 	ctx := context.TODO()
 	// expect the StatefulSet to have a Volume / VolumeMount for the TLS secret
 	stateful := &appsv1.StatefulSet{}
@@ -371,8 +371,8 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 			break
 		}
 	}
-	assert.NotNil(t, keystoreVol, "Didn't find TLS keystore volume in sts config!")
-	assert.NotNil(t, keystoreVol.VolumeSource.Secret)
+	assert.NotNil(t, keystoreVol)
+	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
 	assert.Equal(t, sc.Spec.SolrTLS.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
 
 	// check the SOLR_SSL_ related env vars on the sts
@@ -384,8 +384,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 			break
 		}
 	}
-	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
-	assert.NotNil(t, mainContainer.Env)
+	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
 	expectTLSEnvVars(t, mainContainer.Env, sc.Spec.SolrTLS.KeyStorePasswordSecret.Name, sc.Spec.SolrTLS.KeyStorePasswordSecret.Key, needsPkcs12InitContainer)
 
 	// initContainers
@@ -414,7 +413,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 		assert.Equal(t, expCmd, expInitContainer.Command[2])
 	}
 
-	return mainContainer
+	return stateful
 }
 
 // ensure the TLS related env vars are set for the Solr pod
@@ -480,6 +479,8 @@ func expectUrlSchemeJob(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud)
 func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string) error {
 	secretData := map[string][]byte{}
 	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
+	secretData["tls.crt"] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
+
 	mockTLSSecret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
 		Data:       secretData,

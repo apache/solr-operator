@@ -56,6 +56,7 @@ const (
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
+	SolrTlsCertMd5Annotation         = "solr.apache.org/tlsCertMd5"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -83,7 +84,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string, createPkcs12InitContainer bool) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string, createPkcs12InitContainer bool, tlsCertMd5 string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
@@ -363,6 +364,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			podAnnotations = make(map[string]string, 1)
 		}
 		podAnnotations[SolrXmlMd5Annotation] = solrXmlMd5
+	}
+
+	// track the MD5 of the TLS cert (from secret) to trigger restarts if the cert changes
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.RestartOnTLSSecretUpdate && tlsCertMd5 != "" {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		podAnnotations[SolrTlsCertMd5Annotation] = tlsCertMd5
 	}
 
 	if solrCloud.Spec.SolrOpts != "" {
@@ -1144,10 +1153,6 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		},
 	}
 
-	if opts.RestartOnTLSSecretUpdate && opts.TLSSecretVersion != "" {
-		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_TLS_SECRET_VERS", Value: opts.TLSSecretVersion})
-	}
-
 	return envVars
 }
 
@@ -1220,6 +1225,12 @@ func findDNSNamesForCertificate(solrCloud *solr.SolrCloud) []string {
 	} else {
 		dnsNames = append(dnsNames, solrCloud.AdvertisedNodeHost("*"))
 	}
+
+	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
+		commonServiceHost := fmt.Sprintf("%s-solrcloud-common.%s", solrCloud.Name, solrCloud.Namespace)
+		dnsNames = append(dnsNames, commonServiceHost)
+	}
+
 	if len(dnsNames) > 1 {
 		dnsNames = deDupeDNSNames(dnsNames)
 		sort.Strings(dnsNames)

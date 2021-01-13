@@ -1083,8 +1083,13 @@ func (sc *SolrCloud) CommonServiceName() string {
 }
 
 // InternalURLForCloud returns the name of the common service for the cloud
-func InternalURLForCloud(cloudName string, namespace string) string {
-	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
+func InternalURLForCloud(sc *SolrCloud) string {
+	urlScheme := "http"
+	port := sc.Spec.SolrAddressability.CommonServicePort
+	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	}
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s:%d", urlScheme, sc.Name, sc.Namespace, port)
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -1185,11 +1190,11 @@ func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string)
 }
 
 func (sc *SolrCloud) CommonPortSuffix() string {
-	return PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
 }
 
 func (sc *SolrCloud) NodePortSuffix() string {
-	return PortToSuffix(sc.NodePort())
+	return sc.PortToSuffix(sc.NodePort())
 }
 
 func (sc *SolrCloud) NodePort() int {
@@ -1202,13 +1207,18 @@ func (sc *SolrCloud) NodePort() int {
 	return port
 }
 
-// PortToSuffix returns the url suffix for a port.
-// Port 80 does not require a suffix, as it is the default port for HTTP.
-func PortToSuffix(port int) string {
-	if port == 80 {
-		return ""
+func (sc *SolrCloud) PortToSuffix(port int) string {
+	suffix := ""
+	if sc.UrlScheme() == "https" {
+		if port != 443 {
+			suffix = ":" + strconv.Itoa(port)
+		}
+	} else {
+		if port != 80 {
+			suffix = ":" + strconv.Itoa(port)
+		}
 	}
-	return ":" + strconv.Itoa(port)
+	return suffix
 }
 
 func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
@@ -1252,6 +1262,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 		url += sc.CommonPortSuffix()
 	}
 	return url
+}
+
+func (sc *SolrCloud) UrlScheme() string {
+	urlScheme := "http"
+	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	}
+	return urlScheme
 }
 
 func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {

@@ -18,6 +18,7 @@
 package solr_api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -50,15 +51,32 @@ type SolrAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+// Used to call a Solr pod over https when using a self-signed cert
+// It's "insecure" but is only used for internal communication, such as getting cluster status
+// so if you're worried about this, don't use a self-signed cert
+var noVerifyTLSHttpClient *http.Client = nil
+
+func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud)
+
+	client := http.DefaultClient
+
+	// if TLS enabled but is using a self-signed cert, skipVerify for now
+	if cloud.Spec.SolrTLS != nil && cloud.Spec.SolrTLS.AutoCreate != nil {
+		if noVerifyTLSHttpClient == nil {
+			customTransport := http.DefaultTransport.(*http.Transport).Clone()
+			customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+			noVerifyTLSHttpClient = &http.Client{Transport: customTransport}
+			client = noVerifyTLSHttpClient
+		}
+	}
 
 	urlParams.Set("wt", "json")
 
 	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
 
 	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
+	if resp, err = client.Get(cloudUrl); err != nil {
 		return err
 	}
 

@@ -26,7 +26,7 @@ import (
 )
 
 // CreateCollection to request collection creation on SolrCloud
-func CreateCollection(cloud string, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName solr.CollectionRouterName, routerField string, shards string, collectionConfigName string, namespace string) (success bool, err error) {
+func CreateCollection(cloud *solr.SolrCloud, collection string, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName solr.CollectionRouterName, routerField string, shards string, collectionConfigName string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	numShardsParameter := strconv.FormatInt(numShards, 10)
@@ -54,22 +54,22 @@ func CreateCollection(cloud string, collection string, numShards int64, replicat
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to create collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to create collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error creating collection", "namespace", namespace, "cloud", cloud, "collection", collection)
+		log.Error(err, "Error creating collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
 	}
 
 	return success, err
 }
 
 // CreateCollectionAlias to request the creation of an alias to one or more collections
-func CreateCollectionAlias(cloud string, alias string, aliasType string, collections []string, namespace string) (err error) {
+func CreateCollectionAlias(cloud *solr.SolrCloud, alias string, aliasType string, collections []string) (err error) {
 	queryParams := url.Values{}
 	collectionsArray := strings.Join(collections, ",")
 	queryParams.Add("action", "CREATEALIAS")
@@ -78,15 +78,15 @@ func CreateCollectionAlias(cloud string, alias string, aliasType string, collect
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to create alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to create alias", "namespace", cloud.Namespace, "cloud", cloud.Name, "alias", alias, "to collections", collectionsArray)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			log.Info("Created alias", "alias", alias, "to collection", collectionsArray)
 		}
 	} else {
-		log.Error(err, "Error creating alias", "namespace", namespace, "cloud", cloud, "alias", alias, "to collections", collectionsArray)
+		log.Error(err, "Error creating alias", "namespace", cloud.Namespace, "cloud", cloud.Name, "alias", alias, "to collections", collectionsArray)
 	}
 
 	return err
@@ -94,51 +94,51 @@ func CreateCollectionAlias(cloud string, alias string, aliasType string, collect
 }
 
 // DeleteCollection to request collection deletion on SolrCloud
-func DeleteCollection(cloud string, collection string, namespace string) (success bool, err error) {
+func DeleteCollection(cloud *solr.SolrCloud, collection string) (success bool, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "DELETE")
 	queryParams.Add("name", collection)
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to delete collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to delete collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error deleting collection", "namespace", namespace, "cloud", cloud, "collection", collection)
+		log.Error(err, "Error deleting collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
 	}
 
 	return success, err
 }
 
 // DeleteCollectionAlias removes an alias
-func DeleteCollectionAlias(cloud string, alias string, namespace string) (success bool, err error) {
+func DeleteCollectionAlias(cloud *solr.SolrCloud, alias string) (success bool, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "DELETEALIAS")
 	queryParams.Add("name", alias)
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to delete collection alias", "namespace", namespace, "cloud", cloud, "alias", alias)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to delete collection alias", "namespace", cloud.Namespace, "cloud", cloud.Name, "alias", alias)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error deleting collection alias", "namespace", namespace, "cloud", cloud, "alias", alias)
+		log.Error(err, "Error deleting collection alias", "namespace", cloud.Namespace, "cloud", cloud.Name, "alias", alias)
 	}
 
 	return success, err
 }
 
 // ModifyCollection to request collection modification on SolrCloud.
-func ModifyCollection(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
+func ModifyCollection(cloud *solr.SolrCloud, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
@@ -151,22 +151,22 @@ func ModifyCollection(cloud string, collection string, replicationFactor int64, 
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to modify collection", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to modify collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error modifying collection", "namespace", namespace, "cloud", cloud, "collection")
+		log.Error(err, "Error modifying collection", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection")
 	}
 
 	return success, err
 }
 
 // CheckIfCollectionModificationRequired to check if the collection's modifiable parameters have changed in spec and need to be updated
-func CheckIfCollectionModificationRequired(cloud string, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string, namespace string) (success bool, err error) {
+func CheckIfCollectionModificationRequired(cloud *solr.SolrCloud, collection string, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, collectionConfigName string) (success bool, err error) {
 	queryParams := url.Values{}
 	replicationFactorParameter := strconv.FormatInt(replicationFactor, 10)
 	maxShardsPerNodeParameter := strconv.FormatInt(maxShardsPerNode, 10)
@@ -177,7 +177,7 @@ func CheckIfCollectionModificationRequired(cloud string, collection string, repl
 
 	resp := &solr_api.SolrClusterStatusResponse{}
 
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, &resp)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, &resp)
 
 	if collectionResp, ok := resp.ClusterStatus.Collections[collection]; ok {
 		// Check modifiable collection parameters
@@ -200,41 +200,41 @@ func CheckIfCollectionModificationRequired(cloud string, collection string, repl
 			success = true
 		}
 	} else {
-		log.Error(err, "Error calling collection API status", "namespace", namespace, "cloud", cloud, "collection", collection)
+		log.Error(err, "Error calling collection API status", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
 	}
 
 	return success, err
 }
 
 // CheckIfCollectionExists to request if collection exists in list of collection
-func CheckIfCollectionExists(cloud string, collection string, namespace string) (success bool) {
+func CheckIfCollectionExists(cloud *solr.SolrCloud, collection string) (success bool) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "LIST")
 
 	resp := &SolrCollectionsListResponse{}
 
-	log.Info("Calling to list collections", "namespace", namespace, "cloud", cloud, "collection", collection)
-	err := solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to list collections", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection)
+	err := solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if containsCollection(resp.Collections, collection) {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error listing collections", "namespace", namespace, "cloud", cloud, "collection")
+		log.Error(err, "Error listing collections", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection")
 	}
 
 	return success
 }
 
 // CurrentCollectionAliasDetails will return a success if details found for an alias and comma separated string of associated collections
-func CurrentCollectionAliasDetails(cloud string, alias string, namespace string) (success bool, collections string) {
+func CurrentCollectionAliasDetails(cloud *solr.SolrCloud, alias string) (success bool, collections string) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "LISTALIASES")
 
 	resp := &SolrCollectionAliasDetailsResponse{}
 
-	err := solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	err := solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		success, collections := containsAlias(resp.Aliases, alias)
