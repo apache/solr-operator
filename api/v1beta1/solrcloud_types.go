@@ -677,9 +677,6 @@ type SolrTLSOptions struct {
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
-
-	// Set at runtime during reconcile, once the TLS secret is issued
-	TLSSecretVersion string `json:"-"`
 }
 
 func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
