@@ -7,8 +7,8 @@ set -o pipefail
 set -u
 
 licRes=$(
-    find . -type f -iname '*.go' ! -path '*/vendor/*' -exec \
-         sh -c 'head -n3 $1 | grep -Eq "(Copyright|generated|GENERATED)" || echo -e  $1' {} {} \;
+    find . -type f -iname '*.go' ! -exec \
+         sh -c 'head -n5 $1 | grep -Eq "(Licensed to the Apache Software Foundation)" || echo -e  $1' {} {} \;
 )
 
 if [ -n "${licRes}" ]; then
