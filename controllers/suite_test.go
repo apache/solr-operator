@@ -29,7 +29,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	zkOp "github.com/pravega/zookeeper-operator/pkg/apis"
 	"k8s.io/client-go/kubernetes/scheme"

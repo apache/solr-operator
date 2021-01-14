@@ -19,8 +19,8 @@ package controllers
 
 import (
 	"context"
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
-	"github.com/bloomberg/solr-operator/controllers/util"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"

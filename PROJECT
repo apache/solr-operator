@@ -1,6 +1,6 @@
 version: "2"
-domain: bloomberg.com
-repo: github.com/bloomberg/solr-operator
+domain: apache.org
+repo: github.com/apache/lucene-solr-operator
 resources:
 - group: solr
   version: v1beta1

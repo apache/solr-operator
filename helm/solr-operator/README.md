@@ -3,7 +3,7 @@ Solr Operator
 
 The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
 
-Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/bloomberg/solr-operator).
+Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/lucene-solr-operator).
 
 ## Using the Helm Chart
 
@@ -34,7 +34,7 @@ kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/maste
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
 ```console
-$ helm repo add solr-operator https://bloomberg.github.io/solr-operator/charts
+$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
 ```
 
 ### Installing the Chart

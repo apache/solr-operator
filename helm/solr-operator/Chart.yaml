@@ -5,9 +5,9 @@ description: The Solr Operator enables easy management of Solr resources within 
 version: 0.2.8
 appVersion: v0.2.8
 kubeVersion: ">= 1.16.0-0"
-home: https://github.com/bloomberg/solr-operator
+home: https://github.com/apache/lucene-solr-operator
 sources:
-  - https://github.com/bloomberg/solr-operator
+  - https://github.com/apache/lucene-solr-operator
 keywords:
   - solr
   - apache

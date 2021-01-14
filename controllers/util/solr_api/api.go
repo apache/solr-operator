@@ -20,7 +20,7 @@ package solr_api
 import (
 	"encoding/json"
 	"fmt"
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"

@@ -18,7 +18,7 @@
 package controllers
 
 import (
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"

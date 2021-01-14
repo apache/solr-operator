@@ -18,8 +18,8 @@
 package util
 
 import (
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
-	"github.com/bloomberg/solr-operator/controllers/util/solr_api"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers/util/solr_api"
 	"net/url"
 	"strconv"
 	"strings"

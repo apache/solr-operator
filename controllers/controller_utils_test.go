@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"

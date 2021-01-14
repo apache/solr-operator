@@ -21,7 +21,7 @@ The helm chart provides abstractions over the Input Arguments described below, a
 The first step is to add the Solr Operator helm repository.
 
 ```bash
-$ helm repo add solr-operator https://bloomberg.github.io/solr-operator/charts
+$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
 ```
 
 
