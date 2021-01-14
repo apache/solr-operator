@@ -1,0 +1,43 @@
+# https://cwiki.apache.org/confluence/display/INFRA/.asf.yaml+features+for+git+repositories
+
+github:
+  description: "Apache Lucene and Solr open-source search software"
+  homepage: https://lucene.apache.org/
+  labels:
+    - solr
+    - search
+    - nosql
+    - golang
+    - search-engine
+    - information-retrieval
+    - kubernetes
+    - operator
+    - controller
+    - crd
+
+  features:
+    # Enable issue management
+    issues: true
+    # Enable projects for project management boards
+    projects: true
+
+  enabled_merge_buttons:
+    # enable squash button:
+    squash:  true
+    # disable merge button:
+    merge:   false
+    # disable rebase button:
+    rebase:  false
+
+  protected_branches:
+    master:
+      required_signatures: false
+
+  # Github Pages
+  ghp_branch:  master
+  ghp_path:    /docs
+
+  notifications:
+    commits:      commits@lucene.apache.org
+    issues:       issues@lucene.apache.org
+    pullrequests: issues@lucene.apache.org
