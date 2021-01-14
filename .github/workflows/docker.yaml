@@ -1,0 +1,20 @@
+name: Docker Build
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+
+jobs:
+  test:
+    name: Build and Test Operator
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # Setup
+      - uses: actions/checkout@v2
+
+      # Cleanup & Install dependencies
+      - run: docker --version
+      - run: make docker-vendor-build
