@@ -34,7 +34,7 @@ kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/maste
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
 ```console
-$ helm repo add solr-operator https://bloomberg.github.io/solr-operator/charts
+$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
 ```
 
 ### Installing the Chart
