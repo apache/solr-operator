@@ -3,7 +3,7 @@ Solr Operator
 
 The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
 
-Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/bloomberg/solr-operator).
+Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/lucene-solr-operator).
 
 ## Using the Helm Chart
 

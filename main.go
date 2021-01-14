@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"strings"
 
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
-	"github.com/bloomberg/solr-operator/controllers"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"

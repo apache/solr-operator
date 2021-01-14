@@ -21,10 +21,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
-	"github.com/bloomberg/solr-operator/controllers/util"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
 
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

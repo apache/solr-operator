@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/bloomberg/solr-operator/controllers/util"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 )
 
 // SolrCollectionReconciler reconciles a SolrCollection object

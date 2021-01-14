@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/bloomberg/solr-operator/controllers/util"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	solrv1beta1 "github.com/bloomberg/solr-operator/api/v1beta1"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 )
 
 // SolrBackupReconciler reconciles a SolrBackup object

@@ -15,6 +15,6 @@ rm -rf release-artifacts/*
 
 helm package helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d release-artifacts/
 
-helm repo index release-artifacts/ --url https://github.com/bloomberg/solr-operator/releases/download/${VERSION}/ --merge docs/charts/index.yaml
+helm repo index release-artifacts/ --url https://github.com/apache/lucene-solr-operator/releases/download/${VERSION}/ --merge docs/charts/index.yaml
 
 mv release-artifacts/index.yaml docs/charts/index.yaml

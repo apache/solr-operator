@@ -1,4 +1,4 @@
-module github.com/bloomberg/solr-operator
+module github.com/apache/lucene-solr-operator
 
 go 1.14
 

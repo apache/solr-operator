@@ -20,8 +20,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"testing"
 
-	solr "github.com/bloomberg/solr-operator/api/v1beta1"
-	"github.com/bloomberg/solr-operator/controllers/util"
+	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"

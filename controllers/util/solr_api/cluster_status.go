@@ -16,7 +16,7 @@ limitations under the License.
 
 package solr_api
 
-import solr "github.com/bloomberg/solr-operator/api/v1beta1"
+import solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 
 type SolrOverseerStatusResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
