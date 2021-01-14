@@ -1,0 +1,17 @@
+github:
+  features:
+    # Enable issue management
+    issues: true
+    # Enable projects for project management boards
+    projects: true
+  enabled_merge_buttons:
+    # enable squash button:
+    squash:  true
+    # disable merge button:
+    merge:   false
+    # enable rebase button:
+    rebase:  true
+  
+  # Github Pages
+  ghp_branch:  master
+  ghp_path:    /docs
