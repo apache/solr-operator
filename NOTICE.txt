@@ -1,14 +1,12 @@
 ==============================================================
- Apache Solr
+ Apache Solr Operator
  Copyright 2006-2021 The Apache Software Foundation
 ==============================================================
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).
 
-Includes software from other Apache Software Foundation projects,
-including, but not limited to:
-  - Apache Lucene Java
+Includes software from other Apache Software Foundation projects.
 
 This includes code provided by Bloomberg Finance LP as a Software Grant
 to The ASF.
