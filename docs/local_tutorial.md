@@ -104,7 +104,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 ```bash
 # Create a spec for a 3-node cluster v8.3 with 300m RAM each:
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example
@@ -134,7 +134,7 @@ We'll use the Operator's built in collection creation option
 ```bash
 # Create the spec
 cat <<EOF > collection.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: mycoll
@@ -192,7 +192,7 @@ curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system
 
 # Update the solrCloud configuratin with the new version, keeping 5 nodes
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example

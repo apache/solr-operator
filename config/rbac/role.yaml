@@ -155,7 +155,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrbackups
   verbs:
@@ -167,7 +167,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrbackups/status
   verbs:
@@ -175,7 +175,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcloud
   verbs:
@@ -183,13 +183,13 @@ rules:
   - list
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcloud/status
   verbs:
   - get
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrclouds
   verbs:
@@ -201,7 +201,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrclouds/status
   verbs:
@@ -209,7 +209,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcollectionaliases
   verbs:
@@ -221,7 +221,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcollectionaliases/status
   verbs:
@@ -229,7 +229,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcollections
   verbs:
@@ -241,7 +241,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrcollections/status
   verbs:
@@ -249,7 +249,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrprometheusexporters
   verbs:
@@ -261,7 +261,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - solr.bloomberg.com
+  - solr.apache.org
   resources:
   - solrprometheusexporters/status
   verbs:

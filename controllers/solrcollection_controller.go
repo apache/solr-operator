@@ -42,8 +42,8 @@ type SolrCollectionReconciler struct {
 	Log    logr.Logger
 }
 
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollections/status,verbs=get;update;patch
 
 func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()

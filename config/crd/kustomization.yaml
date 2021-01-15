@@ -2,11 +2,11 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/solr.bloomberg.com_solrclouds.yaml
-- bases/solr.bloomberg.com_solrbackups.yaml
-- bases/solr.bloomberg.com_solrcollections.yaml
-- bases/solr.bloomberg.com_solrprometheusexporters.yaml
-- bases/solr.bloomberg.com_solrcollectionaliases.yaml
+- bases/solr.apache.org_solrclouds.yaml
+- bases/solr.apache.org_solrbackups.yaml
+- bases/solr.apache.org_solrcollections.yaml
+- bases/solr.apache.org_solrprometheusexporters.yaml
+- bases/solr.apache.org_solrcollectionaliases.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge: []

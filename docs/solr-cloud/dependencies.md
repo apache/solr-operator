@@ -44,5 +44,5 @@ NAME                                          HOSTS                             
 ingress.extensions/example-solrcloud-common   default-example-solrcloud.test.domain,default-example-solrcloud-0.test.domain + 3 more...   80      2d2h
 
 NAME                                       VERSION   DESIREDNODES   NODES   READYNODES   AGE
-solrcloud.solr.bloomberg.com/example       8.1.1     4              4       4            47h
+solrcloud.solr.apache.org/example       8.1.1     4              4       4            47h
 ```

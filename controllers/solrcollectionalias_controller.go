@@ -42,10 +42,10 @@ type SolrCollectionAliasReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollectionaliases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollectionaliases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud/status,verbs=get
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollectionaliases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollectionaliases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcloud,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcloud/status,verbs=get
 
 func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()

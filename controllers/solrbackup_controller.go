@@ -49,10 +49,10 @@ type SolrBackupReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrbackups/status,verbs=get;update;patch
 
 func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
