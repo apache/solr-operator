@@ -5,7 +5,7 @@ CRD_OPTIONS ?= "crd"
 NAME ?= solr-operator
 NAMESPACE ?= bloomberg/
 IMG = $(NAMESPACE)$(NAME)
-VERSION ?= $(shell git describe --tags HEAD)
+VERSION ?= $(or $(shell git describe --tags HEAD),"latest")
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
@@ -45,7 +45,7 @@ release: clean manifests helm-check
 
 # Build solr-operator binary
 build: generate vet
-	BIN=solr-operator VERSION=${VERSION:-latest} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
+	BIN=solr-operator VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Run tests
 test: check-format check-license generate fmt vet manifests
@@ -114,7 +114,7 @@ CONTROLLER_GEN=$(shell which controller-gen)
 # Build the base builder docker image
 # This can be a static go build or dynamic
 docker-base-build:
-	docker build --build-arg VERSION=${VERSION:-latest} --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator-build -f ./build/Dockerfile.build
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator-build -f ./build/Dockerfile.build
 
 # Build the docker image for the operator only
 docker-build: docker-base-build
