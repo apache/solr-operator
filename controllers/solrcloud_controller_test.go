@@ -737,11 +737,15 @@ func TestZookeeperDeprecationRemap(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
 	// Check the default Zookeeper
-	assert.Equal(t, reps, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
+	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
+	if instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas != nil {
+		assert.Equal(t, reps, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
+	}
 	assert.EqualValues(t, testImage, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Image")
 	assert.EqualValues(t, testPVCSpec.VolumeName, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.VolumeName, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.PersistentVolumeClaimSpec.VolumeName")
 	assert.Equal(t, testPodPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod, "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.ZookeeperPod")
@@ -804,6 +808,7 @@ func TestExternalKubeDomainCloudReconcile(t *testing.T) {
 	err = testClient.Create(context.TODO(), instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet

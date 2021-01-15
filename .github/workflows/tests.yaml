@@ -13,14 +13,13 @@ jobs:
 
     strategy:
       matrix:
-        matrix:
-          go: [ '1.14' ]
+        go: [ '1.14' ]
 
     steps:
       # Setup
       - uses: actions/checkout@v2
       - name: Setup go
-        uses: actions/setup-go@v1
+        uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.go }}
 

@@ -102,6 +102,7 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Fetch new value of instance to check finalizers
 	foundInstance := &solr.SolrCloud{}
