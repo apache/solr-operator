@@ -1,0 +1,57 @@
+name: Build & Test
+
+on:
+  pull_request:
+    branches:
+      - 'master'
+
+jobs:
+  test:
+    name: Build and Test Operator
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        matrix:
+          go: [ '1.14' ]
+
+    steps:
+      # Setup
+      - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go }}
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            /usr/local/bin/kustomize
+            /usr/local/kubebuilder
+            ~/go/bin
+          key: ${{ runner.os }}-build-dependencies-${{ hashFiles('hack/install_dependencies') }}
+          restore-keys: |
+            ${{ runner.os }}-build-dependencies
+
+      # Cleanup & Install dependencies
+      - run: make clean
+      - run: make controller-gen
+      - run: ./hack/install_dependencies.sh
+      - run: make mod-tidy
+
+      - uses: actions/cache@v2
+        with:
+          path: |
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-code-dependencies-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-code-dependencies
+
+      # Build
+      - run: make manifests
+      - run: make build
+
+      # Test
+      - run: make manifests-check
+      - run: make test
