@@ -37,7 +37,7 @@ github:
   ghp_branch:  master
   ghp_path:    /docs
 
-  notifications:
-    commits:      commits@lucene.apache.org
-    issues:       issues@lucene.apache.org
-    pullrequests: issues@lucene.apache.org
+notifications:
+  commits:      commits@lucene.apache.org
+  issues:       issues@lucene.apache.org
+  pullrequests: issues@lucene.apache.org
