@@ -125,6 +125,12 @@ We welcome issue reports [here](../../issues); be sure to choose the proper issu
 
 Please read the [LICENSE](LICENSE) file here.
 
+## Code of Conduct
+
+This space applies the ASF [Code of Conduct](https://www.apache.org/foundation/policies/conduct)
+If you have any concerns about the Code, or behavior which you have experienced in the project, please
+contact us at private@lucene.apache.org .
+
 ## Security Vulnerability Reporting
 
 If you believe you have identified a security vulnerability in this project, please send email to the ASF security
