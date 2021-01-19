@@ -38,7 +38,6 @@ import (
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
 
 func TestIngressCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -171,7 +170,6 @@ func TestIngressCloudReconcile(t *testing.T) {
 }
 
 func TestIngressNoNodesCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -300,7 +298,6 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 }
 
 func TestIngressNoCommonCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -433,7 +430,6 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 }
 
 func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -563,7 +559,6 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 }
 
 func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -698,7 +693,6 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 }
 
 func TestIngressKubeDomainCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 

@@ -756,7 +756,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 // solrCloud: SolrCloud instance
 // nodeStatuses: []SolrNodeStatus the nodeStatuses
 // ingressBaseDomain: string baseDomain of the ingress
-func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string, ingressBaseDomain string) (ingress *extv1.Ingress) {
+func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *extv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	var annotations map[string]string
 

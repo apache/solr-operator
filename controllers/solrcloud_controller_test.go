@@ -51,7 +51,6 @@ var (
 )
 
 func TestCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
@@ -164,8 +163,6 @@ func TestCloudReconcile(t *testing.T) {
 }
 
 func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
-	ingressBaseDomain := "ing.base.domain"
-	SetIngressBaseUrl(ingressBaseDomain)
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	replicas := int32(4)
@@ -320,7 +317,6 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 }
 
 func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
@@ -404,7 +400,6 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 }
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	connString := "host:7271,host2:7271"
@@ -480,7 +475,6 @@ func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 }
 
 func TestDefaults(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 	instance := &solr.SolrCloud{
@@ -571,188 +565,7 @@ func TestDefaults(t *testing.T) {
 		"solr.xml MD5 annotation should be set on the pod template!")
 }
 
-func TestIngressDefaults(t *testing.T) {
-	SetIngressBaseUrl("test.ingress.url")
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec:       solr.SolrCloudSpec{},
-	}
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	emptyRequests(requests)
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Solr defaults
-	assert.Equal(t, 80, instance.Spec.SolrAddressability.CommonServicePort, "Bad Default - instance.Spec.SolrAddressability.CommonServicePort")
-	assert.Equal(t, 8983, instance.Spec.SolrAddressability.PodPort, "Bad Default - instance.Spec.SolrAddressability.PodPort")
-	assert.NotNil(t, instance.Spec.SolrAddressability.External, "Bad Default - instance.Spec.SolrAddressability.External")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideNodes, "Bad Default - instance.Spec.SolrAddressability.External.HideNodes")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideCommon, "Bad Default - instance.Spec.SolrAddressability.External.HideCommon")
-	assert.Equal(t, "test.ingress.url", instance.Spec.SolrAddressability.External.DomainName, "Bad Default - instance.Spec.SolrAddressability.External.DomainName")
-	assert.Equal(t, solr.Ingress, instance.Spec.SolrAddressability.External.Method, "Bad Default - instance.Spec.SolrAddressability.External.Method")
-	assert.Equal(t, 80, instance.Spec.SolrAddressability.External.NodePortOverride, "Bad Default - instance.Spec.SolrAddressability.External.NodePortOverride")
-
-	// Test NodeServicePort automatic change when using ExternalDNS
-	instance.Spec.SolrAddressability.External = &solr.ExternalAddressability{}
-	instance.Spec.SolrAddressability.External.Method = solr.ExternalDNS
-	instance.Spec.SolrAddressability.External.DomainName = "test.ingress.url"
-	instance.Spec.SolrAddressability.PodPort = 8000
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Update(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	emptyRequests(requests)
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Solr defaults
-	assert.Equal(t, 80, instance.Spec.SolrAddressability.CommonServicePort, "Bad Default - instance.Spec.SolrAddressability.CommonServicePort")
-	assert.Equal(t, 8000, instance.Spec.SolrAddressability.PodPort, "Bad Default - instance.Spec.SolrAddressability.PodPort")
-	assert.NotNil(t, instance.Spec.SolrAddressability.External, "Bad Default - instance.Spec.SolrAddressability.External")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideNodes, "Bad Default - instance.Spec.SolrAddressability.External.HideNodes")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideCommon, "Bad Default - instance.Spec.SolrAddressability.External.HideCommon")
-	assert.Equal(t, "test.ingress.url", instance.Spec.SolrAddressability.External.DomainName, "Bad Default - instance.Spec.SolrAddressability.External.DomainName")
-	assert.Equal(t, solr.ExternalDNS, instance.Spec.SolrAddressability.External.Method, "Bad Default - instance.Spec.SolrAddressability.External.Method")
-	assert.Equal(t, 0, instance.Spec.SolrAddressability.External.NodePortOverride, "Bad Default - instance.Spec.SolrAddressability.External.NodePortOverride")
-
-	// Test NodePortOverride automatic set with an ingress that has nodes exposed.
-	instance.Spec.SolrAddressability.External.Method = solr.Ingress
-	instance.Spec.SolrAddressability.PodPort = 7000
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Update(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	emptyRequests(requests)
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Solr defaults
-	assert.Equal(t, 80, instance.Spec.SolrAddressability.CommonServicePort, "Bad Default - instance.Spec.SolrAddressability.CommonServicePort")
-	assert.Equal(t, 7000, instance.Spec.SolrAddressability.PodPort, "Bad Default - instance.Spec.SolrAddressability.PodPort")
-	assert.NotNil(t, instance.Spec.SolrAddressability.External, "Bad Default - instance.Spec.SolrAddressability.External")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideNodes, "Bad Default - instance.Spec.SolrAddressability.External.HideNodes")
-	assert.Equal(t, false, instance.Spec.SolrAddressability.External.HideCommon, "Bad Default - instance.Spec.SolrAddressability.External.HideCommon")
-	assert.Equal(t, "test.ingress.url", instance.Spec.SolrAddressability.External.DomainName, "Bad Default - instance.Spec.SolrAddressability.External.DomainName")
-	assert.Equal(t, solr.Ingress, instance.Spec.SolrAddressability.External.Method, "Bad Default - instance.Spec.SolrAddressability.External.Method")
-	assert.Equal(t, 80, instance.Spec.SolrAddressability.External.NodePortOverride, "Bad Default - instance.Spec.SolrAddressability.External.NodePortOverride")
-}
-
-// Deprecated: Will be removed in v0.3.0
-func TestZookeeperDeprecationRemap(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-	reps := int32(2)
-
-	testImage := &solr.ContainerImage{
-		Repository:      "test/repo",
-		Tag:             "latest",
-		PullPolicy:      "Always",
-		ImagePullSecret: "",
-	}
-	testPVCSpec := &corev1.PersistentVolumeClaimSpec{
-		VolumeName: "test",
-	}
-
-	testPodPolicy := solr.ZookeeperPodPolicy{
-		Affinity: &corev1.Affinity{
-			NodeAffinity:    &corev1.NodeAffinity{},
-			PodAntiAffinity: &corev1.PodAntiAffinity{},
-		},
-	}
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					ZookeeperOutdated: &solr.OldZookeeperSpec{
-						Replicas:                  &reps,
-						Image:                     testImage,
-						PersistentVolumeClaimSpec: testPVCSpec,
-						ZookeeperPod:              testPodPolicy,
-					},
-				},
-			},
-		},
-	}
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Check the default Zookeeper
-	assert.NotNil(t, instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
-	if instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas != nil {
-		assert.Equal(t, reps, *instance.Spec.ZookeeperRef.ProvidedZookeeper.Replicas, "Bad Migration - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Replicas")
-	}
-	assert.EqualValues(t, testImage, instance.Spec.ZookeeperRef.ProvidedZookeeper.Image, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.Image")
-	assert.EqualValues(t, testPVCSpec.VolumeName, instance.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.VolumeName, "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.PersistentVolumeClaimSpec.VolumeName")
-	assert.Equal(t, testPodPolicy, instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod, "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.OutdatedZookeeper.ZookeeperPod")
-}
-
 func TestExternalKubeDomainCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -858,7 +671,6 @@ func TestExternalKubeDomainCloudReconcile(t *testing.T) {
 }
 
 func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
