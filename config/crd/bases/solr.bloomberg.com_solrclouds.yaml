@@ -4451,7 +4451,7 @@ spec:
                           type: string
                         type: array
                       domainName:
-                        description: "Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS. The common and/or node services will be addressable by unique names under the given domain. e.g. default-example-solrcloud.given.domain.name.com \n This options will be required for the Ingress and ExternalDNS methods once the ingressBaseDomain startup parameter is removed. \n For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true. If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above."
+                        description: "Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS. The common and/or node services will be addressable by unique names under the given domain. e.g. given.domain.name.com -> default-example-solrcloud.given.domain.name.com \n For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true. If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above."
                         type: string
                       hideCommon:
                         description: Do not expose the common Solr service externally. This affects a single service. Defaults to false.
@@ -4472,6 +4472,7 @@ spec:
                         description: "Use the external address to advertise the SolrNode, defaults to false. \n If false, the external address will be available, however Solr (and clients using the CloudSolrClient in SolrJ) will only be aware of the internal URLs. If true, Solr will startup with the hostname of the external address. \n NOTE: This option cannot be true when hideNodes is set to true. So it will be auto-set to false if that is the case."
                         type: boolean
                     required:
+                    - domainName
                     - method
                     type: object
                   kubeDomain:

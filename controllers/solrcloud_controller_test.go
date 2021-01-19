@@ -208,14 +208,6 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					Annotations: testHeadlessServiceAnnotations,
 					Labels:      testHeadlessServiceLabels,
 				},
-				NodeServiceOptions: &solr.ServiceOptions{
-					Annotations: testNodeServiceAnnotations,
-					Labels:      testNodeServiceLabels,
-				},
-				IngressOptions: &solr.IngressOptions{
-					Annotations: testIngressAnnotations,
-					Labels:      testIngressLabels,
-				},
 				ConfigMapOptions: &solr.ConfigMapOptions{
 					Annotations: testConfigMapAnnotations,
 					Labels:      testConfigMapLabels,
@@ -255,6 +247,11 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
+	// Check the configMap
+	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string{})
+	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
+	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
+
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
 	assert.EqualValues(t, replicas, *statefulSet.Spec.Replicas, "Solr StatefulSet has incorrect number of replicas.")
@@ -262,9 +259,9 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
 	expectedEnvVars := map[string]string{
 		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "default-$(POD_HOSTNAME).ing.base.domain",
+		"SOLR_HOST":      "$(POD_HOSTNAME).foo-clo-solrcloud-headless.default",
 		"SOLR_PORT":      "8983",
-		"SOLR_NODE_PORT": "80",
+		"SOLR_NODE_PORT": "8983",
 		"GC_TUNE":        "gc Options",
 		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
 	}
@@ -274,7 +271,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "statefulSet labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels), statefulSet.Labels)
 	testMapsEqual(t, "statefulSet annotations", util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations), statefulSet.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
-	testMapsEqual(t, "pod annotations", testPodAnnotations, statefulSet.Spec.Template.Annotations)
+	testMapsEqual(t, "pod annotations", util.MergeLabelsOrAnnotations(map[string]string{"solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations), statefulSet.Spec.Template.Annotations)
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, statefulSet.Spec.Template.Spec.NodeSelector)
 	testPodProbe(t, testProbeLivenessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe)
 	testPodProbe(t, testProbeReadinessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe)
@@ -293,27 +290,10 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "common service annotations", testCommonServiceAnnotations, service.Annotations)
 
 	// Check that the headless Service does not exist
-	expectNoService(g, cloudHsKey, "Headless service shouldn't exist, but it does.")
-
-	// Check the ingress
-	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
-	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
-
-	nodeNames := instance.GetAllSolrNodeNames()
-	assert.EqualValues(t, replicas, len(nodeNames), "SolrCloud has incorrect number of nodeNames.")
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		service := expectService(t, g, requests, expectedCloudRequest, nodeSKey, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}))
-		expectedNodeServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "external"})
-		testMapsEqual(t, "node '"+nodeName+"' service labels", util.MergeLabelsOrAnnotations(expectedNodeServiceLabels, testNodeServiceLabels), service.Labels)
-		testMapsEqual(t, "node '"+nodeName+"' service annotations", testNodeServiceAnnotations, service.Annotations)
-	}
-
-	// Check the configMap
-	configMap := expectConfigMap(t, g, requests, expectedCloudRequest, cloudCMKey, map[string]string{})
-	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
-	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
+	headlessService := expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Selector.MatchLabels)
+	expectedHeadlessServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "headless"})
+	testMapsEqual(t, "common service labels", util.MergeLabelsOrAnnotations(expectedHeadlessServiceLabels, testHeadlessServiceLabels), headlessService.Labels)
+	testMapsEqual(t, "common service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
 }
 
 func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {

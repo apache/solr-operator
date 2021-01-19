@@ -389,14 +389,11 @@ type ExternalAddressability struct {
 
 	// Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS.
 	// The common and/or node services will be addressable by unique names under the given domain.
-	// e.g. default-example-solrcloud.given.domain.name.com
-	//
-	// This options will be required for the Ingress and ExternalDNS methods once the ingressBaseDomain startup parameter is removed.
+	// e.g. given.domain.name.com -> default-example-solrcloud.given.domain.name.com
 	//
 	// For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true.
 	// If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above.
-	// +optional
-	DomainName string `json:"domainName,omitempty"`
+	DomainName string `json:"domainName"`
 
 	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
 	// This option is ignored with the LoadBalancer method.
