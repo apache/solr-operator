@@ -25,7 +25,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // Used to call a Solr pod over https when using a self-signed cert
@@ -59,13 +58,6 @@ type SolrAsyncStatus struct {
 
 	Message string `json:"msg"`
 }
-
-// Used to call a Solr pod over https when using a self-signed cert
-// It's "insecure" but is only used for internal communication, such as getting cluster status
-// so if you're worried about this, don't use a self-signed cert
-//var noVerifyTLSHttpClient *http.Client = nil
-
-var logger = ctrl.Log.WithName("controllers").WithName("SolrCloud")
 
 func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
