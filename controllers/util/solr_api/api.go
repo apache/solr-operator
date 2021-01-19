@@ -18,7 +18,6 @@
 package solr_api
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -26,7 +25,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
+
+// Used to call a Solr pod over https when using a self-signed cert
+// It's "insecure" but is only used for internal communication, such as getting cluster status
+// so if you're worried about this, don't use a self-signed cert
+var noVerifyTLSHttpClient *http.Client
+
+func SetNoVerifyTLSHttpClient(client *http.Client) {
+	noVerifyTLSHttpClient = client
+}
 
 type SolrAsyncResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
@@ -54,21 +63,16 @@ type SolrAsyncStatus struct {
 // Used to call a Solr pod over https when using a self-signed cert
 // It's "insecure" but is only used for internal communication, such as getting cluster status
 // so if you're worried about this, don't use a self-signed cert
-var noVerifyTLSHttpClient *http.Client = nil
+//var noVerifyTLSHttpClient *http.Client = nil
+
+var logger = ctrl.Log.WithName("controllers").WithName("SolrCloud")
 
 func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := http.DefaultClient
-
-	// if TLS enabled but is using a self-signed cert, skipVerify for now
 	if cloud.Spec.SolrTLS != nil && cloud.Spec.SolrTLS.AutoCreate != nil {
-		if noVerifyTLSHttpClient == nil {
-			customTransport := http.DefaultTransport.(*http.Transport).Clone()
-			customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-			noVerifyTLSHttpClient = &http.Client{Transport: customTransport}
-			client = noVerifyTLSHttpClient
-		}
+		client = noVerifyTLSHttpClient
 	}
 
 	urlParams.Set("wt", "json")

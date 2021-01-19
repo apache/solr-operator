@@ -681,6 +681,18 @@ type SolrTLSOptions struct {
 
 func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
 
+	// we always need a keystore password, regardless of auto-create or user-supplied
+	if opts.KeyStorePasswordSecret == nil {
+		secretName := fmt.Sprintf("%s-pkcs12-keystore", instanceName)
+		opts.KeyStorePasswordSecret = &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: secretName,
+			},
+			Key: "password-key",
+		}
+		changed = true
+	}
+
 	if opts.AutoCreate != nil {
 		// User wants us to create a Certificate and Keystore password on-the-fly for them
 		// Fill-in any missing information with defaults so that the reconciliation process
@@ -692,17 +704,6 @@ func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
 
 		if opts.AutoCreate.SubjectDistinguishedName == "" {
 			opts.AutoCreate.SubjectDistinguishedName = "O=" + instanceName
-			changed = true
-		}
-
-		if opts.KeyStorePasswordSecret == nil {
-			secretName := fmt.Sprintf("%s-pkcs12-keystore", instanceName)
-			opts.KeyStorePasswordSecret = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: secretName,
-				},
-				Key: "password-key",
-			}
 			changed = true
 		}
 
@@ -1082,11 +1083,10 @@ func (sc *SolrCloud) CommonServiceName() string {
 // InternalURLForCloud returns the name of the common service for the cloud
 func InternalURLForCloud(sc *SolrCloud) string {
 	urlScheme := "http"
-	port := sc.Spec.SolrAddressability.CommonServicePort
 	if sc.Spec.SolrTLS != nil {
 		urlScheme = "https"
 	}
-	return fmt.Sprintf("%s://%s-solrcloud-common.%s:%d", urlScheme, sc.Name, sc.Namespace, port)
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", urlScheme, sc.Name, sc.Namespace, sc.CommonPortSuffix())
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud

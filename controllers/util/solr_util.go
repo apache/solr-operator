@@ -1226,15 +1226,6 @@ func findDNSNamesForCertificate(solrCloud *solr.SolrCloud) []string {
 		dnsNames = append(dnsNames, solrCloud.AdvertisedNodeHost("*"))
 	}
 
-	commonServiceHost := fmt.Sprintf("%s-solrcloud-common.%s", solrCloud.Name, solrCloud.Namespace)
-	dnsNames = append(dnsNames, commonServiceHost)
-
-	if solrCloud.UsesIndividualNodeServices() {
-		for _, nodeName := range solrCloud.GetAllSolrNodeNames() {
-			dnsNames = append(dnsNames, solrCloud.AdvertisedNodeHost(nodeName))
-		}
-	}
-
 	if len(dnsNames) > 1 {
 		dnsNames = deDupeDNSNames(dnsNames)
 		sort.Strings(dnsNames)

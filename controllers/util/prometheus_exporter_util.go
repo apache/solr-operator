@@ -156,10 +156,23 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	// Add JAVA_OPTS last, so that it can use values from all of the other ENV_VARS
 	if len(allJavaOpts) > 0 {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "JAVA_OPTS",
-			Value: strings.Join(allJavaOpts, " "),
-		})
+		currentJavaOpts := ""
+		appendOpts := strings.Join(allJavaOpts, " ")
+		// see if the user already provided JAVA_OPTS
+		for _, envVar := range envVars {
+			if envVar.Name == "JAVA_OPTS" {
+				currentJavaOpts = envVar.Value
+				envVar.Value += " " + appendOpts
+			}
+		}
+
+		if currentJavaOpts == "" {
+			// no existing JAVA_OPTS provided by user, append
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "JAVA_OPTS",
+				Value: appendOpts,
+			})
+		}
 	}
 
 	containers := []corev1.Container{
