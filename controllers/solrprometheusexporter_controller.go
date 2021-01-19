@@ -117,6 +117,11 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 			return ctrl.Result{}, err
 		}
 
+		// capture the MD5 for the default config XML, otherwise we already computed it above
+		if configXmlMd5 == "" {
+			configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[configMapKey])))
+		}
+
 		// Check if the ConfigMap already exists
 		configMapLogger := logger.WithValues("configMap", configMap.Name)
 		foundConfigMap := &corev1.ConfigMap{}
@@ -124,18 +129,10 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
-
-			// capture the MD5 for the config XML
-			configXml, _ := configMap.Data[configMapKey]
-			configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
 			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
-
-			// capture the MD5 for the config XML
-			configXml, _ := foundConfigMap.Data[configMapKey]
-			configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 		}
 		if err != nil {
 			return ctrl.Result{}, err

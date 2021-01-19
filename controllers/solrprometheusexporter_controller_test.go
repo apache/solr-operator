@@ -18,20 +18,21 @@
 package controllers
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	"testing"
-
+	"crypto/md5"
+	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"testing"
 )
 
 var _ reconcile.Reconciler = &SolrPrometheusExporterReconciler{}
@@ -200,7 +201,8 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "deployment labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testDeploymentLabels), deployment.Labels)
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
-	testPodAnnotations["solr.apache.org/exporterConfigXmlMd5"] = "2c354e0aeb176a6b5560f46fe35c9ca7"
+	expectedMd5 := fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
+	testPodAnnotations["solr.apache.org/exporterConfigXmlMd5"] = expectedMd5
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 	assert.EqualValues(t, testPriorityClass, deployment.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
@@ -316,7 +318,9 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	testMapsEqual(t, "deployment labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testDeploymentLabels), deployment.Labels)
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
-	testPodAnnotations["solr.apache.org/exporterConfigXmlMd5"] = "2c354e0aeb176a6b5560f46fe35c9ca7" // include the md5 hash of the testExporterConfig
+
+	expectedMd5 := fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
+	testPodAnnotations["solr.apache.org/exporterConfigXmlMd5"] = expectedMd5
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
 	// Env Variable Tests
