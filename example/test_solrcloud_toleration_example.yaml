@@ -3,14 +3,9 @@ kind: SolrCloud
 metadata:
   name: example-with-tolerations
 spec:
-  dataPvcSpec:
-    resources:
-      requests:
-        storage: "5Gi"
   replicas: 1
   solrImage:
-    tag: 8.2.0
-  solrJavaMem: "-Xms1g -Xmx3g"
+    tag: 8.7.0
   customSolrKubeOptions:
     podOptions:
       nodeSelector:
