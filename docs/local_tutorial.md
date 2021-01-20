@@ -62,7 +62,7 @@ Before installing the Solr Operator, we need to install the [Zookeeper Operator]
 Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+kubectl apply -f https://raw.githubusercontent.com/apache/lucene-solr-operator/main/example/dependencies/zk_operator.yaml
 ```
 
 Now add the Solr Operator Helm repository. (You should only need to do this once)
