@@ -56,7 +56,6 @@ func TestMain(m *testing.M) {
 			filepath.Join("..", "config", "crd", "bases"),
 			filepath.Join("..", "example", "dependencies"),
 		},
-		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
 	zkOp.AddToScheme(scheme.Scheme)
