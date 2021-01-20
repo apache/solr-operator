@@ -85,21 +85,19 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	configMapKey := "solr-prometheus-exporter.xml"
+	configMapKey := util.PrometheusExporterConfigMapKey
 	configXmlMd5 := ""
 	if prometheusExporter.Spec.Config == "" && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
 		foundConfigMap := &corev1.ConfigMap{}
-		nn := types.NamespacedName{Name: prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: prometheusExporter.Namespace}
-		err = r.Get(context.TODO(), nn, foundConfigMap)
+		err = r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: prometheusExporter.Namespace}, foundConfigMap)
 		if err != nil {
-			return ctrl.Result{}, err // if they passed a providedConfigMap name, then it must exist
+			return ctrl.Result{}, err
 		}
 
 		if foundConfigMap.Data != nil {
 			configXml, ok := foundConfigMap.Data[configMapKey]
 			if ok {
 				configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
-				logger.Info("Provided configMap has MD5", "configMap", foundConfigMap.Name, "md5", configXmlMd5)
 			} else {
 				return ctrl.Result{}, fmt.Errorf("required '%s' key not found in provided ConfigMap %s",
 					configMapKey, prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)

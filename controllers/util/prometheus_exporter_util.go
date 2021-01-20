@@ -34,7 +34,9 @@ const (
 	SolrMetricsPortName = "solr-metrics"
 	ExtSolrMetricsPort  = 80
 
-	DefaultPrometheusExporterEntrypoint = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
+	DefaultPrometheusExporterEntrypoint      = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
+	PrometheusExporterConfigMapKey           = "solr-prometheus-exporter.xml"
+	PrometheusExporterConfigXmlMd5Annotation = "solr.apache.org/exporterConfigXmlMd5"
 )
 
 // SolrConnectionInfo defines how to connect to a cloud or standalone solr instance.
@@ -118,8 +120,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 					},
 					Items: []corev1.KeyToPath{
 						{
-							Key:  "solr-prometheus-exporter.xml",
-							Path: "solr-prometheus-exporter.xml",
+							Key:  PrometheusExporterConfigMapKey,
+							Path: PrometheusExporterConfigMapKey,
 						},
 					},
 				},
@@ -128,7 +130,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		volumeMounts = []corev1.VolumeMount{{Name: "solr-prometheus-exporter-xml", MountPath: "/opt/solr-exporter", ReadOnly: true}}
 
-		exporterArgs = append(exporterArgs, "-f", "/opt/solr-exporter/solr-prometheus-exporter.xml")
+		exporterArgs = append(exporterArgs, "-f", "/opt/solr-exporter/"+PrometheusExporterConfigMapKey)
 	} else {
 		exporterArgs = append(exporterArgs, "-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml")
 	}
@@ -212,7 +214,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if podAnnotations == nil {
 			podAnnotations = make(map[string]string, 1)
 		}
-		podAnnotations["solr.apache.org/exporterConfigXmlMd5"] = configXmlMd5
+		podAnnotations[PrometheusExporterConfigXmlMd5Annotation] = configXmlMd5
 	}
 
 	deployment := &appsv1.Deployment{
@@ -304,7 +306,7 @@ func GenerateMetricsConfigMap(solrPrometheusExporter *solr.SolrPrometheusExporte
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			"solr-prometheus-exporter.xml": solrPrometheusExporter.Spec.Config,
+			PrometheusExporterConfigMapKey: solrPrometheusExporter.Spec.Config,
 		},
 	}
 	return configMap
