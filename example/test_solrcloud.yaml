@@ -1,0 +1,48 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrCloud
+metadata:
+  name: example
+spec:
+  dataStorage:
+    persistent:
+      reclaimPolicy: Delete
+      pvcTemplate:
+        spec:
+          resources:
+            requests:
+              storage: "5Gi"
+    backupRestoreOptions:
+      volume:
+        persistentVolumeClaim:
+          claimName: "pvc-test"
+  replicas: 3
+  solrImage:
+    tag: 8.2.0
+  solrJavaMem: "-Xms1g -Xmx3g"
+  customSolrKubeOptions:
+    podOptions:
+      resources:
+        limits:
+          memory: "1G"
+        requests:
+          cpu: "65m"
+          memory: "156Mi"
+  zookeeperRef:
+    provided:
+      chroot: "/this/will/be/auto/created"
+      persistence:
+        spec:
+          storageClassName: "hostpath"
+          resources:
+            requests:
+              storage: "5Gi"
+      replicas: 1
+      zookeeperPodPolicy:
+        resources:
+          limits:
+            memory: "1G"
+          requests:
+            cpu: "65m"
+            memory: "156Mi"
+  solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+  solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"

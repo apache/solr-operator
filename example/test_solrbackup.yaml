@@ -1,0 +1,14 @@
+apiVersion: solr.bloomberg.com/v1beta1
+kind: SolrBackup
+metadata:
+  name: solrbackup-test
+  namespace: default
+spec:
+  persistence:
+    volume:
+      source:
+        persistentVolumeClaim:
+          claimName: "pvc-test"
+  solrCloud: example
+  collections:
+    - example
