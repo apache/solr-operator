@@ -63,7 +63,7 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response in
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := http.DefaultClient
-	if cloud.Spec.SolrTLS != nil && cloud.Spec.SolrTLS.AutoCreate != nil {
+	if cloud.Spec.SolrTLS != nil {
 		client = noVerifyTLSHttpClient
 	}
 
