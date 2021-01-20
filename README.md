@@ -2,7 +2,7 @@
 [![Latest Version](https://img.shields.io/github/tag/apache/lucene-solr-operator)](https://github.com/apache/lucene-solr-operator/releases)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Go Report Card](https://goreportcard.com/badge/github.com/apache/lucene-solr-operator)](https://goreportcard.com/report/github.com/apache/lucene-solr-operator)
-[![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/master)
+[![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
