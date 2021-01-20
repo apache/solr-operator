@@ -14,12 +14,12 @@ This is because the Solr Operator, in most instances, relies on the Zookeeper Op
 
 If you are setting `useZkOperator=false`, then please disregard this section.
 
-Eventually the Zookeeper Opertor will be a dependency on the Solr Operator helm chart, but for now there are two easy ways to deploy it.
+Eventually the Zookeeper Operator will be a dependency on the Solr Operator helm chart, but for now there are two easy ways to deploy it.
 
 - A helm chart is available [in the Zookeeper Operator repository](https://github.com/pravega/zookeeper-operator/blob/master/charts/zookeeper-operator/).
 - Use the following kubectl command:
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/apache/lucene-solr-operator/main/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
 ```
 
 #### Helm
@@ -27,7 +27,7 @@ kubectl apply -f https://raw.githubusercontent.com/apache/lucene-solr-operator/m
 Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/apache/lucene-solr-operator/main/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
 ```
 
 ### Adding the Solr Operator Helm Chart Repository
