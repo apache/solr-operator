@@ -216,8 +216,10 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 
 			if hasLogXml {
-				// stored in the pod spec annotations on the statefulset so that we get a restart when the log config changes
-				configMapInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
+				if !strings.Contains(logXml, "monitorInterval=") {
+					// stored in the pod spec annotations on the statefulset so that we get a restart when the log config changes
+					configMapInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
+				} // else log4j will automatically refresh for us, so no restart needed
 				configMapInfo[util.LogXmlFile] = foundConfigMap.Name
 			}
 

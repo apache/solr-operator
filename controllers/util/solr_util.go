@@ -333,10 +333,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Did the user provide a custom log config?
 	if configMapInfo[LogXmlFile] != "" {
 
-		if podAnnotations == nil {
-			podAnnotations = make(map[string]string, 1)
+		if configMapInfo[LogXmlMd5Annotation] != "" {
+			if podAnnotations == nil {
+				podAnnotations = make(map[string]string, 1)
+			}
+			podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
 		}
-		podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
 
 		// cannot use /var/solr as a mountPath, so mount the custom log config in a sub-dir
 		volName := "log4j2-xml"
