@@ -189,8 +189,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml ... but the provided ConfigMap
 	// might be for the Prometheus exporter, so we only care if they provide a solr.xml in the CM
-	solrXmlConfigMapName := instance.ConfigMapName()
-	solrXmlMd5 := ""
+	configMapInfo := make(map[string]string)
 	if instance.Spec.CustomSolrKubeOptions.ConfigMapOptions != nil && instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
 		foundConfigMap := &corev1.ConfigMap{}
 		nn := types.NamespacedName{Name: instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: instance.Namespace}
@@ -201,20 +200,32 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		// ConfigMap doesn't have to have a solr.xml, but if it does, then it needs to be valid!
 		if foundConfigMap.Data != nil {
-			solrXml, ok := foundConfigMap.Data["solr.xml"]
-			if ok {
+			logXml, hasLogXml := foundConfigMap.Data["log4j2.xml"]
+			solrXml, hasSolrXml := foundConfigMap.Data["solr.xml"]
+
+			// if there's a user-provided config, it must have one of the expected keys
+			if !hasLogXml && !hasSolrXml {
+				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
+					instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+			}
+
+			if hasSolrXml {
 				if !strings.Contains(solrXml, "${hostPort:") {
 					return requeueOrNot,
 						fmt.Errorf("Custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
 							instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
-				solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
-				solrXmlConfigMapName = foundConfigMap.Name
-			} else {
-				return requeueOrNot, fmt.Errorf("Required 'solr.xml' key not found in provided ConfigMap %s",
-					instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+				configMapInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
+				configMapInfo["solr.xml"] = foundConfigMap.Name
 			}
+
+			if hasLogXml {
+				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
+				configMapInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
+				configMapInfo["log4j2.xml"] = foundConfigMap.Name
+			}
+
 		} else {
 			return requeueOrNot, fmt.Errorf("Provided ConfigMap %s has no data",
 				instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
@@ -225,6 +236,9 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return requeueOrNot, err
 		}
 
+		configMapInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
+		configMapInfo["solr.xml"] = configMap.Name
+
 		// Check if the ConfigMap already exists
 		configMapLogger := logger.WithValues("configMap", configMap.Name)
 		foundConfigMap := &corev1.ConfigMap{}
@@ -232,12 +246,10 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
-			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
 		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
 			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
-			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data["solr.xml"])))
 		}
 		if err != nil {
 			return requeueOrNot, err
@@ -254,7 +266,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, solrXmlConfigMapName, solrXmlMd5)
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, configMapInfo)
 		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
 			return requeueOrNot, err
 		}

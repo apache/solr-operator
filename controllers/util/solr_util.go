@@ -48,6 +48,7 @@ const (
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
+	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -75,7 +76,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, solrXmlConfigMapName string, solrXmlMd5 string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, configMapInfo map[string]string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
@@ -124,7 +125,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: solrXmlConfigMapName,
+						Name: configMapInfo["solr.xml"],
 					},
 					Items: []corev1.KeyToPath{
 						{
@@ -328,13 +329,54 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		envVars = append(envVars, customPodOptions.EnvVariables...)
 	}
 
-	// track the MD5 of the custom solr.xml in the pod spec annotations,
-	// so we get a rolling restart when the configMap changes
-	if solrXmlMd5 != "" {
+	// Did the user provide a custom log config?
+	if configMapInfo["log4j2.xml"] != "" {
+
 		if podAnnotations == nil {
 			podAnnotations = make(map[string]string, 1)
 		}
-		podAnnotations[SolrXmlMd5Annotation] = solrXmlMd5
+		podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
+
+		pathOnHost := "/var/solr/custom-log4j2.xml"
+
+		// add the volume mount for the custom log config
+		solrVolumes = append(solrVolumes, corev1.Volume{
+			Name: "log4j2-xml",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: configMapInfo["log4j2.xml"],
+					},
+					Items: []corev1.KeyToPath{
+						{
+							Key:  "log4j2.xml",
+							Path: "log4j2.xml",
+						},
+					},
+					DefaultMode: &defaultMode,
+				},
+			},
+		})
+
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "log4j2-xml",
+			MountPath: pathOnHost,
+			ReadOnly:  false,
+		})
+
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "LOG4J_PROPS",
+			Value: pathOnHost,
+		})
+	}
+
+	// track the MD5 of the custom solr.xml in the pod spec annotations,
+	// so we get a rolling restart when the configMap changes
+	if configMapInfo[SolrXmlMd5Annotation] != "" {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		podAnnotations[SolrXmlMd5Annotation] = configMapInfo[SolrXmlMd5Annotation]
 	}
 
 	if solrCloud.Spec.SolrOpts != "" {
