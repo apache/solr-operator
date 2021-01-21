@@ -1,7 +1,7 @@
 # https://cwiki.apache.org/confluence/display/INFRA/.asf.yaml+features+for+git+repositories
 
 github:
-  description: "Apache Lucene and Solr open-source search software"
+  description: "Kubernetes Operator for Apache Solr"
   homepage: https://lucene.apache.org/
   labels:
     - solr
@@ -30,12 +30,11 @@ github:
     rebase:  false
 
   protected_branches:
-    master:
+    main:
       required_signatures: false
 
   # Github Pages
-  ghp_branch:  master
-  ghp_path:    /docs
+  ghp_branch: gh-pages
 
 notifications:
   commits:      commits@lucene.apache.org

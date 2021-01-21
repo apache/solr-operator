@@ -134,6 +134,3 @@ Make sure that you have updated the go.mod file:
 ```bash
 $ make mod-tidy
 ```
-
-Finally, as mentioned on the Repo's README, you will need to sign all commits included in the PR.
-More information can be found on the [organization's contibutions documentation](https://github.com/bloomberg/.github/blob/master/CONTRIBUTING.md#contribution-licensing).

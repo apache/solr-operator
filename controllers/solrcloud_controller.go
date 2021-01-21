@@ -58,14 +58,9 @@ type SolrCloudReconciler struct {
 }
 
 var useZkCRD bool
-var IngressBaseUrl string
 
 func UseZkCRD(useCRD bool) {
 	useZkCRD = useCRD
-}
-
-func SetIngressBaseUrl(ingressBaseUrl string) {
-	IngressBaseUrl = ingressBaseUrl
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
@@ -106,7 +101,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return reconcile.Result{}, err
 	}
 
-	changed := instance.WithDefaults(IngressBaseUrl)
+	changed := instance.WithDefaults()
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
 		if err := r.Update(context.TODO(), instance); err != nil {
@@ -230,6 +225,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
 			return requeueOrNot, err
 		}
+		solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
 
 		// Check if the ConfigMap already exists
 		configMapLogger := logger.WithValues("configMap", configMap.Name)
@@ -238,12 +234,10 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
 			err = r.Create(context.TODO(), configMap)
-			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
 		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
 			// Update the found ConfigMap and write the result back if there are any changes
 			configMapLogger.Info("Updating ConfigMap")
 			err = r.Update(context.TODO(), foundConfigMap)
-			solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data["solr.xml"])))
 		}
 		if err != nil {
 			return requeueOrNot, err
@@ -416,7 +410,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	extAddressabilityOpts := instance.Spec.SolrAddressability.External
 	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solr.Ingress {
 		// Generate Ingress
-		ingress := util.GenerateIngress(instance, solrNodeNames, IngressBaseUrl)
+		ingress := util.GenerateIngress(instance, solrNodeNames)
 		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
 			return requeueOrNot, err
 		}

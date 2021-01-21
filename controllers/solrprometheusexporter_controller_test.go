@@ -18,20 +18,22 @@
 package controllers
 
 import (
-	corev1 "k8s.io/api/core/v1"
-	"testing"
-
+	"crypto/md5"
+	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"testing"
 )
 
 var _ reconcile.Reconciler = &SolrPrometheusExporterReconciler{}
@@ -191,7 +193,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{"solr-prometheus-exporter.xml": testExporterConfig})
+	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{util.PrometheusExporterConfigMapKey: testExporterConfig})
 	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
 	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
 
@@ -200,6 +202,8 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "deployment labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testDeploymentLabels), deployment.Labels)
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
+	expectedMd5 := fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
+	testPodAnnotations[util.PrometheusExporterConfigXmlMd5Annotation] = expectedMd5
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 	assert.EqualValues(t, testPriorityClass, deployment.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 
@@ -306,7 +310,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{"solr-prometheus-exporter.xml": testExporterConfig})
+	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{util.PrometheusExporterConfigMapKey: testExporterConfig})
 	testMapsEqual(t, "configMap labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testConfigMapLabels), configMap.Labels)
 	testMapsEqual(t, "configMap annotations", testConfigMapAnnotations, configMap.Annotations)
 
@@ -315,6 +319,9 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	testMapsEqual(t, "deployment labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testDeploymentLabels), deployment.Labels)
 	testMapsEqual(t, "deployment annotations", testDeploymentAnnotations, deployment.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels), deployment.Spec.Template.ObjectMeta.Labels)
+
+	expectedMd5 := fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
+	testPodAnnotations[util.PrometheusExporterConfigXmlMd5Annotation] = expectedMd5
 	testMapsEqual(t, "pod annotations", testPodAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
 	// Env Variable Tests
@@ -489,7 +496,7 @@ func TestMetricsReconcileWithSolrZkAcls(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{"solr-prometheus-exporter.xml": testExporterConfig})
+	configMap := expectConfigMap(t, g, requests, expectedMetricsRequest, metricsCMKey, map[string]string{util.PrometheusExporterConfigMapKey: testExporterConfig})
 	testMapsEqual(t, "configMap labels", instance.SharedLabelsWith(instance.Labels), configMap.Labels)
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, configMap.Name)
@@ -561,4 +568,108 @@ func TestMetricsReconcileWithSolrZkAcls(t *testing.T) {
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
 	testMapsEqual(t, "service labels", expectedServiceLabels, service.Labels)
 	testMapsEqual(t, "service annotations", expectedServiceAnnotations, service.Annotations)
+}
+
+func TestMetricsReconcileWithUserProvidedConfig(t *testing.T) {
+	g := gomega.NewGomegaWithT(t)
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrPrometheusExporterReconciler := &SolrPrometheusExporterReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrPrometheusExporter"),
+	}
+	newRec, requests := SetupTestReconcile(solrPrometheusExporterReconciler)
+	g.Expect(solrPrometheusExporterReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, expectedMetricsRequest.Namespace)
+
+	// configure the exporter to pull config from a user-provided ConfigMap instead of the default
+	withUserProvidedConfigMapName := "custom-exporter-config"
+	instance := &solr.SolrPrometheusExporter{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedMetricsRequest.Name, Namespace: expectedMetricsRequest.Namespace},
+		Spec: solr.SolrPrometheusExporterSpec{
+			CustomKubeOptions: solr.CustomExporterKubeOptions{
+				ConfigMapOptions: &solr.ConfigMapOptions{
+					ProvidedConfigMap: withUserProvidedConfigMapName,
+				},
+			},
+		},
+	}
+
+	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+
+	// reconcile is happening but it can't proceed b/c the user-provided configmap doesn't exist
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	// create the user-provided ConfigMap but w/o the expected key
+	userProvidedConfigXml := "<config/>"
+	userProvidedConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      withUserProvidedConfigMapName,
+			Namespace: expectedMetricsRequest.Namespace,
+		},
+		Data: map[string]string{
+			"foo": userProvidedConfigXml,
+		},
+	}
+	err = testClient.Create(context.TODO(), userProvidedConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	userProvidedConfigMapNN := types.NamespacedName{Name: userProvidedConfigMap.Name, Namespace: userProvidedConfigMap.Namespace}
+
+	// can't proceed b/c the user-provided ConfigMap is invalid
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	// update the config to fix the error
+	updateUserProvidedConfigMap(testClient, g, userProvidedConfigMapNN, map[string]string{util.PrometheusExporterConfigMapKey: userProvidedConfigXml})
+
+	// reconcile should pass now
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, userProvidedConfigMap.Name)
+	expectedAnnotations := map[string]string{
+		util.PrometheusExporterConfigXmlMd5Annotation: fmt.Sprintf("%x", md5.Sum([]byte(userProvidedConfigXml))),
+	}
+	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+
+	// update the user-provided ConfigMap to trigger reconcile on the deployment
+	updatedConfigXml := "<config>updated by user</config>"
+	updateUserProvidedConfigMap(testClient, g, userProvidedConfigMapNN, map[string]string{util.PrometheusExporterConfigMapKey: updatedConfigXml})
+
+	// reconcile should happen again
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, userProvidedConfigMap.Name)
+	expectedAnnotations = map[string]string{
+		util.PrometheusExporterConfigXmlMd5Annotation: fmt.Sprintf("%x", md5.Sum([]byte(updatedConfigXml))),
+	}
+	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+}
+
+func updateUserProvidedConfigMap(testClient client.Client, g *gomega.GomegaWithT, userProvidedConfigMapNN types.NamespacedName, dataMap map[string]string) {
+	foundConfigMap := &corev1.ConfigMap{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), userProvidedConfigMapNN, foundConfigMap) }, timeout).Should(gomega.Succeed())
+	foundConfigMap.Data = dataMap
+	err := testClient.Update(context.TODO(), foundConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
 }

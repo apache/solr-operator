@@ -7,7 +7,7 @@ This is because the Solr Operator, in most instances, relies on the Zookeeper Op
 Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
 ```
 
 ## Using the Solr Operator Helm Chart

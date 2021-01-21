@@ -64,7 +64,7 @@ func TestAutoCreateSelfSignedTLS(t *testing.T) {
 		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
 	}
 
-	changed := instance.WithDefaults("")
+	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 
 	// check the config gets setup correctly before reconcile
@@ -78,7 +78,7 @@ func TestAutoCreateSelfSignedTLS(t *testing.T) {
 func TestEnableTLSOnExisting(t *testing.T) {
 
 	instance := buildTestSolrCloud()
-	changed := instance.WithDefaults("")
+	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 
 	g := gomega.NewGomegaWithT(t)
@@ -100,7 +100,7 @@ func TestEnableTLSOnExisting(t *testing.T) {
 		},
 		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
 	}
-	changed = instance.WithDefaults("")
+	changed = instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 
 	// check the config gets setup correctly before reconcile
@@ -159,7 +159,7 @@ func TestUserSuppliedTLS(t *testing.T) {
 		},
 	}
 
-	changed := instance.WithDefaults("")
+	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false)
@@ -183,7 +183,7 @@ func TestUserSuppliedTLSWithPkcs12Conversion(t *testing.T) {
 			Key: "keystore.p12",
 		},
 	}
-	changed := instance.WithDefaults("")
+	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true)
@@ -522,7 +522,6 @@ type TLSTestHelper struct {
 }
 
 func NewTLSTestHelper(g *gomega.GomegaWithT) *TLSTestHelper {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a

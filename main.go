@@ -62,9 +62,6 @@ var (
 
 	// External Operator dependencies
 	useZookeeperCRD bool
-
-	// Addressability Options
-	ingressBaseDomain string
 )
 
 func init() {
@@ -76,7 +73,6 @@ func init() {
 
 	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
-	flag.StringVar(&ingressBaseDomain, "ingress-base-domain", "", "The operator will use this base domain for host matching in an ingress for the cloud.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 	flag.Parse()
 }
@@ -141,7 +137,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	controllers.SetIngressBaseUrl(ingressBaseDomain)
 	controllers.UseZkCRD(useZookeeperCRD)
 
 	if err = (&controllers.SolrCloudReconciler{

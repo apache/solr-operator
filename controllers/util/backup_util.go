@@ -95,11 +95,7 @@ func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) 
 func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
 	var backupVolume corev1.VolumeSource
 	var solrCloudBackupDirectoryOverride string
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions == nil {
-		if solrCloud.Spec.BackupRestoreVolume != nil {
-			backupVolume = *solrCloud.Spec.BackupRestoreVolume
-		}
-	} else {
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
 		backupVolume = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
 		solrCloudBackupDirectoryOverride = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory
 	}

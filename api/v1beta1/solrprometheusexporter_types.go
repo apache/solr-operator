@@ -35,13 +35,6 @@ type SolrPrometheusExporterSpec struct {
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
 
-	// DEPRECATED: Please use the options provided in customKubeOptions.podOptions
-	//
-	// Pod defines the policy to create pod for the SolrCloud.
-	// Updating the Pod does not take effect on any existing pods.
-	// +optional
-	PodPolicy SolrPodPolicy `json:"podPolicy,omitempty"`
-
 	// Provide custom options for kubernetes objects created for the SolrPrometheusExporter.
 	// +optional
 	CustomKubeOptions CustomExporterKubeOptions `json:"customKubeOptions,omitempty"`
@@ -76,34 +69,6 @@ func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bo
 	if ps.NumThreads == 0 {
 		ps.NumThreads = 1
 		changed = true
-	}
-
-	if ps.PodPolicy.Affinity != nil {
-		changed = true
-		if ps.CustomKubeOptions.PodOptions == nil {
-			ps.CustomKubeOptions.PodOptions = &PodOptions{}
-		}
-		if ps.CustomKubeOptions.PodOptions.Affinity == nil {
-			ps.CustomKubeOptions.PodOptions.Affinity = ps.PodPolicy.Affinity
-		}
-		ps.PodPolicy.Affinity = nil
-	}
-
-	if len(ps.PodPolicy.Resources.Requests) > 0 || len(ps.PodPolicy.Resources.Limits) > 0 {
-		changed = true
-		if ps.CustomKubeOptions.PodOptions == nil {
-			ps.CustomKubeOptions.PodOptions = &PodOptions{}
-		}
-		if len(ps.CustomKubeOptions.PodOptions.Resources.Requests) == 0 &&
-			len(ps.PodPolicy.Resources.Requests) > 0 {
-			ps.CustomKubeOptions.PodOptions.Resources.Requests = ps.PodPolicy.Resources.Requests
-		}
-		if len(ps.CustomKubeOptions.PodOptions.Resources.Limits) == 0 &&
-			len(ps.PodPolicy.Resources.Limits) > 0 {
-			ps.CustomKubeOptions.PodOptions.Resources.Limits = ps.PodPolicy.Resources.Limits
-		}
-		ps.PodPolicy.Resources.Requests = nil
-		ps.PodPolicy.Resources.Limits = nil
 	}
 
 	return changed
