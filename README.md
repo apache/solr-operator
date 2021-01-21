@@ -21,7 +21,7 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 ## Menu
 
 - [Documentation](#documentation)
-- [Version Compatibility and Upgrade Notes](#version-compatability--upgrade-notes)
+- [Version Compatibility and Upgrade Notes](#version-compatibility--upgrade-notes)
 - [Contributions](#contributions)
 - [License](#license)
 - [Code of Conduct](#code-of-conduct)
@@ -31,19 +31,19 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
-- [Local Tutorial](https://apache.github.io/lucene-solr-operator/docs/local_tutorial.md)
-- [Running the Solr Operator](https://apache.github.io/lucene-solr-operator/docs/running-the-operator.md)
+- [Local Tutorial](https://apache.github.io/lucene-solr-operator/docs/local_tutorial)
+- [Running the Solr Operator](https://apache.github.io/lucene-solr-operator/docs/running-the-operator)
 - Available Solr Resources
     - [Solr Clouds](https://apache.github.io/lucene-solr-operator/docs/solr-cloud)
     - [Solr Collections](https://apache.github.io/lucene-solr-operator/docs/solr-collection)
     - [Solr Backups](https://apache.github.io/lucene-solr-operator/docs/solr-backup)
     - [Solr Metrics](https://apache.github.io/lucene-solr-operator/docs/solr-prometheus-exporter)
     - [Solr Collection Aliases](https://apache.github.io/lucene-solr-operator/docs/solr-collection-alias)
-- [Development](https://apache.github.io/lucene-solr-operator/docs/development.md)
+- [Development](https://apache.github.io/lucene-solr-operator/docs/development)
 
 ### Examples
 
-Example uses of each CRD have been [provided](https://apache.github.io/lucene-solr-operator/examples).
+Example uses of each CRD have been [provided](https://apache.github.io/lucene-solr-operator/example).
 
 ## Version Compatibility & Upgrade Notes
 
