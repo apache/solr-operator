@@ -123,7 +123,7 @@ We :heart: contributions.
 
 Have you had a good experience with the **Solr Operator**? Why not share some love and contribute code, or just let us know about any issues you had with it?
 
-We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
+We welcome issue reports [here](https://github.com/apache/lucene-solr-operator/issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
 ## License
 
