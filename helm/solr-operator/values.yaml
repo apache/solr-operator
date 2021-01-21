@@ -13,7 +13,6 @@ nameOverride: ""
 fullnameOverride: ""
 
 useZkOperator: "true"
-ingressBaseDomain: ""
 
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.

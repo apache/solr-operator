@@ -26,9 +26,6 @@ spec:
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         - -zk-operator={{ .Values.useZkOperator }}
-        {{- if .Values.ingressBaseDomain }}
-        - --ingress-base-domain={{ .Values.ingressBaseDomain }}
-        {{- end }}
         {{- if .Values.watchNamespaces }}
         - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
         {{- end }}

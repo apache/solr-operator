@@ -1,8 +1,6 @@
 apiVersion: solr.bloomberg.com/v1beta1
 kind: SolrPrometheusExporter
 metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
   name: solrprometheusexporter-sample
 spec:
   solrReference:
@@ -10,4 +8,4 @@ spec:
       name: "example"
   numThreads: 4
   image:
-    tag: 8.2.0
+    tag: 8.7.0
