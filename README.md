@@ -2,9 +2,10 @@
 [![Latest Version](https://img.shields.io/github/tag/apache/lucene-solr-operator)](https://github.com/apache/lucene-solr-operator/releases)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Go Report Card](https://goreportcard.com/badge/github.com/apache/lucene-solr-operator)](https://goreportcard.com/report/github.com/apache/lucene-solr-operator)
-[![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/master)
+[![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
+[![Mailing List]]
 
 The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 
@@ -120,23 +121,21 @@ Have you had a good experience with the **Solr Operator**? Why not share some lo
 
 We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
-Before sending a [Pull Request](../../pulls), please make sure you read our
-[Contribution Guidelines](https://github.com/bloomberg/.github/blob/master/CONTRIBUTING.md).
-
 ## License
 
 Please read the [LICENSE](LICENSE) file here.
 
 ## Code of Conduct
 
-This project has adopted a [Code of Conduct](https://github.com/bloomberg/.github/blob/master/CODE_OF_CONDUCT.md).
+This space applies the ASF [Code of Conduct](https://www.apache.org/foundation/policies/conduct)
 If you have any concerns about the Code, or behavior which you have experienced in the project, please
-contact us at opensource@bloomberg.net.
+contact us at private@lucene.apache.org .
 
 ## Security Vulnerability Reporting
 
-If you believe you have identified a security vulnerability in this project, please send email to the project
-team at opensource@bloomberg.net, detailing the suspected issue and any methods you've found to reproduce it.
+If you believe you have identified a security vulnerability in this project, please send email to the ASF security
+team at security@apache.org, detailing the suspected issue and any methods you've found to reproduce it. More details
+can be found [here](https://www.apache.org/security/)
 
 Please do NOT open an issue in the GitHub repository, as we'd prefer to keep vulnerability reports private until
 we've had an opportunity to review and address them.

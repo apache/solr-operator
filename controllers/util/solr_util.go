@@ -48,7 +48,9 @@ const (
 	SolrCloudPVCDataStorage          = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
+	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
+	LogXmlFile                       = "log4j2.xml"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -125,12 +127,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMapInfo["solr.xml"],
+						Name: configMapInfo[SolrXmlFile],
 					},
 					Items: []corev1.KeyToPath{
 						{
-							Key:  "solr.xml",
-							Path: "solr.xml",
+							Key:  SolrXmlFile,
+							Path: SolrXmlFile,
 						},
 					},
 					DefaultMode: &defaultMode,
@@ -330,44 +332,30 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Did the user provide a custom log config?
-	if configMapInfo["log4j2.xml"] != "" {
+	if configMapInfo[LogXmlFile] != "" {
 
 		if podAnnotations == nil {
 			podAnnotations = make(map[string]string, 1)
 		}
 		podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
 
-		pathOnHost := "/var/solr/custom-log4j2.xml"
+		// cannot use /var/solr as a mountPath, so mount the custom log config in a sub-dir
+		volName := "log4j2-xml"
+		mountPath := fmt.Sprintf("/var/solr/%s-log-config", solrCloud.Name)
+		log4jPropsEnvVarPath := fmt.Sprintf("%s/%s", mountPath, LogXmlFile)
 
-		// add the volume mount for the custom log config
 		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name: "log4j2-xml",
+			Name: volName,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMapInfo["log4j2.xml"],
-					},
-					Items: []corev1.KeyToPath{
-						{
-							Key:  "log4j2.xml",
-							Path: "log4j2.xml",
-						},
-					},
-					DefaultMode: &defaultMode,
+					LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[LogXmlFile]},
+					Items:                []corev1.KeyToPath{{Key: LogXmlFile, Path: LogXmlFile}},
+					DefaultMode:          &defaultMode,
 				},
 			},
 		})
-
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "log4j2-xml",
-			MountPath: pathOnHost,
-			ReadOnly:  false,
-		})
-
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "LOG4J_PROPS",
-			Value: pathOnHost,
-		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: volName, MountPath: mountPath})
+		envVars = append(envVars, corev1.EnvVar{Name: "LOG4J_PROPS", Value: log4jPropsEnvVarPath})
 	}
 
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
