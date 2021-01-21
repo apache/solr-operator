@@ -4,9 +4,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrbackups.solr.bloomberg.com
+  name: solrbackups.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrBackup
     listKind: SolrBackupList
@@ -1132,9 +1132,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrclouds.solr.bloomberg.com
+  name: solrclouds.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrCloud
     listKind: SolrCloudList
@@ -6434,9 +6434,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrcollectionaliases.solr.bloomberg.com
+  name: solrcollectionaliases.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrCollectionAlias
     listKind: SolrCollectionAliasList
@@ -6508,9 +6508,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrcollections.solr.bloomberg.com
+  name: solrcollections.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrCollection
     listKind: SolrCollectionList
@@ -6605,9 +6605,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrprometheusexporters.solr.bloomberg.com
+  name: solrprometheusexporters.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrPrometheusExporter
     listKind: SolrPrometheusExporterList
