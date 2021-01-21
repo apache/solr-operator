@@ -9,7 +9,7 @@ Create an example set of collections against on the "example" solr cloud
 ```bash
 $ cat example/test_solrcollection.yaml
 
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: example-collection-1
@@ -23,7 +23,7 @@ spec:
   maxShardsPerNode: 1
   collectionConfigName: "_default"
 ---
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: example-collection-2-compositeid-autoadd
@@ -37,7 +37,7 @@ spec:
   maxShardsPerNode: 1
   collectionConfigName: "_default"
 ---
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: example-collection-3-implicit

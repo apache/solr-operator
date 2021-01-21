@@ -74,8 +74,8 @@ $ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/char
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
 
 ```bash
-# Install the operator (specifying ingressBaseDomain to match our ingressController)
-$ helm install solr-operator solr-operator/solr-operator --set-string ingressBaseDomain=ing.local.domain
+# Install the operator
+$ helm install solr-operator solr-operator/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
@@ -104,7 +104,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 ```bash
 # Create a spec for a 3-node cluster v8.3 with 300m RAM each:
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example
@@ -113,6 +113,10 @@ spec:
   solrImage:
     tag: "8.3"
   solrJavaMem: "-Xms300m -Xmx300m"
+  solrAddressability:
+    external:
+      method: Ingress
+      domainName: "ing.local.domain"
 EOF
 
 # Install Solr from that spec
@@ -134,7 +138,7 @@ We'll use the Operator's built in collection creation option
 ```bash
 # Create the spec
 cat <<EOF > collection.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: mycoll
@@ -192,7 +196,7 @@ curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system
 
 # Update the solrCloud configuratin with the new version, keeping 5 nodes
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example
