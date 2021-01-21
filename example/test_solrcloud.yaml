@@ -17,7 +17,7 @@ spec:
           claimName: "pvc-test"
   replicas: 3
   solrImage:
-    tag: 8.2.0
+    tag: 8.7.0
   solrJavaMem: "-Xms1g -Xmx3g"
   customSolrKubeOptions:
     podOptions:

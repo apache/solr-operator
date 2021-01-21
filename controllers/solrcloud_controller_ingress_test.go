@@ -38,7 +38,6 @@ import (
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
 
 func TestIngressCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -171,7 +170,6 @@ func TestIngressCloudReconcile(t *testing.T) {
 }
 
 func TestIngressNoNodesCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -244,6 +242,7 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -300,7 +299,6 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 }
 
 func TestIngressNoCommonCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -433,7 +431,6 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 }
 
 func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -563,7 +560,6 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 }
 
 func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -698,7 +694,6 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 }
 
 func TestIngressKubeDomainCloudReconcile(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(false)
 	g := gomega.NewGomegaWithT(t)
 
@@ -769,6 +764,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet

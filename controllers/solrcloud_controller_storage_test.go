@@ -37,7 +37,6 @@ import (
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
 
 func TestPersistentStorageVolumesRetain(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
@@ -123,7 +122,6 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 }
 
 func TestPersistentStorageVolumesDelete(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
@@ -222,7 +220,6 @@ func TestPersistentStorageVolumesDelete(t *testing.T) {
 }
 
 func TestDefaultEphemeralStorage(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
@@ -297,7 +294,6 @@ func TestDefaultEphemeralStorage(t *testing.T) {
 }
 
 func TestEphemeralStorageWithSpecs(t *testing.T) {
-	SetIngressBaseUrl("")
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
