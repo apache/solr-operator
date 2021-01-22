@@ -25,6 +25,7 @@ import (
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -656,10 +657,14 @@ func TestMetricsReconcileWithUserProvidedConfig(t *testing.T) {
 	updatedConfigXml := "<config>updated by user</config>"
 	updateUserProvidedConfigMap(testClient, g, userProvidedConfigMapNN, map[string]string{util.PrometheusExporterConfigMapKey: updatedConfigXml})
 
-	// reconcile should happen again
+	// reconcile should happen again 2x
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
-	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, userProvidedConfigMap.Name)
+	deployment = &appsv1.Deployment{}
+	err = testClient.Get(context.TODO(), metricsDKey, deployment)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
 	expectedAnnotations = map[string]string{
 		util.PrometheusExporterConfigXmlMd5Annotation: fmt.Sprintf("%x", md5.Sum([]byte(updatedConfigXml))),
 	}
