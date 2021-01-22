@@ -765,6 +765,7 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the annotation on the pod template to make sure a rolling restart will take place
 	updateSolrXml = foundConfigMap.Data[util.SolrXmlFile]
@@ -885,6 +886,8 @@ func TestCloudWithUserProvidedLogConfigMapReconcile(t *testing.T) {
 	foundConfigMap.Data[util.LogXmlFile] = updatedXml
 	err = testClient.Update(context.TODO(), foundConfigMap)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// capture all reconcile requests
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
