@@ -22,7 +22,7 @@ Create an example Solr cloud, with the following configuration.
 ```bash
 $ cat example/test_solrcloud.yaml
 
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example
@@ -90,7 +90,7 @@ The solr-operator supports private Docker repo access for Solr images you may wa
 Using a private image requires you have a K8s secret preconfigured with appropriate access to the image. (type: kubernetes.io/dockerconfigjson)
 
 ```
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example-private-repo-solr-image

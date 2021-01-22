@@ -53,10 +53,10 @@ type SolrPrometheusExporterReconciler struct {
 // +kubebuilder:rbac:groups=,resources=services/status,verbs=get
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrprometheusexporters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrprometheusexporters,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrprometheusexporters/status,verbs=get;update;patch
 
 func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()

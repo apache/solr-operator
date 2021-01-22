@@ -3,7 +3,7 @@
 The solr-operator supports the full lifecycle of standard aliases. Here is an example pointing an alias to 2 collections
 
 ```
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollectionAlias
 metadata:
   name: collection-alias-example

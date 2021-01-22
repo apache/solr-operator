@@ -6,9 +6,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: solrbackups.solr.bloomberg.com
+  name: solrbackups.solr.apache.org
 spec:
-  group: solr.bloomberg.com
+  group: solr.apache.org
   names:
     kind: SolrBackup
     listKind: SolrBackupList
