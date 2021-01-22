@@ -50,3 +50,187 @@ The Prometheus Exporter can be setup to scrape a standalone Solr instance.
 In order to use this functionality, use the following spec field:
 
 `SolrPrometheusExporter.spec.solrRef.standalone.address`
+
+## Prometheus Stack
+
+In this section, we'll walk through how to use the Prometheus exporter with the [Prometheus Stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack).
+
+The Prometheus Stack provides all the services you need for monitoring Kubernetes applications like Solr and is the recommended way of deploying Prometheus and Grafana.
+
+### Install Prometheus Stack
+
+Begin by installing the Prometheus Stack in the `monitoring` namespace with Helm release name `mon`:
+```
+MONITOR_NS=monitoring
+PROM_OPER_REL=mon
+
+kubectl create ns ${MONITOR_NS}
+
+# see: https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+if ! helm repo list | grep -q "https://prometheus-community.github.io/helm-charts"; then
+  echo -e "\nAdding the prometheus-community repo to helm"
+  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+  helm repo add stable https://charts.helm.sh/stable
+  helm repo update
+fi
+
+helm upgrade --install ${PROM_OPER_REL} prometheus-community/kube-prometheus-stack \
+--namespace ${MONITOR_NS} \
+--set kubeStateMetrics.enabled=false \
+--set nodeExporter.enabled=false
+```
+_Refer to the Prometheus stack documentation for detailed instructions._
+
+Verify you have Prometheus / Grafana pods running in the `monitoring` namespace:
+```
+kubectl get pods -n monitoring
+```
+
+### Deploy Prometheus Exporter for Solr Metrics
+
+Next, deploy a Solr Prometheus exporter for the SolrCloud you want to capture metrics from in the namespace where you're running SolrCloud, not in the `monitoring` namespace. 
+For instance, the following example creates a Prometheus exporter named `dev-prom-exporter` for a SolrCloud named `dev` deployed in the `dev` namespace:
+```
+apiVersion: solr.apache.org/v1beta1
+kind: SolrPrometheusExporter
+metadata:
+  name: dev-prom-exporter
+spec:
+  customKubeOptions:
+    podOptions:
+      resources:
+        requests:
+          cpu: 300m
+          memory: 900Mi
+  solrReference:
+    cloud:
+      name: "dev"
+  numThreads: 6
+```
+
+Look at the logs for your exporter pod to ensure it is running properly (notice we're using a label filter vs. addressing the pod by name):
+```
+kubectl logs -l solr-prometheus-exporter=dev-prom-exporter
+```
+You should see some log messages that look similar to:
+```
+INFO  - <timestamp>; org.apache.solr.prometheus.collector.SchedulerMetricsCollector; Beginning metrics collection
+INFO  - <timestamp>; org.apache.solr.prometheus.collector.SchedulerMetricsCollector; Completed metrics collection
+```
+
+You can also see the metrics that are exported by the pod by opening a port-forward to the exporter pod and hitting port 8080 with cURL:
+```
+kubectl port-forward $(kubectl get pod -l solr-prometheus-exporter=dev-prom-exporter --no-headers -o custom-columns=":metadata.name") 8080
+
+curl http://localhost:8080/metrics
+```
+#### Customize Prometheus Exporter Config
+
+Each Solr pod exposes metrics as JSON from the `/solr/admin/metrics` endpoint. To see this in action, open a port-forward to a Solr pod and send a request to `http://localhost:8983/solr/admin/metrics`.
+
+The Prometheus exporter requests metrics from each pod and then extracts the desired metrics using a series of [jq](https://stedolan.github.io/jq/) queries against the JSON returned by each pod.
+
+By default, the Solr operator configures the exporter to use the config from `/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml`.
+
+If you need to customize the metrics exposed to Prometheus, you'll need to provide a custom config XML via a ConfigMap and then configure the exporter CRD to point to it.
+
+For instance, let's imagine you need to expose a new metric to Prometheus. Start by pulling the default config from the exporter pod using:
+```
+EXPORTER_POD_ID=$(kubectl get pod -l solr-prometheus-exporter=dev-prom-exporter --no-headers -o custom-columns=":metadata.name"`)
+
+kubectl cp $EXPORTER_POD_ID:/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml ./solr-exporter-config.xml
+```
+Create a ConfigMap with your customized XML config under the `solr-prometheus-exporter.xml` key.
+```
+apiVersion: v1
+data:
+  solr-prometheus-exporter.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <config>
+    ... YOUR CUSTOM CONFIG HERE ...
+    </config>
+kind: ConfigMap
+metadata:
+  name: custom-exporter-xml
+```
+_Note: Using `kubectl create configmap --from-file` scrambles the XML formatting, so we recommend defining the configmap YAML as shown above to keep the XML formatted properly._
+
+Point to the custom ConfigMap in your Prometheus exporter definition using:
+```
+spec:
+  customKubeOptions:
+    configMapOptions:
+      providedConfigMap: custom-exporter-xml
+``` 
+The ConfigMap needs to be defined in the same namespace where you're running the exporter.
+
+The Solr operator automatically triggers a restart of the exporter pods whenever the exporter config XML changes in the ConfigMap.
+
+#### Solr Prometheus Exporter Service
+The Solr operator creates a K8s `ClusterIP` service for load-balancing across exporter pods; there will typically only be one active exporter pod per SolrCloud managed by a K8s deployment.
+
+For our example `dev-prom-exporter`, the service name is: `dev-prom-exporter-solr-metrics`
+
+Take a quick look at the labels on the service as you'll need them to define a service monitor in the next step.
+```
+kubectl get svc dev-prom-exporter-solr-metrics --show-labels
+```
+
+Also notice the ports that are exposed for this service:
+```
+kubectl get svc dev-prom-exporter-solr-metrics --output jsonpath="{@.spec.ports}"
+```
+You should see output similar to:
+```
+[{"name":"solr-metrics","port":80,"protocol":"TCP","targetPort":8080}]
+```
+
+### Create a Service Monitor
+The Prometheus operator (deployed with the Prometheus stack) uses service monitors to find which services to scrape metrics from. Thus, we need to define a service monitor for our exporter service `dev-prom-exporter-solr-metrics`.
+
+```
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: solr-metrics
+  labels:
+    release: mon
+spec:
+  selector:
+    matchLabels:
+      solr-prometheus-exporter: dev-prom-exporter
+  namespaceSelector:
+    matchNames:
+    - dev
+  endpoints:
+  - port: solr-metrics
+    interval: 20s
+```
+
+There are a few important aspects of this service monitor definition:
+* The `release: mon` label associates this service monitor with the Prometheus operator; recall that we used `mon` as the Helm release when installing our Prometheus stack
+* The Prometheus operator uses the `solr-prometheus-exporter: dev-prom-exporter` label selector to find the service to scrape metrics from, which of course is the `dev-prom-exporter-solr-metrics` service created by the Solr operator.
+* The Prometheus operator uses `dev` to match the namespace (`namespaceSelector.matchNames`) where our SolrCloud and Prometheus exporter services are deployed
+* The `endpoints` section identifies the port to scrape metrics from and the scrape interval; recall our service exposes the port as `solr-metrics`  
+
+Save the service monitor YAML to a file, such as `dev-prom-service-monitor.yaml` and apply to the `monitoring` namespace:
+```
+kubectl apply -f dev-prom-service-monitor.yaml -n monitoring
+```
+
+Prometheus is now configured to scrape metrics from the exporter service.
+
+### Load Solr Dashboard in Grafana
+
+You can expose Grafana via a LoadBalancer (or Ingress) but for now, we'll just open a port-forward to port 3000 to access Grafana:
+```
+GRAFANA_POD_ID=$(kubectl get pod -l app.kubernetes.io/name=grafana --no-headers -o custom-columns=":metadata.name" -n monitoring)
+kubectl port-forward -n monitoring $GRAFANA_POD_ID 3000
+```
+Open Grafana using `localhost:3000` and login with username `admin` and password `prom-operator`.
+
+Once logged into Grafana, import the Solr dashboard JSON corresponding to the version of Solr you're running.
+
+Solr does not export any useful metrics until you have at least one collection defined.
+
+_Note: Solr 8.8.0 includes an updated dashboard that includes better metrics for query performance._ 
