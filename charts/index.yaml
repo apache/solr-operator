@@ -17,10 +17,10 @@ entries:
     - operator
     kubeVersion: '>= 1.16.0-0'
     maintainers:
+    - email: dev@lucene.apache.org
+      name: Solr Dev Community
     - email: houston@apache.org
       name: Houston Putman
-    - email: bsankaranara@bloomberg.net
-      name: Balaji Sankaranarayanan
     name: solr-operator
     sources:
     - https://github.com/apache/lucene-solr-operator

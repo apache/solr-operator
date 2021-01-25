@@ -1,0 +1,5 @@
+# Artifact Hub repository metadata file
+repositoryID: apache-solr
+owners: # (optional, used to claim repository ownership)
+  - name: Apache Solr PMC
+    email: private@lucene.apache.org
