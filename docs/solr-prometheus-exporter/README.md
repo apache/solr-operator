@@ -187,6 +187,7 @@ You should see output similar to:
 
 ### Create a Service Monitor
 The Prometheus operator (deployed with the Prometheus stack) uses service monitors to find which services to scrape metrics from. Thus, we need to define a service monitor for our exporter service `dev-prom-exporter-solr-metrics`.
+If you're not using the Prometheus operator, then you do not need a service monitor as Prometheus will scrape metrics using the `prometheus.io/*` pod annotations on the exporter service; see [Prometheus Configuration](https://prometheus.io/docs/prometheus/latest/configuration/configuration/). 
 
 ```
 apiVersion: monitoring.coreos.com/v1
@@ -233,4 +234,4 @@ Once logged into Grafana, import the Solr dashboard JSON corresponding to the ve
 
 Solr does not export any useful metrics until you have at least one collection defined.
 
-_Note: Solr 8.8.0 includes an updated dashboard that includes better metrics for query performance._ 
+_Note: Solr 8.8.0 and newer versions include an updated dashboard that provides better metrics for monitoring query performance._ 
