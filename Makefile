@@ -64,6 +64,10 @@ deploy: manifests install
 	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
 	kubectl apply -k config/default
 
+# Generate code
+generate: controller-gen mod-tidy
+	$(CONTROLLER_GEN) object:headerFile=./hack/headers/header.go.txt paths="./..."
+
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: controller-gen mod-tidy
 	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
@@ -89,10 +93,6 @@ manifests-check:
 
 helm-check:
 	helm lint helm/solr-operator
-
-# Generate code
-generate: controller-gen mod-tidy
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths="./..."
 
 
 # # find or download controller-gen
