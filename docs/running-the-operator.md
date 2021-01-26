@@ -18,17 +18,19 @@ The helm chart provides abstractions over the Input Arguments described below, a
 
 ### How to install via Helm
 
+The official documenation for installing the Solr Operator Helm chart can be found on [Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+
 The first step is to add the Solr Operator helm repository.
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
 ```
 
 
-Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
+Next, install the Solr Operator chart. Note this is using Helm v3, use the official Helm chart documentation linked to above.
 
 ```bash
-$ helm install solr-operator solr-operator/solr-operator
+$ helm install solr-operator apache-solr/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.

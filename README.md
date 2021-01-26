@@ -1,7 +1,7 @@
 # Solr Operator
 [![Latest Version](https://img.shields.io/github/tag/apache/lucene-solr-operator)](https://github.com/apache/lucene-solr-operator/releases)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
-[![Go Report Card](https://goreportcard.com/badge/github.com/apache/lucene-solr-operator)](https://goreportcard.com/report/github.com/apache/lucene-solr-operator)
+[![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/apache-solr)](https://artifacthub.io/packages/search?repo=apache-solr)
 [![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
@@ -32,6 +32,9 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
 - [Local Tutorial](https://apache.github.io/lucene-solr-operator/docs/local_tutorial)
+- [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
+  - The released helm charts and their instructions should be used for all safe and stable deployments.
+    The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
 - [Running the Solr Operator](https://apache.github.io/lucene-solr-operator/docs/running-the-operator)
 - Available Solr Resources
     - [Solr Clouds](https://apache.github.io/lucene-solr-operator/docs/solr-cloud)
@@ -46,6 +49,9 @@ Please visit the following pages for documentation on using and developing the S
 Example uses of each CRD have been [provided](https://apache.github.io/lucene-solr-operator/example).
 
 ## Version Compatibility & Upgrade Notes
+
+#### v0.3.0
+- All deprecated CRD fields and Solr Operator options from `v0.2.*` have been removed.
 
 #### v0.2.7
 - Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
