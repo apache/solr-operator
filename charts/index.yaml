@@ -91,7 +91,6 @@ entries:
     - solr
     - apache
     - search
-    - lucene
     - operator
     kubeVersion: '>= 1.13.0-0'
     maintainers:
