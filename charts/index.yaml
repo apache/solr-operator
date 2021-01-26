@@ -1,12 +1,79 @@
 apiVersion: v1
 entries:
   solr-operator:
-  - apiVersion: v1
+  - annotations:
+      artifacthub.io/changes: |-
+        - This will be the last release of the Bloomberg Solr Operator.
+          All new versions will be release from the Apache organization.
+        - Bug Fixes
+          - Fixing upgrade issue with new Status fields
+      artifacthub.io/crds: |
+        - kind: SolrCloud
+          version: v1beta1
+          name: solrcloud.solr.bloomberg.com
+          displayName: Solr Cloud
+          description: A distributed Solr Cloud cluster
+        - kind: SolrPrometheusExporter
+          version: v1beta1
+          name: solrprometheusexporter.solr.bloomberg.com
+          displayName: Solr Prometheus Exporter
+          description: A Prometheus metrics exporter for Solr
+        - kind: SolrBackup
+          version: v1beta1
+          name: solrbackup.solr.bloomberg.com
+          displayName: Solr Backup
+          description: A backup mechanism for Solr
+      artifacthub.io/crdsExamples: |
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrCloud
+          metadata:
+            name: example
+          spec:
+            dataStorage:
+              persistent:
+                reclaimPolicy: Delete
+                pvcTemplate:
+                  spec:
+                    resources:
+                      requests:
+                        storage: "20Gi"
+            replicas: 3
+            solrImage:
+              tag: 8.7.0
+            solrJavaMem: "-Xms4g -Xmx4g"
+            customSolrKubeOptions:
+              podOptions:
+                resources:
+                  requests:
+                    memory: "6G"
+            zookeeperRef:
+              provided:
+                replicas: 3
+            solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+            solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrPrometheusExporter
+          metadata:
+            name: example
+          spec:
+            solrReference:
+              cloud:
+                name: "example"
+            numThreads: 4
+            image:
+              tag: 8.7.0
+      artifacthub.io/images: |
+        - name: solr-operator
+          image: bloomberg/solr-operator:v0.2.8
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Seamless Upgrades
+      artifacthub.io/prerelease: "false"
+    apiVersion: v1
     appVersion: v0.2.8
     created: "2021-01-11T15:21:23.033109-05:00"
     description: The Solr Operator enables easy management of Solr resources within
       Kubernetes.
-    digest: 0aafa7d978f376e368ef4d609e917ba8cd6dc087535e2777479a1b87cd65d9c9
+    digest: f52eaac4913b26a6ad827d0c4fd0f5b041e0918099e08ec4d200bd8602156084
     home: https://github.com/apache/lucene-solr-operator
     icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
     keywords:
@@ -25,14 +92,128 @@ entries:
     sources:
     - https://github.com/apache/lucene-solr-operator
     urls:
-    - https://github.com/apache/lucene-solr-operator/releases/download/v0.2.8/solr-operator-0.2.8.tgz
+    - https://apache.github.io/lucene-solr-operator/charts/solr-operator-0.2.8.tgz
     version: 0.2.8
-  - apiVersion: v1
+  - annotations:
+      artifacthub.io/changes: |
+        - Upgrade Notes and Compatibility
+          - Kubernetes 1.16+ is required for for this release of the Solr Operator.
+            Please continue using v0.2.6 until you are able to upgrade your Kubernetes cluster.
+          - Removed Features
+            - Support for etcd/zetcd deployments has been removed.
+          - Deprecations (All deprecations will be removed in v0.3.0)
+            - The section for a Zookeeper cluster Spec "SolrCloud.spec.zookeeperRef.provided.zookeeper" has been DEPRECATED.
+              The same fields (except for the deprecated persistentVolumeClaimSpec option) are now available under "SolrCloud.spec.zookeeperRef.provided".
+            - Data Storage options have been expanded, and moved from their old locations.
+              - "SolrCloud.spec.dataPvcSpec" has been DEPRECATED.
+                Please instead use the following instead: "SolrCloud.spec.dataStorage.persistent.pvcTemplate.spec"
+              - "SolrCloud.spec.backupRestoreVolume" has been DEPRECATED.
+                Please instead use the following instead: "SolrCloud.spec.dataStorage.backupRestoreOptions.Volume"
+          - Changes
+            - The SolrCloud and SolrPrometheusExporter services' portNames have changed to "solr-client" and "solr-metrics" from "ext-solr-client" and "ext-solr-metrics", respectivelyi.
+            - The default PodManagementPolicy for StatefulSets has been changed to Parallel from OrderedReady.
+              This change will not affect existing StatefulSets, as PodManagementPolicy cannot be updated.
+              In order to continue using OrderedReady on new SolrClouds, please use the following setting:
+              "SolrCloud.spec.customSolrKubeOptions.statefulSetOptions.podManagementPolicy"
+            - The location of backup-restore volume mounts in Solr containers has changed from "/var/solr/solr-backup-restore" to "/var/solr/data/backup-restore".
+
+        - New Features
+          - Introducing a managed SolrCloud update strategy
+          - Added PriorityClassName in podOptions
+          - Added option to provide ZK ACLs
+          - Added dataStorage options for SolrCloud
+            - PVC reclaim policy
+            - Ephemeral Volume spec for non-persistent storage
+          - Ability to provide custom solr.xml for SolrCloud
+          - Ability to specify sidecar container and additional initContainers
+
+        - Improvements
+          - Gracefully shutdown Solr nodes using the Solr stop port
+          - Adding scope: Namespaced to all CRDs
+          - Move chroot creation logic to pod postStart and out of operator
+          - Change default SolrCloud podManagementPolicy to Parallel from OrderedReady
+
+        - Bug Fixes
+          - ZKConnectionString now uses all ZK hosts with Provided ZK
+          - Fix service port name and status URL bugs
+          - Fix never-ending reconcile loop for ZKs
+          - Fix never-ending reconcile loop for ingresses in Kube 1.18+
+          - Backups
+            - SolrBackup now works with Solr 8.6+
+            - Fixed an issue with volume permissions in the read-write-many volume
+
+        - Miscellaneous
+          - Upgraded dependencies of the Solr Operator
+          - Remove Etcd support from the Solr Operator
+          - Remove default imagePullPolicy for pods
+          - Upgraded CRD versions to v1, from v1beta1
+      artifacthub.io/crds: |
+        - kind: SolrCloud
+          version: v1beta1
+          name: solrcloud.solr.bloomberg.com
+          displayName: Solr Cloud
+          description: A distributed Solr Cloud cluster
+        - kind: SolrPrometheusExporter
+          version: v1beta1
+          name: solrprometheusexporter.solr.bloomberg.com
+          displayName: Solr Prometheus Exporter
+          description: A Prometheus metrics exporter for Solr
+        - kind: SolrBackup
+          version: v1beta1
+          name: solrbackup.solr.bloomberg.com
+          displayName: Solr Backup
+          description: A backup mechanism for Solr
+      artifacthub.io/crdsExamples: |
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrCloud
+          metadata:
+            name: example
+          spec:
+            dataStorage:
+              persistent:
+                reclaimPolicy: Delete
+                pvcTemplate:
+                  spec:
+                    resources:
+                      requests:
+                        storage: "20Gi"
+            replicas: 3
+            solrImage:
+              tag: 8.7.0
+            solrJavaMem: "-Xms4g -Xmx4g"
+            customSolrKubeOptions:
+              podOptions:
+                resources:
+                  requests:
+                    memory: "6G"
+            zookeeperRef:
+              provided:
+                replicas: 3
+            solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+            solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrPrometheusExporter
+          metadata:
+            name: example
+          spec:
+            solrReference:
+              cloud:
+                name: "example"
+            numThreads: 4
+            image:
+              tag: 8.7.0
+      artifacthub.io/images: |
+        - name: solr-operator
+          image: bloomberg/solr-operator:v0.2.7
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Seamless Upgrades
+      artifacthub.io/prerelease: "false"
+    apiVersion: v1
     appVersion: v0.2.7
     created: "2020-12-14T17:55:28.546801-05:00"
     description: The Solr Operator enables easy management of Solr resources within
       Kubernetes.
-    digest: 9627073abdbd7c3ac9a0616f0582e78c6889eea9963b6ef5b38aa1e3370fd433
+    digest: bb6b46daf7b17af6954bfc2911c43f0440d77c74afc59214659ab0912dbc5fa2
     home: https://github.com/apache/lucene-solr-operator
     icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
     keywords:
@@ -43,22 +224,79 @@ entries:
     - operator
     kubeVersion: '>= 1.13.0-0'
     maintainers:
+    - email: dev@lucene.apache.org
+      name: Solr Dev Community
     - email: houston@apache.org
       name: Houston Putman
-    - email: bsankaranara@bloomberg.net
-      name: Balaji Sankaranarayanan
     name: solr-operator
     sources:
     - https://github.com/apache/lucene-solr-operator
     urls:
-    - https://github.com/apache/lucene-solr-operator/releases/download/v0.2.7/solr-operator-0.2.7.tgz
+    - https://apache.github.io/lucene-solr-operator/charts/solr-operator-0.2.7.tgz
     version: 0.2.7
-  - apiVersion: v1
+  - annotations:
+      artifacthub.io/changes: |
+        - Helm chart fixes and improvements
+        - Adding namespace functionality to operator and helm chart
+        - Adding custom addressability options to solrcloud
+        - Adding configurable liveness, readiness, startup checks
+        - Documentation improvements
+      artifacthub.io/crds: |
+        - kind: SolrCloud
+          version: v1beta1
+          name: solrcloud.solr.bloomberg.com
+          displayName: Solr Cloud
+          description: A distributed Solr Cloud cluster
+        - kind: SolrPrometheusExporter
+          version: v1beta1
+          name: solrprometheusexporter.solr.bloomberg.com
+          displayName: Solr Prometheus Exporter
+          description: A Prometheus metrics exporter for Solr
+        - kind: SolrBackup
+          version: v1beta1
+          name: solrbackup.solr.bloomberg.com
+          displayName: Solr Backup
+          description: A backup mechanism for Solr
+      artifacthub.io/crdsExamples: |
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrCloud
+          metadata:
+            name: example
+          spec:
+            replicas: 3
+            solrImage:
+              tag: 8.7.0
+            solrJavaMem: "-Xms4g -Xmx4g"
+            customSolrKubeOptions:
+              podOptions:
+                resources:
+                  requests:
+                    memory: "6G"
+            solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
+            solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+        - apiVersion: solr.bloomberg.com/v1beta1
+          kind: SolrPrometheusExporter
+          metadata:
+            name: example
+          spec:
+            solrReference:
+              cloud:
+                name: "example"
+            numThreads: 4
+            image:
+              tag: 8.7.0
+      artifacthub.io/images: |
+        - name: solr-operator
+          image: bloomberg/solr-operator:v0.2.6
+      artifacthub.io/operator: "true"
+      artifacthub.io/operatorCapabilities: Basic Install
+      artifacthub.io/prerelease: "false"
+    apiVersion: v1
     appVersion: v0.2.6
     created: "2020-08-10T15:25:32.770735-04:00"
     description: The Solr Operator enables easy management of Solr resources within
       Kubernetes.
-    digest: 15ea4636403cdd7d6a565fc599c67b908f4293c0bff8d1a85dad5bc7c29311df
+    digest: be3249f61fe9900603bd40d7bc026095bb9e2ac3b6af38c5d4b0dd72169a2180
     home: https://github.com/apache/lucene-solr-operator
     icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
     keywords:
@@ -69,6 +307,8 @@ entries:
     - operator
     kubeVersion: '>= 1.13.0-0'
     maintainers:
+    - email: dev@lucene.apache.org
+      name: Solr Dev Community
     - email: houston@apache.org
       name: Houston Putman
     - email: bsankaranara@bloomberg.net
@@ -77,29 +317,6 @@ entries:
     sources:
     - https://github.com/apache/lucene-solr-operator
     urls:
-    - https://github.com/apache/lucene-solr-operator/releases/download/v0.2.6/solr-operator-0.2.6.tgz
+    - https://apache.github.io/lucene-solr-operator/charts/solr-operator-0.2.6.tgz
     version: 0.2.6
-  - apiVersion: v1
-    appVersion: v0.2.5
-    created: "2020-05-20T12:28:07.211507-04:00"
-    description: The Solr Operator enables easy management of Solr resources within
-      Kubernetes.
-    digest: 8ccc461fbc1ccd6c149fc34b40f049155f41131c03d291bca1f469cddb0c09dd
-    home: https://github.com/apache/lucene-solr-operator
-    icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
-    keywords:
-    - solr
-    - apache
-    - search
-    - operator
-    kubeVersion: '>= 1.13.0-0'
-    maintainers:
-    - email: houston@apache.org
-      name: Houston Putman
-    name: solr-operator
-    sources:
-    - https://github.com/apache/lucene-solr-operator
-    urls:
-    - https://github.com/apache/lucene-solr-operator/releases/download/v0.2.5/solr-operator-0.2.5.tgz
-    version: 0.2.5
-generated: "2021-01-11T15:21:23.028609-05:00"
+generated: "2021-01-26T12:23:39.188751-05:00"
