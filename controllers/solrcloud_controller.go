@@ -199,6 +199,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 			// if there's a user-provided config, it must have one of the expected keys
 			if !hasLogXml && !hasSolrXml {
+				// TODO: Create event for the CRD.
 				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
 					providedConfigMapName)
 			}
