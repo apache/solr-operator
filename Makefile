@@ -3,7 +3,7 @@ CRD_OPTIONS ?= "crd"
 
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
-NAMESPACE ?= bloomberg/
+NAMESPACE ?= apache/
 IMG = $(NAMESPACE)$(NAME)
 VERSION ?= $(or $(shell git describe --tags HEAD),"latest")
 GIT_SHA = $(shell git rev-parse --short HEAD)
@@ -61,7 +61,7 @@ install: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests install
-	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image bloomberg/solr-operator=${IMG}:${VERSION}
+	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image apache/solr-operator=${IMG}:${VERSION}
 	kubectl apply -k config/default
 
 # Generate code

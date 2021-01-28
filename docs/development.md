@@ -83,7 +83,7 @@ $ NAMESPACE=your-namespace/ make docker-vendor-build docker-vendor-push
 ```
 
 You can control the namespace and version for your solr-operator docker image via the ENV variables:
-- `NAMESPACE`, defaults to `bloomberg/`. **This must end with a forward slash.** This can also include the docker repository information for private repos.
+- `NAMESPACE`, defaults to `apache/`. **This must end with a forward slash.** This can also include the docker repository information for private repos.
 - `NAME`, defaults to `solr-operator`.
 - `VERSION`, defaults to the git HEAD tag. (e.g. `v0.2.5-1-g06f4e2a`).  
 You can check what version you are using by running `make version`.

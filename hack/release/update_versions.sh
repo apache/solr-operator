@@ -9,7 +9,7 @@ set -u
 echo "Updating the latest version throughout the repo to: ${VERSION}"
 
 # Update default solr-operator version and the helm chart versions.
-gawk -i inplace '$1 == "repository:" { tag = ($2 == "bloomberg/solr-operator") }
+gawk -i inplace '$1 == "repository:" { tag = ($2 == "apache/solr-operator") }
 tag && $1 == "tag:"{$1 = "  " $1; $2 = "'"${VERSION}"'"} 1' helm/solr-operator/values.yaml
 
 gawk -i inplace '$1 == "version:"{$1 = $1; $2 = "'"${VERSION#v}"'"} 1' helm/solr-operator/Chart.yaml
