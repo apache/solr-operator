@@ -128,3 +128,117 @@ Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a
 each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+## Override Built-in Solr Configuration Files
+
+The Solr operator deploys well-configured SolrCloud instances with minimal input required from human operators. 
+As such, the operator installs various configuration files automatically, including `solr.xml` for node-level settings and `log4j2.xml` for logging. 
+However, there may come a time when you need to override the built-in configuration files with custom settings.
+
+In general, users can provide custom config files by providing a ConfigMap in the same namespace as the SolrCloud instance; 
+all custom config files should be stored in the same user-provided ConfigMap under different keys.
+Point your SolrCloud definition to a user-provided ConfigMap using the following structure:
+```
+spec:
+  ...
+  customSolrKubeOptions:
+    configMapOptions:
+      providedConfigMap: <Custom-ConfigMap-Here>
+```
+
+### Custom solr.xml
+
+Solr pods load node-level configuration settings from `/var/solr/data/solr.xml`. 
+This important configuration file gets created by the `cp-solr-xml` initContainer which bootstraps the `solr.home` directory on each pod before starting the main container.
+The default `solr.xml` is mounted into the `cp-solr-xml` initContainer from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
+
+_Note: The data in the default ConfigMap is not editable! Any changes to the `solr.xml` in the default ConfigMap created by the operator will be overwritten during the next reconcile cycle._
+
+Many of the specific values in `solr.xml` can be set using Java system properties; for instance, the following setting controls the read timeout for the HTTP client used by Solr's `HttpShardHandlerFactory`:
+```
+<int name="socketTimeout">${socketTimeout:600000}</int>
+```
+The `${socketTimeout:600000}` syntax means pull the value from a Java system property named `socketTimeout` with default `600000` if not set.
+
+You can set Java system properties using the `solrOpts` string in your SolrCloud definition, such as:
+```
+spec:
+  solrOpts: -DsocketTimeout=300000
+```
+This same approach works for a number of settings in `solrconfig.xml` as well.
+
+However, if you need to customize `solr.xml` beyond what can be accomplished with Java system properties, 
+then you need to supply your own `solr.xml` in a ConfigMap in the same namespace where you deploy your SolrCloud instance.
+Provide your custom XML in the ConfigMap using `solr.xml` as the key as shown in the example below:
+```
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: custom-solr-xml
+data:
+  solr.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <solr>
+      ... CUSTOM CONFIG HERE ...
+    </solr>
+```
+
+You can get the default `solr.xml` from a Solr pod as a starting point for creating a custom config using `kubectl cp` as shown in the example below:
+```
+SOLR_POD_ID=$(kubectl get pod -l technology=solr-cloud --no-headers -o custom-columns=":metadata.name" | head -1)
+kubectl cp $SOLR_POD_ID:/var/solr/data/solr.xml ./custom-solr.xml
+```
+This copies the default config from the first Solr pod found in the namespace and names it `custom-solr.xml`. Customize the settings in `custom-solr.xml` as needed and then create a ConfigMap using YAML. 
+
+_Note: Using `kubectl create configmap --from-file` scrambles the XML formatting, so we recommend defining the configmap YAML as shown above to keep the XML formatted properly._
+
+Point your SolrCloud instance at the custom ConfigMap using:
+```
+  customSolrKubeOptions:
+    configMapOptions:
+      providedConfigMap: custom-solr-xml
+```
+
+#### Changes to Custom Config Trigger Rolling Restarts
+
+The Solr operator stores the MD5 hash of your custom XML in the StatefulSet's pod spec annotations (`spec.template.metadata.annotations`). To see the current annotations for your Solr pods, you can do:
+```
+kubectl annotate pod -l technology=solr-cloud --list=true
+```
+If the custom `solr.xml` changes in the user-provided ConfigMap, then the operator triggers a rolling restart of Solr pods to apply the updated configuration settings automatically.
+
+To summarize, if you need to customize `solr.xml`, provide your own version in a ConfigMap and changes made to the XML in the ConfigMap are automatically applied to your Solr pods.
+
+### Custom Log Configuration
+
+As with `solr.xml`, the operator configures Solr with a default Log4j2 configuration file: `-Dlog4j.configurationFile=/var/solr/log4j2.xml`.
+
+If you need to fine-tune the log configuration, then you can provide a custom `log4j2.xml` in a ConfigMap using the same basic process as described in the previous section for customizing `solr.xml`.
+
+As with custom `solr.xml`, the operator can track the MD5 hash of your `log4j2.xml` in the pod spec annotations to trigger a rolling restart if the log config changes. 
+However, Log4j2 supports hot reloading of log configuration using the `monitorInterval` attribute on the root `<Configuration>` element. For more information on this, see: [Log4j Automatic Reconfiguration](https://logging.apache.org/log4j/2.x/manual/configuration.html#AutomaticReconfiguration). 
+If your custom log config has a `monitorInterval` set, then the operator does not watch for changes to the log config and will not trigger a rolling restart if the config changes. 
+Kubernetes will automatically update the file on each pod's filesystem when the data in the ConfigMap changes. Once Kubernetes updates the file, Log4j will pick up the changes and apply them without restarting the Solr pod.
+
+If you need to customize both `solr.xml` and `log4j2.xml` then you need to supply both in the same ConfigMap using multiple keys as shown below:
+```
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: custom-solr-xml
+data:
+  log4j2.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <Configuration monitorInterval="30">
+     ... YOUR CUSTOM LOG4J CONFIG HERE ...
+    </Configuration>
+
+
+  solr.xml: |
+    <?xml version="1.0" encoding="UTF-8" ?>
+    <solr>
+     ... YOUR CUSTOM SOLR XML CONFIG HERE ...
+    </solr>
+```
