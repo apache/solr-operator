@@ -861,7 +861,7 @@ func TestCloudWithUserProvidedLogConfigMapReconcile(t *testing.T) {
 	}
 	assert.NotNil(t, logXmlVolMount, "Didn't find the log4j2-xml Volume mount")
 	expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomLogXmlConfigMap)
-	assert.Equal(t, expectedMountPath, logXmlVolMount.MountPath)
+	assert.Equal(t, expectedMountPath, logXmlVolMount.MountPath, "Custom log4j2.xml mount path is incorrect.")
 
 	solrXmlConfigName := fmt.Sprintf("%s-solrcloud-configmap", instance.GetName())
 	foundConfigMap := &corev1.ConfigMap{}
@@ -887,6 +887,27 @@ func TestCloudWithUserProvidedLogConfigMapReconcile(t *testing.T) {
 	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	assert.Equal(t, updateLogXmlMd5, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should be updated on the pod template.")
+	expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+	testPodEnvVariables(t, expectedEnvVars, stateful.Spec.Template.Spec.Containers[0].Env)
+
+	// switch the log4j config over to using monitorInterval, so no more rolling restart on change to config
+	emptyRequests(requests)
+	// update the user-provided log XML to trigger a pod rolling restart
+	updatedXml = "<Configuration monitorInterval=\"30\">Updated!</Configuration>"
+	foundConfigMap = &corev1.ConfigMap{}
+	err = testClient.Get(context.TODO(), types.NamespacedName{Name: testCustomLogXmlConfigMap, Namespace: instance.Namespace}, foundConfigMap)
+	foundConfigMap.Data[util.LogXmlFile] = updatedXml
+	err = testClient.Update(context.TODO(), foundConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	time.Sleep(time.Millisecond * 250)
+	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// log xml md5 annotation should no longer be on the pod template
+	assert.Equal(t, "", stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should not be set on the pod template.")
 }
 
 func TestCloudWithUserProvidedSolrXmlAndLogConfigReconcile(t *testing.T) {
@@ -996,4 +1017,6 @@ func TestCloudWithUserProvidedSolrXmlAndLogConfigReconcile(t *testing.T) {
 	customLogXml := userProvidedConfigMap.Data[util.LogXmlFile]
 	expectedLogXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(customLogXml)))
 	assert.Equal(t, expectedLogXmlMd5, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+	expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+	testPodEnvVariables(t, expectedEnvVars, stateful.Spec.Template.Spec.Containers[0].Env)
 }

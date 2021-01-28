@@ -183,6 +183,7 @@ data:
       ... CUSTOM CONFIG HERE ...
     </solr>
 ```
+**Important: Your custom `solr.xml` must include `<int name="hostPort">${hostPort:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
 
 You can get the default `solr.xml` from a Solr pod as a starting point for creating a custom config using `kubectl cp` as shown in the example below:
 ```
@@ -199,6 +200,7 @@ Point your SolrCloud instance at the custom ConfigMap using:
     configMapOptions:
       providedConfigMap: custom-solr-xml
 ```
+_Note: If you set `providedConfigMap`, then the ConfigMap must include the `solr.xml` or `log4j2.xml` key, otherwise the SolrCloud will fail to reconcile._
 
 #### Changes to Custom Config Trigger Rolling Restarts
 
@@ -212,9 +214,8 @@ To summarize, if you need to customize `solr.xml`, provide your own version in a
 
 ### Custom Log Configuration
 
-As with `solr.xml`, the operator configures Solr with a default Log4j2 configuration file: `-Dlog4j.configurationFile=/var/solr/log4j2.xml`.
-
-If you need to fine-tune the log configuration, then you can provide a custom `log4j2.xml` in a ConfigMap using the same basic process as described in the previous section for customizing `solr.xml`.
+By default, the Solr Docker image configures Solr to load its log configuration from `/var/solr/log4j2.xml`. 
+If you need to fine-tune the log configuration, then you can provide a custom `log4j2.xml` in a ConfigMap using the same basic process as described in the previous section for customizing `solr.xml`. If supplied, the operator overrides the log config using the `LOG4J_PROPS` env var.
 
 As with custom `solr.xml`, the operator can track the MD5 hash of your `log4j2.xml` in the pod spec annotations to trigger a rolling restart if the log config changes. 
 However, Log4j2 supports hot reloading of log configuration using the `monitorInterval` attribute on the root `<Configuration>` element. For more information on this, see: [Log4j Automatic Reconfiguration](https://logging.apache.org/log4j/2.x/manual/configuration.html#AutomaticReconfiguration). 
