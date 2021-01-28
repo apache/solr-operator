@@ -340,21 +340,36 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
 		}
 
-		// cannot use /var/solr as a mountPath, so mount the custom log config in a sub-dir
+		// cannot use /var/solr as a mountPath, so mount the custom log config
+		// in a sub-dir named after the user-provided ConfigMap
 		volName := "log4j2-xml"
-		mountPath := fmt.Sprintf("/var/solr/%s-log-config", solrCloud.Name)
+		mountPath := fmt.Sprintf("/var/solr/%s", configMapInfo[LogXmlFile])
 		log4jPropsEnvVarPath := fmt.Sprintf("%s/%s", mountPath, LogXmlFile)
+		appendedToExisting := false
+		if configMapInfo[LogXmlFile] == configMapInfo[SolrXmlFile] {
+			// the user provided a custom log4j2.xml and solr.xml, append to the volume for solr.xml created above
+			for _, vol := range solrVolumes {
+				if vol.Name == "solr-xml" {
+					vol.ConfigMap.Items = append(vol.ConfigMap.Items, corev1.KeyToPath{Key: LogXmlFile, Path: LogXmlFile})
+					appendedToExisting = true
+					volName = vol.Name
+					break
+				}
+			}
+		}
 
-		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name: volName,
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[LogXmlFile]},
-					Items:                []corev1.KeyToPath{{Key: LogXmlFile, Path: LogXmlFile}},
-					DefaultMode:          &defaultMode,
+		if !appendedToExisting {
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name: volName,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: &corev1.ConfigMapVolumeSource{
+						LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[LogXmlFile]},
+						Items:                []corev1.KeyToPath{{Key: LogXmlFile, Path: LogXmlFile}},
+						DefaultMode:          &defaultMode,
+					},
 				},
-			},
-		})
+			})
+		}
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: volName, MountPath: mountPath})
 		envVars = append(envVars, corev1.EnvVar{Name: "LOG4J_PROPS", Value: log4jPropsEnvVarPath})
 	}
