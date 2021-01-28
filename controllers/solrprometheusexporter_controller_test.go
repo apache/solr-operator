@@ -34,6 +34,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"testing"
+	"time"
 )
 
 var _ reconcile.Reconciler = &SolrPrometheusExporterReconciler{}
@@ -656,8 +657,11 @@ func TestMetricsReconcileWithUserProvidedConfig(t *testing.T) {
 	updatedConfigXml := "<config>updated by user</config>"
 	updateUserProvidedConfigMap(testClient, g, userProvidedConfigMapNN, map[string]string{util.PrometheusExporterConfigMapKey: updatedConfigXml})
 
-	// reconcile should happen again
+	// reconcile should happen again 3x
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	time.Sleep(time.Millisecond * 250)
 
 	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, userProvidedConfigMap.Name)
 	expectedAnnotations = map[string]string{
