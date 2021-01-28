@@ -56,6 +56,8 @@ Once we have installed Solr to our k8s, this will allow us to address the nodes 
 
 ## Install the Solr Operator
 
+You can follow along here, or follow the instructions in the [Official Helm release](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
 Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
@@ -68,14 +70,14 @@ kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependenc
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
 ```
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
 
 ```bash
 # Install the operator
-$ helm install solr-operator solr-operator/solr-operator
+$ helm install solr-operator apache-solr/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
