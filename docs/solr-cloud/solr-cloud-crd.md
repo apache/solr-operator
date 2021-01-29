@@ -38,7 +38,7 @@ These options can be found in `SolrCloud.spec.dataStorage`
 
 ## Update Strategy
 
-The SolrCloud CRD provides users the ability to define how it is updated, through `SolrCloud.Spec.updateStrategy`.
+The SolrCloud CRD provides users the ability to define how Pod updates should be managed, through `SolrCloud.Spec.updateStrategy`.
 This provides the following options:
 
 Under `SolrCloud.Spec.updateStrategy`:
