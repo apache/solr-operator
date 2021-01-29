@@ -7,11 +7,10 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
     2. [Install an Ingress Controller to reach the cluster on localhost](#install-an-ingress-controller)
  3. [Install Solr Operator](#install-the-solr-operator)
  4. [Start your Solr cluster](#start-an-example-solr-cloud-cluster)
- 5. [Create a collection and index some documents](#create-a-collection-and-index-some-documents)
- 6. [Scale from 3 to 5 nodes](#scale-from-3-to-5-nodes)
- 7. [Upgrade to newer Solr version](#upgrade-to-newer-version)
- 8. [Install Kubernetes Dashboard (optional)](#install-kubernetes-dashboard-optional)
- 9. [Delete the solrCloud cluster named 'example'](#delete-the-solrcloud-cluster-named-example)
+ 5. [Scale from 3 to 5 nodes](#scale-from-3-to-5-nodes)
+ 6. [Upgrade to newer Solr version](#upgrade-to-newer-version)
+ 7. [Install Kubernetes Dashboard (optional)](#install-kubernetes-dashboard-optional)
+ 8. [Delete the solrCloud cluster named 'example'](#delete-the-solrcloud-cluster-named-example)
 
 ## Setup Kubernetes and Dependencies
 
@@ -131,42 +130,6 @@ kubectl get solrclouds -w
 # Open a web browser to see a solr node:
 # Note that this is the service level, so will round-robin between the nodes
 open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=nodes"
-```
-
-## Create a collection and index some documents
-
-We'll use the Operator's built in collection creation option
-
-```bash
-# Create the spec
-cat <<EOF > collection.yaml
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCollection
-metadata:
-  name: mycoll
-spec:
-  solrCloud: example
-  collection: mycoll
-  autoAddReplicas: true
-  routerName: compositeId
-  numShards: 1
-  replicationFactor: 3
-  maxShardsPerNode: 2
-  collectionConfigName: "_default"
-EOF
-
-# Execute the command and check in Admin UI that it succeeds
-kubectl apply -f collection.yaml
-
-# Check in Admin UI that collection is created
-open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=graph"
-```
-
-Now index some documents into the empty collection.
-```bash
-curl -XPOST -H "Content-Type: application/json" \
-    -d '[{id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}, {id: 6}, {id: 7}, {id: 8}]' \
-    "http://default-example-solrcloud.ing.local.domain/solr/mycoll/update/"
 ```
 
 ## Scale from 3 to 5 nodes
