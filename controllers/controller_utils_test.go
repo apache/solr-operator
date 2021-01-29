@@ -364,7 +364,7 @@ func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 
 	cleanupObjects := []runtime.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
-		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrCollection{}, &solr.SolrCollectionAlias{}, &solr.SolrPrometheusExporter{},
+		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrPrometheusExporter{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},

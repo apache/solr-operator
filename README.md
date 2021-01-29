@@ -38,10 +38,8 @@ Please visit the following pages for documentation on using and developing the S
 - [Running the Solr Operator](https://apache.github.io/lucene-solr-operator/docs/running-the-operator)
 - Available Solr Resources
     - [Solr Clouds](https://apache.github.io/lucene-solr-operator/docs/solr-cloud)
-    - [Solr Collections](https://apache.github.io/lucene-solr-operator/docs/solr-collection)
     - [Solr Backups](https://apache.github.io/lucene-solr-operator/docs/solr-backup)
     - [Solr Metrics](https://apache.github.io/lucene-solr-operator/docs/solr-prometheus-exporter)
-    - [Solr Collection Aliases](https://apache.github.io/lucene-solr-operator/docs/solr-collection-alias)
 - [Development](https://apache.github.io/lucene-solr-operator/docs/development)
 
 ### Examples
@@ -52,6 +50,9 @@ Example uses of each CRD have been [provided](https://apache.github.io/lucene-so
 
 #### v0.3.0
 - All deprecated CRD fields and Solr Operator options from `v0.2.*` have been removed.
+  
+- The `SolrCollection` and `SolrCollectionAlias` have been removed. Please use the Solr APIs to manage these resources instead.
+Discussion around the removal can be found in [Issue #204](https://github.com/apache/lucene-solr-operator/issues/204).
 
 #### v0.2.7
 - Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.

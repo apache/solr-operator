@@ -10,10 +10,4 @@ resources:
   kind: SolrBackup
 - group: solr
   version: v1beta1
-  kind: SolrCollection
-- group: solr
-  version: v1beta1
   kind: SolrPrometheusExporter
-- group: solr
-  version: v1beta1
-  kind: SolrCollectionAlias
