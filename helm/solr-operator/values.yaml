@@ -20,7 +20,7 @@
 replicaCount: 1
 
 image:
-  repository: bloomberg/solr-operator
+  repository: apache/solr-operator
   tag: v0.2.8
   pullPolicy: Always
 

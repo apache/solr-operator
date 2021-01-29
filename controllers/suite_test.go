@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	"fmt"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -76,6 +77,9 @@ func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan 
 	requests := make(chan reconcile.Request)
 	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
 		result, err := inner.Reconcile(req)
+		if err != nil {
+			fmt.Printf("\n\nReconcile Error: %s\n\n", err)
+		}
 		requests <- req
 		return result, err
 	})
