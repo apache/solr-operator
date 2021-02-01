@@ -112,7 +112,8 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.EqualValues(t, extraContainers1, deployment.Spec.Template.Spec.InitContainers)
 
 	// Pod Options Checks
-	assert.Equal(t, extraVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
+	expectedEnvVars := append(extraVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: util.CheckPeerNameDisabled})
+	assert.Equal(t, expectedEnvVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
 	assert.Equal(t, podSecurityContext, *deployment.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
 	assert.Equal(t, affinity, deployment.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
 	assert.Equal(t, resources.Limits, deployment.Spec.Template.Spec.Containers[0].Resources.Limits, "Resources.Limits is not the same as the one provided in podOptions")
@@ -327,7 +328,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"JAVA_OPTS": "$(SOLR_ZK_CREDS_AND_ACLS)",
+		"JAVA_OPTS": "$(SOLR_ZK_CREDS_AND_ACLS) -Dsolr.ssl.checkPeerName=false",
 	}
 	foundEnv := deployment.Spec.Template.Spec.Containers[0].Env
 	f := false
@@ -507,7 +508,7 @@ func TestMetricsReconcileWithSolrZkAcls(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"JAVA_OPTS": "$(SOLR_ZK_CREDS_AND_ACLS)",
+		"JAVA_OPTS": "$(SOLR_ZK_CREDS_AND_ACLS) -Dsolr.ssl.checkPeerName=false",
 	}
 	foundEnv := deployment.Spec.Template.Spec.Containers[0].Env
 	f := false

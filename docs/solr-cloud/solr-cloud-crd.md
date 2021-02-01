@@ -243,3 +243,214 @@ data:
      ... YOUR CUSTOM SOLR XML CONFIG HERE ...
     </solr>
 ```
+
+## Enable TLS Between Solr Pods
+
+A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
+However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
+The Solr operator provides **optional** configuration settings to enable TLS for encrypting traffic between Solr pods.
+
+Enabling TLS for Solr is a straight-forward process once you have a [**PKCS12 keystore**]((https://en.wikipedia.org/wiki/PKCS_12)) containing an [X.509](https://en.wikipedia.org/wiki/X.509) certificate and private key; as of Java 8, PKCS12 is the default keystore format supported by the JVM.
+
+### cert-manager
+
+Behind the scenes, the Solr operator relies on [cert-manager](https://cert-manager.io/docs/), a Kubernetes controller for managing TLS certificates, 
+including renewing certificates prior to expiration. 
+One of the primary benefits of cert-manager is it supports pluggable certificate `Issuer` implementations, including a self-signed Issuer for local development and an [ACME compliant](https://tools.ietf.org/html/rfc8555) Issuer for working with services like [Let’s Encrypt](https://letsencrypt.org/).
+If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to [User supplied TLS Certificate](#-User-supplied-TLS-Certificate) later in this section.
+If you do not have a TLS certificate, then we recommend installing **cert-manager** as it makes working with TLS in Kubernetes much easier.
+
+Another benefit is cert-manager can create a [PKCS12](https://cert-manager.io/docs/release-notes/release-notes-0.15/#general-availability-of-jks-and-pkcs-12-keystores) keystore automatically when issuing a `Certificate`, 
+which allows the Solr operator to mount the keystore directly on our Solr pods.
+
+Given its popularity, cert-manager may already be installed in your Kubernetes cluster. To check if `cert-manager` is already installed, do:
+```
+kubectl get crds -l app.kubernetes.io/instance=cert-manager
+```
+If installed, you should see the following cert-manager related CRDs:
+```
+certificaterequests.cert-manager.io
+certificates.cert-manager.io
+challenges.acme.cert-manager.io
+clusterissuers.cert-manager.io
+issuers.cert-manager.io
+orders.acme.cert-manager.io
+```
+
+If not intalled, use Helm to install it into the `cert-manager` namespace:
+```
+if ! helm repo list | grep -q "https://charts.jetstack.io"; then
+  helm repo add jetstack https://charts.jetstack.io
+  helm repo update
+fi
+
+kubectl create ns cert-manager
+helm upgrade --install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --version v1.1.0 \
+  --set installCRDs=true
+``` 
+You’ll need admin privileges to install the CRDs in a shared K8s cluster, so work with your friendly Kubernetes admin to install if needed (most likely cert-manager will already be installed).
+Refer to the [cert-manager Installation](https://cert-manager.io/docs/installation/kubernetes/) instructions for more information.
+
+The Solr operator was tested with cert-manager [v.1.1.0](https://github.com/jetstack/cert-manager/releases/tag/v1.1.0) running on Kubernetes 1.18+.
+
+### Quickstart: Solr operator Requests TLS Certificate from cert-manager
+
+The easiest way to get started is to have the Solr operator create the certificate (`certificates.cert-manager.io` a cert-manager CRD) for your SolrCloud instance. The actual certificate issuing is handled by cert-manager.
+This approach is useful for development environments and testing out integration with cert-manager in your K8s cluster.
+
+The following snippet of YAML (from a SolrCloud CRD definition), demonstrates how to enable TLS with a self-signed certificate for a SolrCloud instance using the `autoCreate` option:
+
+```
+ spec:
+   ... other SolrCloud CRD settings ...
+
+   solrTLS:
+     autoCreate:
+       subjectDName: "O=MyOrg,OU=SomeUnit,C=USA"
+
+```
+Notice there is no mention of a certificate issuer. If you don’t specify an *issuerRef* under *autoCreate*, the Solr operator will create a self-signed cert.
+Alternatively, define a cert-manager `ClusterIssuer` / `Issuer` and then the Solr operator creates a certificate CRD instance using the specified Issuer. 
+For instance, the following example uses an issuer named `acme-letsencrypt-issuer` which requests a certificate from LetsEncrypt using the ACME API:
+```
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    autoCreate:
+      name: my-solr-tls
+      subjectDName: "O=MyOrg,OU=SomeUnit,C=USA"
+      issuerRef:
+        name: acme-letsencrypt-issuer
+        kind: Issuer
+```
+
+The benefit of letting the Solr operator create the `Certificate` is it can configure the DNS names based on the operator's external addressability options.
+Keep in mind, however, that some DNS names in Kubernetes are not valid for external certificates, for instance `<svc>.<namespace>.svc.cluster.local` is not a valid external domain name 
+and certificate issuer services like LetsEncrypt will not generate a certificate for K8s internal DNS names (you'll get errors during certificate issuing).
+
+Also, with self-signed certificates, you'll have to configure HTTP client libraries to skip hostname and CA verification.
+
+Unless you want a self-signed certificate, you need to define the `ClusterIssuer` / `Issuer` before requesting certificates; the Solr operator does not create other types issuers because requirements will differ based on the underlying provider. 
+For instance, on GKE, to create a Let’s Encrypt Issuer you need a service account with various cloud DNS permissions granted for DNS01 challenges to work, see: https://cert-manager.io/docs/configuration/acme/dns01/google/. 
+In general, we don’t want the Solr operator to assume responsibility for operations that should be done by the cert-manager. However, once the Issuer exists, the Solr operator can automatically generate a Certificate for Solr using the `issuerRef` option.
+If you specify an `issuerRef`, then the issuer must exist, otherwise the SolrCloud instance will fail to reconcile.
+
+### User generated TLS Certificate using cert-manager
+Users can also choose to just create the [certificate CRD](https://cert-manager.io/docs/usage/certificate/) instance using cert-manager directly; this gives users full control over the fields in the certificate.
+Requesting the certificate outside of the SolrCloud CRD also helps reduce complexity during SolrCloud reconciliation as the Solr operator simply needs to configure the volume mount to load the keystore on each Solr pod.
+Refer to the [cert-manager docs](https://cert-manager.io/docs/) on how to define a certificate. Once created, simply point the SolrCloud deployment at the TLS and keystore password secrets, e.g.
+```
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-password-secret
+      key: password-key
+    pkcs12Secret:
+      name: my-tls-cert
+      key: keystore.p12
+```
+Note, when generating the Certificate, users must take care to request that the **pkcs12 keystore** gets created using config similar to the following:
+```
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef:
+        key: password-key
+        name: pkcs12-password-secret
+```
+_Note: the example structure above goes in your certificate CRD YAML, not SolrCloud._
+
+Lastly, you'll have to create the keystore secret (e.g. `pkcs12-password-secret`) in the same namespace before requesting the certificate, see: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.PKCS12Keystore
+
+### User supplied TLS Certificate
+
+Lastly, users may bring their own cert stored in a `kubernetes.io/tls` secret; for this use case, cert-manager is not required. 
+There are many ways to get a certificate, such as from the GKE managed certificate process or from a CA directly. 
+Regardless of how you obtain a Certificate, it needs to be stored in a [Kubernetes TLS secret](https://kubernetes.io/docs/concepts/configuration/secret/#tls-secrets) that contains a `tls.crt` file (x.509 certificate with a public key and info about the issuer) and a `tls.key` file (the private key).
+
+Ideally, the TLS secret will also have a `pkcs12` keystore. 
+If the supplied TLS secret does not contain a `keystore.p12` key, then the Solr operator creates an `initContainer` on the StatefulSet to generate the keystore from the TLS secret using the following command:
+```
+openssl pkcs12 -export -in tls.crt -inkey tls.key -out keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+```
+_The `initContainer` uses the main Solr image as it has `openssl` installed._
+
+Configure the SolrCloud deployment to point to the user-provided keystore and TLS secrets:
+```
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-keystore-manual
+      key: password-key
+    pkcs12Secret:
+      name: pkcs12-keystore-manual
+      key: keystore.p12
+```
+
+### Ingress
+
+The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
+```
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+spec:
+  rules:
+    ...
+  tls:
+  - secretName: my-selfsigned-cert-tls
+```
+
+### Certificate Renewal and Rolling Restarts
+
+cert-manager automatically handles certificate renewal. From the docs:
+
+> The default duration for all certificates is 90 days and the default renewal windows is 30 days. This means that certificates are considered valid for 3 months and renewal will be attempted within 1 month of expiration.
+>          https://docs.cert-manager.io/en/release-0.8/reference/certificates.html
+
+However, this only covers updating the underlying TLS secret and mounted secrets in each Solr pod do get updated on the filesystem, see: https://kubernetes.io/docs/concepts/configuration/secret/#mounted-secrets-are-updated-automatically. 
+However, the JVM only reads key and trust stores once during initialization and does not reload them if they change. Thus, we need to recycle the Solr container in each pod to pick up the updated keystore.
+
+The operator tracks the MD5 hash of the `tls.crt` from the TLS secret in an annotation on the StatefulSet pod spec so that when the TLS secret changes, it will trigger a rolling restart of the affected Solr pods.
+The operator guards this behavior with an **opt-in** flag `restartOnTLSSecretUpdate` as some users may not want to restart Solr pods when the TLS secret holding the cert changes and may instead choose to restart the pods during a maintenance window (presumably before the certs expire).
+```
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    restartOnTLSSecretUpdate: true
+    ...
+
+```
+
+### Misc Config Settings for TLS Enabled Solr
+
+Although not required, we recommend setting the `commonServicePort` and `nodePortOverride` to `443` instead of the default port `80` under `solrAddressability` to avoid confusion when working with `https`. 
+```
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    commonServicePort: 443
+    external:
+      nodePortOverride: 443
+
+```  
+
+Also, the operator sets the `-Dsolr.ssl.checkPeerName=false` Java system property for the Prometheus exporter by default to enable flexibility when requesting metrics from TLS enabled Solr pods.
+Use the following approach to override this default behavior by setting `-Dsolr.ssl.checkPeerName=true`:
+```
+    podOptions:
+      envVars:
+        - name: JAVA_OPTS
+          value: "-Dsolr.ssl.checkPeerName=true"
+```
