@@ -771,11 +771,7 @@ func (sc *SolrCloud) CommonServiceName() string {
 
 // InternalURLForCloud returns the name of the common service for the cloud
 func InternalURLForCloud(sc *SolrCloud) string {
-	urlScheme := "http"
-	if sc.Spec.SolrTLS != nil {
-		urlScheme = "https"
-	}
-	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", urlScheme, sc.Name, sc.Namespace, sc.CommonPortSuffix())
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(), sc.Name, sc.Namespace, sc.CommonPortSuffix())
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud

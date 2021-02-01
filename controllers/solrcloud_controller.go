@@ -189,7 +189,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml
-	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml
 	configMapInfo := make(map[string]string)
 	if instance.Spec.CustomSolrKubeOptions.ConfigMapOptions != nil && instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
 		providedConfigMapName := instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap
@@ -292,15 +291,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 		}
 
-		// go get the current version of the TLS secret so changes get picked up by our STS spec (via env vars)
 		foundTLSSecret := &corev1.Secret{}
 		lookupErr := r.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
 		if lookupErr != nil {
-			r.Log.Info("TLS secret not found.", "secret", instance.Spec.SolrTLS.PKCS12Secret.Name)
 			return requeueOrNot, lookupErr
 		} else {
 			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-			// capture the resourceVersion of the secret and stash in an envVar so that the STS gets updates when the cert changes
+			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
 			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
 				tlsCertBytes, ok := foundTLSSecret.Data["tls.crt"]
 				if ok {
@@ -786,7 +783,6 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&extv1.Ingress{}).
-		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Secret{}).
 		Owns(&batchv1.Job{})
 
@@ -982,7 +978,7 @@ func (r *SolrCloudReconciler) isCertificateReady(ctx context.Context, cert *cert
 		keyStorePasswordSecret := &corev1.Secret{}
 		err := r.Get(ctx, types.NamespacedName{Name: tlsOpts.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
 		if err != nil {
-			r.Log.Error(err, "Keystore password secret not found", "name", tlsOpts.KeyStorePasswordSecret.Name)
+			r.Log.Error(err, "Required keystore password secret not found! Cannot proceed with TLS config for SolrCloud without this secret", "name", tlsOpts.KeyStorePasswordSecret.Name)
 			return nil
 		}
 	}
@@ -1009,12 +1005,9 @@ func (r *SolrCloudReconciler) afterCertificateReady(ctx context.Context, instanc
 
 		// now update the existing Certificate to trigger the cert-manager to re-issue it
 		err = r.Update(ctx, foundCert)
-		if err != nil {
-			return false, err
-		}
 
 		// just updated the cert, assume it's not ready and re-queue
-		return false, nil
+		return false, err
 	} else {
 		// cert exists, is ready and has no changes
 

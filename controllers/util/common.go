@@ -248,7 +248,7 @@ func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
 		}
 	}
 
-	if !requireUpdate && !DeepEqualWithNils(to.Spec.TLS, from.Spec.TLS) {
+	if !DeepEqualWithNils(to.Spec.TLS, from.Spec.TLS) {
 		requireUpdate = true
 		to.Spec.TLS = from.Spec.TLS
 	}
