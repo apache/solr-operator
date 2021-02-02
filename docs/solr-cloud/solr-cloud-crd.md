@@ -444,7 +444,7 @@ spec:
     external:
       nodePortOverride: 443
 
-```  
+```
 
 Also, the operator sets the `-Dsolr.ssl.checkPeerName=false` Java system property for the Prometheus exporter by default to enable flexibility when requesting metrics from TLS enabled Solr pods.
 Use the following approach to override this default behavior by setting `-Dsolr.ssl.checkPeerName=true`:
@@ -454,3 +454,35 @@ Use the following approach to override this default behavior by setting `-Dsolr.
         - name: JAVA_OPTS
           value: "-Dsolr.ssl.checkPeerName=true"
 ```
+
+#### Public / Private Domain Names
+
+If your Solr pods use Kubernetes internal domain names, such as `<cloud>-solrcloud-<oridinal>.<ns>` or 
+`<cloud>-solrcloud-<oridinal>.<ns>.svc.cluster.local` then you **cannot** request a certificate from a service like LetsEncrypt. 
+You'll receive an error like (from the cert-manager controller pod logs):
+```
+   Cannot issue for \"*.<ns>.svc.cluster.local\": Domain name does not end with a valid public suffix (TLD)"
+```
+This is policy enforced by trusted certificate authorities, see: https://www.digicert.com/kb/advisories/internal-names.htm.
+Intuitively, this makes sense because services like LetsEncrypt cannot determine if you own a private domain because they cannot reach it from the Internet. 
+
+Some CA's provide TLS certificates for private domains but that topic is beyond the scope of the Solr operator.
+You may want to use a self-signed certificate for internal traffic and then a public certificate for your Ingress.
+Alternatively, you can choose to expose Solr pods with an external name using SolrCloud `solrAddressability` settings:
+```
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:    
+    commonServicePort: 443
+    external:
+      nodePortOverride: 443
+      domainName: k8s.solr.cloud
+      method: Ingress
+      useExternalAddress: true
+```
+The example settings above will result in your Solr pods getting names like: `search-solrcloud-0.<ns>.k8s.solr.cloud` 
+which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
