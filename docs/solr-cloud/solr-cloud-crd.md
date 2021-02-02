@@ -484,5 +484,5 @@ spec:
       method: Ingress
       useExternalAddress: true
 ```
-The example settings above will result in your Solr pods getting names like: `search-solrcloud-0.<ns>.k8s.solr.cloud` 
+The example settings above will result in your Solr pods getting names like: `<ns>-search-solrcloud-0.k8s.solr.cloud` 
 which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
