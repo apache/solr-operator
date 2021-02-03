@@ -997,31 +997,6 @@ func init() {
 	SchemeBuilder.Register(&SolrCloud{}, &SolrCloudList{})
 }
 
-type CertificateIssuerRef struct {
-	// Name of the resource being referred to.
-	Name string `json:"name"`
-	// Kind of the resource being referred to.
-	// +optional
-	Kind string `json:"kind,omitempty"`
-}
-
-type CreateCertificate struct {
-	// Name of the certificate to create for Solr TLS; defaults to the name of the SolrCloud + "-solr-tls"
-	// +optional
-	Name string `json:"name,omitempty"`
-
-	// Subject distinguished name for the auto-generated cert;
-	// use format: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country
-	// If not provided, then the operator uses the SolrCloud instance name as the Organization
-	// +optional
-	SubjectDistinguishedName string `json:"subjectDName,omitempty"`
-
-	// Specify the cert-manager Issuer or ClusterIssuer to use to issue the certificate;
-	// for creating a self-signed cert, don't supply an issuerRef.
-	// +optional
-	IssuerRef *CertificateIssuerRef `json:"issuerRef,omitempty"`
-}
-
 type ClientAuthType string
 
 const (
@@ -1031,18 +1006,12 @@ const (
 )
 
 type SolrTLSOptions struct {
-	// Solr operator should just create a TLS cert automatically using the specified Issuer
-	// If issuerRef is not specified, the operator generates a self-signed certificate.
-	// +optional
-	AutoCreate *CreateCertificate `json:"autoCreate,omitempty"`
-
 	// Secret containing the key store password
 	// +optional
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
 	// TLS Secret containing a pkcs12 keystore created by cert-manager; required unless autoCreate is requested.
-	// +optional
-	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
 
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
@@ -1074,38 +1043,6 @@ func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
 			Key: "password-key",
 		}
 		changed = true
-	}
-
-	if opts.AutoCreate != nil {
-		// User wants us to create a Certificate and Keystore password on-the-fly for them
-		// Fill-in any missing information with defaults so that the reconciliation process
-		// doesn't have to account for missing values with defaults
-		if opts.AutoCreate.Name == "" {
-			opts.AutoCreate.Name = fmt.Sprintf("%s-solr-tls", instanceName)
-			changed = true
-		}
-
-		if opts.AutoCreate.SubjectDistinguishedName == "" {
-			opts.AutoCreate.SubjectDistinguishedName = "O=" + instanceName
-			changed = true
-		}
-
-		if opts.PKCS12Secret == nil {
-			var issuerName string
-			if opts.AutoCreate.IssuerRef != nil {
-				issuerName = strings.Replace(opts.AutoCreate.IssuerRef.Name, "-issuer", "", -1)
-			} else {
-				issuerName = "selfsigned"
-			}
-			certSecretName := fmt.Sprintf("%s-%s-%s", instanceName, issuerName, "solr-tls")
-			opts.PKCS12Secret = &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: certSecretName,
-				},
-				Key: DefaultKeyStoreFile,
-			}
-			changed = true
-		}
 	}
 
 	if opts.ClientAuth == "" {

@@ -4509,28 +4509,6 @@ spec:
               solrTLS:
                 description: Options to enable TLS between Solr pods
                 properties:
-                  autoCreate:
-                    description: Solr operator should just create a TLS cert automatically using the specified Issuer If issuerRef is not specified, the operator generates a self-signed certificate.
-                    properties:
-                      issuerRef:
-                        description: Specify the cert-manager Issuer or ClusterIssuer to use to issue the certificate; for creating a self-signed cert, don't supply an issuerRef.
-                        properties:
-                          kind:
-                            description: Kind of the resource being referred to.
-                            type: string
-                          name:
-                            description: Name of the resource being referred to.
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      name:
-                        description: Name of the certificate to create for Solr TLS; defaults to the name of the SolrCloud + "-solr-tls"
-                        type: string
-                      subjectDName:
-                        description: 'Subject distinguished name for the auto-generated cert; use format: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country If not provided, then the operator uses the SolrCloud instance name as the Organization'
-                        type: string
-                    type: object
                   checkPeerName:
                     description: TLS certificates contain host/ip "peer name" information that is validated by default.
                     type: boolean
@@ -4573,6 +4551,8 @@ spec:
                   verifyClientHostname:
                     description: Verify client's hostname during SSL handshake
                     type: boolean
+                required:
+                - pkcs12Secret
                 type: object
               updateStrategy:
                 description: Define how Solr rolling updates are executed.

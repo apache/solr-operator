@@ -19,17 +19,6 @@ package util
 
 import (
 	"fmt"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
-	b64 "encoding/base64"
-	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
-	certmetav1 "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-	"math/rand"
-	"regexp"
-
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	kbatch "k8s.io/api/batch/v1"
@@ -37,6 +26,9 @@ import (
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -954,134 +946,6 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 	return ingressRule
 }
 
-func GenerateCertificate(solrCloud *solr.SolrCloud) certv1.Certificate {
-
-	dnsNames := findDNSNamesForCertificate(solrCloud)
-
-	// convert something like: CN=localhost, OU=Organizational Unit, O=Organization, L=Location, ST=State, C=Country
-	// into an X509Subject to be used during cert creation
-	subjectMap := parseSubjectDName(solrCloud.Spec.SolrTLS.AutoCreate.SubjectDistinguishedName)
-	subject := toX509Subject(subjectMap)
-	commonName := subjectMap["CN"]
-
-	var issuerRef certmetav1.ObjectReference
-	if solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef != nil {
-		issuerRef = certmetav1.ObjectReference{
-			Name: solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef.Name,
-			Kind: solrCloud.Spec.SolrTLS.AutoCreate.IssuerRef.Kind,
-		}
-	} else {
-		issuerRef = certmetav1.ObjectReference{
-			Name: fmt.Sprintf("%s-selfsigned-issuer", solrCloud.Name),
-			Kind: "Issuer",
-		}
-	}
-
-	cert := certv1.Certificate{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.Spec.SolrTLS.AutoCreate.Name,
-			Namespace: solrCloud.Namespace,
-		},
-		Spec: certv1.CertificateSpec{
-			Subject:    subject,
-			CommonName: commonName,
-			SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name,
-			DNSNames:   dnsNames,
-			Keystores: &certv1.CertificateKeystores{
-				PKCS12: &certv1.PKCS12Keystore{
-					Create: true,
-					PasswordSecretRef: certmetav1.SecretKeySelector{
-						Key: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Key,
-						LocalObjectReference: certmetav1.LocalObjectReference{
-							Name: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Name,
-						},
-					},
-				},
-			},
-			IssuerRef: issuerRef,
-		},
-	}
-
-	return cert
-}
-
-func toX509Subject(subjectMap map[string]string) *certv1.X509Subject {
-	var provinces []string
-	// sometimes it's ST and other times it's S ... handle both
-	if subjectMap["ST"] != "" {
-		provinces = append(provinces, subjectMap["ST"])
-	}
-	if subjectMap["S"] != "" {
-		provinces = append(provinces, subjectMap["S"])
-	}
-	return &certv1.X509Subject{
-		Organizations:       toX509SubjectField(subjectMap["O"]),
-		Countries:           toX509SubjectField(subjectMap["C"]),
-		OrganizationalUnits: toX509SubjectField(subjectMap["OU"]),
-		Localities:          toX509SubjectField(subjectMap["L"]),
-		Provinces:           provinces,
-		StreetAddresses:     toX509SubjectField(subjectMap["STREET"]),
-		PostalCodes:         toX509SubjectField(subjectMap["PC"]),
-		SerialNumber:        subjectMap["SERIALNUMBER"],
-	}
-}
-
-func toX509SubjectField(fieldValue string) []string {
-	if fieldValue != "" {
-		return []string{fieldValue}
-	} else {
-		return nil
-	}
-}
-
-func parseSubjectDName(dname string) map[string]string {
-	parsed := make(map[string]string)
-	fields := []string{"CN", "O", "OU", "L", "ST", "S", "C", "SERIALNUMBER", "STREET", "PC"}
-	for _, f := range fields {
-		regex := fmt.Sprintf("(?i)%s=([^,]+)", f)
-		match := regexp.MustCompile(regex).FindStringSubmatch(dname)
-		if len(match) == 2 {
-			parsed[f] = match[1]
-		}
-	}
-	return parsed
-}
-
-// used to generate a random password to be used for the keystore
-func randomPasswordB64() []byte {
-	rand.Seed(time.Now().UnixNano())
-	lower := "abcdefghijklmnpqrstuvwxyz" // no 'o'
-	chars := lower + strings.ToUpper(lower) + "0123456789()[]~%$!#"
-	pass := make([]byte, 12)
-	perm := rand.Perm(len(chars))
-	for i := 0; i < len(pass); i++ {
-		pass[i] = chars[perm[i]]
-	}
-	return []byte(b64.StdEncoding.EncodeToString(pass))
-}
-
-func GenerateKeystoreSecret(solrCloud *solr.SolrCloud) corev1.Secret {
-	secretName := solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Name
-	data := map[string][]byte{}
-	data["password-key"] = randomPasswordB64()
-	return corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: solrCloud.Namespace},
-		Data:       data,
-		Type:       corev1.SecretTypeOpaque,
-	}
-}
-
-func GenerateSelfSignedIssuer(solrCloud *solr.SolrCloud, issuerName string) certv1.Issuer {
-	return certv1.Issuer{
-		ObjectMeta: metav1.ObjectMeta{Name: issuerName, Namespace: solrCloud.Namespace},
-		Spec: certv1.IssuerSpec{
-			IssuerConfig: certv1.IssuerConfig{
-				SelfSigned: &certv1.SelfSignedIssuer{},
-			},
-		},
-	}
-}
-
 func GenerateUrlSchemeJob(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) kbatch.Job {
 	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
 	envVars := []corev1.EnvVar{
@@ -1099,14 +963,26 @@ func GenerateUrlSchemeJob(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrC
 		},
 	}
 
-	/*
-		TODO: Once the ZK ACL PR is merged, add this env var:
-		{
-			Name:      "SOLR_ZK_CREDS_AND_ACLS",
-			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)",
-			ValueFrom: nil,
-		},
-	*/
+	allSolrOpts := []string{}
+	// Add ACL information, if given, through Env Vars
+	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
+		envVars = append(envVars, aclEnvs...)
+
+		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
+		allSolrOpts = append(allSolrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
+	}
+
+	if solrCloud.Spec.SolrOpts != "" {
+		allSolrOpts = append(allSolrOpts, solrCloud.Spec.SolrOpts)
+	}
+
+	// Add SOLR_OPTS last, so that it can use values from all of the other ENV_VARS
+	if len(allSolrOpts) > 0 {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "SOLR_OPTS",
+			Value: strings.Join(allSolrOpts, " "),
+		})
+	}
 
 	// have to create the chroot here as the postStart script is too late for the zkcli.sh we need to set the urlScheme
 	cmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"
@@ -1250,89 +1126,6 @@ func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	}
 
 	return vols
-}
-
-func findDNSNamesForCertificate(solrCloud *solr.SolrCloud) []string {
-	var dnsNames []string
-	extOpts := solrCloud.Spec.SolrAddressability.External
-	if extOpts != nil {
-		wildCardDNS := ""
-		if extOpts.DomainName != "" {
-			wildCardDNS = "." + extOpts.DomainName
-			dnsNames = append(dnsNames, extOpts.DomainName, "*."+extOpts.DomainName)
-		}
-		rules := CreateSolrIngressRules(solrCloud, []string{}, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
-		for _, rule := range rules {
-			if wildCardDNS == "" || !strings.HasSuffix(rule.Host, wildCardDNS) {
-				dnsNames = append(dnsNames, rule.Host)
-			} // else this host is already captured by the wildCardDNS
-		}
-	} else {
-		dnsNames = append(dnsNames, solrCloud.AdvertisedNodeHost("*"))
-	}
-
-	if len(dnsNames) > 1 {
-		dnsNames = deDupeDNSNames(dnsNames)
-		sort.Strings(dnsNames)
-	}
-	return dnsNames
-}
-
-func deDupeDNSNames(dnsNames []string) []string {
-	keys := make(map[string]bool)
-	var set []string
-	for _, name := range dnsNames {
-		if _, exists := keys[name]; !exists {
-			keys[name] = true
-			set = append(set, name)
-		}
-	}
-	return set
-}
-
-func CopyCreateCertificateFields(from, to *certv1.Certificate) bool {
-	requireUpdate := false
-
-	// from is the desired state, built using the user-supplied config
-	// to is the current state, returned from an API Get call
-	// for changed fields, we take the value in the "from" object and send the "to" object back to the API update call
-
-	if from.Name != to.Name {
-		to.Name = from.Name
-		requireUpdate = true
-	}
-
-	if from.Spec.CommonName != to.Spec.CommonName {
-		to.Spec.CommonName = from.Spec.CommonName
-		requireUpdate = true
-	}
-
-	if from.Spec.SecretName != to.Spec.SecretName {
-		to.Spec.SecretName = from.Spec.SecretName
-		requireUpdate = true
-	}
-
-	if !DeepEqualWithNils(from.Spec.Subject, to.Spec.Subject) {
-		to.Spec.Subject = from.Spec.Subject
-		requireUpdate = true
-	}
-
-	if !DeepEqualWithNils(from.Spec.IssuerRef, to.Spec.IssuerRef) {
-		to.Spec.IssuerRef = from.Spec.IssuerRef
-		requireUpdate = true
-	}
-
-	if !DeepEqualWithNils(from.Spec.DNSNames, to.Spec.DNSNames) {
-		to.Spec.DNSNames = from.Spec.DNSNames
-		requireUpdate = true
-	}
-
-	if !DeepEqualWithNils(from.Spec.Keystores, to.Spec.Keystores) {
-		to.Spec.Keystores = from.Spec.Keystores
-		requireUpdate = true
-	}
-
-	return requireUpdate
 }
 
 func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {

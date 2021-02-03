@@ -18,12 +18,9 @@
 package controllers
 
 import (
-	"crypto/md5"
 	b64 "encoding/base64"
-	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
-	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -41,7 +38,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
@@ -51,91 +47,6 @@ var (
 	expectedIngressWithTLS      = types.NamespacedName{Name: "foo-tls-solrcloud-common", Namespace: "default"}
 	expectedStatefulSetName     = types.NamespacedName{Name: "foo-tls-solrcloud", Namespace: "default"}
 )
-
-func TestAutoCreateSelfSignedTLS(t *testing.T) {
-
-	instance := buildTestSolrCloud()
-
-	// Add the TLS config to create a self-signed cert
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
-		AutoCreate: &solr.CreateCertificate{
-			SubjectDistinguishedName: "CN=testCN, O=testO, OU=testOU",
-		},
-		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
-	}
-
-	changed := instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
-
-	// check the config gets setup correctly before reconcile
-	verifyAutoCreateSelfSignedTLSConfig(t, instance)
-
-	// config is good, reconcile the TLS state
-	verifyReconcileSelfSignedTLS(t, instance)
-}
-
-// Test upgrade from non-TLS cluster to TLS enabled cluster
-func TestEnableTLSOnExisting(t *testing.T) {
-
-	instance := buildTestSolrCloud()
-	changed := instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
-
-	g := gomega.NewGomegaWithT(t)
-	helper := NewTLSTestHelper(g)
-	defer func() {
-		helper.StopTest()
-	}()
-
-	ctx := context.TODO()
-	helper.ReconcileSolrCloud(ctx, instance, 2)
-	defer testClient.Delete(ctx, instance)
-
-	// now, update the config to enable TLS
-	err := testClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
-		AutoCreate: &solr.CreateCertificate{
-			SubjectDistinguishedName: "CN=testCN, O=testO, OU=testOU",
-		},
-		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
-	}
-	changed = instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
-
-	// check the config gets setup correctly before reconcile
-	verifyAutoCreateSelfSignedTLSConfig(t, instance)
-
-	foundTLSSecret := &corev1.Secret{}
-	lookupErr := testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
-	// TLS secret should not exist
-	assert.True(t, errors.IsNotFound(lookupErr))
-
-	// apply the update to trigger the upgrade to https
-	err = testClient.Update(ctx, instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-
-	// Create a mock secret in the background so the isCert ready function returns
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		_ = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace)
-		wg.Done()
-	}()
-	helper.WaitForReconcile(4)
-	wg.Wait()
-
-	// Cert was created?
-	findByName := types.NamespacedName{Name: expectedCloudWithTLSRequest.Name + "-solr-tls", Namespace: expectedCloudWithTLSRequest.Namespace}
-	foundCert := &certv1.Certificate{}
-	g.Eventually(func() error { return testClient.Get(ctx, findByName, foundCert) }, timeout).Should(gomega.Succeed())
-	err = testClient.Get(ctx, findByName, foundCert)
-
-	verifySelfSignedCert(t, foundCert, instance.Name)
-	expectStatefulSetTLSConfig(t, g, instance, false)
-	expectIngressTLSConfig(t, g)
-	expectUrlSchemeJob(t, g, instance)
-}
 
 // For TLS, all we really need is a secret holding the keystore password and a secret holding the pkcs12 keystore,
 // which can come from anywhere really, so this method tests handling of user-supplied secrets
@@ -165,6 +76,69 @@ func TestUserSuppliedTLS(t *testing.T) {
 	verifyReconcileUserSuppliedTLS(t, instance, false)
 }
 
+// Test upgrade from non-TLS cluster to TLS enabled cluster
+func TestEnableTLSOnExistingCluster(t *testing.T) {
+
+	instance := buildTestSolrCloud()
+	changed := instance.WithDefaults()
+	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
+
+	g := gomega.NewGomegaWithT(t)
+	helper := NewTLSTestHelper(g)
+	defer func() {
+		helper.StopTest()
+	}()
+
+	ctx := context.TODO()
+	helper.ReconcileSolrCloud(ctx, instance, 2)
+	defer testClient.Delete(ctx, instance)
+
+	// now, update the config to enable TLS
+	tlsSecretName := "tls-cert-secret-from-user"
+	err := testClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
+		KeyStorePasswordSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: tlsSecretName,
+			},
+			Key: "some-password-key-thingy",
+		},
+		PKCS12Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: tlsSecretName,
+			},
+			Key: "keystore.p12",
+		},
+		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
+	}
+	changed = instance.WithDefaults()
+	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
+
+	foundTLSSecret := &corev1.Secret{}
+	lookupErr := testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
+	// TLS secret should not exist
+	assert.True(t, errors.IsNotFound(lookupErr))
+
+	// apply the update to trigger the upgrade to https
+	err = testClient.Update(ctx, instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// Create a mock secret in the background so the isCert ready function returns
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		_ = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace)
+		wg.Done()
+	}()
+	helper.WaitForReconcile(4)
+	wg.Wait()
+
+	expectStatefulSetTLSConfig(t, g, instance, false)
+	expectIngressTLSConfig(t, g, tlsSecretName)
+	expectUrlSchemeJob(t, g, instance)
+}
+
 func TestUserSuppliedTLSWithPkcs12Conversion(t *testing.T) {
 
 	tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
@@ -187,113 +161,6 @@ func TestUserSuppliedTLSWithPkcs12Conversion(t *testing.T) {
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true)
-}
-
-func verifyReconcileSelfSignedTLS(t *testing.T, instance *solr.SolrCloud) {
-	g := gomega.NewGomegaWithT(t)
-	helper := NewTLSTestHelper(g)
-	defer func() {
-		helper.StopTest()
-	}()
-
-	ctx := context.TODO()
-	helper.ReconcileSolrCloud(ctx, instance, 4)
-	defer testClient.Delete(ctx, instance)
-
-	// Cert was created?
-	findByName := types.NamespacedName{Name: expectedCloudWithTLSRequest.Name + "-solr-tls", Namespace: expectedCloudWithTLSRequest.Namespace}
-	foundCert := &certv1.Certificate{}
-	g.Eventually(func() error { return testClient.Get(ctx, findByName, foundCert) }, timeout).Should(gomega.Succeed())
-	err := testClient.Get(ctx, findByName, foundCert)
-	verifySelfSignedCert(t, foundCert, instance.Name)
-	expectStatefulSetTLSConfig(t, g, instance, false)
-	expectIngressTLSConfig(t, g)
-	expectUrlSchemeJob(t, g, instance)
-
-	// trigger an update to the TLS secret (since cert-manager is not actually issuing the cert for us during testing)
-
-	// update the subject field and verify update occurs
-	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	instance.Spec.SolrTLS.AutoCreate.SubjectDistinguishedName = "CN=testCN, O=testO, OU=testOU, S=testS"
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		// wait a max of 2 reconcile TLS cycles ~ 10 secs
-		for i := 0; i < 10; i++ {
-			tlsSecret := &corev1.Secret{}
-			err := testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, tlsSecret)
-			if err != nil && errors.IsNotFound(err) {
-				_ = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace)
-				time.Sleep(2 * time.Second) // wait a full TLS reconcile cycle ...
-				wg.Done()
-				return
-			} else {
-				time.Sleep(1 * time.Second)
-			}
-		}
-		// timed out waiting to see the secret get deleted after cert config changed, the test will fail
-		wg.Done()
-	}()
-
-	err = testClient.Update(ctx, instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	helper.WaitForReconcile(2)
-	wg.Wait() // waits to make sure the TLS secret was created in the background
-
-	// was the cert updated after the subject changed?
-	findByName = types.NamespacedName{Name: expectedCloudWithTLSRequest.Name + "-solr-tls", Namespace: expectedCloudWithTLSRequest.Namespace}
-	foundCert = &certv1.Certificate{}
-	g.Eventually(func() error { return testClient.Get(ctx, findByName, foundCert) }, timeout).Should(gomega.Succeed())
-	err = testClient.Get(ctx, findByName, foundCert)
-	verifySelfSignedCert(t, foundCert, instance.Name)
-	// was the change to the subject picked up?
-	assert.NotNil(t, foundCert.Spec.Subject.Provinces, "Update cert subject not applied!")
-	assert.Equal(t, "testS", foundCert.Spec.Subject.Provinces[0])
-
-	// ensure the STS was updated after the cert changed
-	statefulSet := expectStatefulSetTLSConfig(t, g, instance, false)
-	tlsCertMd5FromSts := statefulSet.Spec.Template.Annotations[util.SolrTlsCertMd5Annotation]
-
-	foundTLSSecret := &corev1.Secret{}
-	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	foundTlsCertMd5 := fmt.Sprintf("%x", md5.Sum([]byte(foundTLSSecret.Data["tls.crt"])))
-	assert.Equal(t, foundTlsCertMd5, tlsCertMd5FromSts)
-}
-
-func verifyAutoCreateSelfSignedTLSConfig(t *testing.T, sc *solr.SolrCloud) {
-	assert.NotNil(t, sc.Spec.SolrTLS)
-	tls := sc.Spec.SolrTLS
-	assert.NotNil(t, tls.AutoCreate)
-	assert.Equal(t, sc.Name+"-solr-tls", tls.AutoCreate.Name)
-	assert.Equal(t, fmt.Sprintf("%s-pkcs12-keystore", sc.Name), tls.KeyStorePasswordSecret.Name)
-	assert.Equal(t, "password-key", tls.KeyStorePasswordSecret.Key)
-	assert.Equal(t, fmt.Sprintf("%s-selfsigned-solr-tls", sc.Name), tls.PKCS12Secret.Name)
-	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
-
-	cert := util.GenerateCertificate(sc)
-	verifySelfSignedCert(t, &cert, sc.Name)
-	expectTLSEnvVars(t, util.TLSEnvVars(tls, false), fmt.Sprintf("%s-pkcs12-keystore", sc.Name), "password-key", false)
-}
-
-func verifySelfSignedCert(t *testing.T, cert *certv1.Certificate, solrCloudName string) {
-	assert.Equal(t, solrCloudName+"-solr-tls", cert.Name)
-	assert.Equal(t, "testCN", cert.Spec.CommonName)
-	assert.NotNil(t, cert.Spec.Subject)
-	assert.Equal(t, "testO", cert.Spec.Subject.Organizations[0])
-	assert.Equal(t, "testOU", cert.Spec.Subject.OrganizationalUnits[0])
-	assert.True(t, len(cert.Spec.DNSNames) == 2)
-	assert.Equal(t, "*.test.domain.com", cert.Spec.DNSNames[0])
-	assert.Equal(t, "test.domain.com", cert.Spec.DNSNames[1])
-	assert.Equal(t, fmt.Sprintf("%s-selfsigned-solr-tls", solrCloudName), cert.Spec.SecretName)
-	assert.NotNil(t, cert.Spec.Keystores)
-	assert.NotNil(t, cert.Spec.Keystores.PKCS12)
-	assert.Equal(t, fmt.Sprintf("%s-pkcs12-keystore", solrCloudName), cert.Spec.Keystores.PKCS12.PasswordSecretRef.Name)
-	assert.Equal(t, "password-key", cert.Spec.Keystores.PKCS12.PasswordSecretRef.Key)
-	assert.Equal(t, fmt.Sprintf("%s-selfsigned-issuer", solrCloudName), cert.Spec.IssuerRef.Name)
-	assert.Equal(t, "Issuer", cert.Spec.IssuerRef.Kind)
 }
 
 func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, needsPkcs12InitContainer bool) {
@@ -345,7 +212,6 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 func verifyUserSuppliedTLSConfig(t *testing.T, sc *solr.SolrCloud, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
 	assert.NotNil(t, sc.Spec.SolrTLS)
 	tls := sc.Spec.SolrTLS
-	assert.Nil(t, tls.AutoCreate)
 
 	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
 	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
@@ -383,6 +249,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 			break
 		}
 	}
+	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
 	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
 	expectTLSEnvVars(t, mainContainer.Env, sc.Spec.SolrTLS.KeyStorePasswordSecret.Name, sc.Spec.SolrTLS.KeyStorePasswordSecret.Key, needsPkcs12InitContainer)
 
@@ -456,11 +323,11 @@ func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.Env
 	return filtered
 }
 
-func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT) {
+func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
 	ingress := &extv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
 	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1)
-	assert.Equal(t, "foo-tls-selfsigned-solr-tls", ingress.Spec.TLS[0].SecretName)
+	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName)
 	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"])
 }
 

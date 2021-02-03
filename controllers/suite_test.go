@@ -19,7 +19,6 @@ package controllers
 
 import (
 	"fmt"
-	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -62,7 +61,6 @@ func TestMain(m *testing.M) {
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
 	zkOp.AddToScheme(scheme.Scheme)
-	certv1.AddToScheme(scheme.Scheme)
 
 	var err error
 	if testCfg, err = t.Start(); err != nil {

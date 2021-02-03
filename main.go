@@ -24,7 +24,6 @@ import (
 	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers"
 	"github.com/apache/lucene-solr-operator/controllers/util/solr_api"
-	certv1 "github.com/jetstack/cert-manager/pkg/apis/certmanager/v1"
 	"net/http"
 	"os"
 	"runtime"
@@ -61,8 +60,7 @@ var (
 	watchNamespaces string
 
 	// External Operator dependencies
-	useZookeeperCRD   bool
-	useCertManagerCRD bool
+	useZookeeperCRD bool
 )
 
 func init() {
@@ -71,15 +69,10 @@ func init() {
 	_ = solrv1beta1.AddToScheme(scheme)
 	_ = zkv1beta1.AddToScheme(scheme)
 
-	flag.BoolVar(&useCertManagerCRD, "cert-manager", true, "Set to false if cert-manager is not installed in your cluster.")
+	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 	flag.Parse()
-
-	if useCertManagerCRD {
-		_ = certv1.AddToScheme(scheme)
-	}
-	// +kubebuilder:scaffold:scheme
 }
 
 func main() {
