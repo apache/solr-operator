@@ -91,6 +91,8 @@ The Solr operator gives a few options.
 - Connecting to an already running zookeeper ensemble via [connection strings](#zk-connection-info)
 - [Spinning up a provided](#provided-instance) Zookeeper Ensemble in the same namespace via the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator)
 
+These options are configured under `spec.zookeeperRef`
+
 #### Chroot
 
 Both options below come with options to specify a `chroot`, or a ZNode path for solr to use as it's base "directory" in Zookeeper.
@@ -102,6 +104,12 @@ If a chroot is provided without a prefix of `/`, the operator will add the prefi
 
 This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
 If you provide an external connection string, you do not _have_ to provide an internal one as well.
+
+Under `spec.zookeeperRef`:
+
+- **`connectionInfo`**
+  - **`externalConnectionString`** - The ZK connection string to the external Zookeeper cluster, e.g. `zoo1:2181`
+  - **`chroot`** - The chroot to use for the cluster
 
 #### ACLs
 
