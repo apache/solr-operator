@@ -4514,6 +4514,10 @@ spec:
                     type: boolean
                   clientAuth:
                     description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                    enum:
+                    - None
+                    - Want
+                    - Need
                     type: string
                   keyStorePasswordSecret:
                     description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password

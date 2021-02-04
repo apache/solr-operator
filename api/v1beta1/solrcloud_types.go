@@ -997,6 +997,7 @@ func init() {
 	SchemeBuilder.Register(&SolrCloud{}, &SolrCloudList{})
 }
 
+// +kubebuilder:validation:Enum=None;Want;Need
 type ClientAuthType string
 
 const (
