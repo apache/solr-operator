@@ -148,14 +148,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	if solrCloud.Spec.SolrTLS != nil {
-		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
-	}
-
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 
 	if solrCloud.Spec.SolrTLS != nil {
+		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 		volumeMounts = append(volumeMounts, tlsVolumeMounts(createPkcs12InitContainer)...)
 	}
 

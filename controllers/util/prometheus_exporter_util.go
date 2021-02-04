@@ -18,16 +18,14 @@
 package util
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -38,7 +36,6 @@ const (
 	DefaultPrometheusExporterEntrypoint      = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
 	PrometheusExporterConfigMapKey           = "solr-prometheus-exporter.xml"
 	PrometheusExporterConfigXmlMd5Annotation = "solr.apache.org/exporterConfigXmlMd5"
-	CheckPeerNameSysProp                     = "solr.ssl.checkPeerName"
 )
 
 // SolrConnectionInfo defines how to connect to a cloud or standalone solr instance.
@@ -50,7 +47,7 @@ type SolrConnectionInfo struct {
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tlsOptions *solr.SolrTLSOptions, pkcs12InitContainer *corev1.Container) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -163,30 +160,16 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		}
 	}
 
-	// Add JAVA_OPTS last, so that it can use values from all of the other ENV_VARS
-	// Set the 'solr.ssl.checkPeerName' Java system prop unless explicitly overridden by the user
-	var currentJavaOpts *corev1.EnvVar
-	// see if the user already provided JAVA_OPTS
-	for _, envVar := range envVars {
-		if envVar.Name == "JAVA_OPTS" {
-			currentJavaOpts = &envVar
-
-			if !strings.Contains(currentJavaOpts.Value, CheckPeerNameSysProp) {
-				allJavaOpts = append(allJavaOpts, fmt.Sprintf("-D%s=false", CheckPeerNameSysProp))
-			}
-
-			// append our opts to the user-supplied value
-			if len(allJavaOpts) > 0 {
-				envVar.Value += " " + strings.Join(allJavaOpts, " ")
-			}
-
-			break
-		}
+	if tlsOptions != nil {
+		envVars = append(envVars, TLSEnvVars(tlsOptions, pkcs12InitContainer != nil)...)
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(pkcs12InitContainer != nil)...)
+		solrVolumes = append(solrVolumes, tlsVolumes(tlsOptions, pkcs12InitContainer != nil)...)
+		allJavaOpts = append(allJavaOpts, tlsJavaOpts(tlsOptions)...)
 	}
 
-	if currentJavaOpts == nil {
-		// no existing JAVA_OPTS provided by user
-		allJavaOpts = append(allJavaOpts, fmt.Sprintf("-D%s=false", CheckPeerNameSysProp))
+	// the order of env vars in the array is important for the $(var) syntax to work
+	// since JAVA_OPTS refers to $(SOLR_SSL_*) if TLS is enabled, it needs to be last
+	if len(allJavaOpts) > 0 {
 		envVars = append(envVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: strings.Join(allJavaOpts, " ")})
 	}
 
@@ -217,8 +200,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			},
 		},
 	}
-	var initContainers []corev1.Container
 
+	var initContainers []corev1.Container
 	if customPodOptions != nil {
 		if len(customPodOptions.SidecarContainers) > 0 {
 			containers = append(containers, customPodOptions.SidecarContainers...)
@@ -227,6 +210,14 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if len(customPodOptions.InitContainers) > 0 {
 			initContainers = customPodOptions.InitContainers
 		}
+	}
+
+	// if the SolrCloud used an initContainer to create the pkcs12 keystore from the TLS cert
+	// we need to make a copy of it for the Prom deployment
+	if pkcs12InitContainer != nil {
+		copyOfInitContainer := corev1.Container{}
+		pkcs12InitContainer.DeepCopyInto(&copyOfInitContainer)
+		initContainers = append(initContainers, copyOfInitContainer)
 	}
 
 	// track the MD5 of the custom exporter config in the pod spec annotations,
@@ -398,4 +389,22 @@ func CreateMetricsIngressRule(solrPrometheusExporter *solr.SolrPrometheusExporte
 			},
 		},
 	}
+}
+
+func tlsJavaOpts(tlsOptions *solr.SolrTLSOptions) []string {
+	javaOpts := []string{
+		"-Djavax.net.ssl.keyStore=$(SOLR_SSL_KEY_STORE)",
+		"-Djavax.net.ssl.keyStorePassword=$(SOLR_SSL_KEY_STORE_PASSWORD)",
+		"-Djavax.net.ssl.trustStore=$(SOLR_SSL_TRUST_STORE)",
+		"-Djavax.net.ssl.trustStorePassword=$(SOLR_SSL_TRUST_STORE_PASSWORD)",
+		"-Djavax.net.ssl.keyStoreType=PKCS12",
+		"-Djavax.net.ssl.trustStoreType=PKCS12",
+		"-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)",
+	}
+
+	if tlsOptions.VerifyClientHostname {
+		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
+	}
+
+	return javaOpts
 }
