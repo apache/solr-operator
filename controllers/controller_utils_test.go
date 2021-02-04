@@ -360,10 +360,8 @@ var (
 		FailureThreshold:    3,
 		PeriodSeconds:       5,
 		Handler: corev1.Handler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Scheme: corev1.URISchemeHTTP,
-				Path:   "/solr/admin/info/system",
-				Port:   intstr.FromInt(8983),
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt(8983),
 			},
 		},
 	}

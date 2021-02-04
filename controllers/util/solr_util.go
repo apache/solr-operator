@@ -584,7 +584,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 }
 
 // fillProbe builds the probe logic used for pod liveness, readiness, startup checks
-func fillProbe(customSolrKubeOptions corev1.Probe, defaultInitialDelaySeconds int32, defaultTimeoutSeconds int32, defaultSuccessThreshold int32, defaultFailureThreshold int32, defaultPeriodSeconds int32, defaultHandler *corev1.Handler) *corev1.Probe {
+func fillProbe(customProbe corev1.Probe, defaultInitialDelaySeconds int32, defaultTimeoutSeconds int32, defaultSuccessThreshold int32, defaultFailureThreshold int32, defaultPeriodSeconds int32, defaultHandler *corev1.Handler) *corev1.Probe {
 	probe := &corev1.Probe{
 		InitialDelaySeconds: defaultInitialDelaySeconds,
 		TimeoutSeconds:      defaultTimeoutSeconds,
@@ -594,28 +594,28 @@ func fillProbe(customSolrKubeOptions corev1.Probe, defaultInitialDelaySeconds in
 		Handler:             *defaultHandler,
 	}
 
-	if customSolrKubeOptions.InitialDelaySeconds != 0 {
-		probe.InitialDelaySeconds = customSolrKubeOptions.InitialDelaySeconds
+	if customProbe.InitialDelaySeconds != 0 {
+		probe.InitialDelaySeconds = customProbe.InitialDelaySeconds
 	}
 
-	if customSolrKubeOptions.TimeoutSeconds != 0 {
-		probe.TimeoutSeconds = customSolrKubeOptions.TimeoutSeconds
+	if customProbe.TimeoutSeconds != 0 {
+		probe.TimeoutSeconds = customProbe.TimeoutSeconds
 	}
 
-	if customSolrKubeOptions.SuccessThreshold != 0 {
-		probe.SuccessThreshold = customSolrKubeOptions.SuccessThreshold
+	if customProbe.SuccessThreshold != 0 {
+		probe.SuccessThreshold = customProbe.SuccessThreshold
 	}
 
-	if customSolrKubeOptions.FailureThreshold != 0 {
-		probe.FailureThreshold = customSolrKubeOptions.FailureThreshold
+	if customProbe.FailureThreshold != 0 {
+		probe.FailureThreshold = customProbe.FailureThreshold
 	}
 
-	if customSolrKubeOptions.PeriodSeconds != 0 {
-		probe.PeriodSeconds = customSolrKubeOptions.PeriodSeconds
+	if customProbe.PeriodSeconds != 0 {
+		probe.PeriodSeconds = customProbe.PeriodSeconds
 	}
 
-	if customSolrKubeOptions.Handler.Exec != nil || customSolrKubeOptions.Handler.HTTPGet != nil {
-		probe.Handler = customSolrKubeOptions.Handler
+	if customProbe.Handler.Exec != nil || customProbe.Handler.HTTPGet != nil || customProbe.Handler.TCPSocket != nil {
+		probe.Handler = customProbe.Handler
 	}
 
 	return probe
