@@ -1006,12 +1006,11 @@ const (
 )
 
 type SolrTLSOptions struct {
-	// Secret containing the key store password
-	// +optional
-	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
-
-	// TLS Secret containing a pkcs12 keystore created by cert-manager; required unless autoCreate is requested.
+	// TLS Secret containing a pkcs12 keystore
 	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+
+	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
 
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
@@ -1032,18 +1031,6 @@ type SolrTLSOptions struct {
 }
 
 func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
-
-	// we always need a keystore password, regardless of auto-create or user-supplied
-	if opts.KeyStorePasswordSecret == nil {
-		secretName := fmt.Sprintf("%s-pkcs12-keystore", instanceName)
-		opts.KeyStorePasswordSecret = &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: secretName,
-			},
-			Key: "password-key",
-		}
-		changed = true
-	}
 
 	if opts.ClientAuth == "" {
 		opts.ClientAuth = None

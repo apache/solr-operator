@@ -112,7 +112,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.EqualValues(t, extraContainers1, deployment.Spec.Template.Spec.InitContainers)
 
 	// Pod Options Checks
-	expectedEnvVars := append(extraVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: util.CheckPeerNameDisabled})
+	expectedEnvVars := append(extraVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: fmt.Sprintf("-D%s=false", util.CheckPeerNameSysProp)})
 	assert.Equal(t, expectedEnvVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
 	assert.Equal(t, podSecurityContext, *deployment.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
 	assert.Equal(t, affinity, deployment.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")

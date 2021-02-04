@@ -18,6 +18,7 @@
 package util
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -37,9 +38,7 @@ const (
 	DefaultPrometheusExporterEntrypoint      = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
 	PrometheusExporterConfigMapKey           = "solr-prometheus-exporter.xml"
 	PrometheusExporterConfigXmlMd5Annotation = "solr.apache.org/exporterConfigXmlMd5"
-
-	CheckPeerNameSysProp  = "-Dsolr.ssl.checkPeerName="
-	CheckPeerNameDisabled = CheckPeerNameSysProp + "false"
+	CheckPeerNameSysProp                     = "solr.ssl.checkPeerName"
 )
 
 // SolrConnectionInfo defines how to connect to a cloud or standalone solr instance.
@@ -173,7 +172,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			currentJavaOpts = &envVar
 
 			if !strings.Contains(currentJavaOpts.Value, CheckPeerNameSysProp) {
-				allJavaOpts = append(allJavaOpts, CheckPeerNameDisabled)
+				allJavaOpts = append(allJavaOpts, fmt.Sprintf("-D%s=false", CheckPeerNameSysProp))
 			}
 
 			// append our opts to the user-supplied value
@@ -187,7 +186,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	if currentJavaOpts == nil {
 		// no existing JAVA_OPTS provided by user
-		allJavaOpts = append(allJavaOpts, CheckPeerNameDisabled)
+		allJavaOpts = append(allJavaOpts, fmt.Sprintf("-D%s=false", CheckPeerNameSysProp))
 		envVars = append(envVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: strings.Join(allJavaOpts, " ")})
 	}
 

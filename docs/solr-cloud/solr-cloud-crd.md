@@ -300,10 +300,30 @@ Refer to the [cert-manager Installation](https://cert-manager.io/docs/installati
 Once cert-manager is installed, you need to create an `Issuer` or `ClusterIssuer` CRD and then request a certificate using a [Certificate CRD](https://cert-manager.io/docs/usage/certificate/).
 Refer to the [cert-manager docs](https://cert-manager.io/docs/) on how to define a certificate.
 
-Certificate Issuers are typically platform specific. For instance, on GKE, to create a Let’s Encrypt Issuer you need a service account with various cloud DNS permissions granted for DNS01 challenges to work, see: https://cert-manager.io/docs/configuration/acme/dns01/google/. 
+Certificate Issuers are typically platform specific. For instance, on GKE, to create a Let’s Encrypt Issuer you need a service account with various cloud DNS permissions granted for DNS01 challenges to work, see: https://cert-manager.io/docs/configuration/acme/dns01/google/.
 
-Also, when requesting your certificate, keep in mind that some DNS names in Kubernetes are not valid for public certificates, for instance `<svc>.<namespace>.svc.cluster.local` is not a valid external domain name 
-and certificate issuer services like LetsEncrypt will not generate a certificate for K8s internal DNS names (you'll get errors during certificate issuing).
+The DNS names in your certificate should match the Solr addressability settings in your SolrCloud CRD. For instance, if your SolrCloud CRD uses the following settings:
+```
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+``` 
+Then your certificate needs the following domains specified:
+```
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  ...
+spec:
+  dnsNames:
+  - '*.k8s.solr.cloud'
+  - k8s.solr.cloud
+```
+The wildcard DNS name will cover all SolrCloud nodes such as `<NS>-solrcloud-1.k8s.solr.cloud`.
+
+Also, when requesting your certificate, keep in mind that internal DNS names in Kubernetes are not valid for public certificates. 
+For instance `<svc>.<namespace>.svc.cluster.local` is internal to Kubernetes and certificate issuer services like LetsEncrypt 
+will not generate a certificate for K8s internal DNS names (you'll get errors during certificate issuing).
 
 Another benefit is cert-manager can create a [PKCS12](https://cert-manager.io/docs/release-notes/release-notes-0.15/#general-availability-of-jks-and-pkcs-12-keystores) keystore automatically when issuing a `Certificate`, 
 which allows the Solr operator to mount the keystore directly on our Solr pods. Ensure your certificate instance requests **pkcs12 keystore** gets created using config similar to the following:
@@ -317,7 +337,17 @@ which allows the Solr operator to mount the keystore directly on our Solr pods. 
 ```
 _Note: the example structure above goes in your certificate CRD YAML, not SolrCloud._
 
-You need to create the keystore secret (e.g. `pkcs12-password-secret`) in the same namespace before requesting the certificate, see: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.PKCS12Keystore
+You need to create the keystore secret (e.g. `pkcs12-password-secret`) in the same namespace before requesting the certificate, see: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.PKCS12Keystore.
+Although a keystore password is not required for PKCS12, **cert-manager** requires a password when requesting a `pkcs12` keystore for your certificate.
+Moreover, most JVMs require a password for pkcs12 keystores, not supplying a password typically results in errors like the following:
+```
+Caused by: java.security.UnrecoverableKeyException: Get Key failed: null
+	at java.base/sun.security.pkcs12.PKCS12KeyStore.engineGetKey(Unknown Source)
+	at java.base/sun.security.util.KeyStoreDelegator.engineGetKey(Unknown Source)
+	at java.base/java.security.KeyStore.getKey(Unknown Source)
+	at java.base/sun.security.ssl.SunX509KeyManagerImpl.<init>(Unknown Source)
+```
+Consequently, the Solr operator requires you to use a non-null password for your keystore. 
 
 Here's an example of how to use cert-manager to generate a self-signed certificate:
 ```
@@ -327,7 +357,7 @@ kind: Secret
 metadata:
   name: pkcs12-password-secret
 data:
-  password-key: dGVzdDEyMzQ=
+  password-key: SOME_PASSWORD_HERE
 
 ---
 apiVersion: cert-manager.io/v1

@@ -50,7 +50,7 @@ var (
 
 // For TLS, all we really need is a secret holding the keystore password and a secret holding the pkcs12 keystore,
 // which can come from anywhere really, so this method tests handling of user-supplied secrets
-func TestUserSuppliedTLS(t *testing.T) {
+func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 
 	tlsSecretName := "tls-cert-secret-from-user"
 	instance := buildTestSolrCloud()
@@ -139,7 +139,7 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 	expectUrlSchemeJob(t, g, instance)
 }
 
-func TestUserSuppliedTLSWithPkcs12Conversion(t *testing.T) {
+func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
 
 	tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
 	instance := buildTestSolrCloud()
