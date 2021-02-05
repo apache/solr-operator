@@ -702,8 +702,8 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 
 	keystorePassKey := "keystore-passwords-are-important"
 
-	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, restartOnTLSSecretUpdate)
-	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, needsPkcs12InitContainer)
+	instance.Spec.SolrReference.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, restartOnTLSSecretUpdate)
+	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrReference.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, needsPkcs12InitContainer)
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.
@@ -746,7 +746,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
-	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer)
+	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer)
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
@@ -768,7 +768,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
 	foundTLSSecret := &corev1.Secret{}
-	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
+	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrReference.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// change the tls.crt which should trigger a rolling restart

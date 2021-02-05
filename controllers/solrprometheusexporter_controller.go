@@ -167,37 +167,37 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	// Make sure the TLS config is in order
 	var tlsClientOptions *util.TLSClientOptions = nil
-	if prometheusExporter.Spec.SolrTLS != nil {
+	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {
 		requeueOrNot := reconcile.Result{}
 		ctx := context.TODO()
 		foundTLSSecret := &corev1.Secret{}
-		lookupErr := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrTLS.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
+		lookupErr := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
 		if lookupErr != nil {
 			return requeueOrNot, lookupErr
 		} else {
 			// Make sure the secret containing the keystore password exists as well
 			keyStorePasswordSecret := &corev1.Secret{}
-			err := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+			err := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
 			if err != nil {
 				return requeueOrNot, lookupErr
 			}
 			// we found the keystore secret, but does it have the key we expect?
-			if _, ok := keyStorePasswordSecret.Data[prometheusExporter.Spec.SolrTLS.KeyStorePasswordSecret.Key]; !ok {
+			if _, ok := keyStorePasswordSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key]; !ok {
 				return requeueOrNot, fmt.Errorf("%s key not found in keystore password secret %s",
-					prometheusExporter.Spec.SolrTLS.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
+					prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
 			}
 
 			tlsClientOptions = &util.TLSClientOptions{}
-			tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrTLS
+			tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
 
-			if _, ok := foundTLSSecret.Data[prometheusExporter.Spec.SolrTLS.PKCS12Secret.Key]; !ok {
+			if _, ok := foundTLSSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Key]; !ok {
 				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
 				tlsClientOptions.NeedsPkcs12InitContainer = true
 			}
 
 			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
 			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-			if prometheusExporter.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+			if prometheusExporter.Spec.SolrReference.SolrTLS.RestartOnTLSSecretUpdate {
 				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 					tlsClientOptions.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 				} else {
@@ -339,22 +339,22 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 }
 
 func (r *SolrPrometheusExporterReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
-	tlsSecretField := ".spec.solrTLS.pkcs12Secret"
+	tlsSecretField := ".spec.solrReference.solrTLS.pkcs12Secret"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj runtime.Object) []string {
-		// grab the SolrCloud object, extract the used configMap...
+		// grab the SolrCloud object, extract the referenced TLS secret...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
-		if exporter.Spec.SolrTLS == nil {
+		if exporter.Spec.SolrReference.SolrTLS == nil {
 			return nil
 		}
 		// ...and if so, return it
-		return []string{exporter.Spec.SolrTLS.PKCS12Secret.Name}
+		return []string{exporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name}
 	}); err != nil {
 		return ctrlBuilder, err
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.ConfigMap{}},
+		&source.Kind{Type: &corev1.Secret{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}

@@ -29,7 +29,7 @@ const (
 // SolrPrometheusExporterSpec defines the desired state of SolrPrometheusExporter
 type SolrPrometheusExporterSpec struct {
 	// Reference of the Solr instance to collect metrics for
-	SolrReference `json:"solrReference"`
+	SolrReference SolrReference `json:"solrReference"`
 
 	// Image of Solr Prometheus Exporter to run.
 	// +optional
