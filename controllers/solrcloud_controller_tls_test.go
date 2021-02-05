@@ -18,7 +18,10 @@
 package controllers
 
 import (
+	"crypto/md5"
+	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -34,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sync"
 	"testing"
+	"time"
 )
 
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
@@ -52,7 +56,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
-	verifyReconcileUserSuppliedTLS(t, instance, false)
+	verifyReconcileUserSuppliedTLS(t, instance, false, false)
 }
 
 // Test upgrade from non-TLS cluster to TLS enabled cluster
@@ -109,10 +113,19 @@ func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, true)
-	verifyReconcileUserSuppliedTLS(t, instance, true)
+	verifyReconcileUserSuppliedTLS(t, instance, true, false)
 }
 
-func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, needsPkcs12InitContainer bool) {
+func TestTLSSecretUpdate(t *testing.T) {
+	tlsSecretName := "tls-cert-secret-update"
+	keystorePassKey := "some-password-key-thingy"
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
+	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
+	verifyReconcileUserSuppliedTLS(t, instance, false, true)
+}
+
+func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool) {
 	g := gomega.NewGomegaWithT(t)
 	ctx := context.TODO()
 
@@ -156,7 +169,39 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
-	expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
+	sts := expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
+
+	if !restartOnTLSSecretUpdate {
+		assert.Empty(t, sts.Spec.Template.ObjectMeta.Annotations[util.SolrTlsCertMd5Annotation],
+			"Shouldn't have a cert MD5 as we're not tracking updates to the secret")
+		return
+	}
+
+	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
+	foundTLSSecret := &corev1.Secret{}
+	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	expectedCertMd5 := fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey]))
+	assert.Equal(t, expectedCertMd5, sts.Spec.Template.ObjectMeta.Annotations[util.SolrTlsCertMd5Annotation],
+		"TLS cert MD5 annotation on STS does not match the secret")
+
+	// change the tls.crt which should trigger a rolling restart
+	updatedTlsCertData := "certificate renewed"
+	foundTLSSecret.Data[util.TLSCertKey] = []byte(updatedTlsCertData)
+	err = testClient.Update(context.TODO(), foundTLSSecret)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// capture all reconcile requests
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+
+	// Check the annotation on the pod template to make sure a rolling restart will take place
+	time.Sleep(time.Millisecond * 250)
+	sts = expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
+	expectedCertMd5 = fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey]))
+	assert.Equal(t, expectedCertMd5, sts.Spec.Template.ObjectMeta.Annotations[util.SolrTlsCertMd5Annotation],
+		"TLS cert MD5 annotation on STS does not match the UPDATED secret")
 }
 
 // ensures the TLS settings are applied correctly to the STS
