@@ -110,7 +110,7 @@ type SolrCloudSpec struct {
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults(instanceName string) (changed bool) {
+func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -730,7 +730,7 @@ type SolrCloud struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sc *SolrCloud) WithDefaults() bool {
-	return sc.Spec.withDefaults(sc.Name)
+	return sc.Spec.withDefaults()
 }
 
 func (sc *SolrCloud) GetAllSolrNodeNames() []string {
