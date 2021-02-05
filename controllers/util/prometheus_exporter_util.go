@@ -45,15 +45,17 @@ type SolrConnectionInfo struct {
 	StandaloneAddress      string
 }
 
-type TLSEnabled struct {
-	TLSOptions          *solr.SolrTLSOptions
-	Pkcs12InitContainer *corev1.Container
-	TLSCertMd5          string
+// Used internally to capture config needed to provided Solr client apps like the exporter
+// with config needed to call TLS enabled Solr pods
+type TLSClientOptions struct {
+	TLSOptions               *solr.SolrTLSOptions
+	NeedsPkcs12InitContainer bool
+	TLSCertMd5               string
 }
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSEnabled) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSClientOptions) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -167,9 +169,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	if tls != nil {
-		envVars = append(envVars, TLSEnvVars(tls.TLSOptions, tls.Pkcs12InitContainer != nil)...)
-		volumeMounts = append(volumeMounts, tlsVolumeMounts(tls.Pkcs12InitContainer != nil)...)
-		solrVolumes = append(solrVolumes, tlsVolumes(tls.TLSOptions, tls.Pkcs12InitContainer != nil)...)
+		envVars = append(envVars, TLSEnvVars(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(tls.NeedsPkcs12InitContainer)...)
+		solrVolumes = append(solrVolumes, tlsVolumes(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
 		allJavaOpts = append(allJavaOpts, tlsJavaOpts(tls.TLSOptions)...)
 	}
 
@@ -218,12 +220,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		}
 	}
 
-	// if the SolrCloud used an initContainer to create the pkcs12 keystore from the TLS cert
-	// we need to make a copy of it for the Prom deployment
-	if tls != nil && tls.Pkcs12InitContainer != nil {
-		copyOfInitContainer := corev1.Container{}
-		tls.Pkcs12InitContainer.DeepCopyInto(&copyOfInitContainer)
-		initContainers = append(initContainers, copyOfInitContainer)
+	// if the supplied TLS secret does not have the pkcs12 keystore, use an initContainer to create its
+	if tls != nil && tls.NeedsPkcs12InitContainer {
+		pkcs12InitContainer := generatePkcs12InitContainer(tls.TLSOptions.KeyStorePasswordSecret,
+			solrPrometheusExporter.Spec.Image.ToImageName(), solrPrometheusExporter.Spec.Image.PullPolicy)
+		initContainers = append(initContainers, pkcs12InitContainer)
 	}
 
 	// track the MD5 of the custom exporter config in the pod spec annotations,

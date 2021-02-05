@@ -529,7 +529,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	if createPkcs12InitContainer {
-		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, generatePkcs12InitContainer(solrCloud))
+		pkcs12InitContainer := generatePkcs12InitContainer(solrCloud.Spec.SolrTLS.KeyStorePasswordSecret,
+			solrCloud.Spec.SolrImage.ToImageName(), solrCloud.Spec.SolrImage.PullPolicy)
+		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, pkcs12InitContainer)
 	}
 
 	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
@@ -1129,9 +1131,9 @@ func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	return vols
 }
 
-func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {
+func generatePkcs12InitContainer(keyStorePasswordSecret *corev1.SecretKeySelector, imageName string, imagePullPolicy corev1.PullPolicy) corev1.Container {
 	// get the keystore password from the env for generating the keystore using openssl
-	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: solrCloud.Spec.SolrTLS.KeyStorePasswordSecret}
+	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: keyStorePasswordSecret}
 	envVars := []corev1.EnvVar{
 		{
 			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
@@ -1144,8 +1146,8 @@ func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {
 		"/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 	return corev1.Container{
 		Name:                     "gen-pkcs12-keystore",
-		Image:                    solrCloud.Spec.SolrImage.ToImageName(),
-		ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
+		Image:                    imageName,
+		ImagePullPolicy:          imagePullPolicy,
 		TerminationMessagePath:   "/dev/termination-log",
 		TerminationMessagePolicy: "File",
 		Command:                  []string{"sh", "-c", cmd},
