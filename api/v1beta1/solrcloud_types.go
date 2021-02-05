@@ -52,10 +52,6 @@ const (
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
-
-	DefaultKeyStorePath         = "/var/solr/tls"
-	DefaultKeyStoreFile         = "keystore.p12"
-	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -144,10 +140,6 @@ func (spec *SolrCloudSpec) withDefaults(instanceName string) (changed bool) {
 	changed = spec.SolrAddressability.withDefaults() || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
-
-	if spec.SolrTLS != nil {
-		changed = spec.SolrTLS.withDefaults(instanceName) || changed
-	}
 
 	if spec.ZookeeperRef == nil {
 		spec.ZookeeperRef = &ZookeeperRef{}
@@ -1015,7 +1007,7 @@ type SolrTLSOptions struct {
 
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
-	// +optional
+	// +kubebuilder:default=None
 	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
 
 	// Verify client's hostname during SSL handshake
@@ -1029,14 +1021,4 @@ type SolrTLSOptions struct {
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
-}
-
-func (opts *SolrTLSOptions) withDefaults(instanceName string) (changed bool) {
-
-	if opts.ClientAuth == "" {
-		opts.ClientAuth = None
-		changed = true
-	}
-
-	return changed
 }

@@ -77,7 +77,7 @@ func UseZkCRD(useCRD bool) {
 // +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
@@ -436,7 +436,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		instance.Status = newStatus
-		r.Log.Info("Updating SolrCloud Status: ", "namespace", instance.Namespace, "name", instance.Name, "status", instance.Status)
+		logger.Info("Updating SolrCloud Status", "status", instance.Status)
 		err = r.Status().Update(context.TODO(), instance)
 		if err != nil {
 			return requeueOrNot, err
@@ -769,11 +769,15 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&extv1.Ingress{}).
-		Owns(&corev1.Secret{}).
 		Owns(&batchv1.Job{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
+	ctrlBuilder, err = r.indexAndWatchForTLSSecret(mgr, ctrlBuilder)
 	if err != nil {
 		return err
 	}
@@ -809,6 +813,48 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 				foundClouds := &solr.SolrCloudList{}
 				listOps := &client.ListOptions{
 					FieldSelector: fields.OneTermEqualSelector(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", a.Meta.GetName()),
+					Namespace:     a.Meta.GetNamespace(),
+				}
+				err := r.List(context.TODO(), foundClouds, listOps)
+				if err != nil {
+					return []reconcile.Request{}
+				}
+
+				requests := make([]reconcile.Request, len(foundClouds.Items))
+				for i, item := range foundClouds.Items {
+					requests[i] = reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					}
+				}
+				return requests
+			}),
+		},
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, ".spec.solrTLS.pkcs12Secret", func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		solrCloud := rawObj.(*solr.SolrCloud)
+		if solrCloud.Spec.SolrTLS == nil {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{solrCloud.Spec.SolrTLS.PKCS12Secret.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				foundClouds := &solr.SolrCloudList{}
+				listOps := &client.ListOptions{
+					FieldSelector: fields.OneTermEqualSelector(".spec.solrTLS.pkcs12Secret", a.Meta.GetName()),
 					Namespace:     a.Meta.GetNamespace(),
 				}
 				err := r.List(context.TODO(), foundClouds, listOps)

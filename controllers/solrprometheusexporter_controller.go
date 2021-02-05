@@ -163,13 +163,12 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	solrConnectionInfo := util.SolrConnectionInfo{}
 	// If TLS is enabled for this SolrCloud, extract the TLS options and pkcs12 keystore initcontainer if applicable
 	// as the Prom exporter will need these to make requests to the SolrCloud pods
-	var tlsOptions *solrv1beta1.SolrTLSOptions = nil
-	var pkcs12InitContainer *corev1.Container = nil
-	if solrConnectionInfo, tlsOptions, pkcs12InitContainer, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
+	var tlsEnabled *util.TLSEnabled = nil
+	if solrConnectionInfo, tlsEnabled, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
 		return ctrl.Result{}, err
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsOptions, pkcs12InitContainer)
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsEnabled)
 	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -202,7 +201,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	return ctrl.Result{}, err
 }
 
-func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, tlsOptions *solrv1beta1.SolrTLSOptions, pkcs12InitContainer *corev1.Container, err error) {
+func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, tlsEnabled *util.TLSEnabled, err error) {
 	solrConnectionInfo = util.SolrConnectionInfo{}
 
 	if prometheusExporter.Spec.SolrReference.Standalone != nil {
@@ -218,18 +217,33 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
 
-				tlsOptions = solrCloud.Spec.SolrTLS
-				if tlsOptions != nil {
+				if solrCloud.Spec.SolrTLS != nil {
+					tlsEnabled = &util.TLSEnabled{}
+					tlsEnabled.TLSOptions = solrCloud.Spec.SolrTLS
+
+					foundTLSSecret := &corev1.Secret{}
+					err = r.Get(context.TODO(), types.NamespacedName{Name: solrCloud.Spec.SolrTLS.PKCS12Secret.Name, Namespace: solrCloud.Namespace}, foundTLSSecret)
+					if err != nil {
+						return solrConnectionInfo, nil, err
+					}
+
+					if solrCloud.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+						tlsCertBytes, ok := foundTLSSecret.Data["tls.crt"]
+						if ok {
+							tlsEnabled.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+						}
+					}
+
 					foundStatefulSet := &appsv1.StatefulSet{}
 					err = r.Get(context.TODO(), types.NamespacedName{Name: solrCloud.StatefulSetName(), Namespace: solrCloud.GetNamespace()}, foundStatefulSet)
 					if err != nil {
 						// can't find the sts for the SolrCloud ... just bail
-						return solrConnectionInfo, tlsOptions, nil, err
+						return solrConnectionInfo, nil, err
 					}
 
 					for _, cnt := range foundStatefulSet.Spec.Template.Spec.InitContainers {
 						if cnt.Name == "gen-pkcs12-keystore" {
-							pkcs12InitContainer = &cnt
+							tlsEnabled.Pkcs12InitContainer = &cnt
 							break
 						}
 					}
@@ -237,7 +251,7 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 			}
 		}
 	}
-	return solrConnectionInfo, tlsOptions, pkcs12InitContainer, err
+	return solrConnectionInfo, tlsEnabled, err
 }
 
 func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) error {

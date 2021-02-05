@@ -70,8 +70,6 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 		},
 	}
 
-	changed := instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false)
 }
@@ -112,8 +110,6 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 		},
 		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
 	}
-	changed = instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 
 	foundTLSSecret := &corev1.Secret{}
 	lookupErr := testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
@@ -157,8 +153,6 @@ func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
 			Key: "keystore.p12",
 		},
 	}
-	changed := instance.WithDefaults()
-	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true)
 }
@@ -204,6 +198,7 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(ctx, instance)
 
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
 	expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
@@ -290,9 +285,9 @@ func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePas
 	})
 	assert.True(t, len(envVars) == 9)
 
-	expectedKeystorePath := solr.DefaultKeyStorePath + "/keystore.p12"
+	expectedKeystorePath := util.DefaultKeyStorePath + "/keystore.p12"
 	if needsPkcs12InitContainer {
-		expectedKeystorePath = solr.DefaultWritableKeyStorePath + "/keystore.p12"
+		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
 	}
 	for _, envVar := range envVars {
 		if envVar.Name == "SOLR_SSL_ENABLED" {

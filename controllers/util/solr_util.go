@@ -72,6 +72,10 @@ const (
 	DefaultStartupProbeSuccessThreshold    = 1
 	DefaultStartupProbeFailureThreshold    = 15
 	DefaultStartupProbePeriodSeconds       = 10
+
+	DefaultKeyStorePath         = "/var/solr/tls"
+	DefaultKeyStoreFile         = "keystore.p12"
+	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -1024,11 +1028,11 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	// this complexity is due to the secret mount directory not being writable
 	var keystorePath string
 	if createPkcs12InitContainer {
-		keystorePath = solr.DefaultWritableKeyStorePath
+		keystorePath = DefaultWritableKeyStorePath
 	} else {
-		keystorePath = solr.DefaultKeyStorePath
+		keystorePath = DefaultKeyStorePath
 	}
-	keystorePath += ("/" + solr.DefaultKeyStoreFile)
+	keystorePath += ("/" + DefaultKeyStoreFile)
 
 	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 
@@ -1079,7 +1083,7 @@ func tlsVolumeMounts(createPkcs12InitContainer bool) []corev1.VolumeMount {
 		{
 			Name:      "keystore",
 			ReadOnly:  true,
-			MountPath: solr.DefaultKeyStorePath,
+			MountPath: DefaultKeyStorePath,
 		},
 	}
 
@@ -1090,7 +1094,7 @@ func tlsVolumeMounts(createPkcs12InitContainer bool) []corev1.VolumeMount {
 		mounts = append(mounts, corev1.VolumeMount{
 			Name:      "pkcs12",
 			ReadOnly:  false,
-			MountPath: solr.DefaultWritableKeyStorePath,
+			MountPath: DefaultWritableKeyStorePath,
 		})
 	}
 
@@ -1135,8 +1139,8 @@ func generatePkcs12InitContainer(solrCloud *solr.SolrCloud) corev1.Container {
 		},
 	}
 
-	cmd := "openssl pkcs12 -export -in " + solr.DefaultKeyStorePath + "/tls.crt -in " + solr.DefaultKeyStorePath +
-		"/ca.crt -inkey " + solr.DefaultKeyStorePath + "/tls.key -out " + solr.DefaultKeyStorePath +
+	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/tls.crt -in " + DefaultKeyStorePath +
+		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
 		"/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 	return corev1.Container{
 		Name:                     "gen-pkcs12-keystore",
