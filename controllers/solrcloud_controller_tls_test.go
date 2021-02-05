@@ -104,7 +104,6 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
 	expectIngressTLSConfig(t, g, tlsSecretName)
-	expectUrlSchemeJob(t, g, instance)
 }
 
 func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {

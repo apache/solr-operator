@@ -21,7 +21,6 @@ import (
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	kbatch "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -268,18 +267,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
-	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
-
-	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
-	var postStart *corev1.Handler
-	if len(zkChroot) > 1 {
-		postStart = &corev1.Handler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
-			},
-		}
-	}
-
 	// Environment Variables
 	envVars := []corev1.EnvVar{
 		{
@@ -314,18 +301,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Value: solrHostName,
 		},
 		{
-			Name:  "ZK_HOST",
-			Value: zkConnectionStr,
-		},
-		{
-			Name:  "ZK_SERVER",
-			Value: zkServer,
-		},
-		{
-			Name:  "ZK_CHROOT",
-			Value: zkChroot,
-		},
-		{
 			Name:  "SOLR_LOG_LEVEL",
 			Value: solrCloud.Spec.SolrLogLevel,
 		},
@@ -335,12 +310,21 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	// Add ACL information, if given, through Env Vars
-	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
-		envVars = append(envVars, aclEnvs...)
+	// Add all necessary information for connection to Zookeeper
+	zkEnvVars, zkSolrOpt, hasChroot := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
+	if zkSolrOpt != "" {
+		allSolrOpts = append(allSolrOpts, zkSolrOpt)
+	}
+	envVars = append(envVars, zkEnvVars...)
 
-		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
-		allSolrOpts = append(allSolrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
+	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
+	var postStart *corev1.Handler
+	if hasChroot {
+		postStart = &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
+			},
+		}
 	}
 
 	// Append TLS related env vars if enabled
@@ -424,7 +408,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrDataVolumeName)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -490,6 +474,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		podManagementPolicy = solrCloud.Spec.CustomSolrKubeOptions.StatefulSetOptions.PodManagementPolicy
 	}
 
+	if createPkcs12InitContainer {
+		pkcs12InitContainer := generatePkcs12InitContainer(solrCloud.Spec.SolrTLS.KeyStorePasswordSecret,
+			solrCloud.Spec.SolrImage.ToImageName(), solrCloud.Spec.SolrImage.PullPolicy)
+		initContainers = append(initContainers, pkcs12InitContainer)
+	}
+
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -527,12 +517,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeClaimTemplates: pvcs,
 		},
-	}
-
-	if createPkcs12InitContainer {
-		pkcs12InitContainer := generatePkcs12InitContainer(solrCloud.Spec.SolrTLS.KeyStorePasswordSecret,
-			solrCloud.Spec.SolrImage.ToImageName(), solrCloud.Spec.SolrImage.PullPolicy)
-		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, pkcs12InitContainer)
 	}
 
 	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
@@ -582,7 +566,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	return stateful
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrDataVolumeName string) []corev1.Container {
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string) (containers []corev1.Container) {
 	// The setup of the solr.xml will always be necessary
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -617,7 +601,13 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrDataVolumeNa
 		VolumeMounts:    volumeMounts,
 	}
 
-	return []corev1.Container{volumePrepInitContainer}
+	containers = append(containers, volumePrepInitContainer)
+
+	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus); hasZKSetupContainer {
+		containers = append(containers, zkSetupContainer)
+	}
+
+	return containers
 }
 
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
@@ -950,30 +940,14 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 	return ingressRule
 }
 
-func GenerateUrlSchemeJob(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) kbatch.Job {
-	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
-	envVars := []corev1.EnvVar{
-		{
-			Name:  "ZK_HOST",
-			Value: zkConnectionStr,
-		},
-		{
-			Name:  "ZK_CHROOT",
-			Value: zkChroot,
-		},
-		{
-			Name:  "ZK_SERVER",
-			Value: zkServer,
-		},
-	}
+// TODO: Have this replace the postStart hook for creating the chroot
+func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) (bool, corev1.Container) {
+	allSolrOpts := make([]string, 0)
 
-	allSolrOpts := []string{}
-	// Add ACL information, if given, through Env Vars
-	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
-		envVars = append(envVars, aclEnvs...)
-
-		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
-		allSolrOpts = append(allSolrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
+	// Add all necessary ZK Info
+	envVars, zkSolrOpt, _ := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
+	if zkSolrOpt != "" {
+		allSolrOpts = append(allSolrOpts, zkSolrOpt)
 	}
 
 	if solrCloud.Spec.SolrOpts != "" {
@@ -988,31 +962,22 @@ func GenerateUrlSchemeJob(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrC
 		})
 	}
 
-	// have to create the chroot here as the postStart script is too late for the zkcli.sh we need to set the urlScheme
-	cmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"
-	cmd += "; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https"
-	cmd += "; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json"
-	return kbatch.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: solrCloud.Name + "-set-https-scheme", Namespace: solrCloud.Namespace},
-		Spec: kbatch.JobSpec{
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyOnFailure,
-					Containers: []corev1.Container{
-						{
-							Name:                     "run-zkcli",
-							Image:                    solrCloud.Spec.SolrImage.ToImageName(),
-							ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
-							Env:                      envVars,
-							TerminationMessagePath:   "/dev/termination-log",
-							TerminationMessagePolicy: "File",
-							Command:                  []string{"sh", "-c", cmd},
-						},
-					},
-				},
-			},
-		},
+	if solrCloud.Spec.SolrTLS != nil {
+		cmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}" +
+			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https" +
+			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json"
+		return true, corev1.Container{
+			Name:                     "setup-zk",
+			Image:                    solrCloud.Spec.SolrImage.ToImageName(),
+			ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
+			TerminationMessagePath:   "/dev/termination-log",
+			TerminationMessagePolicy: "File",
+			Command:                  []string{"sh", "-c", cmd},
+			Env:                      envVars,
+		}
 	}
+
+	return false, corev1.Container{}
 }
 
 func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.EnvVar {
@@ -1155,4 +1120,32 @@ func generatePkcs12InitContainer(keyStorePasswordSecret *corev1.SecretKeySelecto
 		VolumeMounts:             tlsVolumeMounts(true),
 		Env:                      envVars,
 	}
+}
+
+func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) (envVars []corev1.EnvVar, solrOpt string, hasChroot bool) {
+	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
+	envVars = []corev1.EnvVar{
+		{
+			Name:  "ZK_HOST",
+			Value: zkConnectionStr,
+		},
+		{
+			Name:  "ZK_CHROOT",
+			Value: zkChroot,
+		},
+		{
+			Name:  "ZK_SERVER",
+			Value: zkServer,
+		},
+	}
+
+	// Add ACL information, if given, through Env Vars
+	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
+		envVars = append(envVars, aclEnvs...)
+
+		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
+		solrOpt = "$(SOLR_ZK_CREDS_AND_ACLS)"
+	}
+
+	return envVars, solrOpt, len(zkChroot) > 1
 }

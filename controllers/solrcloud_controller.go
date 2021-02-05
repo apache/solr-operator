@@ -26,7 +26,6 @@ import (
 	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -78,7 +77,6 @@ func UseZkCRD(useCRD bool) {
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=jobs,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -303,21 +301,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				needsPkcs12InitContainer = true
 			}
 		}
-
-		// create a job to set the cluster property but we need a ZK connection first
-		urlSchemeJob := util.GenerateUrlSchemeJob(instance, &newStatus)
-		foundJob := &batchv1.Job{}
-		err := r.Get(ctx, types.NamespacedName{Name: urlSchemeJob.Name, Namespace: instance.Namespace}, foundJob)
-		if err != nil && errors.IsNotFound(err) {
-			r.Log.Info("Creating one-time job to set urlScheme cluster property to 'https'", "job", urlSchemeJob.Name)
-			if err := controllerutil.SetControllerReference(instance, &urlSchemeJob, r.scheme); err != nil {
-				return requeueOrNot, err
-			}
-			err = r.Create(ctx, &urlSchemeJob)
-			if err != nil {
-				return requeueOrNot, err
-			}
-		} // else job exists
 	}
 
 	pvcLabelSelector := make(map[string]string, 0)
@@ -772,8 +755,7 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
-		Owns(&extv1.Ingress{}).
-		Owns(&batchv1.Job{})
+		Owns(&extv1.Ingress{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
