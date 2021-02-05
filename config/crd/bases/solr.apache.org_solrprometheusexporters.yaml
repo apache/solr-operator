@@ -3397,6 +3397,60 @@ spec:
                             type: object
                         type: object
                     type: object
+                  solrTLS:
+                    description: Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+                    properties:
+                      checkPeerName:
+                        description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                        type: boolean
+                      clientAuth:
+                        default: None
+                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                        enum:
+                        - None
+                        - Want
+                        - Need
+                        type: string
+                      keyStorePasswordSecret:
+                        description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      pkcs12Secret:
+                        description: TLS Secret containing a pkcs12 keystore
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      restartOnTLSSecretUpdate:
+                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                        type: boolean
+                      verifyClientHostname:
+                        description: Verify client's hostname during SSL handshake
+                        type: boolean
+                    required:
+                    - keyStorePasswordSecret
+                    - pkcs12Secret
+                    type: object
                   standalone:
                     description: Reference of a standalone solr instance
                     properties:
@@ -3406,60 +3460,6 @@ spec:
                     required:
                     - address
                     type: object
-                type: object
-              solrTLS:
-                description: Options to enable TLS between Solr pods
-                properties:
-                  checkPeerName:
-                    description: TLS certificates contain host/ip "peer name" information that is validated by default.
-                    type: boolean
-                  clientAuth:
-                    default: None
-                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
-                    enum:
-                    - None
-                    - Want
-                    - Need
-                    type: string
-                  keyStorePasswordSecret:
-                    description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
-                    properties:
-                      key:
-                        description: The key of the secret to select from.  Must be a valid secret key.
-                        type: string
-                      name:
-                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                        type: string
-                      optional:
-                        description: Specify whether the Secret or its key must be defined
-                        type: boolean
-                    required:
-                    - key
-                    type: object
-                  pkcs12Secret:
-                    description: TLS Secret containing a pkcs12 keystore
-                    properties:
-                      key:
-                        description: The key of the secret to select from.  Must be a valid secret key.
-                        type: string
-                      name:
-                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                        type: string
-                      optional:
-                        description: Specify whether the Secret or its key must be defined
-                        type: boolean
-                    required:
-                    - key
-                    type: object
-                  restartOnTLSSecretUpdate:
-                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
-                    type: boolean
-                  verifyClientHostname:
-                    description: Verify client's hostname during SSL handshake
-                    type: boolean
-                required:
-                - keyStorePasswordSecret
-                - pkcs12Secret
                 type: object
             required:
             - solrReference

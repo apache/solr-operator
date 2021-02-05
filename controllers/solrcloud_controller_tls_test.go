@@ -18,9 +18,7 @@
 package controllers
 
 import (
-	b64 "encoding/base64"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
-	"github.com/apache/lucene-solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -32,10 +30,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
 	"sync"
 	"testing"
 )
@@ -51,26 +47,11 @@ var (
 // For TLS, all we really need is a secret holding the keystore password and a secret holding the pkcs12 keystore,
 // which can come from anywhere really, so this method tests handling of user-supplied secrets
 func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
-
 	tlsSecretName := "tls-cert-secret-from-user"
+	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
-	// Add the TLS config
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
-		KeyStorePasswordSecret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "some-password-key-thingy",
-		},
-		PKCS12Secret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "keystore.p12",
-		},
-	}
-
-	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, false)
+	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
+	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false)
 }
 
@@ -93,24 +74,11 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 
 	// now, update the config to enable TLS
 	tlsSecretName := "tls-cert-secret-from-user"
+	keystorePassKey := "some-password-key-thingy"
+
 	err := testClient.Get(ctx, types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
-		KeyStorePasswordSecret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "some-password-key-thingy",
-		},
-		PKCS12Secret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "keystore.p12",
-		},
-		RestartOnTLSSecretUpdate: true, // opt-in: restart the Solr pods when the TLS secret changes
-	}
-
+	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
 	foundTLSSecret := &corev1.Secret{}
 	lookupErr := testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.PKCS12Secret.Name, Namespace: instance.Namespace}, foundTLSSecret)
 	// TLS secret should not exist
@@ -124,7 +92,7 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		_ = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace)
+		createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
 		wg.Done()
 	}()
 	helper.WaitForReconcile(4)
@@ -136,24 +104,11 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 }
 
 func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
-
 	tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
+	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{
-		KeyStorePasswordSecret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "some-password-key-thingy",
-		},
-		PKCS12Secret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{
-				Name: tlsSecretName,
-			},
-			Key: "keystore.p12",
-		},
-	}
-	verifyUserSuppliedTLSConfig(t, instance, tlsSecretName, "some-password-key-thingy", tlsSecretName, true)
+	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
+	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true)
 }
 
@@ -190,7 +145,7 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 		tlsKey = "tls.key" // to trigger the initContainer creation, don't want keystore.p12 in the secret
 	}
 
-	err = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, tlsKey, instance.Namespace)
+	_, err = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, tlsKey, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// now try to reconcile
@@ -204,118 +159,13 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 	expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
 }
 
-func verifyUserSuppliedTLSConfig(t *testing.T, sc *solr.SolrCloud, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
-	assert.NotNil(t, sc.Spec.SolrTLS)
-	tls := sc.Spec.SolrTLS
-
-	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
-	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
-	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
-	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
-
-	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer)
-}
-
 // ensures the TLS settings are applied correctly to the STS
 func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud, needsPkcs12InitContainer bool) *appsv1.StatefulSet {
 	ctx := context.TODO()
-	// expect the StatefulSet to have a Volume / VolumeMount for the TLS secret
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
-
-	assert.NotNil(t, stateful.Spec.Template.Spec.Volumes)
-	var keystoreVol *corev1.Volume = nil
-	for _, vol := range stateful.Spec.Template.Spec.Volumes {
-		if vol.Name == "keystore" {
-			keystoreVol = &vol
-			break
-		}
-	}
-	assert.NotNil(t, keystoreVol)
-	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
-	assert.Equal(t, sc.Spec.SolrTLS.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
-
-	// check the SOLR_SSL_ related env vars on the sts
-	assert.NotNil(t, stateful.Spec.Template.Spec.Containers)
-	var mainContainer *corev1.Container = nil
-	for _, cnt := range stateful.Spec.Template.Spec.Containers {
-		if cnt.Name == "solrcloud-node" {
-			mainContainer = &cnt
-			break
-		}
-	}
-	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
-	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
-	expectTLSEnvVars(t, mainContainer.Env, sc.Spec.SolrTLS.KeyStorePasswordSecret.Name, sc.Spec.SolrTLS.KeyStorePasswordSecret.Key, needsPkcs12InitContainer)
-
-	// initContainers
-	if needsPkcs12InitContainer {
-		var pkcs12Vol *corev1.Volume = nil
-		for _, vol := range stateful.Spec.Template.Spec.Volumes {
-			if vol.Name == "pkcs12" {
-				pkcs12Vol = &vol
-				break
-			}
-		}
-
-		assert.NotNil(t, pkcs12Vol, "Didn't find TLS keystore volume in sts config!")
-		assert.NotNil(t, pkcs12Vol.EmptyDir, "pkcs12 vol should by an emptyDir")
-
-		assert.NotNil(t, stateful.Spec.Template.Spec.InitContainers)
-		var expInitContainer *corev1.Container = nil
-		for _, cnt := range stateful.Spec.Template.Spec.InitContainers {
-			if cnt.Name == "gen-pkcs12-keystore" {
-				expInitContainer = &cnt
-				break
-			}
-		}
-		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
-		assert.NotNil(t, expInitContainer, "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
-		assert.Equal(t, expCmd, expInitContainer.Command[2])
-	}
-
+	expectTLSConfigOnPodTemplate(t, sc.Spec.SolrTLS, &stateful.Spec.Template, needsPkcs12InitContainer)
 	return stateful
-}
-
-// ensure the TLS related env vars are set for the Solr pod
-func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool) {
-	assert.NotNil(t, envVars)
-	envVars = filterVarsByName(envVars, func(n string) bool {
-		return strings.HasPrefix(n, "SOLR_SSL_")
-	})
-	assert.True(t, len(envVars) == 9)
-
-	expectedKeystorePath := util.DefaultKeyStorePath + "/keystore.p12"
-	if needsPkcs12InitContainer {
-		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
-	}
-	for _, envVar := range envVars {
-		if envVar.Name == "SOLR_SSL_ENABLED" {
-			assert.Equal(t, "true", envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
-			assert.Equal(t, expectedKeystorePath, envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_KEY_STORE_PASSWORD" {
-			assert.NotNil(t, envVar.ValueFrom)
-			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
-			assert.Equal(t, expectedKeystorePasswordSecretName, envVar.ValueFrom.SecretKeyRef.Name)
-			assert.Equal(t, expectedKeystorePasswordSecretKey, envVar.ValueFrom.SecretKeyRef.Key)
-		}
-	}
-}
-
-// filter env vars by name using a supplied match function
-func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.EnvVar {
-	filtered := make([]corev1.EnvVar, 0)
-	for _, v := range envVars {
-		if f(v.Name) {
-			filtered = append(filtered, v)
-		}
-	}
-	return filtered
 }
 
 func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
@@ -335,19 +185,6 @@ func expectUrlSchemeJob(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud)
 	assert.Equal(t, "library/solr:7.7.0", job.Spec.Template.Spec.Containers[0].Image)
 	assert.True(t, len(job.Spec.Template.Spec.Containers[0].Command) == 3)
 	assert.True(t, len(job.Spec.Template.Spec.Containers[0].Env) == 3)
-}
-
-func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string) error {
-	secretData := map[string][]byte{}
-	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
-	secretData["tls.crt"] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
-
-	mockTLSSecret := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-		Data:       secretData,
-		Type:       corev1.SecretTypeOpaque,
-	}
-	return apiClient.Create(ctx, &mockTLSSecret)
 }
 
 func buildTestSolrCloud() *solr.SolrCloud {
@@ -439,7 +276,7 @@ func (helper *TLSTestHelper) ReconcileSolrCloud(ctx context.Context, instance *s
 	if instance.Spec.SolrTLS != nil {
 		wg.Add(1)
 		go func() {
-			_ = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Spec.SolrTLS.PKCS12Secret.Key, instance.Namespace)
+			createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Spec.SolrTLS.PKCS12Secret.Key, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
 			wg.Done()
 		}()
 	}

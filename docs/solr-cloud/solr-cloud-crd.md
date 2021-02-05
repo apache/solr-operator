@@ -485,14 +485,24 @@ spec:
 
 ```
 
-Also, the operator sets the `-Dsolr.ssl.checkPeerName=false` Java system property for the Prometheus exporter by default to enable flexibility when requesting metrics from TLS enabled Solr pods.
-Use the following approach to override this default behavior by setting `-Dsolr.ssl.checkPeerName=true`:
+#### Prometheus Exporter
+
+If you're relying on a self-signed certificate (or any certificate that requires importing the CA into the Java trust store) for Solr pods, then the Prometheus Exporter will not be able to make requests for metrics. 
+You'll need to duplicate your TLS config from your SolrCloud CRD definition to your Prometheus exporter CRD definition as shown in the example below:
 ```
-    podOptions:
-      envVars:
-        - name: JAVA_OPTS
-          value: "-Dsolr.ssl.checkPeerName=true"
+  solrReference:
+    cloud:
+      name: "dev"
+    solrTLS:
+      restartOnTLSSecretUpdate: true
+      keyStorePasswordSecret:
+        name: pkcs12-password-secret
+        key: password-key
+      pkcs12Secret:
+        name: dev-selfsigned-cert-tls
+        key: keystore.p12
 ```
+_This only applies to the SolrJ client the exporter uses to make requests to your TLS-enabled Solr pods and does not enable HTTPS for the exporter service._
 
 #### Public / Private Domain Names
 

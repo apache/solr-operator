@@ -274,23 +274,27 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			return requeueOrNot, lookupErr
 		} else {
 			// Make sure the secret containing the keystore password exists as well
-			if foundTLSSecret != nil {
-				keyStorePasswordSecret := &corev1.Secret{}
-				err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
-				if err != nil {
-					return requeueOrNot, lookupErr
-				}
+			keyStorePasswordSecret := &corev1.Secret{}
+			err := r.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+			if err != nil {
+				return requeueOrNot, lookupErr
+			}
+
+			// we found the keystore secret, but does it have the key we expect?
+			if _, ok := keyStorePasswordSecret.Data[instance.Spec.SolrTLS.KeyStorePasswordSecret.Key]; !ok {
+				return requeueOrNot, fmt.Errorf("%s key not found in keystore password secret %s",
+					instance.Spec.SolrTLS.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
 			}
 
 			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
 			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
 			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
-				tlsCertBytes, ok := foundTLSSecret.Data["tls.crt"]
-				if ok {
+				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 					tlsCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 				} else {
-					r.Log.Error(err, "tls.crt key not found TLS secret", "name", foundTLSSecret.Name)
-					return requeueOrNot, nil
+					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
+						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
+						util.TLSCertKey, foundTLSSecret.Name)
 				}
 			}
 

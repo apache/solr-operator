@@ -18,7 +18,11 @@
 package controllers
 
 import (
+	b64 "encoding/base64"
+	"github.com/apache/lucene-solr-operator/controllers/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"strings"
 	"testing"
 
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -176,6 +180,139 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 		Should(gomega.MatchError("deployments.apps \"" + deploymentKey.Name + "\" not found"))
 
 	return deploy
+}
+
+func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
+	assert.NotNil(t, tls)
+	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
+	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
+	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
+	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
+	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer)
+}
+
+func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLSSecretUpdate bool) *solr.SolrTLSOptions {
+	return &solr.SolrTLSOptions{
+		KeyStorePasswordSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  keystorePassKey,
+		},
+		PKCS12Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  util.Pkcs12KeystoreFile,
+		},
+		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
+	}
+}
+
+func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string, keystorePasswordKey string) (corev1.Secret, error) {
+	secretData := map[string][]byte{}
+	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
+	secretData[util.TLSCertKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock tls.crt")))
+
+	if keystorePasswordKey != "" {
+		secretData[keystorePasswordKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore password")))
+	}
+
+	mockTLSSecret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+		Data:       secretData,
+		Type:       corev1.SecretTypeOpaque,
+	}
+	err := apiClient.Create(ctx, &mockTLSSecret)
+	return mockTLSSecret, err
+}
+
+// Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
+func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool) *corev1.Container {
+	assert.NotNil(t, podTemplate.Spec.Volumes)
+	var keystoreVol *corev1.Volume = nil
+	for _, vol := range podTemplate.Spec.Volumes {
+		if vol.Name == "keystore" {
+			keystoreVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, keystoreVol)
+	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
+	assert.Equal(t, tls.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
+
+	// check the SOLR_SSL_ related env vars on the sts
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
+	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
+	expectTLSEnvVars(t, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer)
+
+	// initContainers
+	if needsPkcs12InitContainer {
+		var pkcs12Vol *corev1.Volume = nil
+		for _, vol := range podTemplate.Spec.Volumes {
+			if vol.Name == "pkcs12" {
+				pkcs12Vol = &vol
+				break
+			}
+		}
+
+		assert.NotNil(t, pkcs12Vol, "Didn't find TLS keystore volume in sts config!")
+		assert.NotNil(t, pkcs12Vol.EmptyDir, "pkcs12 vol should by an emptyDir")
+
+		assert.NotNil(t, podTemplate.Spec.InitContainers)
+		var expInitContainer *corev1.Container = nil
+		for _, cnt := range podTemplate.Spec.InitContainers {
+			if cnt.Name == "gen-pkcs12-keystore" {
+				expInitContainer = &cnt
+				break
+			}
+		}
+		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		assert.NotNil(t, expInitContainer, "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
+		assert.Equal(t, expCmd, expInitContainer.Command[2])
+	}
+
+	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+// ensure the TLS related env vars are set for the Solr pod
+func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool) {
+	assert.NotNil(t, envVars)
+	envVars = filterVarsByName(envVars, func(n string) bool {
+		return strings.HasPrefix(n, "SOLR_SSL_")
+	})
+	assert.True(t, len(envVars) == 9)
+
+	expectedKeystorePath := util.DefaultKeyStorePath + "/keystore.p12"
+	if needsPkcs12InitContainer {
+		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
+	}
+	for _, envVar := range envVars {
+		if envVar.Name == "SOLR_SSL_ENABLED" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+			assert.Equal(t, expectedKeystorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_KEY_STORE_PASSWORD" {
+			assert.NotNil(t, envVar.ValueFrom)
+			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
+			assert.Equal(t, expectedKeystorePasswordSecretName, envVar.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, expectedKeystorePasswordSecretKey, envVar.ValueFrom.SecretKeyRef.Key)
+		}
+	}
+}
+
+// filter env vars by name using a supplied match function
+func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.EnvVar {
+	filtered := make([]corev1.EnvVar, 0)
+	for _, v := range envVars {
+		if f(v.Name) {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered
 }
 
 func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {

@@ -74,8 +74,9 @@ const (
 	DefaultStartupProbePeriodSeconds       = 10
 
 	DefaultKeyStorePath         = "/var/solr/tls"
-	DefaultKeyStoreFile         = "keystore.p12"
+	Pkcs12KeystoreFile          = "keystore.p12"
 	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
+	TLSCertKey                  = "tls.crt"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -1034,7 +1035,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	} else {
 		keystorePath = DefaultKeyStorePath
 	}
-	keystorePath += ("/" + DefaultKeyStoreFile)
+	keystorePath += ("/" + Pkcs12KeystoreFile)
 
 	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 
@@ -1141,9 +1142,9 @@ func generatePkcs12InitContainer(keyStorePasswordSecret *corev1.SecretKeySelecto
 		},
 	}
 
-	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/tls.crt -in " + DefaultKeyStorePath +
+	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " -in " + DefaultKeyStorePath +
 		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
-		"/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		"/pkcs12/" + Pkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 	return corev1.Container{
 		Name:                     "gen-pkcs12-keystore",
 		Image:                    imageName,

@@ -56,10 +56,6 @@ type SolrPrometheusExporterSpec struct {
 	// The xml config for the metrics
 	// +optional
 	Config string `json:"metricsConfig,omitempty"`
-
-	// Options to enable TLS between Solr pods
-	// +optional
-	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
 func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bool) {
@@ -88,6 +84,10 @@ type SolrReference struct {
 	// Reference of a standalone solr instance
 	// +optional
 	Standalone *StandaloneSolrReference `json:"standalone,omitempty"`
+
+	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {
