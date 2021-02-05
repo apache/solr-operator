@@ -135,28 +135,11 @@ open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=nodes
 
 ## Create a collection and index some documents
 
-We'll use the Operator's built in collection creation option
+Create a collection via the [Collections API](https://lucene.apache.org/solr/guide/8_8/collection-management.html#create).
 
 ```bash
-# Create the spec
-cat <<EOF > collection.yaml
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCollection
-metadata:
-  name: mycoll
-spec:
-  solrCloud: example
-  collection: mycoll
-  autoAddReplicas: true
-  routerName: compositeId
-  numShards: 1
-  replicationFactor: 3
-  maxShardsPerNode: 2
-  collectionConfigName: "_default"
-EOF
-
-# Execute the command and check in Admin UI that it succeeds
-kubectl apply -f collection.yaml
+# Execute the Collections API command
+curl "http://default-example-solrcloud.ing.local.domain/admin/collections?action=CREATE&name=mycoll&numShards=1&replicationFactor=3&maxShardsPerNode=2&collection.configName=_default"
 
 # Check in Admin UI that collection is created
 open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=graph"
