@@ -99,7 +99,7 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 		createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
 		wg.Done()
 	}()
-	helper.WaitForReconcile(4)
+	helper.WaitForReconcile(3)
 	wg.Wait()
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
@@ -208,7 +208,30 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	ctx := context.TODO()
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
-	expectTLSConfigOnPodTemplate(t, sc.Spec.SolrTLS, &stateful.Spec.Template, needsPkcs12InitContainer)
+	podTemplate := &stateful.Spec.Template
+	expectTLSConfigOnPodTemplate(t, sc.Spec.SolrTLS, podTemplate, needsPkcs12InitContainer)
+
+	// Check HTTPS cluster prop setup container
+	assert.NotNil(t, podTemplate.Spec.InitContainers)
+	var zkSetupInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == "setup-zk" {
+			zkSetupInitContainer = &cnt
+			break
+		}
+	}
+	expCmd := "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https"
+	if sc.Spec.SolrTLS != nil {
+		assert.NotNil(t, zkSetupInitContainer, "Didn't find the zk-setup InitContainer in the sts!")
+		if zkSetupInitContainer != nil {
+			assert.Equal(t, "library/solr:7.7.0", zkSetupInitContainer.Image)
+			assert.Equal(t, 3, len(zkSetupInitContainer.Command), "Wrong command length for zk-setup init container")
+			assert.Contains(t, zkSetupInitContainer.Command[2], expCmd, "ZK Setup command does not set urlScheme")
+			assert.Equal(t, 3, len(zkSetupInitContainer.Env), "Wrong number of envVars for zk-setup init container")
+		}
+	} else {
+		assert.Nil(t, zkSetupInitContainer, "Shouldn't find the zk-setup InitContainer in the sts, when not using https!")
+	}
 	return stateful
 }
 
