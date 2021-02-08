@@ -613,19 +613,19 @@ func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.Solr
 				zkLogger.Info("Updating Zookeeer Cluster")
 				err = r.Update(context.TODO(), foundZkCluster)
 			}
-			external := &foundZkCluster.Status.ExternalClientEndpoint
-			if "" == *external {
-				external = nil
-			}
-			internal := make([]string, zkCluster.Spec.Replicas)
-			for i := range internal {
-				internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", foundZkCluster.Name, i, foundZkCluster.Name, foundZkCluster.Namespace, foundZkCluster.ZookeeperPorts().Client)
-			}
-			newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-				InternalConnectionString: strings.Join(internal, ","),
-				ExternalConnectionString: external,
-				ChRoot:                   pzk.ChRoot,
-			}
+		}
+		external := &foundZkCluster.Status.ExternalClientEndpoint
+		if "" == *external {
+			external = nil
+		}
+		internal := make([]string, zkCluster.Spec.Replicas)
+		for i := range internal {
+			internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", zkCluster.Name, i, zkCluster.Name, zkCluster.Namespace, zkCluster.ZookeeperPorts().Client)
+		}
+		newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+			InternalConnectionString: strings.Join(internal, ","),
+			ExternalConnectionString: external,
+			ChRoot:                   pzk.ChRoot,
 		}
 		return err
 	} else {

@@ -109,6 +109,7 @@ func TestIngressCloudReconcile(t *testing.T) {
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -239,8 +240,7 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// The default value of UseExternalAddress needs to be set to False
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
@@ -371,6 +371,7 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -499,8 +500,7 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// Additional reconcile for defaulting of Spec
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
@@ -633,6 +633,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -762,8 +763,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// Additional reconcile for defaulting of Spec
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
