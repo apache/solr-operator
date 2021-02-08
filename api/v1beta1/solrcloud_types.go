@@ -104,6 +104,10 @@ type SolrCloudSpec struct {
 	// Set GC Tuning configuration through GC_TUNE environment variable
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
+
+	// Options to enable TLS between Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -758,8 +762,8 @@ func (sc *SolrCloud) CommonServiceName() string {
 }
 
 // InternalURLForCloud returns the name of the common service for the cloud
-func InternalURLForCloud(cloudName string, namespace string) string {
-	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
+func InternalURLForCloud(sc *SolrCloud) string {
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(), sc.Name, sc.Namespace, sc.CommonPortSuffix())
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -860,11 +864,11 @@ func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string)
 }
 
 func (sc *SolrCloud) CommonPortSuffix() string {
-	return PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
 }
 
 func (sc *SolrCloud) NodePortSuffix() string {
-	return PortToSuffix(sc.NodePort())
+	return sc.PortToSuffix(sc.NodePort())
 }
 
 func (sc *SolrCloud) NodePort() int {
@@ -877,13 +881,18 @@ func (sc *SolrCloud) NodePort() int {
 	return port
 }
 
-// PortToSuffix returns the url suffix for a port.
-// Port 80 does not require a suffix, as it is the default port for HTTP.
-func PortToSuffix(port int) string {
-	if port == 80 {
-		return ""
+func (sc *SolrCloud) PortToSuffix(port int) string {
+	suffix := ""
+	if sc.UrlScheme() == "https" {
+		if port != 443 {
+			suffix = ":" + strconv.Itoa(port)
+		}
+	} else {
+		if port != 80 {
+			suffix = ":" + strconv.Itoa(port)
+		}
 	}
-	return ":" + strconv.Itoa(port)
+	return suffix
 }
 
 func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
@@ -929,6 +938,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	return url
 }
 
+func (sc *SolrCloud) UrlScheme() string {
+	urlScheme := "http"
+	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	}
+	return urlScheme
+}
+
 func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
 	external := sc.Spec.SolrAddressability.External
 	if external != nil && external.UseExternalAddress {
@@ -970,4 +987,38 @@ type SolrCloudList struct {
 
 func init() {
 	SchemeBuilder.Register(&SolrCloud{}, &SolrCloudList{})
+}
+
+// +kubebuilder:validation:Enum=None;Want;Need
+type ClientAuthType string
+
+const (
+	None ClientAuthType = "None"
+	Want ClientAuthType = "Want"
+	Need ClientAuthType = "Need"
+)
+
+type SolrTLSOptions struct {
+	// TLS Secret containing a pkcs12 keystore
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+
+	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
+
+	// Determines the client authentication method, either None, Want, or Need;
+	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// +kubebuilder:default=None
+	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
+
+	// Verify client's hostname during SSL handshake
+	// +optional
+	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
+
+	// TLS certificates contain host/ip "peer name" information that is validated by default.
+	// +optional
+	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// +optional
+	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 }

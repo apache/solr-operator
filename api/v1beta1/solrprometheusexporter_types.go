@@ -29,7 +29,7 @@ const (
 // SolrPrometheusExporterSpec defines the desired state of SolrPrometheusExporter
 type SolrPrometheusExporterSpec struct {
 	// Reference of the Solr instance to collect metrics for
-	SolrReference `json:"solrReference"`
+	SolrReference SolrReference `json:"solrReference"`
 
 	// Image of Solr Prometheus Exporter to run.
 	// +optional
@@ -84,6 +84,10 @@ type SolrReference struct {
 	// Reference of a standalone solr instance
 	// +optional
 	Standalone *StandaloneSolrReference `json:"standalone,omitempty"`
+
+	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {

@@ -165,7 +165,51 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{}, err
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5)
+	// Make sure the TLS config is in order
+	var tlsClientOptions *util.TLSClientOptions = nil
+	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {
+		requeueOrNot := reconcile.Result{}
+		ctx := context.TODO()
+		foundTLSSecret := &corev1.Secret{}
+		lookupErr := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
+		if lookupErr != nil {
+			return requeueOrNot, lookupErr
+		} else {
+			// Make sure the secret containing the keystore password exists as well
+			keyStorePasswordSecret := &corev1.Secret{}
+			err := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+			if err != nil {
+				return requeueOrNot, lookupErr
+			}
+			// we found the keystore secret, but does it have the key we expect?
+			if _, ok := keyStorePasswordSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key]; !ok {
+				return requeueOrNot, fmt.Errorf("%s key not found in keystore password secret %s",
+					prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
+			}
+
+			tlsClientOptions = &util.TLSClientOptions{}
+			tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
+
+			if _, ok := foundTLSSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Key]; !ok {
+				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+				tlsClientOptions.NeedsPkcs12InitContainer = true
+			}
+
+			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+			if prometheusExporter.Spec.SolrReference.SolrTLS.RestartOnTLSSecretUpdate {
+				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
+					tlsClientOptions.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+				} else {
+					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
+						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
+						util.TLSCertKey, foundTLSSecret.Name)
+				}
+			}
+		}
+	}
+
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions)
 	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -236,6 +280,12 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManagerAndReconciler(mgr ctr
 		return err
 	}
 
+	// Get notified when the TLS secret updates (such as when the cert gets renewed)
+	ctrlBuilder, err = r.indexAndWatchForTLSSecret(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
 	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(reconciler)
 }
@@ -265,6 +315,51 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
 				listOps := &client.ListOptions{
 					FieldSelector: fields.OneTermEqualSelector(providedConfigMapField, a.Meta.GetName()),
+					Namespace:     a.Meta.GetNamespace(),
+				}
+				err := r.List(context.TODO(), foundExporters, listOps)
+				if err != nil {
+					// if no exporters found, just no-op this
+					return []reconcile.Request{}
+				}
+
+				requests := make([]reconcile.Request, len(foundExporters.Items))
+				for i, item := range foundExporters.Items {
+					requests[i] = reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					}
+				}
+				return requests
+			}),
+		},
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	tlsSecretField := ".spec.solrReference.solrTLS.pkcs12Secret"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the referenced TLS secret...
+		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
+		if exporter.Spec.SolrReference.SolrTLS == nil {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{exporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+				listOps := &client.ListOptions{
+					FieldSelector: fields.OneTermEqualSelector(tlsSecretField, a.Meta.GetName()),
 					Namespace:     a.Meta.GetNamespace(),
 				}
 				err := r.List(context.TODO(), foundExporters, listOps)

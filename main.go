@@ -18,15 +18,18 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
+	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
+	"github.com/apache/lucene-solr-operator/controllers"
+	"github.com/apache/lucene-solr-operator/controllers/util/solr_api"
+	"net/http"
 	"os"
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"strings"
 
-	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
-	"github.com/apache/lucene-solr-operator/controllers"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -73,6 +76,11 @@ func init() {
 }
 
 func main() {
+	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
+	customTransport := http.DefaultTransport.(*http.Transport).Clone()
+	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	solr_api.SetNoVerifyTLSHttpClient(&http.Client{Transport: customTransport})
+
 	namespace = os.Getenv(EnvOperatorPodNamespace)
 	if len(namespace) == 0 {
 		//log.Fatalf("must set env (%s)", constants.EnvOperatorPodNamespace)
