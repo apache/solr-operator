@@ -55,13 +55,13 @@ func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod
 		if readyPods > 0 {
 			queryParams := url.Values{}
 			queryParams.Add("action", "CLUSTERSTATUS")
-			err := solr_api.CallCollectionsApi(cloud.Name, cloud.Namespace, queryParams, clusterResp)
+			err := solr_api.CallCollectionsApi(cloud, queryParams, clusterResp)
 			if err == nil {
 				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
 					err = apiErr
 				} else {
 					queryParams.Set("action", "OVERSEERSTATUS")
-					err = solr_api.CallCollectionsApi(cloud.Name, cloud.Namespace, queryParams, overseerResp)
+					err = solr_api.CallCollectionsApi(cloud, queryParams, overseerResp)
 					if hasError, apiErr := solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
 						err = apiErr
 					}

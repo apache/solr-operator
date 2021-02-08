@@ -19,7 +19,7 @@ spec:
       containers:
       - args:
         - -zk-operator=true
-        image: bloomberg/solr-operator:latest
+        image: apache/solr-operator:latest
         imagePullPolicy: IfNotPresent
         name: solr-operator
         env:

@@ -54,9 +54,6 @@ const (
 	ZookeeperTechnologyLabel = "zookeeper"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // SolrCloudSpec defines the desired state of SolrCloud
 type SolrCloudSpec struct {
 	// The number of solr nodes to run
@@ -71,36 +68,11 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
-	// DEPRECATED: Please use the options provided in customSolrKubeOptions.podOptions
-	//
-	// Pod defines the policy to create pod for the SolrCloud.
-	// Updating the Pod does not take effect on any existing pods.
-	// +optional
-	SolrPod SolrPodPolicy `json:"solrPodPolicy,omitempty"`
-
 	// Customize how the cloud data is stored.
 	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
 	//
 	// +optional
 	StorageOptions SolrDataStorageOptions `json:"dataStorage,omitempty"`
-
-	// DEPRECATED: Option now found under dataStorage.persistent.pvcSpec . This option will be removed in v0.3.0
-	//
-	// DataPvcSpec is the spec to describe PVC for the solr node to store its data.
-	// This field is optional. If no PVC spec is provided, each solr node will use emptyDir as the data volume
-	// +optional
-	DataPvcSpec *corev1.PersistentVolumeClaimSpec `json:"dataPvcSpec,omitempty"`
-
-	// DEPRECATED: Option now found under dataStorage.BackupRestoreOptions.Volume . This option will be removed in v0.3.0
-	//
-	// Required for backups & restores to be enabled.
-	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
-	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
-	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
-	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
-	// Other options are to use a NFS volume.
-	// +optional
-	BackupRestoreVolume *corev1.VolumeSource `json:"backupRestoreVolume,omitempty"`
 
 	// Provide custom options for kubernetes objects created for the Solr Cloud.
 	// +optional
@@ -132,9 +104,13 @@ type SolrCloudSpec struct {
 	// Set GC Tuning configuration through GC_TUNE environment variable
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
+
+	// Options to enable TLS between Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool) {
+func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -161,7 +137,7 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
-	changed = spec.SolrAddressability.withDefaults(ingressBaseDomain) || changed
+	changed = spec.SolrAddressability.withDefaults() || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
 
@@ -175,54 +151,13 @@ func (spec *SolrCloudSpec) withDefaults(ingressBaseDomain string) (changed bool)
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
-	changed = spec.StorageOptions.withDefaults(spec.DataPvcSpec) || changed
-	if spec.DataPvcSpec != nil {
-		changed = true
-		spec.DataPvcSpec = nil
-	}
-	if spec.BackupRestoreVolume != nil {
-		if spec.StorageOptions.BackupRestoreOptions == nil {
-			spec.StorageOptions.BackupRestoreOptions = &SolrBackupRestoreOptions{
-				Volume: *spec.BackupRestoreVolume,
-			}
-		}
-		spec.BackupRestoreVolume = nil
-		changed = true
-	}
+	changed = spec.StorageOptions.withDefaults() || changed
 
 	if spec.BusyBoxImage == nil {
 		c := ContainerImage{}
 		spec.BusyBoxImage = &c
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
-
-	if spec.SolrPod.Affinity != nil {
-		changed = true
-		if spec.CustomSolrKubeOptions.PodOptions == nil {
-			spec.CustomSolrKubeOptions.PodOptions = &PodOptions{}
-		}
-		if spec.CustomSolrKubeOptions.PodOptions.Affinity == nil {
-			spec.CustomSolrKubeOptions.PodOptions.Affinity = spec.SolrPod.Affinity
-		}
-		spec.SolrPod.Affinity = nil
-	}
-
-	if len(spec.SolrPod.Resources.Requests) > 0 || len(spec.SolrPod.Resources.Limits) > 0 {
-		changed = true
-		if spec.CustomSolrKubeOptions.PodOptions == nil {
-			spec.CustomSolrKubeOptions.PodOptions = &PodOptions{}
-		}
-		if len(spec.CustomSolrKubeOptions.PodOptions.Resources.Requests) == 0 &&
-			len(spec.SolrPod.Resources.Requests) > 0 {
-			spec.CustomSolrKubeOptions.PodOptions.Resources.Requests = spec.SolrPod.Resources.Requests
-		}
-		if len(spec.CustomSolrKubeOptions.PodOptions.Resources.Limits) == 0 &&
-			len(spec.SolrPod.Resources.Limits) > 0 {
-			spec.CustomSolrKubeOptions.PodOptions.Resources.Limits = spec.SolrPod.Resources.Limits
-		}
-		spec.SolrPod.Resources.Requests = nil
-		spec.SolrPod.Resources.Limits = nil
-	}
 
 	return changed
 }
@@ -280,12 +215,9 @@ type SolrDataStorageOptions struct {
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }
 
-func (opts *SolrDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
-	if pvcSpec != nil && opts.PersistentStorage == nil {
-		opts.PersistentStorage = &SolrPersistentDataStorageOptions{}
-	}
+func (opts *SolrDataStorageOptions) withDefaults() (changed bool) {
 	if opts.PersistentStorage != nil {
-		changed = changed || opts.PersistentStorage.withDefaults(pvcSpec)
+		changed = changed || opts.PersistentStorage.withDefaults()
 	}
 
 	return changed
@@ -308,17 +240,12 @@ type SolrPersistentDataStorageOptions struct {
 	PersistentVolumeClaimTemplate PersistentVolumeClaimTemplate `json:"pvcTemplate,omitempty"`
 }
 
-func (opts *SolrPersistentDataStorageOptions) withDefaults(pvcSpec *corev1.PersistentVolumeClaimSpec) (changed bool) {
+func (opts *SolrPersistentDataStorageOptions) withDefaults() (changed bool) {
 	if opts.VolumeReclaimPolicy == "" {
 		changed = true
 		opts.VolumeReclaimPolicy = VolumeReclaimPolicyRetain
 	}
 
-	if pvcSpec != nil {
-		// DEPRECATED: old pvcDataSpec option will be removed in v0.3.0
-		opts.PersistentVolumeClaimTemplate.Spec = *pvcSpec
-		changed = true
-	}
 	return changed
 }
 
@@ -422,17 +349,8 @@ type SolrAddressabilityOptions struct {
 	KubeDomain string `json:"kubeDomain,omitempty"`
 }
 
-func (opts *SolrAddressabilityOptions) withDefaults(ingressBaseDomain string) (changed bool) {
-	// DEPRECATED: ingressBaseDomain will be removed in v0.3.0
-	if opts.External == nil && ingressBaseDomain != "" {
-		changed = true
-		opts.External = &ExternalAddressability{
-			Method:             Ingress,
-			DomainName:         ingressBaseDomain,
-			UseExternalAddress: true,
-			NodePortOverride:   80,
-		}
-	} else if opts.External != nil {
+func (opts *SolrAddressabilityOptions) withDefaults() (changed bool) {
+	if opts.External != nil {
 		changed = opts.External.withDefaults()
 	}
 	if opts.PodPort == 0 {
@@ -459,7 +377,6 @@ type ExternalAddressability struct {
 	//
 	// NOTE: This option cannot be true when hideNodes is set to true. So it will be auto-set to false if that is the case.
 	//
-	// Deprecation warning: When an ingress-base-domain is passed in to the operator, this value defaults to true.
 	// +optional
 	UseExternalAddress bool `json:"useExternalAddress"`
 
@@ -476,14 +393,11 @@ type ExternalAddressability struct {
 
 	// Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS.
 	// The common and/or node services will be addressable by unique names under the given domain.
-	// e.g. default-example-solrcloud.given.domain.name.com
-	//
-	// This options will be required for the Ingress and ExternalDNS methods once the ingressBaseDomain startup parameter is removed.
+	// e.g. given.domain.name.com -> default-example-solrcloud.given.domain.name.com
 	//
 	// For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true.
 	// If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above.
-	// +optional
-	DomainName string `json:"domainName,omitempty"`
+	DomainName string `json:"domainName"`
 
 	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
 	// This option is ignored with the LoadBalancer method.
@@ -602,21 +516,6 @@ type ManagedUpdateOptions struct {
 	MaxShardReplicasUnavailable *intstr.IntOrString `json:"maxShardReplicasUnavailable,omitempty"`
 }
 
-// DEPRECATED: Please use the options provided in SolrCloud.Spec.customSolrKubeOptions.podOptions
-//
-// SolrPodPolicy defines the common pod configuration for Pods, including when used
-// in deployments, stateful-sets, etc.
-type SolrPodPolicy struct {
-	// The scheduling constraints on pods.
-	// +optional
-	Affinity *corev1.Affinity `json:"affinity,omitempty"`
-
-	// Resources is the resource requirements for the container.
-	// This field cannot be updated once the cluster is created.
-	// +optional
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
-}
-
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
 type ZookeeperRef struct {
@@ -653,9 +552,6 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 
 // ZookeeperSpec defines the internal zookeeper ensemble to run with the given spec
 type ZookeeperSpec struct {
-	// DEPRECATED: Will be removed in v0.3.0
-	// +optional
-	ZookeeperOutdated *OldZookeeperSpec `json:"zookeeper,omitempty"`
 
 	// Number of members to create up for the ZK ensemble
 	// Defaults to 3
@@ -681,18 +577,6 @@ type ZookeeperSpec struct {
 }
 
 func (z *ZookeeperSpec) withDefaults() (changed bool) {
-	// Fill information from the deprecated section, and then remove it.
-	// This will be removed when the deprecated feature is removed.
-	if z.ZookeeperOutdated != nil {
-		z.ZookeeperOutdated.withDefaults()
-		z.Replicas = z.ZookeeperOutdated.Replicas
-		z.Image = z.ZookeeperOutdated.Image
-		z.Persistence = z.ZookeeperOutdated.Persistence
-		z.ZookeeperPod = z.ZookeeperOutdated.ZookeeperPod
-		z.ZookeeperOutdated = nil
-		changed = true
-	}
-
 	if z.Replicas == nil {
 		changed = true
 		r := DefaultZkReplicas
@@ -735,32 +619,6 @@ func (z *ZookeeperSpec) withDefaults() (changed bool) {
 	return changed
 }
 
-// ZookeeperSpec defines the internal zookeeper ensemble to run for solr
-type OldZookeeperSpec struct {
-	// Number of members to create up for the ZK ensemble
-	// Defaults to 3
-	// +optional
-	Replicas *int32 `json:"replicas,omitempty"`
-
-	// Image of Zookeeper to run
-	// +optional
-	Image *ContainerImage `json:"image,omitempty"`
-
-	// PersistentVolumeClaimSpec is the spec to describe PVC for the zk container
-	// WARNING: This field is DEPRECATED, please use the Persistence option
-	// +optional
-	PersistentVolumeClaimSpec *corev1.PersistentVolumeClaimSpec `json:"persistentVolumeClaimSpec,omitempty"`
-
-	// Persistence is the configuration for zookeeper persistent layer.
-	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
-	// +optional
-	Persistence *zk.Persistence `json:"persistence,omitempty"`
-
-	// Pod resources for zookeeper pod
-	// +optional
-	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
-}
-
 // ZookeeperPodPolicy defines the common pod configuration for Pods, including when used
 // in deployments, stateful-sets, etc.
 type ZookeeperPodPolicy struct {
@@ -782,50 +640,6 @@ type ZookeeperPodPolicy struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
-func (z *OldZookeeperSpec) withDefaults() (changed bool) {
-	if z.Replicas == nil {
-		changed = true
-		r := DefaultZkReplicas
-		z.Replicas = &r
-	}
-
-	if z.Image == nil {
-		z.Image = &ContainerImage{}
-	}
-	changed = z.Image.withDefaults(DefaultZkRepo, DefaultZkVersion, corev1.PullIfNotPresent) || changed
-
-	// Backwards compatibility with old ZK Persistence options.
-	// This will be removed eventually
-	if z.Persistence == nil && z.PersistentVolumeClaimSpec != nil {
-		z.Persistence = &zk.Persistence{
-			PersistentVolumeClaimSpec: *z.PersistentVolumeClaimSpec,
-		}
-		changed = true
-	}
-
-	if z.Persistence != nil {
-		if z.Persistence.VolumeReclaimPolicy == "" {
-			z.Persistence.VolumeReclaimPolicy = DefaultZkVolumeReclaimPolicy
-			changed = true
-		}
-
-		if len(z.Persistence.PersistentVolumeClaimSpec.AccessModes) == 0 {
-			z.Persistence.PersistentVolumeClaimSpec.AccessModes = []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			}
-			changed = true
-		}
-
-		if len(z.Persistence.PersistentVolumeClaimSpec.Resources.Requests) == 0 {
-			z.Persistence.PersistentVolumeClaimSpec.Resources.Requests = corev1.ResourceList{
-				corev1.ResourceStorage: resource.MustParse(DefaultZkStorage),
-			}
-			changed = true
-		}
-	}
-	return changed
-}
-
 // SolrCloudStatus defines the observed state of SolrCloud
 type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
@@ -838,7 +652,6 @@ type SolrCloudStatus struct {
 	ReadyReplicas int32 `json:"readyReplicas"`
 
 	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
-	// +optional
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -889,7 +702,6 @@ type SolrNodeStatus struct {
 	Version string `json:"version"`
 
 	// This Solr Node pod is using the latest version of solrcloud pod spec.
-	// +optional
 	SpecUpToDate bool `json:"specUpToDate"`
 }
 
@@ -917,8 +729,8 @@ type SolrCloud struct {
 }
 
 // WithDefaults set default values when not defined in the spec.
-func (sc *SolrCloud) WithDefaults(ingressBaseDomain string) bool {
-	return sc.Spec.withDefaults(ingressBaseDomain)
+func (sc *SolrCloud) WithDefaults() bool {
+	return sc.Spec.withDefaults()
 }
 
 func (sc *SolrCloud) GetAllSolrNodeNames() []string {
@@ -950,8 +762,8 @@ func (sc *SolrCloud) CommonServiceName() string {
 }
 
 // InternalURLForCloud returns the name of the common service for the cloud
-func InternalURLForCloud(cloudName string, namespace string) string {
-	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
+func InternalURLForCloud(sc *SolrCloud) string {
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(), sc.Name, sc.Namespace, sc.CommonPortSuffix())
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -1052,11 +864,11 @@ func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string)
 }
 
 func (sc *SolrCloud) CommonPortSuffix() string {
-	return PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
 }
 
 func (sc *SolrCloud) NodePortSuffix() string {
-	return PortToSuffix(sc.NodePort())
+	return sc.PortToSuffix(sc.NodePort())
 }
 
 func (sc *SolrCloud) NodePort() int {
@@ -1069,13 +881,18 @@ func (sc *SolrCloud) NodePort() int {
 	return port
 }
 
-// PortToSuffix returns the url suffix for a port.
-// Port 80 does not require a suffix, as it is the default port for HTTP.
-func PortToSuffix(port int) string {
-	if port == 80 {
-		return ""
+func (sc *SolrCloud) PortToSuffix(port int) string {
+	suffix := ""
+	if sc.UrlScheme() == "https" {
+		if port != 443 {
+			suffix = ":" + strconv.Itoa(port)
+		}
+	} else {
+		if port != 80 {
+			suffix = ":" + strconv.Itoa(port)
+		}
 	}
-	return ":" + strconv.Itoa(port)
+	return suffix
 }
 
 func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
@@ -1121,6 +938,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	return url
 }
 
+func (sc *SolrCloud) UrlScheme() string {
+	urlScheme := "http"
+	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	}
+	return urlScheme
+}
+
 func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
 	external := sc.Spec.SolrAddressability.External
 	if external != nil && external.UseExternalAddress {
@@ -1162,4 +987,38 @@ type SolrCloudList struct {
 
 func init() {
 	SchemeBuilder.Register(&SolrCloud{}, &SolrCloudList{})
+}
+
+// +kubebuilder:validation:Enum=None;Want;Need
+type ClientAuthType string
+
+const (
+	None ClientAuthType = "None"
+	Want ClientAuthType = "Want"
+	Need ClientAuthType = "Need"
+)
+
+type SolrTLSOptions struct {
+	// TLS Secret containing a pkcs12 keystore
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+
+	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
+
+	// Determines the client authentication method, either None, Want, or Need;
+	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// +kubebuilder:default=None
+	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
+
+	// Verify client's hostname during SSL handshake
+	// +optional
+	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
+
+	// TLS certificates contain host/ip "peer name" information that is validated by default.
+	// +optional
+	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// +optional
+	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 }

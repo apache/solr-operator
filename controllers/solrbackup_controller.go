@@ -49,10 +49,10 @@ type SolrBackupReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrclouds/status,verbs=get
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrbackups/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrbackups/status,verbs=get;update;patch
 
 func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -196,7 +196,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
 
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(solrCloud.Name, collection, backup.Name, backup.Namespace)
+		started, err := util.StartBackupForCollection(solrCloud, collection, backup.Name)
 		if err != nil {
 			return true, err
 		}
@@ -206,7 +206,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 		}
 	} else if collectionBackupStatus.InProgress {
 		// Check the state of the backup, when it is in progress, and update the state accordingly
-		finished, successful, asyncStatus, error := util.CheckBackupForCollection(solrCloud.Name, collection, backup.Name, backup.Namespace)
+		finished, successful, asyncStatus, error := util.CheckBackupForCollection(solrCloud, collection, backup.Name)
 		if error != nil {
 			return false, error
 		}
@@ -221,7 +221,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 				collectionBackupStatus.FinishTime = &now
 			}
 
-			err = util.DeleteAsyncInfoForBackup(solrCloud.Name, collection, backup.Name, backup.Namespace)
+			err = util.DeleteAsyncInfoForBackup(solrCloud, collection, backup.Name)
 		} else {
 			collectionBackupStatus.AsyncBackupStatus = asyncStatus
 		}

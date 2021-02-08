@@ -42,8 +42,8 @@ type SolrCollectionReconciler struct {
 	Log    logr.Logger
 }
 
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollections/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollections,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollections/status,verbs=get;update;patch
 
 func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -67,7 +67,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	oldStatus := collection.Status.DeepCopy()
 	requeueOrNot := reconcile.Result{Requeue: true, RequeueAfter: time.Second * 5}
 
-	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.MaxShardsPerNode, collection.Spec.RouterName, collection.Spec.RouterField, collection.Spec.Shards, collection.Spec.CollectionConfigName, collection.Namespace)
+	solrCloud, collectionCreationStatus, err := reconcileSolrCollection(r, collection, collection.Spec.NumShards, collection.Spec.ReplicationFactor, collection.Spec.AutoAddReplicas, collection.Spec.MaxShardsPerNode, collection.Spec.RouterName, collection.Spec.RouterField, collection.Spec.Shards, collection.Spec.CollectionConfigName)
 
 	if err != nil {
 		r.Log.Error(err, "Error while creating SolrCloud collection")
@@ -97,7 +97,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 		if util.ContainsString(collection.ObjectMeta.Finalizers, collectionFinalizer) {
 			r.Log.Info("Deleting Solr collection", "cloud", collection.Spec.SolrCloud, "namespace", collection.Namespace, "Collection Name", collection.Name)
 			// our finalizer is present, so lets handle our external dependency
-			delete, err := util.DeleteCollection(collection.Spec.SolrCloud, collection.Name, collection.Namespace)
+			delete, err := util.DeleteCollection(solrCloud, collection.Name)
 			if err != nil {
 				r.Log.Error(err, "Failed to delete Solr collection")
 				return reconcile.Result{}, err
@@ -120,7 +120,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	}
 
 	if collection.Status.InProgressCreation {
-		if util.CheckIfCollectionExists(collection.Spec.SolrCloud, collection.Spec.Collection, collection.Namespace) {
+		if util.CheckIfCollectionExists(solrCloud, collection.Spec.Collection) {
 			r.Log.Info("Collection exists, creation complete", "collection", collection, "namespace", collection.Namespace, "name", collection.Name)
 			collection.Status.InProgressCreation = false
 			requeueOrNot = reconcile.Result{}
@@ -136,7 +136,7 @@ func (r *SolrCollectionReconciler) Reconcile(req ctrl.Request) (ctrl.Result, err
 	return requeueOrNot, nil
 }
 
-func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName solrv1beta1.CollectionRouterName, routerField string, shards string, collectionConfigName string, namespace string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
+func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta1.SolrCollection, numShards int64, replicationFactor int64, autoAddReplicas bool, maxShardsPerNode int64, routerName solrv1beta1.CollectionRouterName, routerField string, shards string, collectionConfigName string) (solrCloud *solrv1beta1.SolrCloud, collectionCreationStatus bool, err error) {
 	// Get the solrCloud that this collection is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
 	if err = r.Get(context.TODO(), types.NamespacedName{Namespace: collection.Namespace, Name: collection.Spec.SolrCloud}, solrCloud); err != nil {
@@ -145,14 +145,14 @@ func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta
 
 	// If the collection has already been created already and requires modification
 	if collection.Status.Created {
-		modificationRequired, err := util.CheckIfCollectionModificationRequired(solrCloud.Name, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, collectionConfigName, namespace)
+		modificationRequired, err := util.CheckIfCollectionModificationRequired(solrCloud, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, collectionConfigName)
 
 		if err != nil {
 			return nil, false, err
 		}
 
 		if modificationRequired {
-			modify, err := util.ModifyCollection(solrCloud.Name, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, collectionConfigName, namespace)
+			modify, err := util.ModifyCollection(solrCloud, collection.Name, replicationFactor, autoAddReplicas, maxShardsPerNode, collectionConfigName)
 
 			if err != nil {
 				return nil, false, err
@@ -170,7 +170,7 @@ func reconcileSolrCollection(r *SolrCollectionReconciler, collection *solrv1beta
 
 		// Request the creation of collection by calling solr
 		collection.Status.InProgressCreation = true
-		create, err := util.CreateCollection(solrCloud.Name, collection.Name, numShards, replicationFactor, autoAddReplicas, maxShardsPerNode, routerName, routerField, shards, collectionConfigName, namespace)
+		create, err := util.CreateCollection(solrCloud, collection.Name, numShards, replicationFactor, autoAddReplicas, maxShardsPerNode, routerName, routerField, shards, collectionConfigName)
 		if err != nil {
 			collection.Status.InProgressCreation = false
 			return nil, false, err

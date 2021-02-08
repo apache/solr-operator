@@ -5,8 +5,8 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
  1. [Setup Kubernetes and Dependencies](#setup-kubernetes-and-dependencies)
     1. [Setup Docker for Mac with K8S](#setup-docker-for-mac-with-k8s)
     2. [Install an Ingress Controller to reach the cluster on localhost](#install-an-ingress-controller)
- 3. [Install Solr Operator](#install-solr-operator)
- 4. [Start your Solr cluster](#start-your-solr-cluster)
+ 3. [Install Solr Operator](#install-the-solr-operator)
+ 4. [Start your Solr cluster](#start-an-example-solr-cloud-cluster)
  5. [Create a collection and index some documents](#create-a-collection-and-index-some-documents)
  6. [Scale from 3 to 5 nodes](#scale-from-3-to-5-nodes)
  7. [Upgrade to newer Solr version](#upgrade-to-newer-version)
@@ -56,26 +56,28 @@ Once we have installed Solr to our k8s, this will allow us to address the nodes 
 
 ## Install the Solr Operator
 
+You can follow along here, or follow the instructions in the [Official Helm release](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
 Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/bloomberg/solr-operator/master/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
 ```
 
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
 ```
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
 
 ```bash
-# Install the operator (specifying ingressBaseDomain to match our ingressController)
-$ helm install solr-operator solr-operator/solr-operator --set-string ingressBaseDomain=ing.local.domain
+# Install the operator
+$ helm install solr-operator apache-solr/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
@@ -104,7 +106,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 ```bash
 # Create a spec for a 3-node cluster v8.3 with 300m RAM each:
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example
@@ -113,6 +115,10 @@ spec:
   solrImage:
     tag: "8.3"
   solrJavaMem: "-Xms300m -Xmx300m"
+  solrAddressability:
+    external:
+      method: Ingress
+      domainName: "ing.local.domain"
 EOF
 
 # Install Solr from that spec
@@ -134,7 +140,7 @@ We'll use the Operator's built in collection creation option
 ```bash
 # Create the spec
 cat <<EOF > collection.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCollection
 metadata:
   name: mycoll
@@ -192,7 +198,7 @@ curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system
 
 # Update the solrCloud configuratin with the new version, keeping 5 nodes
 cat <<EOF > solrCloud-example.yaml
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example

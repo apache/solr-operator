@@ -1,4 +1,4 @@
-apiVersion: solr.bloomberg.com/v1beta1
+apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: example-private-repo-solr-image
@@ -6,5 +6,5 @@ spec:
   replicas: 3
   solrImage:
     repository: myprivate-repo.jfrog.io/solr
-    tag: 8.2.0
+    tag: 8.7.0
     imagePullSecret: "k8s-docker-registry-secret"

@@ -95,11 +95,7 @@ func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) 
 func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
 	var backupVolume corev1.VolumeSource
 	var solrCloudBackupDirectoryOverride string
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions == nil {
-		if solrCloud.Spec.BackupRestoreVolume != nil {
-			backupVolume = *solrCloud.Spec.BackupRestoreVolume
-		}
-	} else {
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
 		backupVolume = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
 		solrCloudBackupDirectoryOverride = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory
 	}
@@ -321,7 +317,7 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 	return image, envVars, command, volume, volumeMount, numRetries
 }
 
-func StartBackupForCollection(cloud string, collection string, backupName string, namespace string) (success bool, err error) {
+func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string) (success bool, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "BACKUP")
 	queryParams.Add("collection", collection)
@@ -331,29 +327,29 @@ func StartBackupForCollection(cloud string, collection string, backupName string
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to start collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to start collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
 			success = true
 		}
 	} else {
-		log.Error(err, "Error starting collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
+		log.Error(err, "Error starting collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	}
 
 	return success, err
 }
 
-func CheckBackupForCollection(cloud string, collection string, backupName string, namespace string) (finished bool, success bool, asyncStatus string, err error) {
+func CheckBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string) (finished bool, success bool, asyncStatus string, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "REQUESTSTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to check on collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to check on collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -368,23 +364,23 @@ func CheckBackupForCollection(cloud string, collection string, backupName string
 			}
 		}
 	} else {
-		log.Error(err, "Error checking on collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
+		log.Error(err, "Error checking on collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	}
 
 	return finished, success, asyncStatus, err
 }
 
-func DeleteAsyncInfoForBackup(cloud string, collection string, backupName string, namespace string) (err error) {
+func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupName string) (err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "DELETESTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to delete async info for backup command.", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, namespace, queryParams, resp)
+	log.Info("Calling to delete async info for backup command.", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
 	if err != nil {
-		log.Error(err, "Error deleting async data for collection backup", "namespace", namespace, "cloud", cloud, "collection", collection, "backup", backupName)
+		log.Error(err, "Error deleting async data for collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	}
 
 	return err

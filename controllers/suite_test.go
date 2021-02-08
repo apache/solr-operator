@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	"fmt"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -56,6 +57,7 @@ func TestMain(m *testing.M) {
 			filepath.Join("..", "config", "crd", "bases"),
 			filepath.Join("..", "example", "dependencies"),
 		},
+		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
 	zkOp.AddToScheme(scheme.Scheme)
@@ -76,6 +78,9 @@ func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan 
 	requests := make(chan reconcile.Request)
 	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
 		result, err := inner.Reconcile(req)
+		if err != nil {
+			fmt.Printf("\n\nReconcile Error: %s\n\n", err)
+		}
 		requests <- req
 		return result, err
 	})

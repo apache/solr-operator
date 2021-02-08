@@ -29,18 +29,11 @@ const (
 // SolrPrometheusExporterSpec defines the desired state of SolrPrometheusExporter
 type SolrPrometheusExporterSpec struct {
 	// Reference of the Solr instance to collect metrics for
-	SolrReference `json:"solrReference"`
+	SolrReference SolrReference `json:"solrReference"`
 
 	// Image of Solr Prometheus Exporter to run.
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
-
-	// DEPRECATED: Please use the options provided in customKubeOptions.podOptions
-	//
-	// Pod defines the policy to create pod for the SolrCloud.
-	// Updating the Pod does not take effect on any existing pods.
-	// +optional
-	PodPolicy SolrPodPolicy `json:"podPolicy,omitempty"`
 
 	// Provide custom options for kubernetes objects created for the SolrPrometheusExporter.
 	// +optional
@@ -78,34 +71,6 @@ func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bo
 		changed = true
 	}
 
-	if ps.PodPolicy.Affinity != nil {
-		changed = true
-		if ps.CustomKubeOptions.PodOptions == nil {
-			ps.CustomKubeOptions.PodOptions = &PodOptions{}
-		}
-		if ps.CustomKubeOptions.PodOptions.Affinity == nil {
-			ps.CustomKubeOptions.PodOptions.Affinity = ps.PodPolicy.Affinity
-		}
-		ps.PodPolicy.Affinity = nil
-	}
-
-	if len(ps.PodPolicy.Resources.Requests) > 0 || len(ps.PodPolicy.Resources.Limits) > 0 {
-		changed = true
-		if ps.CustomKubeOptions.PodOptions == nil {
-			ps.CustomKubeOptions.PodOptions = &PodOptions{}
-		}
-		if len(ps.CustomKubeOptions.PodOptions.Resources.Requests) == 0 &&
-			len(ps.PodPolicy.Resources.Requests) > 0 {
-			ps.CustomKubeOptions.PodOptions.Resources.Requests = ps.PodPolicy.Resources.Requests
-		}
-		if len(ps.CustomKubeOptions.PodOptions.Resources.Limits) == 0 &&
-			len(ps.PodPolicy.Resources.Limits) > 0 {
-			ps.CustomKubeOptions.PodOptions.Resources.Limits = ps.PodPolicy.Resources.Limits
-		}
-		ps.PodPolicy.Resources.Requests = nil
-		ps.PodPolicy.Resources.Limits = nil
-	}
-
 	return changed
 }
 
@@ -119,6 +84,10 @@ type SolrReference struct {
 	// Reference of a standalone solr instance
 	// +optional
 	Standalone *StandaloneSolrReference `json:"standalone,omitempty"`
+
+	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {

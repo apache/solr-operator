@@ -248,6 +248,11 @@ func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
 		}
 	}
 
+	if !DeepEqualWithNils(to.Spec.TLS, from.Spec.TLS) {
+		requireUpdate = true
+		to.Spec.TLS = from.Spec.TLS
+	}
+
 	return requireUpdate
 }
 
@@ -321,7 +326,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet, logger logr.Logger) boo
 		}
 	*/
 
-	requireUpdate = requireUpdate || CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger)
+	requireUpdate = CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger) || requireUpdate
 
 	return requireUpdate
 }
@@ -344,7 +349,7 @@ func CopyDeploymentFields(from, to *appsv1.Deployment, logger logr.Logger) bool 
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	requireUpdate = requireUpdate || CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger)
+	requireUpdate = CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger) || requireUpdate
 
 	return requireUpdate
 }
@@ -365,9 +370,9 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		to.Annotations = from.Annotations
 	}
 
-	requireUpdate = requireUpdate || CopyPodContainers(&from.Spec.Containers, &to.Spec.Containers, basePath+"Spec.Containers", logger)
+	requireUpdate = CopyPodContainers(&from.Spec.Containers, &to.Spec.Containers, basePath+"Spec.Containers", logger) || requireUpdate
 
-	requireUpdate = requireUpdate || CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger)
+	requireUpdate = CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger) || requireUpdate
 
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
 		requireUpdate = true
@@ -425,6 +430,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 	from := *fromPtr
 	if len(to) < len(from) {
 		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
 		*toPtr = from
 	} else {
 		for i := 0; i < len(from); i++ {

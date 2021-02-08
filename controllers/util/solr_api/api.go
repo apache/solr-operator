@@ -27,6 +27,15 @@ import (
 	"net/url"
 )
 
+// Used to call a Solr pod over https when using a self-signed cert
+// It's "insecure" but is only used for internal communication, such as getting cluster status
+// so if you're worried about this, don't use a self-signed cert
+var noVerifyTLSHttpClient *http.Client
+
+func SetNoVerifyTLSHttpClient(client *http.Client) {
+	noVerifyTLSHttpClient = client
+}
+
 type SolrAsyncResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
@@ -50,15 +59,20 @@ type SolrAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud)
+
+	client := http.DefaultClient
+	if cloud.Spec.SolrTLS != nil {
+		client = noVerifyTLSHttpClient
+	}
 
 	urlParams.Set("wt", "json")
 
 	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
 
 	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
+	if resp, err = client.Get(cloudUrl); err != nil {
 		return err
 	}
 

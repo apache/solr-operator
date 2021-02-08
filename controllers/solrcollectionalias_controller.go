@@ -42,10 +42,10 @@ type SolrCollectionAliasReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollectionaliases,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcollectionaliases/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud,verbs=get;list;watch
-// +kubebuilder:rbac:groups=solr.bloomberg.com,resources=solrcloud/status,verbs=get
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollectionaliases,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcollectionaliases/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcloud,verbs=get;list;watch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrcloud/status,verbs=get
 
 func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -68,7 +68,13 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	oldStatus := alias.Status.DeepCopy()
 	requeueOrNot := reconcile.Result{Requeue: true, RequeueAfter: time.Second * 5}
 
-	aliasCreationStatus := reconcileSolrCollectionAlias(r, alias, alias.Spec.SolrCloud, alias.Name, alias.Spec.AliasType, alias.Spec.Collections, alias.Namespace)
+	solrCloud := &solrv1beta1.SolrCloud{}
+	err = r.Get(context.TODO(), types.NamespacedName{Namespace: alias.Namespace, Name: alias.Spec.SolrCloud}, solrCloud)
+	if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	aliasCreationStatus := reconcileSolrCollectionAlias(r, alias, solrCloud, alias.Name, alias.Spec.AliasType, alias.Spec.Collections)
 
 	if err != nil {
 		r.Log.Error(err, "Error while creating SolrCloud alias")
@@ -84,14 +90,10 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 			}
 		}
 	} else {
-		// The object is being deleted, get associated SolrCloud
-		solrCloud := &solrv1beta1.SolrCloud{}
-		err = r.Get(context.TODO(), types.NamespacedName{Namespace: alias.Namespace, Name: alias.Spec.SolrCloud}, solrCloud)
-
-		if util.ContainsString(alias.ObjectMeta.Finalizers, aliasFinalizer) && solrCloud != nil && aliasCreationStatus {
+		if util.ContainsString(alias.ObjectMeta.Finalizers, aliasFinalizer) && aliasCreationStatus {
 			r.Log.Info("Deleting Solr collection alias", "cloud", alias.Spec.SolrCloud, "namespace", alias.Namespace, "Collection Name", alias.Name)
 			// our finalizer is present, along with the associated SolrCloud and alias lets delete alias
-			delete, err := util.DeleteCollectionAlias(alias.Spec.SolrCloud, alias.Name, alias.Namespace)
+			delete, err := util.DeleteCollectionAlias(solrCloud, alias.Name)
 			if err != nil {
 				r.Log.Error(err, "Failed to delete Solr collection")
 				return reconcile.Result{}, err
@@ -126,13 +128,13 @@ func (r *SolrCollectionAliasReconciler) Reconcile(req ctrl.Request) (ctrl.Result
 	return requeueOrNot, nil
 }
 
-func reconcileSolrCollectionAlias(r *SolrCollectionAliasReconciler, alias *solrv1beta1.SolrCollectionAlias, solrCloudName string, aliasName string, aliasType string, collections []string, namespace string) (aliasCreationStatus bool) {
-	success, aliasCollections := util.CurrentCollectionAliasDetails(solrCloudName, aliasName, namespace)
+func reconcileSolrCollectionAlias(r *SolrCollectionAliasReconciler, alias *solrv1beta1.SolrCollectionAlias, cloud *solrv1beta1.SolrCloud, aliasName string, aliasType string, collections []string) (aliasCreationStatus bool) {
+	success, aliasCollections := util.CurrentCollectionAliasDetails(cloud, aliasName)
 
 	// If not created, or if alias status differs from spec requirements create alias
 	if !success || !reflect.DeepEqual(alias.Status.Collections, aliasCollections) {
 		r.Log.Info("Applying collection alias", "alias", alias)
-		err := util.CreateCollectionAlias(solrCloudName, aliasName, aliasType, collections, namespace)
+		err := util.CreateCollectionAlias(cloud, aliasName, aliasType, collections)
 		if err == nil {
 			alias.Status.Created = true
 			alias.Status.Collections = collections
