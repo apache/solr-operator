@@ -51,6 +51,29 @@ In order to use this functionality, use the following spec field:
 
 `SolrPrometheusExporter.spec.solrRef.standalone.address`
 
+
+### Solr TLS
+
+If you're relying on a self-signed certificate (or any certificate that requires importing the CA into the Java trust store) for Solr pods, then the Prometheus Exporter will not be able to make requests for metrics.
+You'll need to duplicate your TLS config from your SolrCloud CRD definition to your Prometheus exporter CRD definition as shown in the example below:
+
+```
+  solrReference:
+    cloud:
+      name: "dev"
+    solrTLS:
+      restartOnTLSSecretUpdate: true
+      keyStorePasswordSecret:
+        name: pkcs12-password-secret
+        key: password-key
+      pkcs12Secret:
+        name: dev-selfsigned-cert-tls
+        key: keystore.p12
+```
+
+**This only applies to the SolrJ client the exporter uses to make requests to your TLS-enabled Solr pods and does not enable HTTPS for the exporter service.**
+
+
 ## Prometheus Stack
 
 In this section, we'll walk through how to use the Prometheus exporter with the [Prometheus Stack](https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack).
