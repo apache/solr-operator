@@ -19,15 +19,16 @@ package util
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -519,11 +520,20 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
-		stateful.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
-			{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
-		}
+	var imagePullSecrets []corev1.LocalObjectReference
+
+	if customPodOptions != nil {
+		imagePullSecrets = customPodOptions.ImagePullSecrets
 	}
+
+	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
+		imagePullSecrets = append(
+			imagePullSecrets,
+			corev1.LocalObjectReference{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
+		)
+	}
+
+	stateful.Spec.Template.Spec.ImagePullSecrets = imagePullSecrets
 
 	if nil != customPodOptions {
 		if customPodOptions.Affinity != nil {
