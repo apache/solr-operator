@@ -18,6 +18,7 @@
 package util
 
 import (
+	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -51,6 +52,8 @@ const (
 	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
+	SecurityJsonMd5Annotation        = "solr.apache.org/securityJsonMd5"
+	SecurityJsonFile                 = "security.json"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -94,11 +97,36 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		probeScheme = corev1.URISchemeHTTPS
 	}
 
+	var probeHttpHeaders []corev1.HTTPHeader = nil
+	if configMapInfo[SecurityJsonFile] != "" {
+
+		/*
+		n := 32
+		b := make([]byte, n)
+		rand.Read(b)
+		salt := sha256.Sum256(b)
+		saltHash := b64.StdEncoding.EncodeToString(salt[:])
+		passBytes := []byte("Test1234")
+		withSalt := append(salt[:], passBytes...)
+		passHashBytes := sha256.Sum256(withSalt)
+		passHashBytes = sha256.Sum256(passHashBytes[:])
+		passHash := b64.StdEncoding.EncodeToString(passHashBytes[:])
+		output := fmt.Sprintf("\"probe\": \"%s %s\"", passHash, saltHash)
+		fmt.Println(output)
+
+		 */
+
+		// pass the "probe" user's basic auth credentials to the probe endpoints
+		creds := b64.StdEncoding.EncodeToString([]byte("probe:SolrRocks"))
+		probeHttpHeaders = []corev1.HTTPHeader{{Name: "Authorization", Value: "Basic: " + creds}}
+	}
+
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
-			Scheme: probeScheme,
-			Path:   "/solr/admin/info/system",
-			Port:   intstr.FromInt(solrPodPort),
+			Scheme:      probeScheme,
+			Path:        "/solr/admin/info/system",
+			Port:        intstr.FromInt(solrPodPort),
+			HTTPHeaders: probeHttpHeaders,
 		},
 	}
 
@@ -339,7 +367,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Did the user provide a custom log config?
 	if configMapInfo[LogXmlFile] != "" {
-
 		if configMapInfo[LogXmlMd5Annotation] != "" {
 			if podAnnotations == nil {
 				podAnnotations = make(map[string]string, 1)
@@ -349,36 +376,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		// cannot use /var/solr as a mountPath, so mount the custom log config
 		// in a sub-dir named after the user-provided ConfigMap
-		volName := "log4j2-xml"
-		mountPath := fmt.Sprintf("/var/solr/%s", configMapInfo[LogXmlFile])
-		log4jPropsEnvVarPath := fmt.Sprintf("%s/%s", mountPath, LogXmlFile)
-		appendedToExisting := false
-		if configMapInfo[LogXmlFile] == configMapInfo[SolrXmlFile] {
-			// the user provided a custom log4j2.xml and solr.xml, append to the volume for solr.xml created above
-			for _, vol := range solrVolumes {
-				if vol.Name == "solr-xml" {
-					vol.ConfigMap.Items = append(vol.ConfigMap.Items, corev1.KeyToPath{Key: LogXmlFile, Path: LogXmlFile})
-					appendedToExisting = true
-					volName = vol.Name
-					break
-				}
-			}
+		volMount, envVar, newVolume := setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo, LogXmlFile, solrVolumes, "LOG4J_PROPS")
+		volumeMounts = append(volumeMounts, *volMount)
+		envVars = append(envVars, *envVar)
+		if newVolume != nil {
+			solrVolumes = append(solrVolumes, *newVolume)
 		}
+	}
 
-		if !appendedToExisting {
-			solrVolumes = append(solrVolumes, corev1.Volume{
-				Name: volName,
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[LogXmlFile]},
-						Items:                []corev1.KeyToPath{{Key: LogXmlFile, Path: LogXmlFile}},
-						DefaultMode:          &defaultMode,
-					},
-				},
-			})
+	// Did the user provide a security.json? If so, then we need to setup the volume in order to mount it in the initContainer
+	if configMapInfo[SecurityJsonFile] != "" {
+		// Don't need to track the security.json MD5 as updating the security.json does not require a restart of the pods
+
+		// the main container does not need the security-json mounted, only the init container, no env var either
+		if _, _, newVolume := setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo, SecurityJsonFile, solrVolumes, ""); newVolume != nil {
+			solrVolumes = append(solrVolumes, *newVolume)
 		}
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: volName, MountPath: mountPath})
-		envVars = append(envVars, corev1.EnvVar{Name: "LOG4J_PROPS", Value: log4jPropsEnvVarPath})
 	}
 
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
@@ -408,7 +421,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, configMapInfo)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -427,22 +440,23 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					Protocol:      "TCP",
 				},
 			},
-			LivenessProbe: &corev1.Probe{
-				InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-				TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-				SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-				FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-				PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-				Handler:             defaultHandler,
-			},
-			ReadinessProbe: &corev1.Probe{
-				InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-				TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-				SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-				FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-				PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-				Handler:             defaultHandler,
-			},
+			/*
+				LivenessProbe: &corev1.Probe{
+					InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+					TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+					SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+					FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+					PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+					Handler:             defaultHandler,
+				},
+				ReadinessProbe: &corev1.Probe{
+					InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+					TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+					SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+					FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+					PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+					Handler:             defaultHandler,
+				}, */
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
@@ -566,7 +580,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	return stateful
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string) (containers []corev1.Container) {
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, configMapInfo map[string]string) (containers []corev1.Container) {
 	// The setup of the solr.xml will always be necessary
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -603,7 +617,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	containers = append(containers, volumePrepInitContainer)
 
-	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus); hasZKSetupContainer {
+	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, configMapInfo); hasZKSetupContainer {
 		containers = append(containers, zkSetupContainer)
 	}
 
@@ -941,7 +955,7 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 }
 
 // TODO: Have this replace the postStart hook for creating the chroot
-func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus) (bool, corev1.Container) {
+func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, configMapInfo map[string]string) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
 
 	// Add all necessary ZK Info
@@ -962,10 +976,29 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		})
 	}
 
+	cmd := ""
+
 	if solrCloud.Spec.SolrTLS != nil {
-		cmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}" +
+		cmd = "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}" +
 			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https" +
 			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json"
+	}
+
+	volumeMounts := []corev1.VolumeMount{}
+	if configMapInfo[SecurityJsonFile] != "" {
+		// mount security.json from the ConfigMap at /tmp/security.json
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "security-json", MountPath: "/tmp"})
+		if cmd == "" {
+			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER};"
+		}
+		cmd += "ZK_SECURITY_JSON_MD5=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json | md5sum);"
+		cmd += "LOCAL_SECURITY_JSON_MD5=$(cat /tmp/security.json | md5sum);"
+		// if the hashes differ, apply the changes
+		// TODO: we might just check for {} otherwise, we'd overwrite updates made after bootstrapping?s
+		cmd += "if [ \"${ZK_SECURITY_JSON_MD5}\" != \"${LOCAL_SECURITY_JSON_MD5}\" ]; then /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; fi"
+	}
+
+	if cmd != "" {
 		return true, corev1.Container{
 			Name:                     "setup-zk",
 			Image:                    solrCloud.Spec.SolrImage.ToImageName(),
@@ -974,6 +1007,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 			TerminationMessagePolicy: "File",
 			Command:                  []string{"sh", "-c", cmd},
 			Env:                      envVars,
+			VolumeMounts:             volumeMounts,
 		}
 	}
 
@@ -1148,4 +1182,39 @@ func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.
 	}
 
 	return envVars, solrOpt, len(zkChroot) > 1
+}
+
+func setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo map[string]string, fileKey string, solrVolumes []corev1.Volume, envVar string) (*corev1.VolumeMount, *corev1.EnvVar, *corev1.Volume) {
+	volName := strings.ReplaceAll(fileKey, ".", "-")
+	mountPath := fmt.Sprintf("/var/solr/%s", configMapInfo[fileKey])
+	appendedToExisting := false
+	if configMapInfo[fileKey] == configMapInfo[SolrXmlFile] {
+		// the user provided a custom log4j2.xml and solr.xml, append to the volume for solr.xml created above
+		for _, vol := range solrVolumes {
+			if vol.Name == "solr-xml" {
+				vol.ConfigMap.Items = append(vol.ConfigMap.Items, corev1.KeyToPath{Key: fileKey, Path: fileKey})
+				appendedToExisting = true
+				volName = vol.Name
+				break
+			}
+		}
+	}
+
+	var vol *corev1.Volume = nil
+	if !appendedToExisting {
+		defaultMode := int32(420)
+		vol = &corev1.Volume{
+			Name: volName,
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[fileKey]},
+					Items:                []corev1.KeyToPath{{Key: fileKey, Path: fileKey}},
+					DefaultMode:          &defaultMode,
+				},
+			},
+		}
+	}
+	pathToFile := fmt.Sprintf("%s/%s", mountPath, fileKey)
+
+	return &corev1.VolumeMount{Name: volName, MountPath: mountPath}, &corev1.EnvVar{Name: envVar, Value: pathToFile}, vol
 }

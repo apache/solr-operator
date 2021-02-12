@@ -196,11 +196,12 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if foundConfigMap.Data != nil {
 			logXml, hasLogXml := foundConfigMap.Data[util.LogXmlFile]
 			solrXml, hasSolrXml := foundConfigMap.Data[util.SolrXmlFile]
+			securityJson, hasSecurityJson := foundConfigMap.Data[util.SecurityJsonFile]
 
 			// if there's a user-provided config, it must have one of the expected keys
-			if !hasLogXml && !hasSolrXml {
+			if !hasLogXml && !hasSolrXml && !hasSecurityJson {
 				// TODO: Create event for the CRD.
-				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
+				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml', 'log4j2.xml', and/or 'security.json'",
 					providedConfigMapName)
 			}
 
@@ -222,6 +223,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					configMapInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
 				} // else log4j will automatically refresh for us, so no restart needed
 				configMapInfo[util.LogXmlFile] = foundConfigMap.Name
+			}
+
+			if hasSecurityJson {
+				configMapInfo[util.SecurityJsonMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(securityJson)))
+				configMapInfo[util.SecurityJsonFile] = foundConfigMap.Name
 			}
 
 		} else {
