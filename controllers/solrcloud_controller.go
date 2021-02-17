@@ -20,6 +20,7 @@ package controllers
 import (
 	"context"
 	"crypto/md5"
+	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
@@ -76,7 +77,7 @@ func UseZkCRD(useCRD bool) {
 // +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -196,12 +197,11 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if foundConfigMap.Data != nil {
 			logXml, hasLogXml := foundConfigMap.Data[util.LogXmlFile]
 			solrXml, hasSolrXml := foundConfigMap.Data[util.SolrXmlFile]
-			securityJson, hasSecurityJson := foundConfigMap.Data[util.SecurityJsonFile]
 
 			// if there's a user-provided config, it must have one of the expected keys
-			if !hasLogXml && !hasSolrXml && !hasSecurityJson {
+			if !hasLogXml && !hasSolrXml {
 				// TODO: Create event for the CRD.
-				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml', 'log4j2.xml', and/or 'security.json'",
+				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
 					providedConfigMapName)
 			}
 
@@ -223,11 +223,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					configMapInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
 				} // else log4j will automatically refresh for us, so no restart needed
 				configMapInfo[util.LogXmlFile] = foundConfigMap.Name
-			}
-
-			if hasSecurityJson {
-				configMapInfo[util.SecurityJsonMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(securityJson)))
-				configMapInfo[util.SecurityJsonFile] = foundConfigMap.Name
 			}
 
 		} else {
@@ -260,6 +255,71 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err != nil {
 			return requeueOrNot, err
 		}
+	}
+
+	basicAuthCreds := ""
+	if instance.Spec.SolrSecurity != nil {
+		ctx := context.TODO()
+		sec := instance.Spec.SolrSecurity
+		username := solr.DefaultBasicAuthUsername
+		secretName := instance.BasicAuthSecretName()
+		basicAuthSecret := &corev1.Secret{}
+
+		// user has the option of providing a secret with credentials the operator should use to make requests to Solr
+		if sec.BasicAuthSecret != nil {
+			if err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, basicAuthSecret); err != nil {
+				return requeueOrNot, err
+			}
+
+			if _, ok := basicAuthSecret.Data[sec.BasicAuthSecret.Key]; !ok {
+				return requeueOrNot, fmt.Errorf("required %s key not found in user-provided basic-auth secret %s",
+					sec.BasicAuthSecret.Key, secretName)
+			}
+
+			// the username is the key from the user-provided secret
+			username = sec.BasicAuthSecret.Key
+		} else {
+			// We're supplying a secret with random passwords and a default security.json
+			// since we randomly generate the passwords, we need to lookup the secret first and only create if not exist
+			err = r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, basicAuthSecret)
+			if err != nil && errors.IsNotFound(err) {
+				newSecret := util.GenerateBasicAuthSecret(instance)
+				if err := controllerutil.SetControllerReference(instance, newSecret, r.scheme); err != nil {
+					return requeueOrNot, err
+				}
+				err = r.Create(ctx, newSecret)
+				basicAuthSecret = newSecret
+			}
+			if err != nil {
+				return requeueOrNot, err
+			}
+
+			configMapName := instance.SecurityJsonConfigMapName()
+			foundConfigMap := &corev1.ConfigMap{}
+			err = r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: instance.Namespace}, foundConfigMap)
+			if err != nil && errors.IsNotFound(err) {
+				securityJsonConfigMap := util.GenerateSecurityJsonConfigMap(instance, basicAuthSecret)
+				if err := controllerutil.SetControllerReference(instance, securityJsonConfigMap, r.scheme); err != nil {
+					return requeueOrNot, err
+				}
+				err = r.Create(ctx, securityJsonConfigMap)
+				foundConfigMap = securityJsonConfigMap
+			}
+			if err != nil {
+				return requeueOrNot, err
+			}
+
+			// save this for mounting the security.json into the initContainer for the STS
+			configMapInfo[util.SecurityJsonFile] = foundConfigMap.Name
+		}
+
+		// save some basic information needed to configure probes for auth-enabled Solr pods
+		configMapInfo[util.SecuritySecret] = basicAuthSecret.Name
+		configMapInfo[util.SecurityUsername] = username
+
+		// need the creds below for getting CLUSTERSTATUS
+		creds := username + ":" + string(basicAuthSecret.Data[username])
+		basicAuthCreds = b64.StdEncoding.EncodeToString([]byte(creds))
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -381,9 +441,16 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		for _, pod := range outOfDatePodsNotStarted {
 			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
+
+		// If authn enabled on Solr, we need to pass the basic auth header
+		var authHeader map[string]string
+		if basicAuthCreds != "" {
+			authHeader = map[string]string{"Authorization": "Basic " + basicAuthCreds}
+		}
+
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger, authHeader)
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {
@@ -761,6 +828,7 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.Secret{}). /* for authentication */
 		Owns(&extv1.Ingress{})
 
 	var err error

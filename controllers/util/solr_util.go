@@ -18,6 +18,7 @@
 package util
 
 import (
+	"crypto/sha256"
 	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -26,9 +27,11 @@ import (
 	extv1 "k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"math/rand"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -52,8 +55,9 @@ const (
 	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
-	SecurityJsonMd5Annotation        = "solr.apache.org/securityJsonMd5"
 	SecurityJsonFile                 = "security.json"
+	SecurityUsername                 = "security-user"
+	SecuritySecret                   = "security-secret"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -97,36 +101,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		probeScheme = corev1.URISchemeHTTPS
 	}
 
-	var probeHttpHeaders []corev1.HTTPHeader = nil
-	if configMapInfo[SecurityJsonFile] != "" {
-
-		/*
-		n := 32
-		b := make([]byte, n)
-		rand.Read(b)
-		salt := sha256.Sum256(b)
-		saltHash := b64.StdEncoding.EncodeToString(salt[:])
-		passBytes := []byte("Test1234")
-		withSalt := append(salt[:], passBytes...)
-		passHashBytes := sha256.Sum256(withSalt)
-		passHashBytes = sha256.Sum256(passHashBytes[:])
-		passHash := b64.StdEncoding.EncodeToString(passHashBytes[:])
-		output := fmt.Sprintf("\"probe\": \"%s %s\"", passHash, saltHash)
-		fmt.Println(output)
-
-		 */
-
-		// pass the "probe" user's basic auth credentials to the probe endpoints
-		creds := b64.StdEncoding.EncodeToString([]byte("probe:SolrRocks"))
-		probeHttpHeaders = []corev1.HTTPHeader{{Name: "Authorization", Value: "Basic: " + creds}}
-	}
-
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
-			Scheme:      probeScheme,
-			Path:        "/solr/admin/info/system",
-			Port:        intstr.FromInt(solrPodPort),
-			HTTPHeaders: probeHttpHeaders,
+			Scheme: probeScheme,
+			Path:   "/solr/admin/info/system",
+			Port:   intstr.FromInt(solrPodPort),
 		},
 	}
 
@@ -384,7 +363,35 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	// Did the user provide a security.json? If so, then we need to setup the volume in order to mount it in the initContainer
+	if solrCloud.Spec.SolrSecurity != nil {
+		securityEnvVars := []corev1.EnvVar{
+			{
+				Name:      "SOLR_BASIC_AUTH_PASS",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[SecuritySecret]}, Key: configMapInfo[SecurityUsername]}},
+			},
+			{
+				Name:  "SOLR_CLI_AUTH_OPTS",
+				Value: fmt.Sprintf("-Dbasicauth=%s:$(SOLR_BASIC_AUTH_PASS)", configMapInfo[SecurityUsername]),
+			},
+		}
+		envVars = append(envVars, securityEnvVars...)
+
+		// construct the probe command to invoke the SolrCLI "api" action
+		//
+		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
+		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
+		probeCommand := fmt.Sprintf("java $SOLR_CLI_AUTH_OPTS -Dsolr.ssl.checkPeerName=false "+
+			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
+			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
+			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
+			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
+			solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
+
+		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
+		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
+	}
+
+	// Is there a security.json to mount?
 	if configMapInfo[SecurityJsonFile] != "" {
 		// Don't need to track the security.json MD5 as updating the security.json does not require a restart of the pods
 
@@ -440,23 +447,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					Protocol:      "TCP",
 				},
 			},
-			/*
-				LivenessProbe: &corev1.Probe{
-					InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-					TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-					SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-					FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-					PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
-					Handler:             defaultHandler,
-				},
-				ReadinessProbe: &corev1.Probe{
-					InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-					TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-					SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-					FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-					PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
-					Handler:             defaultHandler,
-				}, */
+			LivenessProbe: &corev1.Probe{
+				InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
+				SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
+				FailureThreshold:    DefaultLivenessProbeFailureThreshold,
+				PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+				Handler:             defaultHandler,
+			},
+			ReadinessProbe: &corev1.Probe{
+				InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
+				TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
+				SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
+				FailureThreshold:    DefaultReadinessProbeFailureThreshold,
+				PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+				Handler:             defaultHandler,
+			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
@@ -989,13 +995,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		// mount security.json from the ConfigMap at /tmp/security.json
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "security-json", MountPath: "/tmp"})
 		if cmd == "" {
-			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER};"
+			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "
 		}
-		cmd += "ZK_SECURITY_JSON_MD5=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json | md5sum);"
-		cmd += "LOCAL_SECURITY_JSON_MD5=$(cat /tmp/security.json | md5sum);"
-		// if the hashes differ, apply the changes
-		// TODO: we might just check for {} otherwise, we'd overwrite updates made after bootstrapping?s
-		cmd += "if [ \"${ZK_SECURITY_JSON_MD5}\" != \"${LOCAL_SECURITY_JSON_MD5}\" ]; then /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; fi"
+		cmd += "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); "
+		cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
 	}
 
 	if cmd != "" {
@@ -1217,4 +1220,136 @@ func setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo map[string]stri
 	pathToFile := fmt.Sprintf("%s/%s", mountPath, fileKey)
 
 	return &corev1.VolumeMount{Name: volName, MountPath: mountPath}, &corev1.EnvVar{Name: envVar, Value: pathToFile}, vol
+}
+
+func GenerateSecurityJsonConfigMap(solrCloud *solr.SolrCloud, basicAuthSecret *corev1.Secret) *corev1.ConfigMap {
+	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
+	var annotations map[string]string
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
+	username := solrCloud.BasicAuthUsername()
+
+	blockUnknown := true
+	anonymousPaths := ""
+	if solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints != nil && len(solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints) > 0 {
+		blockUnknown = false // to allow anonymous access to query endpoints
+
+		for i, path := range solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints {
+			fromPath := strings.ReplaceAll(strings.ReplaceAll(path, "/", "_"), "*", "_")
+			name := fmt.Sprintf("anonymous%d%s", i, fromPath)
+			anonymousPaths += fmt.Sprintf(", { \"name\": \"%s\", \"path\": \"%s\", \"collection\": \"*\", \"role\": null }", name, path)
+		}
+	}
+
+	// create a security.json with the same passwords from our secret
+	// hashed with random salt, just as Solr's hashing works
+	adminPasswordHash := solrPasswordHash(basicAuthSecret.Data["admin"])
+	operPasswordHash := solrPasswordHash(basicAuthSecret.Data[username])
+	solrPasswordHash := solrPasswordHash(basicAuthSecret.Data["solr"])
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        solrCloud.SecurityJsonConfigMapName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: map[string]string{
+			SecurityJsonFile: fmt.Sprintf(`{
+      "authentication":{
+        "blockUnknown": %t,
+        "class":"solr.BasicAuthPlugin",
+        "credentials": {
+          "admin": "%s",
+          "%s": "%s",
+          "solr": "%s"
+        },
+        "realm":"Solr Basic Auth",
+        "forwardCredentials": false
+      },
+      "authorization": {
+        "class": "solr.RuleBasedAuthorizationPlugin",
+        "user-role": {
+          "admin": ["admin", "probe"],
+          "%s": ["probe"],
+          "solr": ["users", "probe"]
+        },
+        "permissions": [
+          { "name": "k8s-probes", "role":"probe", "collection": null, "path":"/admin/info/system" },
+          { "name": "k8s-status", "role":"probe", "collection": null, "path":"/admin/collections" },
+          { "name": "all", "role":["admin","users"] },
+          { "name": "read", "role":["admin","users"] },
+          { "name": "update", "role":["admin"] },
+          { "name": "security-read", "role": "admin"},
+          { "name": "security-edit", "role": "admin"}%s
+        ]
+      }
+    }`, blockUnknown, adminPasswordHash, username, operPasswordHash, solrPasswordHash, username, anonymousPaths),
+		},
+	}
+	return configMap
+}
+
+func GenerateBasicAuthSecret(solrCloud *solr.SolrCloud) *corev1.Secret {
+	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
+	var annotations map[string]string
+
+	username := solrCloud.BasicAuthUsername()
+
+	// setup a secret with random passwords
+	adminPassword := randomPassword()
+	operPassword := randomPassword()
+	solrPassword := randomPassword()
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        solrCloud.BasicAuthSecretName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: map[string][]byte{
+			"admin":  adminPassword,
+			username: operPassword,
+			"solr":   solrPassword,
+		},
+		Type: "Opaque",
+	}
+}
+
+func randomPassword() []byte {
+	rand.Seed(time.Now().UnixNano())
+	lower := "abcdefghijklmnpqrstuvwxyz" // no 'o'
+	upper := strings.ToUpper(lower)
+	digits := "0123456789"
+	chars := lower + upper + digits + "()[]%#@-()[]%#@-"
+	pass := make([]byte, 16)
+	// start with a lower char and end with an upper
+	pass[0] = lower[rand.Intn(len(lower))]
+	pass[len(pass)-1] = upper[rand.Intn(len(upper))]
+	perm := rand.Perm(len(chars))
+	for i := 1; i < len(pass)-1; i++ {
+		pass[i] = chars[perm[i]]
+	}
+	return pass
+}
+
+// this mimics the password hash generation approach used by Solr
+func solrPasswordHash(passBytes []byte) string {
+	// generate a random salt
+	b := make([]byte, 32)
+	rand.Read(b)
+	salt := sha256.Sum256(b)
+	saltHash := b64.StdEncoding.EncodeToString(salt[:])
+
+	// combine password with salt to create the hash
+	passHashBytes := sha256.Sum256(append(salt[:], passBytes...))
+	passHashBytes = sha256.Sum256(passHashBytes[:])
+	passHash := b64.StdEncoding.EncodeToString(passHashBytes[:])
+
+	return fmt.Sprintf("%s %s", passHash, saltHash)
 }

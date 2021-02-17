@@ -327,8 +327,11 @@ func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 
 	resp := &solr_api.SolrAsyncResponse{}
 
+	// TODO: support basic-auth
+	var httpHeaders map[string]string
+
 	log.Info("Calling to start collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -348,8 +351,11 @@ func CheckBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 
 	resp := &solr_api.SolrAsyncResponse{}
 
+	// TODO: support basic-auth
+	var httpHeaders map[string]string
+
 	log.Info("Calling to check on collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
 
 	if err == nil {
 		if resp.ResponseHeader.Status == 0 {
@@ -377,8 +383,11 @@ func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupNa
 
 	resp := &solr_api.SolrAsyncResponse{}
 
+	// TODO: support basic-auth
+	var httpHeaders map[string]string
+
 	log.Info("Calling to delete async info for backup command.", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
-	err = solr_api.CallCollectionsApi(cloud, queryParams, resp)
+	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
 	if err != nil {
 		log.Error(err, "Error deleting async data for collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	}
