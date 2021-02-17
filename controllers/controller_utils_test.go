@@ -531,8 +531,13 @@ var (
 			Operator: "Exists",
 		},
 	}
-	testPriorityClass = "p4"
-	extraVars         = []corev1.EnvVar{
+	testPriorityClass              = "p4"
+	testImagePullSecretName        = "MAIN_SECRET"
+	testAdditionalImagePullSecrets = []corev1.LocalObjectReference{
+		{Name: "ADDITIONAL_SECRET_1"},
+		{Name: "ADDITIONAL_SECRET_2"},
+	}
+	extraVars = []corev1.EnvVar{
 		{
 			Name:  "VAR_1",
 			Value: "VAL_1",

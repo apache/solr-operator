@@ -174,6 +174,9 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			Labels:    map[string]string{"base": "here"},
 		},
 		Spec: solr.SolrCloudSpec{
+			SolrImage: &solr.ContainerImage{
+				ImagePullSecret: testImagePullSecretName,
+			},
 			Replicas: &replicas,
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
@@ -194,6 +197,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					ReadinessProbe:    testProbeReadinessNonDefaults,
 					StartupProbe:      testProbeStartup,
 					PriorityClassName: testPriorityClass,
+					ImagePullSecrets:  testAdditionalImagePullSecrets,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
@@ -278,6 +282,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
+	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
