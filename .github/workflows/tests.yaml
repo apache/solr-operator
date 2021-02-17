@@ -52,5 +52,5 @@ jobs:
       - run: make build
 
       # Test
-      - run: make manifests-check
+      - run: make lint
       - run: make test
