@@ -519,11 +519,20 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
-		stateful.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
-			{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
-		}
+	var imagePullSecrets []corev1.LocalObjectReference
+
+	if customPodOptions != nil {
+		imagePullSecrets = customPodOptions.ImagePullSecrets
 	}
+
+	if solrCloud.Spec.SolrImage.ImagePullSecret != "" {
+		imagePullSecrets = append(
+			imagePullSecrets,
+			corev1.LocalObjectReference{Name: solrCloud.Spec.SolrImage.ImagePullSecret},
+		)
+	}
+
+	stateful.Spec.Template.Spec.ImagePullSecrets = imagePullSecrets
 
 	if nil != customPodOptions {
 		if customPodOptions.Affinity != nil {

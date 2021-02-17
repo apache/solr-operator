@@ -69,6 +69,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	podLabels := labels
 	var podAnnotations map[string]string
+	var imagePullSecrets []corev1.LocalObjectReference
 
 	customDeploymentOptions := solrPrometheusExporter.Spec.CustomKubeOptions.DeploymentOptions
 	if nil != customDeploymentOptions {
@@ -80,6 +81,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	if nil != customPodOptions {
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
 		podAnnotations = customPodOptions.Annotations
+		imagePullSecrets = customPodOptions.ImagePullSecrets
 	}
 
 	var envVars []corev1.EnvVar
@@ -274,10 +276,13 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	if solrPrometheusExporter.Spec.Image.ImagePullSecret != "" {
-		deployment.Spec.Template.Spec.ImagePullSecrets = []corev1.LocalObjectReference{
-			{Name: solrPrometheusExporter.Spec.Image.ImagePullSecret},
-		}
+		imagePullSecrets = append(
+			imagePullSecrets,
+			corev1.LocalObjectReference{Name: solrPrometheusExporter.Spec.Image.ImagePullSecret},
+		)
 	}
+
+	deployment.Spec.Template.Spec.ImagePullSecrets = imagePullSecrets
 
 	if nil != customPodOptions {
 		if customPodOptions.Affinity != nil {

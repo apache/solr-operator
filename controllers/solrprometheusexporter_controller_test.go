@@ -63,9 +63,13 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 					Resources:          resources,
 					SidecarContainers:  extraContainers2,
 					InitContainers:     extraContainers1,
+					ImagePullSecrets:   testAdditionalImagePullSecrets,
 				},
 			},
 			ExporterEntrypoint: "/test/entry-point",
+			Image: &solr.ContainerImage{
+				ImagePullSecret: testImagePullSecretName,
+			},
 		},
 	}
 
@@ -124,6 +128,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.Equal(t, len(extraVolumes), len(deployment.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[0].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[0].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
+	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), deployment.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
 
 	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
