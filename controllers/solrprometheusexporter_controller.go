@@ -216,7 +216,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	ready := false
 	// Check if the Metrics Deployment already exists
-	deploymentLogger := logger.WithValues("service", metricsService.Name)
+	deploymentLogger := logger.WithValues("deployment", deploy.Name)
 	foundDeploy := &appsv1.Deployment{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeploy)
 	if err != nil && errors.IsNotFound(err) {
