@@ -22,7 +22,7 @@ import (
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sort"
@@ -837,7 +837,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 // GenerateIngress returns a new Ingress pointer generated for the entire SolrCloud, pointing to all instances
 // solrCloud: SolrCloud instance
 // nodeStatuses: []SolrNodeStatus the nodeStatuses
-func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *extv1.Ingress) {
+func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *netv1.Ingress) {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	var annotations map[string]string
 
@@ -852,7 +852,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ex
 	// Create advertised domain name and possible additional domain names
 	rules := CreateSolrIngressRules(solrCloud, nodeNames, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
 
-	var ingressTLS []extv1.IngressTLS
+	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil {
 		if annotations == nil {
 			annotations = make(map[string]string, 1)
@@ -861,17 +861,17 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ex
 		if !ok {
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
-		ingressTLS = append(ingressTLS, extv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
 	}
 
-	ingress = &extv1.Ingress{
+	ingress = &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.CommonIngressName(),
 			Namespace:   solrCloud.GetNamespace(),
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: extv1.IngressSpec{
+		Spec: netv1.IngressSpec{
 			Rules: rules,
 			TLS:   ingressTLS,
 		},
@@ -883,8 +883,8 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ex
 // solrCloud: SolrCloud instance
 // nodeNames: the names for each of the solr pods
 // domainName: string Domain for the ingress rule to use
-func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) []extv1.IngressRule {
-	var ingressRules []extv1.IngressRule
+func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) []netv1.IngressRule {
+	var ingressRules []netv1.IngressRule
 	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
 		for _, domainName := range domainNames {
 			ingressRules = append(ingressRules, CreateCommonIngressRule(solrCloud, domainName))
@@ -903,15 +903,15 @@ func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domai
 // CreateCommonIngressRule returns a new Ingress Rule generated for a SolrCloud under the given domainName
 // solrCloud: SolrCloud instance
 // domainName: string Domain for the ingress rule to use
-func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule extv1.IngressRule) {
-	pathType := extv1.PathTypeImplementationSpecific
-	ingressRule = extv1.IngressRule{
+func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule netv1.IngressRule) {
+	pathType := netv1.PathTypeImplementationSpecific
+	ingressRule = netv1.IngressRule{
 		Host: solrCloud.ExternalCommonUrl(domainName, false),
-		IngressRuleValue: extv1.IngressRuleValue{
-			HTTP: &extv1.HTTPIngressRuleValue{
-				Paths: []extv1.HTTPIngressPath{
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{
 					{
-						Backend: extv1.IngressBackend{
+						Backend: netv1.IngressBackend{
 							ServiceName: solrCloud.CommonServiceName(),
 							ServicePort: intstr.FromInt(solrCloud.Spec.SolrAddressability.CommonServicePort),
 						},
@@ -928,15 +928,15 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
 // domainName: string Domain for the ingress rule to use
-func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainName string) (ingressRule extv1.IngressRule) {
-	pathType := extv1.PathTypeImplementationSpecific
-	ingressRule = extv1.IngressRule{
+func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainName string) (ingressRule netv1.IngressRule) {
+	pathType := netv1.PathTypeImplementationSpecific
+	ingressRule = netv1.IngressRule{
 		Host: solrCloud.ExternalNodeUrl(nodeName, domainName, false),
-		IngressRuleValue: extv1.IngressRuleValue{
-			HTTP: &extv1.HTTPIngressRuleValue{
-				Paths: []extv1.HTTPIngressPath{
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{
 					{
-						Backend: extv1.IngressBackend{
+						Backend: netv1.IngressBackend{
 							ServiceName: nodeName,
 							ServicePort: intstr.FromInt(solrCloud.NodePort()),
 						},

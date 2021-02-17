@@ -21,7 +21,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"strconv"
@@ -180,7 +180,7 @@ func CopyServiceFields(from, to *corev1.Service, logger logr.Logger) bool {
 }
 
 // CopyIngressFields copies the owned fields from one Ingress to another
-func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
+func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 	logger = logger.WithValues("kind", "ingress")
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
 
