@@ -34,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -49,7 +50,7 @@ var (
 
 func TestBasicAuthBootstrapSecurityJson(t *testing.T) {
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{}
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{ProbesRequireAuth: true}
 	verifyReconcileWithSecurity(t, instance)
 }
 
@@ -78,6 +79,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-from-user"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
@@ -87,6 +89,8 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 func TestEnableTLSOnExistingCluster(t *testing.T) {
 
 	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
+
 	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
 
@@ -134,6 +138,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true, false)
@@ -143,6 +148,7 @@ func TestTLSSecretUpdate(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-update"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, true)
@@ -256,7 +262,11 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 			assert.Equal(t, "library/solr:7.7.0", zkSetupInitContainer.Image)
 			assert.Equal(t, 3, len(zkSetupInitContainer.Command), "Wrong command length for zk-setup init container")
 			assert.Contains(t, zkSetupInitContainer.Command[2], expCmd, "ZK Setup command does not set urlScheme")
-			assert.Equal(t, 3, len(zkSetupInitContainer.Env), "Wrong number of envVars for zk-setup init container")
+			expNumVars := 3
+			if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret == nil {
+				expNumVars = 4 // one more for SECURITY_JSON
+			}
+			assert.Equal(t, expNumVars, len(zkSetupInitContainer.Env), "Wrong number of envVars for zk-setup init container")
 		}
 	} else {
 		assert.Nil(t, zkSetupInitContainer, "Shouldn't find the zk-setup InitContainer in the sts, when not using https!")
@@ -336,11 +346,7 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 	if sc.Spec.SolrSecurity.BasicAuthSecret == nil {
 		assert.True(t, basicAuthSecret.Data["admin"] != nil && len(basicAuthSecret.Data["admin"]) > 0, "password should be set for admin in the basic auth secret")
 		assert.True(t, basicAuthSecret.Data["solr"] != nil && len(basicAuthSecret.Data["solr"]) > 0, "password should be set for solr in the basic auth secret")
-
-		foundConfigMap := &corev1.ConfigMap{}
-		err = testClient.Get(ctx, types.NamespacedName{Name: sc.SecurityJsonConfigMapName(), Namespace: sc.Namespace}, foundConfigMap)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		assert.True(t, foundConfigMap.Data["security.json"] != "", "security.json config map doesn't contain security.json!")
+		assert.True(t, basicAuthSecret.Data["security.json"] != nil && len(basicAuthSecret.Data["security.json"]) > 0, "security.json not found in auth secret")
 	}
 
 	return stateful
@@ -383,35 +389,25 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 	mainContainer := podTemplate.Spec.Containers[0]
 	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
 	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
-	expectBasicAuthEnvVars(t, mainContainer.Env, instance.BasicAuthSecretName(), instance.BasicAuthUsername())
 
-	// probes
-	expProbeCmd := "java $SOLR_CLI_AUTH_OPTS -Dsolr.ssl.checkPeerName=false " +
-		"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
-		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
-		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
-		"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system"
-	assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
-	assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
-	assert.Equal(t, expProbeCmd, mainContainer.LivenessProbe.Exec.Command[2], "liveness probe should invoke java with auth opts")
-	assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
-	assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
-	assert.Equal(t, expProbeCmd, mainContainer.ReadinessProbe.Exec.Command[2], "readiness probe should invoke java with auth opts")
+	// probes with auth
+	if instance.Spec.SolrSecurity.ProbesRequireAuth {
+		expectBasicAuthEnvVars(t, mainContainer.Env, instance.BasicAuthSecretName(), instance.BasicAuthUsername())
+		expProbeCmd := "java $SOLR_CLI_AUTH_OPTS -Dsolr.ssl.checkPeerName=false " +
+			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
+			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
+			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
+			"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system"
+		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
+		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
+		assert.Equal(t, expProbeCmd, mainContainer.LivenessProbe.Exec.Command[2], "liveness probe should invoke java with auth opts")
+		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
+		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
+		assert.Equal(t, expProbeCmd, mainContainer.ReadinessProbe.Exec.Command[2], "readiness probe should invoke java with auth opts")
+	}
 
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
 	if instance.Spec.SolrSecurity.BasicAuthSecret == nil {
-		assert.NotNil(t, podTemplate.Spec.Volumes)
-		var securityJsonVol *corev1.Volume = nil
-		for _, vol := range podTemplate.Spec.Volumes {
-			if vol.Name == "security-json" {
-				securityJsonVol = &vol
-				break
-			}
-		}
-		assert.NotNil(t, securityJsonVol, "Didn't find the security-json volume!")
-		assert.NotNil(t, securityJsonVol.ConfigMap, "security-json volume should come from a configMap")
-		assert.Equal(t, instance.SecurityJsonConfigMapName(), securityJsonVol.ConfigMap.Name)
-
 		// initContainers
 		assert.NotNil(t, podTemplate.Spec.InitContainers)
 		var expInitContainer *corev1.Container = nil
@@ -422,21 +418,11 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 			}
 		}
 		assert.NotNil(t, expInitContainer, "Didn't find the setup-zk InitContainer in the sts!")
-		expCmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; " +
-			"ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
+		expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
 			"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
+			"echo $SECURITY_JSON > /tmp/security.json; " +
 			"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-		assert.Equal(t, expCmd, expInitContainer.Command[2], "setup-zk initContainer not configured to bootstrap security.json!")
-
-		var mount *corev1.VolumeMount = nil
-		for _, m := range expInitContainer.VolumeMounts {
-			if m.Name == "security-json" {
-				mount = &m
-				break
-			}
-		}
-		assert.NotNil(t, mount, "Expected mount for security-json on initContainer")
-		assert.Equal(t, "/tmp", mount.MountPath, "security.json should be mounted at /tmp in initContainer")
+		assert.True(t, strings.Contains(expInitContainer.Command[2], expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container

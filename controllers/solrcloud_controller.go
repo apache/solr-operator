@@ -293,24 +293,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if err != nil {
 				return requeueOrNot, err
 			}
-
-			configMapName := instance.SecurityJsonConfigMapName()
-			foundConfigMap := &corev1.ConfigMap{}
-			err = r.Get(ctx, types.NamespacedName{Name: configMapName, Namespace: instance.Namespace}, foundConfigMap)
-			if err != nil && errors.IsNotFound(err) {
-				securityJsonConfigMap := util.GenerateSecurityJsonConfigMap(instance, basicAuthSecret)
-				if err := controllerutil.SetControllerReference(instance, securityJsonConfigMap, r.scheme); err != nil {
-					return requeueOrNot, err
-				}
-				err = r.Create(ctx, securityJsonConfigMap)
-				foundConfigMap = securityJsonConfigMap
-			}
-			if err != nil {
-				return requeueOrNot, err
-			}
-
-			// save this for mounting the security.json into the initContainer for the STS
-			configMapInfo[util.SecurityJsonFile] = foundConfigMap.Name
+			// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
+			configMapInfo[util.SecurityJsonFile] = string(basicAuthSecret.Data[util.SecurityJsonFile])
 		}
 
 		// save some basic information needed to configure probes for auth-enabled Solr pods

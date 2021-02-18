@@ -768,10 +768,6 @@ func (sc *SolrCloud) BasicAuthSecretName() string {
 	}
 }
 
-func (sc *SolrCloud) SecurityJsonConfigMapName() string {
-	return fmt.Sprintf("%s-solrcloud-security-json", sc.Name)
-}
-
 // ConfigMapName returns the name of the cloud config-map
 func (sc *SolrCloud) ConfigMapName() string {
 	return fmt.Sprintf("%s-solrcloud-configmap", sc.GetName())
@@ -1050,11 +1046,12 @@ type SolrTLSOptions struct {
 }
 
 type SolrSecurityOptions struct {
-	// Secret containing credentials the operator should use for probes and obtaining clusterstatus for managed updates.
+	// Secret containing credentials the operator should use for API requests to secure Solr pods.
 	// If you provide this secret, then the operator assumes you've also configured your own security.json file and
-	// uploaded it to Solr. The 'key' of the secret selector is used as the username. If you change the password for this
+	// uploaded it to Solr. The 'key' of the secret selector is the username. If you change the password for this
 	// user using the Solr security API, then you *must* update the secret with the new password or the operator will be
-	// locked out of Solr and probes will fail, ultimately causing a CrashBackoffLoop for all pods.
+	// locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints
+	// are secured.
 	//
 	// If you don't supply this secret, then the operator bootstraps a default security.json file and creates a
 	// corresponding secret containing the credentials for three users: admin, solr, and k8s-oper. All API requests
@@ -1062,9 +1059,14 @@ type SolrSecurityOptions struct {
 	// basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it!
 	// You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a
 	// bootstrapping operation.
-	//
 	// +optional
 	BasicAuthSecret *corev1.SecretKeySelector `json:"basicAuthSecret,omitempty"`
+
+	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
+	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
+	// endpoints with credentials sourced from an env var instead of HTTP directly.
+	// +optional
+	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 
 	// A list of endpoints that allow un-authenticated (aka "anonymous") access; this allows you to open Solr for
 	// un-authenticated access to query endpoints but lock down all other requests. This setting only applies during
