@@ -34,7 +34,7 @@ clean:
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
-release: clean manifests helm-check
+release: clean manifests lint
 	VERSION=${VERSION} bash hack/release/update_versions.sh
 	VERSION=${VERSION} bash hack/release/build_helm.sh
 	VERSION=${VERSION} bash hack/release/setup_release.sh
@@ -46,10 +46,6 @@ release: clean manifests helm-check
 # Build solr-operator binary
 build: generate vet
 	BIN=solr-operator VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
-
-# Run tests
-test: check-format check-license generate fmt vet manifests
-	go test ./... -coverprofile cover.out
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -81,18 +77,30 @@ fmt:
 vet:
 	go vet ./...
 
+###
+# Tests and Checks
+###
+
+check: lint test
+
+lint: check-format check-license check-manifests check-helm
+
 check-format:
 	./hack/check_format.sh
 
 check-license:
 	./hack/check_license.sh
 
-manifests-check:
+check-manifests: manifests
 	@echo "Check to make sure the manifests are up to date"
-	git diff --exit-code -- config
+	git diff --exit-code -- config helm/solr-operator/crds
 
-helm-check:
+check-helm:
 	helm lint helm/solr-operator
+
+# Run tests
+test: generate vet manifests
+	go test ./... -coverprofile cover.out
 
 
 # # find or download controller-gen

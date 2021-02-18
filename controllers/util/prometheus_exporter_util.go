@@ -21,7 +21,7 @@ import (
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
@@ -391,18 +391,20 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 // solrCloud: SolrCloud instance
 // nodeName: string Name of the node
 // ingressBaseDomain: string base domain for the ingress controller
-func CreateMetricsIngressRule(solrPrometheusExporter *solr.SolrPrometheusExporter, ingressBaseDomain string) extv1.IngressRule {
+func CreateMetricsIngressRule(solrPrometheusExporter *solr.SolrPrometheusExporter, ingressBaseDomain string) netv1.IngressRule {
+	pathType := netv1.PathTypeImplementationSpecific
 	externalAddress := solrPrometheusExporter.MetricsIngressUrl(ingressBaseDomain)
-	return extv1.IngressRule{
+	return netv1.IngressRule{
 		Host: externalAddress,
-		IngressRuleValue: extv1.IngressRuleValue{
-			HTTP: &extv1.HTTPIngressRuleValue{
-				Paths: []extv1.HTTPIngressPath{
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{
 					{
-						Backend: extv1.IngressBackend{
+						Backend: netv1.IngressBackend{
 							ServiceName: solrPrometheusExporter.MetricsServiceName(),
 							ServicePort: intstr.FromInt(ExtSolrMetricsPort),
 						},
+						PathType: &pathType,
 					},
 				},
 			},
