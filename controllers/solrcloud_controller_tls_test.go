@@ -303,8 +303,10 @@ func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
 
 	// is there a user-provided secret for basic auth creds?
 	if instance.Spec.SolrSecurity != nil && instance.Spec.SolrSecurity.BasicAuthSecret != nil {
-		err := testClient.Create(ctx, createBasicAuthSecret(instance.Spec.SolrSecurity.BasicAuthSecret.Name, instance.Spec.SolrSecurity.BasicAuthSecret.Key, instance.Namespace))
+		basicAuthSecret := createBasicAuthSecret(instance.Spec.SolrSecurity.BasicAuthSecret.Name, instance.Spec.SolrSecurity.BasicAuthSecret.Key, instance.Namespace)
+		err := testClient.Create(ctx, basicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
+		defer testClient.Delete(ctx, basicAuthSecret)
 	}
 
 	// now try to reconcile
