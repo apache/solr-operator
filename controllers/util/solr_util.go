@@ -1264,15 +1264,6 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
 		probeAuthz += fmt.Sprintf("{ \"name\": \"k8s-probe-%d\", \"role\":%s, \"collection\": null, \"path\":\"%s\" }", i, probeRole, p)
 	}
 
-	anonymousPaths := ""
-	if solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints != nil && len(solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints) > 0 {
-		blockUnknown = false // to allow anonymous access to query endpoints
-
-		for i, path := range solrCloud.Spec.SolrSecurity.InitAnonymousEndpoints {
-			anonymousPaths += fmt.Sprintf(", { \"name\": \"open-%d\", \"path\": \"%s\", \"collection\": \"*\", \"role\": null }", i, path)
-		}
-	}
-
 	// Create the user accounts for security.json with random passwords
 	// hashed with random salt, just as Solr's hashing works
 	username := solrCloud.BasicAuthUsername()
@@ -1309,10 +1300,10 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": "admin"},
-          { "name": "security-edit", "role": "admin"}%s
+          { "name": "security-edit", "role": "admin"}
         ]
       }
-    }`, blockUnknown, credentialsJson, username, probeAuthz, anonymousPaths)
+    }`, blockUnknown, credentialsJson, username, probeAuthz)
 
 	// we need to store the security.json in the secret, otherwise we'd recompute it for every reconcile loop
 	// but that doesn't work for randomized passwords ...

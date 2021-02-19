@@ -4534,11 +4534,6 @@ spec:
                     required:
                     - key
                     type: object
-                  initAnonymousEndpoints:
-                    description: A list of endpoints that allow un-authenticated (aka "anonymous") access; this allows you to open Solr for un-authenticated access to query endpoints but lock down all other requests. This setting only applies during initial bootstrapping of the security.json file. Changing this after security.json has been applied by the operator to a SolrCloud instance has no effect. Obviously, if you're supplying your own basicAuthSecret, then this setting does not apply as you're expected to configure your own security.json.
-                    items:
-                      type: string
-                    type: array
                   probesRequireAuth:
                     description: Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults to false. If you set to true, then probes will use a local command on the main container to hit the secured endpoints with credentials sourced from an env var instead of HTTP directly.
                     type: boolean

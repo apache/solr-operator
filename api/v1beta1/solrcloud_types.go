@@ -1074,12 +1074,4 @@ type SolrSecurityOptions struct {
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
-
-	// A list of endpoints that allow un-authenticated (aka "anonymous") access; this allows you to open Solr for
-	// un-authenticated access to query endpoints but lock down all other requests. This setting only applies during
-	// initial bootstrapping of the security.json file. Changing this after security.json has been applied by the
-	// operator to a SolrCloud instance has no effect. Obviously, if you're supplying your own basicAuthSecret, then this
-	// setting does not apply as you're expected to configure your own security.json.
-	// +optional
-	InitAnonymousEndpoints []string `json:"initAnonymousEndpoints,omitempty"`
 }
