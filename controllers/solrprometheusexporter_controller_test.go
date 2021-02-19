@@ -737,6 +737,8 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 		close(stopMgr)
 		mgrStopped.Wait()
 	}()
+	
+	cleanupTest(g, expectedMetricsRequest.Namespace)
 
 	// create the TLS and keystore secrets needed for reconciling TLS options
 	tlsKey := "keystore.p12"
@@ -770,6 +772,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	}
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(ctx, instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
