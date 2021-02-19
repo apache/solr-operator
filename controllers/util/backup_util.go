@@ -317,7 +317,7 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 	return image, envVars, command, volume, volumeMount, numRetries
 }
 
-func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string) (success bool, err error) {
+func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string, httpHeaders map[string]string) (success bool, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "BACKUP")
 	queryParams.Add("collection", collection)
@@ -326,9 +326,6 @@ func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backupName))
 
 	resp := &solr_api.SolrAsyncResponse{}
-
-	// TODO: support basic-auth
-	var httpHeaders map[string]string
 
 	log.Info("Calling to start collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
@@ -344,15 +341,12 @@ func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 	return success, err
 }
 
-func CheckBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string) (finished bool, success bool, asyncStatus string, err error) {
+func CheckBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string, httpHeaders map[string]string) (finished bool, success bool, asyncStatus string, err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "REQUESTSTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
 	resp := &solr_api.SolrAsyncResponse{}
-
-	// TODO: support basic-auth
-	var httpHeaders map[string]string
 
 	log.Info("Calling to check on collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
@@ -376,15 +370,12 @@ func CheckBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 	return finished, success, asyncStatus, err
 }
 
-func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupName string) (err error) {
+func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupName string, httpHeaders map[string]string) (err error) {
 	queryParams := url.Values{}
 	queryParams.Add("action", "DELETESTATUS")
 	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
 
 	resp := &solr_api.SolrAsyncResponse{}
-
-	// TODO: support basic-auth
-	var httpHeaders map[string]string
 
 	log.Info("Calling to delete async info for backup command.", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
 	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)

@@ -57,8 +57,6 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 	SecurityJsonFile                 = "security.json"
-	SecurityUsername                 = "security-user"
-	SecuritySecret                   = "security-secret"
 	BasicAuthMd5Annotation           = "solr.apache.org/basicAuthMd5"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
@@ -369,13 +367,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		// mount the secret in a file so it gets updated; env vars do not see:
 		// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-		key := configMapInfo[SecurityUsername]
+		key := solrCloud.BasicAuthUsername()
+		secretName := solrCloud.BasicAuthSecretName()
 		defaultMode := int32(420)
 		vol := &corev1.Volume{
-			Name: strings.ReplaceAll(configMapInfo[SecuritySecret], ".", "-"),
+			Name: strings.ReplaceAll(secretName, ".", "-"),
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
-					SecretName:  configMapInfo[SecuritySecret],
+					SecretName:  secretName,
 					Items:       []corev1.KeyToPath{{Key: key, Path: key}},
 					DefaultMode: &defaultMode,
 				},
@@ -1000,9 +999,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if configMapInfo[SecurityJsonFile] != "" {
+		secretName := solrCloud.BasicAuthSecretName()
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[SecuritySecret]}, Key: SecurityJsonFile}}})
+				LocalObjectReference: corev1.LocalObjectReference{Name: secretName}, Key: SecurityJsonFile}}})
 
 		if cmd == "" {
 			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "

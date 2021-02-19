@@ -20,7 +20,6 @@ package controllers
 import (
 	"context"
 	"crypto/md5"
-	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	"github.com/apache/lucene-solr-operator/controllers/util"
@@ -257,11 +256,10 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 
-	basicAuthCreds := ""
+	basicAuthHeader := ""
 	if instance.Spec.SolrSecurity != nil {
 		ctx := context.TODO()
 		sec := instance.Spec.SolrSecurity
-		username := solr.DefaultBasicAuthUsername
 		secretName := instance.BasicAuthSecretName()
 		basicAuthSecret := &corev1.Secret{}
 
@@ -276,8 +274,6 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 					sec.BasicAuthSecret.Key, secretName)
 			}
 
-			// the username is the key from the user-provided secret
-			username = sec.BasicAuthSecret.Key
 		} else {
 			// We're supplying a secret with random passwords and a default security.json
 			// since we randomly generate the passwords, we need to lookup the secret first and only create if not exist
@@ -297,13 +293,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			configMapInfo[util.SecurityJsonFile] = string(basicAuthSecret.Data[util.SecurityJsonFile])
 		}
 
-		// save some basic information needed to configure probes for auth-enabled Solr pods
-		configMapInfo[util.SecuritySecret] = basicAuthSecret.Name
-		configMapInfo[util.SecurityUsername] = username
-
 		// need the creds below for getting CLUSTERSTATUS
-		creds := username + ":" + string(basicAuthSecret.Data[username])
-		basicAuthCreds = b64.StdEncoding.EncodeToString([]byte(creds))
+		basicAuthHeader = instance.BasicAuthHeader(basicAuthSecret)
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -428,8 +419,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 		// If authn enabled on Solr, we need to pass the basic auth header
 		var authHeader map[string]string
-		if basicAuthCreds != "" {
-			authHeader = map[string]string{"Authorization": "Basic " + basicAuthCreds}
+		if basicAuthHeader != "" {
+			authHeader = map[string]string{"Authorization": basicAuthHeader}
 		}
 
 		// Pick which pods should be deleted for an update.

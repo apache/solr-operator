@@ -18,6 +18,7 @@
 package v1beta1
 
 import (
+	b64 "encoding/base64"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
@@ -766,6 +767,12 @@ func (sc *SolrCloud) BasicAuthSecretName() string {
 	} else {
 		return fmt.Sprintf("%s-solrcloud-basic-auth", sc.Name)
 	}
+}
+
+func (sc *SolrCloud) BasicAuthHeader(basicAuthSecret *corev1.Secret) string {
+	username := sc.BasicAuthUsername()
+	creds := username + ":" + string(basicAuthSecret.Data[username])
+	return "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
 }
 
 // ConfigMapName returns the name of the cloud config-map
