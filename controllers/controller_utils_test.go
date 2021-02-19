@@ -19,6 +19,7 @@ package controllers
 
 import (
 	b64 "encoding/base64"
+	"fmt"
 	"github.com/apache/lucene-solr-operator/controllers/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
@@ -243,7 +244,7 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 			break
 		}
 	}
-	assert.NotNil(t, keystoreVol)
+	assert.NotNil(t, keystoreVol, fmt.Sprintf("keystore volume not found in pod template; spec: %v", podTemplate.Spec))
 	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
 	assert.Equal(t, tls.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
 
