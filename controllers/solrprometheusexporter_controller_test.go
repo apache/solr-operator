@@ -745,10 +745,11 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	}
 	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(ctx, &mockSecret)
 
 	basicAuthMd5 := ""
 	if basicAuth {
-		secretName := tlsSecretName + "basic-auth"
+		secretName := tlsSecretName + "-basic-auth"
 		basicAuthSecret := createBasicAuthSecret(secretName, solr.DefaultBasicAuthUsername, expectedMetricsRequest.Namespace)
 		err := testClient.Create(ctx, basicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())

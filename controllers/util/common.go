@@ -506,7 +506,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 			if !DeepEqualWithNils(to[i].ReadinessProbe, from[i].ReadinessProbe) {
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"ReadinessProbe", "from", to[i].ReadinessProbe, "to", from[i].ReadinessProbe)
-				to[i].LivenessProbe = from[i].ReadinessProbe
+				to[i].ReadinessProbe = from[i].ReadinessProbe
 			}
 
 			if !DeepEqualWithNils(to[i].StartupProbe, from[i].StartupProbe) {

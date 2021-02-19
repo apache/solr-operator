@@ -121,10 +121,12 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
 	// Create a mock secret in the background so the isCert ready function returns
+	var mockTLSSecret *corev1.Secret
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
+		secret, _ := createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, "keystore.p12", instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
+		mockTLSSecret = &secret
 		wg.Done()
 	}()
 	helper.WaitForReconcile(3)
@@ -132,6 +134,8 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
 	expectIngressTLSConfig(t, g, tlsSecretName)
+
+	defer testClient.Delete(ctx, mockTLSSecret)
 }
 
 func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
@@ -187,8 +191,9 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 		tlsKey = "tls.key" // to trigger the initContainer creation, don't want keystore.p12 in the secret
 	}
 
-	_, err = createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, tlsKey, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
+	secret, err := createMockTLSSecret(ctx, testClient, instance.Spec.SolrTLS.PKCS12Secret.Name, tlsKey, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret.Key)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(ctx, &secret)
 
 	// now try to reconcile
 	err = testClient.Create(ctx, instance)
