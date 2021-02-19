@@ -392,8 +392,10 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 
 	// probes with auth
 	if instance.Spec.SolrSecurity.ProbesRequireAuth {
-		expectBasicAuthEnvVars(t, mainContainer.Env, instance.BasicAuthSecretName(), instance.BasicAuthUsername())
-		expProbeCmd := "java $SOLR_CLI_AUTH_OPTS -Dsolr.ssl.checkPeerName=false " +
+		// TODO: volume & mount instead
+		//expectBasicAuthEnvVars(t, mainContainer.Env, instance.BasicAuthSecretName(), instance.BasicAuthUsername())
+
+		expProbeCmd := "java -Dbasicauth=\"k8s-oper:$(cat /tmp/foo-tls-solrcloud-basic-auth/k8s-oper)\" -Dsolr.ssl.checkPeerName=false " +
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +

@@ -59,6 +59,7 @@ const (
 	SecurityJsonFile                 = "security.json"
 	SecurityUsername                 = "security-user"
 	SecuritySecret                   = "security-secret"
+	BasicAuthMd5Annotation           = "solr.apache.org/basicAuthMd5"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -365,30 +366,36 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
-		securityEnvVars := []corev1.EnvVar{
-			{
-				Name: "SOLR_BASIC_AUTH_PASS",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[SecuritySecret]}, Key: configMapInfo[SecurityUsername]}},
-			},
-			{
-				Name:  "SOLR_CLI_AUTH_OPTS",
-				Value: fmt.Sprintf("-Dbasicauth=%s:$(SOLR_BASIC_AUTH_PASS)", configMapInfo[SecurityUsername]),
+
+		// mount the secret in a file so it gets updated; env vars do not see:
+		// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
+		key := configMapInfo[SecurityUsername]
+		defaultMode := int32(420)
+		vol := &corev1.Volume{
+			Name: strings.ReplaceAll(configMapInfo[SecuritySecret], ".", "-"),
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  configMapInfo[SecuritySecret],
+					Items:       []corev1.KeyToPath{{Key: key, Path: key}},
+					DefaultMode: &defaultMode,
+				},
 			},
 		}
-		envVars = append(envVars, securityEnvVars...)
+		solrVolumes = append(solrVolumes, *vol)
+		mountPath := fmt.Sprintf("/tmp/%s", vol.Name)
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: vol.Name, MountPath: mountPath})
+		pathToFile := fmt.Sprintf("%s/%s", mountPath, key)
 
 		// construct the probe command to invoke the SolrCLI "api" action
 		//
 		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-		probeCommand := fmt.Sprintf("java $SOLR_CLI_AUTH_OPTS -Dsolr.ssl.checkPeerName=false "+
+		probeCommand := fmt.Sprintf("java -Dbasicauth=\"%s:$(cat %s)\" -Dsolr.ssl.checkPeerName=false "+
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-			solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
+			key, pathToFile, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
 
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
@@ -1296,6 +1303,8 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
         "permissions": [
           %s,
           { "name": "k8s-status", "role":"k8s", "collection": null, "path":"/admin/collections" },
+          { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
+          { "name": "k8s-ping", "role":"k8s", "collection": null, "path":"/admin/ping" },
           { "name": "all", "role":["admin","users"] },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },

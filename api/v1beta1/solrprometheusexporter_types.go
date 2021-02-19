@@ -19,6 +19,7 @@ package v1beta1
 
 import (
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -88,6 +89,11 @@ type SolrReference struct {
 	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
+
+	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate
+	// We'll pull the default from the SolrCloud instance if not supplied here
+	// +optional
+	BasicAuthSecret *corev1.SecretKeySelector `json:"basicAuthSecret,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {

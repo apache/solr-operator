@@ -161,7 +161,8 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	// Get the ZkConnectionString to connect to
 	solrConnectionInfo := util.SolrConnectionInfo{}
-	if solrConnectionInfo, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
+	var basicAuthSecretSelector *corev1.SecretKeySelector
+	if solrConnectionInfo, basicAuthSecretSelector, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -209,7 +210,22 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		}
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions)
+	basicAuthMd5 := ""
+	if basicAuthSecretSelector != nil {
+		basicAuthSecret := &corev1.Secret{}
+		err := r.Get(context.TODO(), types.NamespacedName{Name: basicAuthSecretSelector.Name, Namespace: prometheusExporter.Namespace}, basicAuthSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		passBytes, ok := basicAuthSecret.Data[basicAuthSecretSelector.Key]
+		if !ok {
+			return reconcile.Result{}, fmt.Errorf("%s key not found in basic-auth password secret %s",
+				basicAuthSecretSelector.Key, basicAuthSecretSelector.Name)
+		}
+		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum(passBytes))
+	}
+
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions, basicAuthSecretSelector, basicAuthMd5)
 	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -242,8 +258,12 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	return ctrl.Result{}, err
 }
 
-func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, err error) {
+func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, basicAuthSecret *corev1.SecretKeySelector, err error) {
 	solrConnectionInfo = util.SolrConnectionInfo{}
+
+	if prometheusExporter.Spec.SolrReference.BasicAuthSecret != nil {
+		basicAuthSecret = prometheusExporter.Spec.SolrReference.BasicAuthSecret
+	}
 
 	if prometheusExporter.Spec.SolrReference.Standalone != nil {
 		solrConnectionInfo.StandaloneAddress = prometheusExporter.Spec.SolrReference.Standalone.Address
@@ -257,10 +277,22 @@ func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExport
 			err = r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: prometheusExporter.Spec.SolrReference.Cloud.Namespace}, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
+
+				// pull the basic-auth secret from the SolrCloud if available
+				if prometheusExporter.Spec.SolrReference.BasicAuthSecret == nil && solrCloud.Spec.SolrSecurity != nil {
+					if solrCloud.Spec.SolrSecurity.BasicAuthSecret != nil {
+						basicAuthSecret = solrCloud.Spec.SolrSecurity.BasicAuthSecret
+					} else {
+						basicAuthSecret = &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: solrCloud.BasicAuthSecretName()},
+							Key:                  solrCloud.BasicAuthUsername(),
+						}
+					}
+				}
 			}
 		}
 	}
-	return solrConnectionInfo, err
+	return solrConnectionInfo, basicAuthSecret, err
 }
 
 func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) error {

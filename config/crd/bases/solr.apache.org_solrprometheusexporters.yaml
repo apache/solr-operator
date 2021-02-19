@@ -3350,6 +3350,21 @@ spec:
               solrReference:
                 description: Reference of the Solr instance to collect metrics for
                 properties:
+                  basicAuthSecret:
+                    description: If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate We'll pull the default from the SolrCloud instance if not supplied here
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
                   cloud:
                     description: Reference of a solrCloud instance
                     properties:
