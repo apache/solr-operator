@@ -1052,7 +1052,20 @@ type SolrTLSOptions struct {
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=Basic;Jwt;Kerberos
+type AuthenticationType string
+
+const (
+	Basic    AuthenticationType = "Basic"
+	Jwt      AuthenticationType = "Jwt"
+	Kerberos AuthenticationType = "Kerberos"
+)
+
 type SolrSecurityOptions struct {
+	// Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the
+	// Solr operator but support for other authentication plugins may be added in the future.
+	AuthenticationType AuthenticationType `json:"authenticationType,omitempty"`
+
 	// Secret containing credentials the operator should use for API requests to secure Solr pods.
 	// If you provide this secret, then the operator assumes you've also configured your own security.json file and
 	// uploaded it to Solr. The 'key' of the secret selector is the username. If you change the password for this

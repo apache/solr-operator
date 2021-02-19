@@ -258,6 +258,12 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	basicAuthHeader := ""
 	if instance.Spec.SolrSecurity != nil {
+
+		if instance.Spec.SolrSecurity.AuthenticationType != solr.Basic {
+			return requeueOrNot, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator.",
+				instance.Spec.SolrSecurity.AuthenticationType)
+		}
+
 		ctx := context.TODO()
 		sec := instance.Spec.SolrSecurity
 		secretName := instance.BasicAuthSecretName()

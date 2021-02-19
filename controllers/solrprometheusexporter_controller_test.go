@@ -737,7 +737,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 		close(stopMgr)
 		mgrStopped.Wait()
 	}()
-	
+
 	cleanupTest(g, expectedMetricsRequest.Namespace)
 
 	// create the TLS and keystore secrets needed for reconciling TLS options

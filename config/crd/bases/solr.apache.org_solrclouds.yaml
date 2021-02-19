@@ -4519,6 +4519,13 @@ spec:
               solrSecurity:
                 description: Options to enable Solr security
                 properties:
+                  authenticationType:
+                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the Solr operator but support for other authentication plugins may be added in the future.
+                    enum:
+                    - Basic
+                    - Jwt
+                    - Kerberos
+                    type: string
                   basicAuthSecret:
                     description: "Secret containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. The 'key' of the secret selector is the username. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured. \n If you don't supply this secret, then the operator bootstraps a default security.json file and creates a corresponding secret containing the credentials for three users: admin, solr, and k8s-oper. All API requests from the operator are made as the 'k8s-oper' user, which is configured with minimal access. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
                     properties:

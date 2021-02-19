@@ -50,21 +50,22 @@ var (
 
 func TestBasicAuthBootstrapSecurityJson(t *testing.T) {
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{ProbesRequireAuth: true}
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic, ProbesRequireAuth: true}
 	verifyReconcileWithSecurity(t, instance)
 }
 
 func TestBasicAuthWithUserProvidedCreds(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{
-		BasicAuthSecret: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "my-basic-auth-secret"}, Key: "some-user-id"},
+		AuthenticationType: solr.Basic,
+		BasicAuthSecret:    &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "my-basic-auth-secret"}, Key: "some-user-id"},
 	}
 	verifyReconcileWithSecurity(t, instance)
 }
 
 func TestBasicAuthBootstrapWithTLS(t *testing.T) {
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{}
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
 
 	tlsSecretName := "tls-cert-secret-from-user"
 	keystorePassKey := "some-password-key-thingy"
@@ -79,7 +80,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-from-user"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic} // with basic-auth too
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
@@ -89,7 +90,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 func TestEnableTLSOnExistingCluster(t *testing.T) {
 
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
 
 	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
@@ -142,7 +143,7 @@ func TestUserSuppliedTLSSecretWithPkcs12Conversion(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, true)
 	verifyReconcileUserSuppliedTLS(t, instance, true, false)
@@ -152,7 +153,7 @@ func TestTLSSecretUpdate(t *testing.T) {
 	tlsSecretName := "tls-cert-secret-update"
 	keystorePassKey := "some-password-key-thingy"
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{} // with basic-auth too
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, true)
