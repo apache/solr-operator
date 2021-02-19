@@ -303,7 +303,7 @@ func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
 
 	// is there a user-provided secret for basic auth creds?
 	if instance.Spec.SolrSecurity != nil && instance.Spec.SolrSecurity.BasicAuthSecret != nil {
-		err := testClient.Create(ctx, createBasicAuthSecret(instance))
+		err := testClient.Create(ctx, createBasicAuthSecret(instance.Spec.SolrSecurity.BasicAuthSecret.Name, instance.Spec.SolrSecurity.BasicAuthSecret.Key, instance.Namespace))
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 	}
 
@@ -316,16 +316,6 @@ func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
 	expectStatefulSetBasicAuthConfig(t, g, instance)
-}
-
-func createBasicAuthSecret(instance *solr.SolrCloud) *corev1.Secret {
-	secretData := map[string][]byte{}
-	secretData[instance.Spec.SolrSecurity.BasicAuthSecret.Key] = []byte("secret password")
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: instance.Spec.SolrSecurity.BasicAuthSecret.Name, Namespace: instance.Namespace},
-		Data:       secretData,
-		Type:       corev1.SecretTypeOpaque,
-	}
 }
 
 func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud) *appsv1.StatefulSet {
@@ -360,26 +350,6 @@ func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecr
 	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"])
 }
 
-func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedSecretName string, expectedSecretKey string) {
-	assert.NotNil(t, envVars)
-	envVars = filterVarsByName(envVars, func(n string) bool {
-		return n == "SOLR_BASIC_AUTH_PASS" || n == "SOLR_CLI_AUTH_OPTS"
-	})
-	assert.True(t, len(envVars) == 2)
-	for _, envVar := range envVars {
-		if envVar.Name == "SOLR_CLI_AUTH_OPTS" {
-			assert.Equal(t, "-Dbasicauth="+expectedSecretKey+":$(SOLR_BASIC_AUTH_PASS)", envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_BASIC_AUTH_PASS" {
-			assert.NotNil(t, envVar.ValueFrom)
-			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
-			assert.Equal(t, expectedSecretName, envVar.ValueFrom.SecretKeyRef.Name)
-			assert.Equal(t, expectedSecretKey, envVar.ValueFrom.SecretKeyRef.Key)
-		}
-	}
-}
-
 // Ensures config is setup for basic-auth enabled Solr pods
 func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, podTemplate *corev1.PodTemplateSpec) *corev1.Container {
 
@@ -392,8 +362,28 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 
 	// probes with auth
 	if instance.Spec.SolrSecurity.ProbesRequireAuth {
-		// TODO: volume & mount instead
-		//expectBasicAuthEnvVars(t, mainContainer.Env, instance.BasicAuthSecretName(), instance.BasicAuthUsername())
+		assert.NotNil(t, podTemplate.Spec.Volumes)
+		secretName := instance.BasicAuthSecretName()
+		var basicAuthSecretVol *corev1.Volume = nil
+		for _, vol := range podTemplate.Spec.Volumes {
+			if vol.Name == secretName {
+				basicAuthSecretVol = &vol
+				break
+			}
+		}
+		assert.NotNil(t, basicAuthSecretVol)
+		assert.NotNil(t, basicAuthSecretVol.VolumeSource.Secret, "Didn't find the basic auth secret volume in sts config!")
+		assert.Equal(t, instance.BasicAuthSecretName(), basicAuthSecretVol.VolumeSource.Secret.SecretName)
+
+		var basicAuthSecretVolMount *corev1.VolumeMount = nil
+		for _, m := range podTemplate.Spec.Containers[0].VolumeMounts {
+			if m.Name == secretName {
+				basicAuthSecretVolMount = &m
+				break
+			}
+		}
+		assert.NotNil(t, basicAuthSecretVolMount)
+		assert.Equal(t, "/tmp/"+secretName, basicAuthSecretVolMount.MountPath)
 
 		expProbeCmd := "java -Dbasicauth=\"k8s-oper:$(cat /tmp/foo-tls-solrcloud-basic-auth/k8s-oper)\" -Dsolr.ssl.checkPeerName=false " +
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +

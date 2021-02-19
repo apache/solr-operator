@@ -685,18 +685,22 @@ func updateUserProvidedConfigMap(testClient client.Client, g *gomega.GomegaWithT
 }
 
 func TestMetricsReconcileWithTLSConfig(t *testing.T) {
-	testReconcileWithTLS(t, "tls-cert-secret-from-user", false, false)
+	testReconcileWithTLS(t, "tls-cert-secret-from-user", false, false, false)
 }
 
 func TestMetricsReconcileWithTLSAndPkcs12Conversion(t *testing.T) {
-	testReconcileWithTLS(t, "tls-cert-secret-from-user-no-pkcs12", true, false)
+	testReconcileWithTLS(t, "tls-cert-secret-from-user-no-pkcs12", true, false, false)
 }
 
 func TestMetricsReconcileWithTLSSecretUpdate(t *testing.T) {
-	testReconcileWithTLS(t, "tls-cert-secret-update", false, true)
+	testReconcileWithTLS(t, "tls-cert-secret-update", false, true, false)
 }
 
-func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool) {
+func TestMetricsReconcileWithTLSConfigAndBasicAuth(t *testing.T) {
+	testReconcileWithTLS(t, "tls-cert-secret-with-auth", false, true, true)
+}
+
+func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool, basicAuth bool) {
 	ctx := context.TODO()
 
 	g := gomega.NewGomegaWithT(t)
@@ -738,6 +742,17 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 
+	basicAuthMd5 := ""
+	if basicAuth {
+		secretName := "basic-auth-secret"
+		basicAuthSecret := createBasicAuthSecret(secretName, solr.DefaultBasicAuthUsername, expectedMetricsRequest.Namespace)
+		err := testClient.Create(ctx, basicAuthSecret)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		instance.Spec.SolrReference.BasicAuthSecret = &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: secretName}, Key: solr.DefaultBasicAuthUsername}
+		creds := instance.Spec.SolrReference.BasicAuthSecret.Key + ":" + string(basicAuthSecret.Data[instance.Spec.SolrReference.BasicAuthSecret.Key])
+		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
+	}
+
 	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
 	err = testClient.Create(ctx, instance)
 	// The instance object may not be a valid object because it might be missing some required fields.
@@ -760,7 +775,11 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	assert.Equal(t, 1, len(envVars))
 	assert.True(t, strings.Contains(envVars[0].Value, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
 
-	if !restartOnTLSSecretUpdate {
+	if basicAuth {
+		expectBasicAuthEnvVars(t, mainContainer.Env, instance.Spec.SolrReference.BasicAuthSecret)
+	}
+
+	if !restartOnTLSSecretUpdate && instance.Spec.SolrReference.BasicAuthSecret == nil {
 		// shouldn't be any annotations on the podTemplateSpec if we're not tracking updates to the TLS secret
 		assert.Nil(t, deployment.Spec.Template.ObjectMeta.Annotations)
 		return
@@ -770,6 +789,11 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	expectedAnnotations := map[string]string{
 		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[util.TLSCertKey])),
 	}
+	if basicAuth {
+		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
+		expectedAnnotations[util.BasicAuthMd5Annotation] = basicAuthMd5
+	}
+
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
 	foundTLSSecret := &corev1.Secret{}
@@ -793,5 +817,29 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	expectedAnnotations = map[string]string{
 		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
 	}
+	if basicAuth {
+		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
+		expectedAnnotations[util.BasicAuthMd5Annotation] = basicAuthMd5
+	}
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+}
+
+func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecret *corev1.SecretKeySelector) {
+	assert.NotNil(t, envVars)
+	envVars = filterVarsByName(envVars, func(n string) bool {
+		return n == "BASIC_AUTH_PASS" || n == "JAVA_OPTS"
+	})
+	assert.True(t, len(envVars) == 2)
+	for _, envVar := range envVars {
+		if envVar.Name == "JAVA_OPTS" {
+			assert.True(t, strings.Contains(envVar.Value, "-Dbasicauth="+basicAuthSecret.Key+":$(BASIC_AUTH_PASS)"), "Expected basic auth creds in JAVA_OPTS")
+		}
+
+		if envVar.Name == "BASIC_AUTH_PASS" {
+			assert.NotNil(t, envVar.ValueFrom)
+			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
+			assert.Equal(t, basicAuthSecret.Name, envVar.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, basicAuthSecret.Key, envVar.ValueFrom.SecretKeyRef.Key)
+		}
+	}
 }

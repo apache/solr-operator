@@ -90,8 +90,10 @@ type SolrReference struct {
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 
-	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate
-	// We'll pull the default from the SolrCloud instance if not supplied here
+	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate.
+	// The key is the username. If basic auth is enabled on the SolrCloud instance, the default secret (unless you are
+	// supplying your own) is named using the pattern: <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json
+	// bootstrapped by the Solr operator, then the username should be "k8s-oper".
 	// +optional
 	BasicAuthSecret *corev1.SecretKeySelector `json:"basicAuthSecret,omitempty"`
 }

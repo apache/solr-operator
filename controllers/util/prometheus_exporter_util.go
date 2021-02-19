@@ -56,7 +56,7 @@ type TLSClientOptions struct {
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSClientOptions, basicAuthSecret *corev1.SecretKeySelector, basicAuthMd5 string) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSClientOptions, basicAuthMd5 string) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -179,9 +179,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// basic auth enabled?
-	if basicAuthSecret != nil {
-		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_PASS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: basicAuthSecret}})
-		allJavaOpts = append(allJavaOpts, fmt.Sprintf("-Dbasicauth=%s:$(BASIC_AUTH_PASS)", basicAuthSecret.Key))
+	if solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret != nil {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:      "BASIC_AUTH_PASS",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret}})
+		allJavaOpts = append(allJavaOpts, fmt.Sprintf("-Dbasicauth=%s:$(BASIC_AUTH_PASS)", solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret.Key))
 		allJavaOpts = append(allJavaOpts, "-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory")
 	}
 
@@ -253,8 +255,8 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		podAnnotations[SolrTlsCertMd5Annotation] = tls.TLSCertMd5
 	}
 
-	// if the secret changes, we want to restart the deployment pods
-	if basicAuthSecret != nil {
+	// if the basic-auth secret changes, we want to restart the deployment pods
+	if basicAuthMd5 != "" {
 		if podAnnotations == nil {
 			podAnnotations = make(map[string]string, 1)
 		}

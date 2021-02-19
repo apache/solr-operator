@@ -223,6 +223,16 @@ func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretNam
 	return mockTLSSecret, err
 }
 
+func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
+	secretData := map[string][]byte{}
+	secretData[key] = []byte("secret password")
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+		Data:       secretData,
+		Type:       corev1.SecretTypeOpaque,
+	}
+}
+
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
 func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool) *corev1.Container {
 	assert.NotNil(t, podTemplate.Spec.Volumes)
