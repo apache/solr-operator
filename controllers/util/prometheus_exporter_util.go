@@ -156,10 +156,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		// Add Custom Volumes to pod
 		for _, volume := range customPodOptions.Volumes {
-			volume.DefaultContainerMount.Name = volume.Name
-
 			// Only add the container mount if one has been provided.
 			if volume.DefaultContainerMount != nil {
+				volume.DefaultContainerMount.Name = volume.Name
 				volumeMounts = append(volumeMounts, *volume.DefaultContainerMount)
 			}
 
