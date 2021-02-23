@@ -90,7 +90,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, configMapInfo map[string]string, createPkcs12InitContainer bool, tlsCertMd5 string) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, createPkcs12InitContainer bool, tlsCertMd5 string) *appsv1.StatefulSet {
 	gracePeriodTerm := int64(10)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
@@ -145,7 +145,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: configMapInfo[SolrXmlFile],
+						Name: reconcileConfigInfo[SolrXmlFile],
 					},
 					Items: []corev1.KeyToPath{
 						{
@@ -344,17 +344,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Did the user provide a custom log config?
-	if configMapInfo[LogXmlFile] != "" {
-		if configMapInfo[LogXmlMd5Annotation] != "" {
+	if reconcileConfigInfo[LogXmlFile] != "" {
+		if reconcileConfigInfo[LogXmlMd5Annotation] != "" {
 			if podAnnotations == nil {
 				podAnnotations = make(map[string]string, 1)
 			}
-			podAnnotations[LogXmlMd5Annotation] = configMapInfo[LogXmlMd5Annotation]
+			podAnnotations[LogXmlMd5Annotation] = reconcileConfigInfo[LogXmlMd5Annotation]
 		}
 
 		// cannot use /var/solr as a mountPath, so mount the custom log config
 		// in a sub-dir named after the user-provided ConfigMap
-		volMount, envVar, newVolume := setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo, LogXmlFile, solrVolumes, "LOG4J_PROPS")
+		volMount, envVar, newVolume := setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo, LogXmlFile, solrVolumes, "LOG4J_PROPS")
 		volumeMounts = append(volumeMounts, *volMount)
 		envVars = append(envVars, *envVar)
 		if newVolume != nil {
@@ -400,11 +400,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
 	// so we get a rolling restart when the configMap changes
-	if configMapInfo[SolrXmlMd5Annotation] != "" {
+	if reconcileConfigInfo[SolrXmlMd5Annotation] != "" {
 		if podAnnotations == nil {
 			podAnnotations = make(map[string]string, 1)
 		}
-		podAnnotations[SolrXmlMd5Annotation] = configMapInfo[SolrXmlMd5Annotation]
+		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
 	}
 
 	// track the MD5 of the TLS cert (from secret) to trigger restarts if the cert changes
@@ -425,7 +425,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, configMapInfo)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, reconcileConfigInfo)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -592,7 +592,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	return stateful
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, configMapInfo map[string]string) (containers []corev1.Container) {
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, reconcileConfigInfo map[string]string) (containers []corev1.Container) {
 	// The setup of the solr.xml will always be necessary
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -629,7 +629,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	containers = append(containers, volumePrepInitContainer)
 
-	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, configMapInfo); hasZKSetupContainer {
+	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, reconcileConfigInfo); hasZKSetupContainer {
 		containers = append(containers, zkSetupContainer)
 	}
 
@@ -967,7 +967,7 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 }
 
 // TODO: Have this replace the postStart hook for creating the chroot
-func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, configMapInfo map[string]string) (bool, corev1.Container) {
+func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, reconcileConfigInfo map[string]string) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
 
 	// Add all necessary ZK Info
@@ -996,7 +996,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json;"
 	}
 
-	if configMapInfo[SecurityJsonFile] != "" {
+	if reconcileConfigInfo[SecurityJsonFile] != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: solrCloud.SecurityBootstrapSecretName()},
@@ -1194,11 +1194,11 @@ func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.
 	return envVars, solrOpt, len(zkChroot) > 1
 }
 
-func setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo map[string]string, fileKey string, solrVolumes []corev1.Volume, envVar string) (*corev1.VolumeMount, *corev1.EnvVar, *corev1.Volume) {
+func setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo map[string]string, fileKey string, solrVolumes []corev1.Volume, envVar string) (*corev1.VolumeMount, *corev1.EnvVar, *corev1.Volume) {
 	volName := strings.ReplaceAll(fileKey, ".", "-")
-	mountPath := fmt.Sprintf("/var/solr/%s", configMapInfo[fileKey])
+	mountPath := fmt.Sprintf("/var/solr/%s", reconcileConfigInfo[fileKey])
 	appendedToExisting := false
-	if configMapInfo[fileKey] == configMapInfo[SolrXmlFile] {
+	if reconcileConfigInfo[fileKey] == reconcileConfigInfo[SolrXmlFile] {
 		// the user provided a custom log4j2.xml and solr.xml, append to the volume for solr.xml created above
 		for _, vol := range solrVolumes {
 			if vol.Name == "solr-xml" {
@@ -1217,7 +1217,7 @@ func setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo map[string]stri
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: configMapInfo[fileKey]},
+					LocalObjectReference: corev1.LocalObjectReference{Name: reconcileConfigInfo[fileKey]},
 					Items:                []corev1.KeyToPath{{Key: fileKey, Path: fileKey}},
 					DefaultMode:          &defaultMode,
 				},
