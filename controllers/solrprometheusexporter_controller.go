@@ -215,12 +215,12 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		passBytes, ok := basicAuthSecret.Data[corev1.BasicAuthPasswordKey]
-		if !ok {
-			return reconcile.Result{}, fmt.Errorf("%s key not found in basic-auth password secret %s",
-				corev1.BasicAuthPasswordKey, prometheusExporter.Spec.SolrReference.BasicAuthSecret)
+
+		err = util.ValidateBasicAuthSecret(basicAuthSecret)
+		if err != nil {
+			return reconcile.Result{}, err
 		}
-		creds := string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(passBytes)
+		creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
 		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
 	}
 
