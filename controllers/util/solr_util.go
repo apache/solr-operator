@@ -227,10 +227,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	if nil != customPodOptions {
 		// Add Custom Volumes to pod
 		for _, volume := range customPodOptions.Volumes {
-			volume.DefaultContainerMount.Name = volume.Name
-
 			// Only add the container mount if one has been provided.
 			if volume.DefaultContainerMount != nil {
+				volume.DefaultContainerMount.Name = volume.Name
 				volumeMounts = append(volumeMounts, *volume.DefaultContainerMount)
 			}
 

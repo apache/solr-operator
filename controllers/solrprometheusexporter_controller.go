@@ -220,11 +220,11 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	foundDeploy := &appsv1.Deployment{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeploy)
 	if err != nil && errors.IsNotFound(err) {
-		deploymentLogger.Info("Creating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
+		deploymentLogger.Info("Creating Deployment")
 		err = r.Create(context.TODO(), deploy)
 	} else if err == nil {
 		if util.CopyDeploymentFields(deploy, foundDeploy, deploymentLogger) {
-			deploymentLogger.Info("Updating Deployment", "namespace", deploy.Namespace, "name", deploy.Name)
+			deploymentLogger.Info("Updating Deployment")
 			err = r.Update(context.TODO(), foundDeploy)
 		}
 		ready = foundDeploy.Status.ReadyReplicas > 0
@@ -235,7 +235,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	if ready != prometheusExporter.Status.Ready {
 		prometheusExporter.Status.Ready = ready
-		logger.Info("Updating status for solr-prometheus-exporter", "namespace", prometheusExporter.Namespace, "name", prometheusExporter.Name)
+		logger.Info("Updating status for solr-prometheus-exporter")
 		err = r.Status().Update(context.TODO(), prometheusExporter)
 	}
 
