@@ -225,13 +225,8 @@ func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretNam
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
-	secretData := map[string][]byte{}
-	secretData[key] = []byte("secret password")
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Data:       secretData,
-		Type:       corev1.SecretTypeOpaque,
-	}
+	secretData := map[string][]byte{corev1.BasicAuthUsernameKey: []byte(key), corev1.BasicAuthPasswordKey: []byte("secret password")}
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
 }
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec

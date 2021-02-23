@@ -19,7 +19,6 @@ package v1beta1
 
 import (
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -91,11 +90,12 @@ type SolrReference struct {
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 
 	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate.
+	// kubernetes.io/basic-auth
 	// The key is the username. If basic auth is enabled on the SolrCloud instance, the default secret (unless you are
 	// supplying your own) is named using the pattern: <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json
 	// bootstrapped by the Solr operator, then the username should be "k8s-oper".
 	// +optional
-	BasicAuthSecret *corev1.SecretKeySelector `json:"basicAuthSecret,omitempty"`
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {

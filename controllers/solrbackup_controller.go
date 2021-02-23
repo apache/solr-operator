@@ -146,7 +146,7 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 		if err := r.Get(context.TODO(), types.NamespacedName{Name: solrCloud.BasicAuthSecretName(), Namespace: solrCloud.Namespace}, basicAuthSecret); err != nil {
 			return nil, collectionBackupsFinished, actionTaken, err
 		}
-		httpHeaders = map[string]string{"Authorization": solrCloud.BasicAuthHeader(basicAuthSecret)}
+		httpHeaders = map[string]string{"Authorization": util.BasicAuthHeader(basicAuthSecret)}
 	}
 
 	// First check if the collection backups have been completed

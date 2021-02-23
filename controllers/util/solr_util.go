@@ -367,7 +367,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		// mount the secret in a file so it gets updated; env vars do not see:
 		// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-		key := solrCloud.BasicAuthUsername()
 		secretName := solrCloud.BasicAuthSecretName()
 		defaultMode := int32(420)
 		vol := &corev1.Volume{
@@ -375,26 +374,26 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  secretName,
-					Items:       []corev1.KeyToPath{{Key: key, Path: key}},
 					DefaultMode: &defaultMode,
 				},
 			},
 		}
 		solrVolumes = append(solrVolumes, *vol)
-		mountPath := fmt.Sprintf("/tmp/%s", vol.Name)
+		mountPath := fmt.Sprintf("/etc/secrets/%s", vol.Name)
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: vol.Name, MountPath: mountPath})
-		pathToFile := fmt.Sprintf("%s/%s", mountPath, key)
+		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
+		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
 
 		// construct the probe command to invoke the SolrCLI "api" action
 		//
 		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-		probeCommand := fmt.Sprintf("java -Dbasicauth=\"%s:$(cat %s)\" -Dsolr.ssl.checkPeerName=false "+
+		probeCommand := fmt.Sprintf("java -Dbasicauth=\"$(cat %s):$(cat %s)\" -Dsolr.ssl.checkPeerName=false "+
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-			key, pathToFile, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
+			usernameFile, passwordFile, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
 
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
@@ -999,10 +998,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if configMapInfo[SecurityJsonFile] != "" {
-		secretName := solrCloud.BasicAuthSecretName()
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: secretName}, Key: SecurityJsonFile}}})
+				LocalObjectReference: corev1.LocalObjectReference{Name: solrCloud.SecurityBootstrapSecretName()},
+				Key:                  SecurityJsonFile}}})
 
 		if cmd == "" {
 			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "
@@ -1231,19 +1230,69 @@ func setupVolumeMountForUserProvidedConfigMapEntry(configMapInfo map[string]stri
 	return &corev1.VolumeMount{Name: volName, MountPath: mountPath}, &corev1.EnvVar{Name: envVar, Value: pathToFile}, vol
 }
 
-func GenerateBasicAuthSecret(solrCloud *solr.SolrCloud) *corev1.Secret {
+func BasicAuthHeader(basicAuthSecret *corev1.Secret) string {
+	creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+	return "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
+}
+
+func ValidateBasicAuthSecret(basicAuthSecret *corev1.Secret) error {
+	if basicAuthSecret.Type != corev1.SecretTypeBasicAuth {
+		return fmt.Errorf("invalid secret type %v; user-provided secret %s must be of type: %v",
+			basicAuthSecret.Type, basicAuthSecret.Name, corev1.SecretTypeBasicAuth)
+	}
+
+	if _, ok := basicAuthSecret.Data[corev1.BasicAuthUsernameKey]; !ok {
+		return fmt.Errorf("%s key not found in user-provided basic-auth secret %s",
+			corev1.BasicAuthUsernameKey, basicAuthSecret.Name)
+	}
+
+	if _, ok := basicAuthSecret.Data[corev1.BasicAuthPasswordKey]; !ok {
+		return fmt.Errorf("%s key not found in user-provided basic-auth secret %s",
+			corev1.BasicAuthPasswordKey, basicAuthSecret.Name)
+	}
+
+	return nil
+}
+
+func GenerateBasicAuthSecretWithBootstrap(solrCloud *solr.SolrCloud) (*corev1.Secret, *corev1.Secret) {
+
+	securityBootstrapInfo := generateSecurityJson(solrCloud)
+
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	var annotations map[string]string
-	return &corev1.Secret{
+	basicAuthSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.BasicAuthSecretName(),
 			Namespace:   solrCloud.GetNamespace(),
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Data: generateSecurityJson(solrCloud),
-		Type: "Opaque",
+		Data: map[string][]byte{
+			corev1.BasicAuthUsernameKey: []byte(solr.DefaultBasicAuthUsername),
+			corev1.BasicAuthPasswordKey: securityBootstrapInfo[solr.DefaultBasicAuthUsername],
+		},
+		Type: corev1.SecretTypeBasicAuth,
 	}
+
+	// this secret holds the admin and solr user credentials and the security.json needed
+	// to bootstrap Solr security. Once Solr is bootstrapped, you can safely delete this secret assuming you've
+	// captured the admin password somewhere else
+	boostrapSecuritySecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        solrCloud.SecurityBootstrapSecretName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: map[string][]byte{
+			"admin":          securityBootstrapInfo["admin"],
+			"solr":           securityBootstrapInfo["solr"],
+			SecurityJsonFile: securityBootstrapInfo[SecurityJsonFile],
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	return basicAuthSecret, boostrapSecuritySecret
 }
 
 func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
@@ -1266,7 +1315,7 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
 
 	// Create the user accounts for security.json with random passwords
 	// hashed with random salt, just as Solr's hashing works
-	username := solrCloud.BasicAuthUsername()
+	username := solr.DefaultBasicAuthUsername
 	users := []string{"admin", username, "solr"}
 	secretData := make(map[string][]byte, len(users))
 	credentials := make(map[string]string, len(users))

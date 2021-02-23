@@ -704,7 +704,7 @@ func TestMetricsReconcileWithTLSConfigAndBasicAuthSecretUpdate(t *testing.T) {
 	testReconcileWithTLS(t, "tls-cert-secret-with-auth-update", false, true, true, true)
 }
 
-func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool, basicAuth bool, updateAuthSecret bool) {
+func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool, testWithBasicAuthEnabled bool, updateAuthSecret bool) {
 	ctx := context.TODO()
 
 	g := gomega.NewGomegaWithT(t)
@@ -750,16 +750,17 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	defer testClient.Delete(ctx, &mockSecret)
 
 	basicAuthMd5 := ""
-	if basicAuth {
+	if testWithBasicAuthEnabled {
 		secretName := tlsSecretName + "-basic-auth"
 		basicAuthSecret := createBasicAuthSecret(secretName, solr.DefaultBasicAuthUsername, expectedMetricsRequest.Namespace)
 		err := testClient.Create(ctx, basicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		defer testClient.Delete(ctx, basicAuthSecret)
-
-		instance.Spec.SolrReference.BasicAuthSecret = &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: secretName}, Key: solr.DefaultBasicAuthUsername}
-		creds := instance.Spec.SolrReference.BasicAuthSecret.Key + ":" + string(basicAuthSecret.Data[instance.Spec.SolrReference.BasicAuthSecret.Key])
+		creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
 		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
+
+		// this would come from the user in a real app
+		instance.Spec.SolrReference.BasicAuthSecret = secretName
 	}
 
 	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
@@ -785,11 +786,14 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	assert.Equal(t, 1, len(envVars))
 	assert.True(t, strings.Contains(envVars[0].Value, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
 
-	if basicAuth {
-		expectBasicAuthEnvVars(t, mainContainer.Env, instance.Spec.SolrReference.BasicAuthSecret)
+	if testWithBasicAuthEnabled {
+		lookupAuthSecret := &corev1.Secret{}
+		err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrReference.BasicAuthSecret, Namespace: instance.Namespace}, lookupAuthSecret)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		expectBasicAuthEnvVars(t, mainContainer.Env, lookupAuthSecret)
 	}
 
-	if !restartOnTLSSecretUpdate && instance.Spec.SolrReference.BasicAuthSecret == nil {
+	if !restartOnTLSSecretUpdate && instance.Spec.SolrReference.BasicAuthSecret == "" {
 		// shouldn't be any annotations on the podTemplateSpec if we're not tracking updates to the TLS secret
 		assert.Nil(t, deployment.Spec.Template.ObjectMeta.Annotations)
 		return
@@ -799,7 +803,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	expectedAnnotations := map[string]string{
 		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[util.TLSCertKey])),
 	}
-	if basicAuth {
+	if testWithBasicAuthEnabled {
 		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
 		expectedAnnotations[util.BasicAuthMd5Annotation] = basicAuthMd5
 	}
@@ -827,22 +831,22 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	expectedAnnotations = map[string]string{
 		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
 	}
-	if basicAuth {
+	if testWithBasicAuthEnabled {
 		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
 		expectedAnnotations[util.BasicAuthMd5Annotation] = basicAuthMd5
 	}
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
-	if basicAuth && updateAuthSecret {
+	if testWithBasicAuthEnabled && updateAuthSecret {
 		// verify the pods would get restarted if the basic auth secret changes
-		secretName := instance.Spec.SolrReference.BasicAuthSecret.Name
+		secretName := instance.Spec.SolrReference.BasicAuthSecret
 		lookupBasicAuthSecret := &corev1.Secret{}
 		err = testClient.Get(ctx, types.NamespacedName{Name: secretName, Namespace: instance.Namespace}, lookupBasicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 
 		// change the tls.crt which should trigger a rolling restart
 		updatedPassword := "updated-password"
-		lookupBasicAuthSecret.Data[instance.Spec.SolrReference.BasicAuthSecret.Key] = []byte(updatedPassword)
+		lookupBasicAuthSecret.Data[corev1.BasicAuthUsernameKey] = []byte(updatedPassword)
 		err = testClient.Update(context.TODO(), lookupBasicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 
@@ -854,7 +858,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 		time.Sleep(time.Millisecond * 250)
 		deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 
-		creds := instance.Spec.SolrReference.BasicAuthSecret.Key + ":" + string(lookupBasicAuthSecret.Data[instance.Spec.SolrReference.BasicAuthSecret.Key])
+		creds := string(lookupBasicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(lookupBasicAuthSecret.Data[corev1.BasicAuthPasswordKey])
 		expectedAnnotations = map[string]string{
 			util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
 			util.BasicAuthMd5Annotation:   fmt.Sprintf("%x", md5.Sum([]byte(creds))),
@@ -863,22 +867,31 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	}
 }
 
-func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecret *corev1.SecretKeySelector) {
+func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecret *corev1.Secret) {
 	assert.NotNil(t, envVars)
 	envVars = filterVarsByName(envVars, func(n string) bool {
-		return n == "BASIC_AUTH_PASS" || n == "JAVA_OPTS"
+		return n == "BASIC_AUTH_PASS" || n == "BASIC_AUTH_USER" || n == "JAVA_OPTS"
 	})
-	assert.True(t, len(envVars) == 2)
+	assert.True(t, len(envVars) == 3)
+
 	for _, envVar := range envVars {
 		if envVar.Name == "JAVA_OPTS" {
-			assert.True(t, strings.Contains(envVar.Value, "-Dbasicauth="+basicAuthSecret.Key+":$(BASIC_AUTH_PASS)"), "Expected basic auth creds in JAVA_OPTS")
+			assert.True(t, strings.Contains(envVar.Value, "-Dbasicauth=$(BASIC_AUTH_USER):$(BASIC_AUTH_PASS)"), "Expected basic auth creds in JAVA_OPTS")
 		}
 
 		if envVar.Name == "BASIC_AUTH_PASS" {
 			assert.NotNil(t, envVar.ValueFrom)
 			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
 			assert.Equal(t, basicAuthSecret.Name, envVar.ValueFrom.SecretKeyRef.Name)
-			assert.Equal(t, basicAuthSecret.Key, envVar.ValueFrom.SecretKeyRef.Key)
+			assert.Equal(t, corev1.BasicAuthPasswordKey, envVar.ValueFrom.SecretKeyRef.Key)
 		}
+
+		if envVar.Name == "BASIC_AUTH_USER" {
+			assert.NotNil(t, envVar.ValueFrom)
+			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
+			assert.Equal(t, basicAuthSecret.Name, envVar.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, corev1.BasicAuthUsernameKey, envVar.ValueFrom.SecretKeyRef.Key)
+		}
+
 	}
 }

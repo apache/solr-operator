@@ -18,7 +18,6 @@
 package v1beta1
 
 import (
-	b64 "encoding/base64"
 	"fmt"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
@@ -753,26 +752,16 @@ func (sc *SolrCloud) GetAllSolrNodeNames() []string {
 	return nodeNames
 }
 
-func (sc *SolrCloud) BasicAuthUsername() string {
-	if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret != nil {
-		return sc.Spec.SolrSecurity.BasicAuthSecret.Key
-	} else {
-		return DefaultBasicAuthUsername
-	}
-}
-
 func (sc *SolrCloud) BasicAuthSecretName() string {
-	if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret != nil {
-		return sc.Spec.SolrSecurity.BasicAuthSecret.Name
+	if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret != "" {
+		return sc.Spec.SolrSecurity.BasicAuthSecret
 	} else {
 		return fmt.Sprintf("%s-solrcloud-basic-auth", sc.Name)
 	}
 }
 
-func (sc *SolrCloud) BasicAuthHeader(basicAuthSecret *corev1.Secret) string {
-	username := sc.BasicAuthUsername()
-	creds := username + ":" + string(basicAuthSecret.Data[username])
-	return "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
+func (sc *SolrCloud) SecurityBootstrapSecretName() string {
+	return fmt.Sprintf("%s-solrcloud-security-bootstrap", sc.Name)
 }
 
 // ConfigMapName returns the name of the cloud config-map
@@ -1052,13 +1041,11 @@ type SolrTLSOptions struct {
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Basic;Jwt;Kerberos
+// +kubebuilder:validation:Enum=Basic
 type AuthenticationType string
 
 const (
-	Basic    AuthenticationType = "Basic"
-	Jwt      AuthenticationType = "Jwt"
-	Kerberos AuthenticationType = "Kerberos"
+	Basic AuthenticationType = "Basic"
 )
 
 type SolrSecurityOptions struct {
@@ -1066,21 +1053,20 @@ type SolrSecurityOptions struct {
 	// Solr operator but support for other authentication plugins may be added in the future.
 	AuthenticationType AuthenticationType `json:"authenticationType,omitempty"`
 
-	// Secret containing credentials the operator should use for API requests to secure Solr pods.
+	// Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods.
 	// If you provide this secret, then the operator assumes you've also configured your own security.json file and
-	// uploaded it to Solr. The 'key' of the secret selector is the username. If you change the password for this
-	// user using the Solr security API, then you *must* update the secret with the new password or the operator will be
-	// locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints
-	// are secured.
+	// uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update
+	// the secret with the new password or the operator will be  locked out of Solr and API requests will fail,
+	// ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting).
 	//
-	// If you don't supply this secret, then the operator bootstraps a default security.json file and creates a
-	// corresponding secret containing the credentials for three users: admin, solr, and k8s-oper. All API requests
-	// from the operator are made as the 'k8s-oper' user, which is configured with minimal access. The 'solr' user has
-	// basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it!
-	// You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a
-	// bootstrapping operation.
+	// If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password
+	// for the "k8s-oper" user. All API requests from the operator are made as the "k8s-oper" user, which is configured
+	// with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json
+	// file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr
+	// resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the
+	// 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation.
 	// +optional
-	BasicAuthSecret *corev1.SecretKeySelector `json:"basicAuthSecret,omitempty"`
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
 
 	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
 	// to false. If you set to true, then probes will use a local command on the main container to hit the secured

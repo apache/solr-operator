@@ -18,7 +18,6 @@
 package util
 
 import (
-	"fmt"
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -179,11 +178,13 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// basic auth enabled?
-	if solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret != nil {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:      "BASIC_AUTH_PASS",
-			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret}})
-		allJavaOpts = append(allJavaOpts, fmt.Sprintf("-Dbasicauth=%s:$(BASIC_AUTH_PASS)", solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret.Key))
+	if solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret != "" {
+		lor := corev1.LocalObjectReference{Name: solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret}
+		usernameRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthUsernameKey}
+		passwordRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthPasswordKey}
+		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_USER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: usernameRef}})
+		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_PASS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: passwordRef}})
+		allJavaOpts = append(allJavaOpts, "-Dbasicauth=$(BASIC_AUTH_USER):$(BASIC_AUTH_PASS)")
 		allJavaOpts = append(allJavaOpts, "-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory")
 	}
 

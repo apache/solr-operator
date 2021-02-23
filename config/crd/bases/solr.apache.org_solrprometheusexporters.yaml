@@ -3351,20 +3351,8 @@ spec:
                 description: Reference of the Solr instance to collect metrics for
                 properties:
                   basicAuthSecret:
-                    description: 'If Solr is secured, you''ll need to provide credentials for the Prometheus exporter to authenticate. The key is the username. If basic auth is enabled on the SolrCloud instance, the default secret (unless you are supplying your own) is named using the pattern: <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json bootstrapped by the Solr operator, then the username should be "k8s-oper".'
-                    properties:
-                      key:
-                        description: The key of the secret to select from.  Must be a valid secret key.
-                        type: string
-                      name:
-                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                        type: string
-                      optional:
-                        description: Specify whether the Secret or its key must be defined
-                        type: boolean
-                    required:
-                    - key
-                    type: object
+                    description: 'If Solr is secured, you''ll need to provide credentials for the Prometheus exporter to authenticate. kubernetes.io/basic-auth The key is the username. If basic auth is enabled on the SolrCloud instance, the default secret (unless you are supplying your own) is named using the pattern: <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json bootstrapped by the Solr operator, then the username should be "k8s-oper".'
+                    type: string
                   cloud:
                     description: Reference of a solrCloud instance
                     properties:

@@ -201,8 +201,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 					tlsClientOptions.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 				} else {
-					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
-						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
+					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
 						util.TLSCertKey, foundTLSSecret.Name)
 				}
 			}
@@ -210,18 +209,19 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	}
 
 	basicAuthMd5 := ""
-	if prometheusExporter.Spec.SolrReference.BasicAuthSecret != nil {
-		selector := prometheusExporter.Spec.SolrReference.BasicAuthSecret
+	if prometheusExporter.Spec.SolrReference.BasicAuthSecret != "" {
 		basicAuthSecret := &corev1.Secret{}
-		err := r.Get(context.TODO(), types.NamespacedName{Name: selector.Name, Namespace: prometheusExporter.Namespace}, basicAuthSecret)
+		err := r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.BasicAuthSecret, Namespace: prometheusExporter.Namespace}, basicAuthSecret)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		passBytes, ok := basicAuthSecret.Data[selector.Key]
+		passBytes, ok := basicAuthSecret.Data[corev1.BasicAuthPasswordKey]
 		if !ok {
-			return reconcile.Result{}, fmt.Errorf("%s key not found in basic-auth password secret %s", selector.Key, selector.Name)
+			return reconcile.Result{}, fmt.Errorf("%s key not found in basic-auth password secret %s",
+				corev1.BasicAuthPasswordKey, prometheusExporter.Spec.SolrReference.BasicAuthSecret)
 		}
-		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(selector.Key+":"+string(passBytes))))
+		creds := string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(passBytes)
+		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
 	}
 
 	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions, basicAuthMd5)
@@ -384,11 +384,11 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForBasicAuthSecret(mgr c
 	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, secretField, func(rawObj runtime.Object) []string {
 		// grab the SolrCloud object, extract the referenced TLS secret...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
-		if exporter.Spec.SolrReference.BasicAuthSecret == nil {
+		if exporter.Spec.SolrReference.BasicAuthSecret == "" {
 			return nil
 		}
 		// ...and if so, return it
-		return []string{exporter.Spec.SolrReference.BasicAuthSecret.Name}
+		return []string{exporter.Spec.SolrReference.BasicAuthSecret}
 	}); err != nil {
 		return ctrlBuilder, err
 	}

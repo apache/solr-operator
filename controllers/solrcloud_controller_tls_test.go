@@ -58,7 +58,7 @@ func TestBasicAuthWithUserProvidedCreds(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{
 		AuthenticationType: solr.Basic,
-		BasicAuthSecret:    &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "my-basic-auth-secret"}, Key: "some-user-id"},
+		BasicAuthSecret:    "my-basic-auth-secret",
 	}
 	verifyReconcileWithSecurity(t, instance)
 }
@@ -269,7 +269,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 			assert.Equal(t, 3, len(zkSetupInitContainer.Command), "Wrong command length for zk-setup init container")
 			assert.Contains(t, zkSetupInitContainer.Command[2], expCmd, "ZK Setup command does not set urlScheme")
 			expNumVars := 3
-			if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret == nil {
+			if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret == "" {
 				expNumVars = 4 // one more for SECURITY_JSON
 			}
 			assert.Equal(t, expNumVars, len(zkSetupInitContainer.Env), "Wrong number of envVars for zk-setup init container")
@@ -308,8 +308,8 @@ func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
 	cleanupTest(g, instance.Namespace)
 
 	// is there a user-provided secret for basic auth creds?
-	if instance.Spec.SolrSecurity != nil && instance.Spec.SolrSecurity.BasicAuthSecret != nil {
-		basicAuthSecret := createBasicAuthSecret(instance.Spec.SolrSecurity.BasicAuthSecret.Name, instance.Spec.SolrSecurity.BasicAuthSecret.Key, instance.Namespace)
+	if instance.Spec.SolrSecurity != nil && instance.Spec.SolrSecurity.BasicAuthSecret != "" {
+		basicAuthSecret := createBasicAuthSecret(instance.Spec.SolrSecurity.BasicAuthSecret, solr.DefaultBasicAuthUsername, instance.Namespace)
 		err := testClient.Create(ctx, basicAuthSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		defer testClient.Delete(ctx, basicAuthSecret)
@@ -338,13 +338,17 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 	basicAuthSecret := &corev1.Secret{}
 	err := testClient.Get(ctx, types.NamespacedName{Name: sc.BasicAuthSecretName(), Namespace: sc.Namespace}, basicAuthSecret)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
-	assert.True(t, basicAuthSecret.Data[sc.BasicAuthUsername()] != nil && len(basicAuthSecret.Data[sc.BasicAuthUsername()]) > 0, "password should be set for k8s-oper in the basic auth secret")
+	assert.Equal(t, solr.DefaultBasicAuthUsername, string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]), "password should be set for k8s-oper in the basic auth secret")
+	assert.True(t, basicAuthSecret.Data[corev1.BasicAuthPasswordKey] != nil && len(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) > 0, "password should be set for k8s-oper in the basic auth secret")
 
 	// verify a security.json gets bootstrapped if not using a user-provided secret
-	if sc.Spec.SolrSecurity.BasicAuthSecret == nil {
-		assert.True(t, basicAuthSecret.Data["admin"] != nil && len(basicAuthSecret.Data["admin"]) > 0, "password should be set for admin in the basic auth secret")
-		assert.True(t, basicAuthSecret.Data["solr"] != nil && len(basicAuthSecret.Data["solr"]) > 0, "password should be set for solr in the basic auth secret")
-		assert.True(t, basicAuthSecret.Data["security.json"] != nil && len(basicAuthSecret.Data["security.json"]) > 0, "security.json not found in auth secret")
+	if sc.Spec.SolrSecurity.BasicAuthSecret == "" {
+		bootstrapSecret := &corev1.Secret{}
+		err := testClient.Get(ctx, types.NamespacedName{Name: sc.SecurityBootstrapSecretName(), Namespace: sc.Namespace}, bootstrapSecret)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		assert.True(t, bootstrapSecret.Data["admin"] != nil && len(bootstrapSecret.Data["admin"]) > 0, "password should be set for admin in the bootstrap security secret")
+		assert.True(t, bootstrapSecret.Data["solr"] != nil && len(bootstrapSecret.Data["solr"]) > 0, "password should be set for solr in the bootstrap security secret")
+		assert.True(t, bootstrapSecret.Data["security.json"] != nil && len(bootstrapSecret.Data["security.json"]) > 0, "security.json not found in the bootstrap security secret")
 	}
 
 	return stateful
@@ -391,9 +395,9 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 			}
 		}
 		assert.NotNil(t, basicAuthSecretVolMount)
-		assert.Equal(t, "/tmp/"+secretName, basicAuthSecretVolMount.MountPath)
+		assert.Equal(t, "/etc/secrets/"+secretName, basicAuthSecretVolMount.MountPath)
 
-		expProbeCmd := "java -Dbasicauth=\"k8s-oper:$(cat /tmp/foo-tls-solrcloud-basic-auth/k8s-oper)\" -Dsolr.ssl.checkPeerName=false " +
+		expProbeCmd := "java -Dbasicauth=\"$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/username):$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/password)\" -Dsolr.ssl.checkPeerName=false " +
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
@@ -407,7 +411,7 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 	}
 
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
-	if instance.Spec.SolrSecurity.BasicAuthSecret == nil {
+	if instance.Spec.SolrSecurity.BasicAuthSecret == "" {
 		// initContainers
 		assert.NotNil(t, podTemplate.Spec.InitContainers)
 		var expInitContainer *corev1.Container = nil
