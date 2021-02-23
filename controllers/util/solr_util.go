@@ -1273,9 +1273,8 @@ func GenerateBasicAuthSecretWithBootstrap(solrCloud *solr.SolrCloud) (*corev1.Se
 		Type: corev1.SecretTypeBasicAuth,
 	}
 
-	// this secret holds the admin and solr user credentials and the security.json needed
-	// to bootstrap Solr security. Once Solr is bootstrapped, you can safely delete this secret assuming you've
-	// captured the admin password somewhere else
+	// this secret holds the admin and solr user credentials and the security.json needed to bootstrap Solr security
+	// once the security.json is created using the setup-zk initContainer, it is not updated by the operator
 	boostrapSecuritySecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.SecurityBootstrapSecretName(),
