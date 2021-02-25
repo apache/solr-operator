@@ -311,6 +311,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if customPodOptions.PriorityClassName != "" {
 			deployment.Spec.Template.Spec.PriorityClassName = customPodOptions.PriorityClassName
 		}
+
+		if customPodOptions.TerminationGracePeriodSeconds != nil {
+			deployment.Spec.Template.Spec.TerminationGracePeriodSeconds = customPodOptions.TerminationGracePeriodSeconds
+		}
 	}
 
 	return deployment

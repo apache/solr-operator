@@ -124,6 +124,10 @@ type PodOptions struct {
 	// solr image.
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// Optional duration in seconds the pod needs to terminate gracefully.
+	// +optional
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

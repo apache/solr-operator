@@ -84,7 +84,7 @@ const (
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, configMapInfo map[string]string, createPkcs12InitContainer bool, tlsCertMd5 string) *appsv1.StatefulSet {
-	gracePeriodTerm := int64(10)
+	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
 	defaultMode := int32(420)
@@ -125,6 +125,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	if nil != customPodOptions {
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
 		podAnnotations = customPodOptions.Annotations
+
+		if customPodOptions.TerminationGracePeriodSeconds != nil {
+			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
+		}
 	}
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
@@ -266,6 +270,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
+	// Solr can take longer than SOLR_STOP_WAIT to run solr stop, give it a few extra seconds before forcefully killing the pod.
+	solrStopWait := terminationGracePeriod - 5
+
 	// Environment Variables
 	envVars := []corev1.EnvVar{
 		{
@@ -306,6 +313,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		{
 			Name:  "GC_TUNE",
 			Value: solrCloud.Spec.SolrGCTune,
+		},
+		{
+			Name:  "SOLR_STOP_WAIT",
+			Value: strconv.FormatInt(solrStopWait, 10),
 		},
 	}
 
@@ -504,7 +515,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				},
 
 				Spec: corev1.PodSpec{
-					TerminationGracePeriodSeconds: &gracePeriodTerm,
+					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &fsGroup,
 					},
