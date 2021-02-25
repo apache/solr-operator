@@ -73,6 +73,35 @@ You'll need to duplicate your TLS config from your SolrCloud CRD definition to y
 
 **This only applies to the SolrJ client the exporter uses to make requests to your TLS-enabled Solr pods and does not enable HTTPS for the exporter service.**
 
+### Prometheus Exporter with Basic Auth
+
+If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret containing the credentials for making API requests to `/admin/metrics` and `/admin/ping` for all collections.
+
+```
+spec:
+  solrReference:
+    basicAuthSecret: user-provided-secret
+```
+If you chose option #1 to have the operator bootstrap `security.json` for you, then the name of the secret will be:
+`<CLOUD>-solrcloud-basic-auth`. If you chose option #2, then pass the same name that you used for your SolrCloud CRD instance.
+
+This user account will need access to the following endpoints in Solr:
+```
+      {
+        "name": "k8s-metrics",
+        "role": "k8s",
+        "collection": null,
+        "path": "/admin/metrics"
+      },
+      {
+        "name": "k8s-ping",
+        "role": "k8s",
+        "collection": "*",
+        "path": "/admin/ping"
+      },
+```
+
+For more details on configuring Solr security with the operator, see [Authentication and Authorization](../solr-cloud/solr-cloud-crd.md#authentication-and-authorization)
 
 ## Prometheus Stack
 

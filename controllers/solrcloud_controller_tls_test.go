@@ -51,7 +51,13 @@ var (
 func TestBasicAuthBootstrapSecurityJson(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic, ProbesRequireAuth: true}
-	verifyReconcileWithSecurity(t, instance)
+	verifyReconcileWithSecurity(t, instance, false)
+}
+
+func TestBasicAuthBootstrapSecurityJsonDeleteSecret(t *testing.T) {
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
+	verifyReconcileWithSecurity(t, instance, true)
 }
 
 func TestBasicAuthWithUserProvidedCreds(t *testing.T) {
@@ -60,7 +66,7 @@ func TestBasicAuthWithUserProvidedCreds(t *testing.T) {
 		AuthenticationType: solr.Basic,
 		BasicAuthSecret:    "my-basic-auth-secret",
 	}
-	verifyReconcileWithSecurity(t, instance)
+	verifyReconcileWithSecurity(t, instance, false)
 }
 
 func TestBasicAuthBootstrapWithTLS(t *testing.T) {
@@ -240,7 +246,8 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 
 	// does basic-auth work with TLS? That's the most common so we test both here
 	if instance.Spec.SolrSecurity != nil {
-		expectStatefulSetBasicAuthConfig(t, g, instance)
+		expectBootstrapSecret := instance.Spec.SolrSecurity.BasicAuthSecret == ""
+		expectStatefulSetBasicAuthConfig(t, g, instance, expectBootstrapSecret)
 	}
 }
 
@@ -280,7 +287,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	return stateful
 }
 
-func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
+func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud, deleteBootstrapSecret bool) {
 	g := gomega.NewGomegaWithT(t)
 	ctx := context.TODO()
 
@@ -323,17 +330,31 @@ func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
-	expectStatefulSetBasicAuthConfig(t, g, instance)
+	expectBootstrapSecret := instance.Spec.SolrSecurity.BasicAuthSecret == ""
+	expectStatefulSetBasicAuthConfig(t, g, instance, expectBootstrapSecret)
+
+	if deleteBootstrapSecret {
+		bootstrapSecret := &corev1.Secret{}
+		err := testClient.Get(ctx, types.NamespacedName{Name: instance.SecurityBootstrapSecretName(), Namespace: instance.Namespace}, bootstrapSecret)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		// this should trigger a reconcile ...
+		testClient.Delete(ctx, bootstrapSecret)
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+
+		expectStatefulSetBasicAuthConfig(t, g, instance, false /* bootstrap secret not found */)
+	}
 }
 
-func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud) *appsv1.StatefulSet {
+func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud, expectBootstrapSecret bool) *appsv1.StatefulSet {
 	assert.NotNil(t, sc.Spec.SolrSecurity, "solrSecurity is not configured for this SolrCloud instance!")
 
 	ctx := context.TODO()
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
 	podTemplate := &stateful.Spec.Template
-	expectBasicAuthConfigOnPodTemplate(t, sc, podTemplate)
+	expectBasicAuthConfigOnPodTemplate(t, sc, podTemplate, expectBootstrapSecret)
 
 	basicAuthSecret := &corev1.Secret{}
 	err := testClient.Get(ctx, types.NamespacedName{Name: sc.BasicAuthSecretName(), Namespace: sc.Namespace}, basicAuthSecret)
@@ -342,7 +363,7 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 	assert.True(t, basicAuthSecret.Data[corev1.BasicAuthPasswordKey] != nil && len(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) > 0, "password should be set for k8s-oper in the basic auth secret")
 
 	// verify a security.json gets bootstrapped if not using a user-provided secret
-	if sc.Spec.SolrSecurity.BasicAuthSecret == "" {
+	if sc.Spec.SolrSecurity.BasicAuthSecret == "" && expectBootstrapSecret {
 		bootstrapSecret := &corev1.Secret{}
 		err := testClient.Get(ctx, types.NamespacedName{Name: sc.SecurityBootstrapSecretName(), Namespace: sc.Namespace}, bootstrapSecret)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
@@ -363,7 +384,7 @@ func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecr
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, podTemplate *corev1.PodTemplateSpec) *corev1.Container {
+func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool) *corev1.Container {
 
 	// check the env vars needed for the probes to work with auth
 	assert.NotNil(t, podTemplate.Spec.Containers)
@@ -421,12 +442,19 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 				break
 			}
 		}
-		assert.NotNil(t, expInitContainer, "Didn't find the setup-zk InitContainer in the sts!")
-		expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
-			"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
-			"echo $SECURITY_JSON > /tmp/security.json; " +
-			"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-		assert.True(t, strings.Contains(expInitContainer.Command[2], expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
+
+		if expectBootstrapSecret {
+			assert.NotNil(t, expInitContainer, "Didn't find the setup-zk InitContainer in the sts!")
+			expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
+				"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
+				"echo $SECURITY_JSON > /tmp/security.json; " +
+				"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+			assert.True(t, strings.Contains(expInitContainer.Command[2], expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
+		} else {
+			assert.True(t, expInitContainer == nil || !strings.Contains(expInitContainer.Command[2], "SECURITY_JSON"),
+				"setup-zk initContainer not reconciled after bootstrap secret deleted")
+		}
+
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container

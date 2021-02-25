@@ -48,6 +48,7 @@ type SolrBackupReconciler struct {
 }
 
 // +kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list
 // +kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch

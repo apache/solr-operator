@@ -544,7 +544,7 @@ spec:
 The example settings above will result in your Solr pods getting names like: `<ns>-search-solrcloud-0.k8s.solr.cloud` 
 which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
 
-## Solr Security: Authentication and Authorization
+## Authentication and Authorization
 
 All well-configured Solr clusters should enforce users to authenticate, even for read-only operations. Even if you want
 to allow anonymous query requests from unknown users, you should make this explicit using Solr's rule-based authorization
@@ -588,6 +588,11 @@ In addition to the `admin` user, the operator defines a `solr` user, which has b
 kubectl get secret <CLOUD>-solrcloud-security-bootstrap -o jsonpath='{.data.solr}' | base64 --decode
 ```
 
+You can safely delete the bootstrap secret, provided you've captured the `admin` password, after your SolrCloud deploys with the bootstrapped `security.json`.
+However, this will trigger a rolling restart across all pods as the `setup-zk` initContainer definition changes.
+
+#### k8s-oper user
+
 The operator makes requests to secured Solr endpoints as the `k8s-oper` user; credentials for the `k8s-oper` user are stored in a separate secret of type `kubernetes.io/basic-auth`
 with name `<CLOUD>-solrcloud-basic-auth`. The `k8s-oper` user is configured with read-only access to a minimal set of endpoints, see details in the **Authorization** sub-section below.
 Remember, if you change the `k8s-oper` password using the Solr security API, then you **must** update the secret with the new password or the operator will be locked out.
@@ -608,6 +613,9 @@ When `probesRequireAuth` is set to `true`, the liveness and readiness probes exe
 The operator configures a command instead of setting the `Authorization` header for the HTTP probes, as that would require a restart of all pods if the password changes. 
 With a command, we can load the username and password from a secret; Kubernetes will 
 [update the mounted secret files](https://kubernetes.io/docs/concepts/configuration/secret/#mounted-secrets-are-updated-automatically) when the secret changes automatically.
+
+If you customize the HTTP path for any probes (under `spec.customSolrKubeOptions.podOptions`), 
+then you must use `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
 
 #### Authorization
 
@@ -640,6 +648,12 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "role": null,
         "collection": null,
         "path": "/admin/info/system"
+      },
+      {
+        "name": "k8s-probe-1",
+        "role": null,
+        "collection": null,
+        "path": "/admin/info/health"
       },
       {
         "name": "k8s-status",
@@ -691,6 +705,12 @@ A few aspects of the default `security.json` configuration warrant a closer look
         "role": null,
         "collection": null,
         "path": "/admin/info/system"
+      },
+      {
+        "name": "k8s-probe-1",
+        "role": null,
+        "collection": null,
+        "path": "/admin/info/health"
       },
 ``` 
 In this case, the `"role":null` indicates this endpoint allows anonymous access by unknown users. 
@@ -756,21 +776,19 @@ the reasoning is that if you're supplying your own basic auth credentials then y
 Users need to ensure their `security.json` contains the user supplied in the `basicAuthSecret` with read access to:
 ```
 /admin/info/system
+/admin/info/health
 /admin/collections
 /admin/metrics
 /admin/ping (for collection="*")
 ```
 _Tip: see the authorization rules defined by the default `security.json` as a guide for configuring access for the operator user_
 
+#### Changing the Password
+
+If you change the password for the user configured in your `basicAuthSecret` using the Solr security API, then you **must** update the secret with the new password or the operator will be locked out.
+Also, changing the password for this user in the K8s secret will not update Solr! You're responsible for changing the password in both places.
+
 ### Prometheus Exporter with Basic Auth
 
-If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret containing the credentials for making API requests to `/admin/metrics` and `/admin/ping` for all collections.
-
-```
-spec:
-  solrReference:
-    basicAuthSecret: user-provided-secret
-```
-
-If you chose option #1 to have the operator bootstrap `security.json` for you, then the name of the secret will be:
-`<CLOUD>-solrcloud-basic-auth`. If you chose option #2, then pass the same name that you used for your SolrCloud CRD instance.
+If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret; 
+refer to [Prometheus Exporter with Basic Auth](../solr-prometheus-exporter/README.md#prometheus-exporter-with-basic-auth) for more details.

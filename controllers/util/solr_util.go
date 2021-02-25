@@ -58,6 +58,7 @@ const (
 	LogXmlFile                       = "log4j2.xml"
 	SecurityJsonFile                 = "security.json"
 	BasicAuthMd5Annotation           = "solr.apache.org/basicAuthMd5"
+	DefaultProbePath                 = "/admin/info/system"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
@@ -104,7 +105,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: probeScheme,
-			Path:   "/solr/admin/info/system",
+			Path:   "/solr" + DefaultProbePath,
 			Port:   intstr.FromInt(solrPodPort),
 		},
 	}
@@ -383,16 +384,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
 
+		// Is TLS enabled? If so we need some additional SSL related props
+		tlsProps := ""
+		if solrCloud.Spec.SolrTLS != nil {
+			tlsProps = " -Djavax.net.ssl.keyStore=\"$(echo $SOLR_SSL_KEY_STORE)\" -Djavax.net.ssl.keyStorePassword=\"$(echo $SOLR_SSL_KEY_STORE_PASSWORD)\" -Djavax.net.ssl.trustStore=\"$(echo $SOLR_SSL_TRUST_STORE)\" -Djavax.net.ssl.trustStorePassword=\"$(echo $SOLR_SSL_TRUST_STORE_PASSWORD)\" "
+		}
+
 		// construct the probe command to invoke the SolrCLI "api" action
 		//
 		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-		probeCommand := fmt.Sprintf("java -Dbasicauth=\"$(cat %s):$(cat %s)\" -Dsolr.ssl.checkPeerName=false "+
+		probeCommand := fmt.Sprintf("java -Dbasicauth=\"$(cat %s):$(cat %s)\" %s-Dsolr.ssl.checkPeerName=false "+
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-			usernameFile, passwordFile, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
+			usernameFile, passwordFile, tlsProps, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
 
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
@@ -1359,29 +1366,34 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
 	return secretData
 }
 
-// Gets a list of probe paths we need to setup authz for
-func getProbePaths(solrCloud *solr.SolrCloud) []string {
-	defaultProbePath := "/admin/info/system"
+func GetCustomProbePaths(solrCloud *solr.SolrCloud) []string {
+	probePaths := []string{}
 
 	podOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
 	if podOptions == nil {
-		return []string{defaultProbePath}
+		return probePaths
 	}
 
-	probePaths := []string{}
-	if podOptions.ReadinessProbe != nil && podOptions.ReadinessProbe.HTTPGet != nil && podOptions.ReadinessProbe.HTTPGet.Path != defaultProbePath {
+	// include any custom paths
+	if podOptions.ReadinessProbe != nil && podOptions.ReadinessProbe.HTTPGet != nil {
 		probePaths = append(probePaths, podOptions.ReadinessProbe.HTTPGet.Path)
-	} else {
-		probePaths = append(probePaths, defaultProbePath)
 	}
 
-	if podOptions.LivenessProbe != nil && podOptions.LivenessProbe.HTTPGet != nil && podOptions.LivenessProbe.HTTPGet.Path != defaultProbePath {
+	if podOptions.LivenessProbe != nil && podOptions.LivenessProbe.HTTPGet != nil {
 		probePaths = append(probePaths, podOptions.LivenessProbe.HTTPGet.Path)
-	} else {
-		probePaths = append(probePaths, defaultProbePath)
 	}
 
-	// de-dupe the paths ...
+	if podOptions.StartupProbe != nil && podOptions.StartupProbe.HTTPGet != nil {
+		probePaths = append(probePaths, podOptions.StartupProbe.HTTPGet.Path)
+	}
+
+	return probePaths
+}
+
+// Gets a list of probe paths we need to setup authz for
+func getProbePaths(solrCloud *solr.SolrCloud) []string {
+	probePaths := []string{DefaultProbePath, "/admin/info/health"}
+	probePaths = append(probePaths, GetCustomProbePaths(solrCloud)...)
 	return uniqueProbePaths(probePaths)
 }
 

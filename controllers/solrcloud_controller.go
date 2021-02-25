@@ -268,6 +268,17 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				instance.Spec.SolrSecurity.AuthenticationType)
 		}
 
+		// for now, we don't support 'solrSecurity.probesRequireAuth=true' and custom probe paths,
+		// so make the user fix that so there are no surprises later
+		if sec.ProbesRequireAuth && instance.Spec.CustomSolrKubeOptions.PodOptions != nil {
+			for _, path := range util.GetCustomProbePaths(instance) {
+				if path != util.DefaultProbePath {
+					return requeueOrNot, fmt.Errorf(
+						"custom probe path %s not supported when 'solrSecurity.probesRequireAuth=true'; must use 'solrSecurity.probesRequireAuth=false' when using custom probe endpoints", path)
+				}
+			}
+		}
+
 		ctx := context.TODO()
 		basicAuthSecret := &corev1.Secret{}
 
@@ -315,9 +326,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				bootstrapSecret := &corev1.Secret{}
 				err = r.Get(ctx, types.NamespacedName{Name: instance.SecurityBootstrapSecretName(), Namespace: instance.Namespace}, bootstrapSecret)
 				if err != nil {
-					return requeueOrNot, err
+					if !errors.IsNotFound(err) {
+						return requeueOrNot, err
+					} // else perhaps the user deleted it after security was bootstrapped ... this is ok but may trigger a restart on the STS
+				} else {
+					// stash this so we can configure the setup-zk initContainer to bootstrap the security.json in ZK
+					reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
 				}
-				reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
 			}
 		}
 
