@@ -272,6 +272,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Solr can take longer than SOLR_STOP_WAIT to run solr stop, give it a few extra seconds before forcefully killing the pod.
 	solrStopWait := terminationGracePeriod - 5
+	if solrStopWait < 0 {
+		solrStopWait = 0
+	}
 
 	// Environment Variables
 	envVars := []corev1.EnvVar{
