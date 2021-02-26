@@ -1393,7 +1393,7 @@ func GetCustomProbePaths(solrCloud *solr.SolrCloud) []string {
 
 // Gets a list of probe paths we need to setup authz for
 func getProbePaths(solrCloud *solr.SolrCloud) []string {
-	probePaths := []string{DefaultProbePath, "/admin/info/health"}
+	probePaths := []string{DefaultProbePath}
 	probePaths = append(probePaths, GetCustomProbePaths(solrCloud)...)
 	return uniqueProbePaths(probePaths)
 }
