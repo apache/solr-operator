@@ -387,19 +387,20 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		// Is TLS enabled? If so we need some additional SSL related props
 		tlsProps := ""
 		if solrCloud.Spec.SolrTLS != nil {
-			tlsProps = " -Djavax.net.ssl.keyStore=\"$(echo $SOLR_SSL_KEY_STORE)\" -Djavax.net.ssl.keyStorePassword=\"$(echo $SOLR_SSL_KEY_STORE_PASSWORD)\" -Djavax.net.ssl.trustStore=\"$(echo $SOLR_SSL_TRUST_STORE)\" -Djavax.net.ssl.trustStorePassword=\"$(echo $SOLR_SSL_TRUST_STORE_PASSWORD)\" "
+			tlsProps = " -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
 		}
+		javaToolOptions := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat %s):$(cat %s)%s\"", usernameFile, passwordFile, tlsProps)
 
 		// construct the probe command to invoke the SolrCLI "api" action
 		//
 		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-		probeCommand := fmt.Sprintf("java -Dbasicauth=\"$(cat %s):$(cat %s)\" %s-Dsolr.ssl.checkPeerName=false "+
+		probeCommand := fmt.Sprintf("%s java -Dsolr.ssl.checkPeerName=false "+
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-			usernameFile, passwordFile, tlsProps, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
+			javaToolOptions, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
 
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}

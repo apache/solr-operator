@@ -418,7 +418,7 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 		assert.NotNil(t, basicAuthSecretVolMount)
 		assert.Equal(t, "/etc/secrets/"+secretName, basicAuthSecretVolMount.MountPath)
 
-		expProbeCmd := "java -Dbasicauth=\"$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/username):$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/password)\" -Dsolr.ssl.checkPeerName=false " +
+		expProbeCmd := "JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/username):$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/password)\" java -Dsolr.ssl.checkPeerName=false " +
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
