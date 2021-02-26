@@ -1316,6 +1316,9 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
 		if i > 0 {
 			probeAuthz += ", "
 		}
+		if strings.HasPrefix(p, "/solr") {
+			p = p[len("/solr"):]
+		}
 		probeAuthz += fmt.Sprintf("{ \"name\": \"k8s-probe-%d\", \"role\":%s, \"collection\": null, \"path\":\"%s\" }", i, probeRole, p)
 	}
 

@@ -617,6 +617,33 @@ With a command, we can load the username and password from a secret; Kubernetes 
 If you customize the HTTP path for any probes (under `spec.customSolrKubeOptions.podOptions`), 
 then you must use `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
 
+If you're running Solr 8+, then we recommend using the `/admin/info/health` endpoint for your probes using the following config:
+```
+spec:
+  ...
+  customSolrKubeOptions:
+    podOptions:
+      livenessProbe:
+        httpGet:
+          scheme: HTTP
+          path: /solr/admin/info/health
+          port: 8983
+      readinessProbe:
+        httpGet:
+          scheme: HTTP
+          path: /solr/admin/info/health
+          port: 8983
+```
+Consequently, the bootstrapped `security.json` will include an additional rule to allow access to the `/admin/info/health` endpoint:
+```
+      {
+        "name": "k8s-probe-1",
+        "role": null,
+        "collection": null,
+        "path": "/admin/info/health"
+      },
+```
+
 #### Authorization
 
 The default `security.json` created by the operator during initialization is shown below; the passwords for each user are randomized for every SolrCloud you create.
@@ -648,12 +675,6 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "role": null,
         "collection": null,
         "path": "/admin/info/system"
-      },
-      {
-        "name": "k8s-probe-1",
-        "role": null,
-        "collection": null,
-        "path": "/admin/info/health"
       },
       {
         "name": "k8s-status",
@@ -705,13 +726,7 @@ A few aspects of the default `security.json` configuration warrant a closer look
         "role": null,
         "collection": null,
         "path": "/admin/info/system"
-      },
-      {
-        "name": "k8s-probe-1",
-        "role": null,
-        "collection": null,
-        "path": "/admin/info/health"
-      },
+      }
 ``` 
 In this case, the `"role":null` indicates this endpoint allows anonymous access by unknown users. 
 The `"collection":null` value indicates the path is not associated with any collection, i.e. it is a top-level system path.

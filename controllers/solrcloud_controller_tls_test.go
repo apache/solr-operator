@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -71,7 +72,23 @@ func TestBasicAuthWithUserProvidedCreds(t *testing.T) {
 
 func TestBasicAuthBootstrapWithTLS(t *testing.T) {
 	instance := buildTestSolrCloud()
+
+	// custom probe endpoint too
+	instance.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+		ReadinessProbe: &corev1.Probe{
+			Handler: corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTPS,
+					Path:   "/solr/admin/info/health",
+					Port:   intstr.FromInt(8983),
+				},
+			},
+		},
+	}
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
+
+	probePaths := util.GetCustomProbePaths(instance)
+	assert.EqualValues(t, []string{"/solr/admin/info/health"}, probePaths)
 
 	tlsSecretName := "tls-cert-secret-from-user"
 	keystorePassKey := "some-password-key-thingy"
@@ -370,6 +387,18 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 		assert.True(t, bootstrapSecret.Data["admin"] != nil && len(bootstrapSecret.Data["admin"]) > 0, "password should be set for admin in the bootstrap security secret")
 		assert.True(t, bootstrapSecret.Data["solr"] != nil && len(bootstrapSecret.Data["solr"]) > 0, "password should be set for solr in the bootstrap security secret")
 		assert.True(t, bootstrapSecret.Data["security.json"] != nil && len(bootstrapSecret.Data["security.json"]) > 0, "security.json not found in the bootstrap security secret")
+
+		if sc.Spec.CustomSolrKubeOptions.PodOptions != nil {
+			probePaths := util.GetCustomProbePaths(sc)
+			if len(probePaths) > 0 {
+				securityJson := string(bootstrapSecret.Data["security.json"])
+				assert.True(t, strings.Contains(securityJson, util.DefaultProbePath), "bootstrapped security.json should have an authz rule for "+util.DefaultProbePath)
+				for _, p := range probePaths {
+					p = p[len("/solr"):] // drop the /solr part on the path
+					assert.True(t, strings.Contains(securityJson, p), "bootstrapped security.json should have an authz rule for "+p)
+				}
+			}
+		}
 	}
 
 	return stateful
