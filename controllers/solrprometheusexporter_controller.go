@@ -201,15 +201,30 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 					tlsClientOptions.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 				} else {
-					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
-						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
+					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
 						util.TLSCertKey, foundTLSSecret.Name)
 				}
 			}
 		}
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions)
+	basicAuthMd5 := ""
+	if prometheusExporter.Spec.SolrReference.BasicAuthSecret != "" {
+		basicAuthSecret := &corev1.Secret{}
+		err := r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.BasicAuthSecret, Namespace: prometheusExporter.Namespace}, basicAuthSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+
+		err = util.ValidateBasicAuthSecret(basicAuthSecret)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
+	}
+
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions, basicAuthMd5)
 	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -286,6 +301,13 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManagerAndReconciler(mgr ctr
 		return err
 	}
 
+	// Get notified when the basic auth secret updates; exporter pods must be restarted if the basic auth password
+	// changes b/c the credentials are loaded from a Java system property at startup and not watched for changes.
+	ctrlBuilder, err = r.indexAndWatchForBasicAuthSecret(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
 	r.scheme = mgr.GetScheme()
 	return ctrlBuilder.Complete(reconciler)
 }
@@ -353,13 +375,35 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForTLSSecret(mgr ctrl.Ma
 		return ctrlBuilder, err
 	}
 
+	return r.buildSecretWatch(tlsSecretField, ctrlBuilder)
+}
+
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForBasicAuthSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	secretField := ".spec.solrReference.basicAuthSecret"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, secretField, func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the referenced TLS secret...
+		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
+		if exporter.Spec.SolrReference.BasicAuthSecret == "" {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{exporter.Spec.SolrReference.BasicAuthSecret}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return r.buildSecretWatch(secretField, ctrlBuilder)
+}
+
+func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &corev1.Secret{}},
 		&handler.EnqueueRequestsFromMapFunc{
 			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
 				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
 				listOps := &client.ListOptions{
-					FieldSelector: fields.OneTermEqualSelector(tlsSecretField, a.Meta.GetName()),
+					FieldSelector: fields.OneTermEqualSelector(secretField, a.Meta.GetName()),
 					Namespace:     a.Meta.GetNamespace(),
 				}
 				err := r.List(context.TODO(), foundExporters, listOps)

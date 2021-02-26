@@ -55,7 +55,7 @@ type TLSClientOptions struct {
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSClientOptions) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSClientOptions, basicAuthMd5 string) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -176,6 +176,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		allJavaOpts = append(allJavaOpts, tlsJavaOpts(tls.TLSOptions)...)
 	}
 
+	// basic auth enabled?
+	if solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret != "" {
+		lor := corev1.LocalObjectReference{Name: solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret}
+		usernameRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthUsernameKey}
+		passwordRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthPasswordKey}
+		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_USER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: usernameRef}})
+		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_PASS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: passwordRef}})
+		allJavaOpts = append(allJavaOpts, "-Dbasicauth=$(BASIC_AUTH_USER):$(BASIC_AUTH_PASS)")
+		allJavaOpts = append(allJavaOpts, "-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory")
+	}
+
 	// the order of env vars in the array is important for the $(var) syntax to work
 	// since JAVA_OPTS refers to $(SOLR_SSL_*) if TLS is enabled, it needs to be last
 	if len(allJavaOpts) > 0 {
@@ -242,6 +253,14 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			podAnnotations = make(map[string]string, 1)
 		}
 		podAnnotations[SolrTlsCertMd5Annotation] = tls.TLSCertMd5
+	}
+
+	// if the basic-auth secret changes, we want to restart the deployment pods
+	if basicAuthMd5 != "" {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		podAnnotations[BasicAuthMd5Annotation] = basicAuthMd5
 	}
 
 	deployment := &appsv1.Deployment{
