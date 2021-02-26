@@ -644,6 +644,9 @@ Consequently, the bootstrapped `security.json` will include an additional rule t
       },
 ```
 
+Note, if you change the probes after creating your solrcloud, then the new probe paths will not be added to the security.json.
+The security file is bootstrapped just once, so if your probes need to change you must add it to the allowed paths via the Solr Security API using the admin credentials.
+
 #### Authorization
 
 The default `security.json` created by the operator during initialization is shown below; the passwords for each user are randomized for every SolrCloud you create.
