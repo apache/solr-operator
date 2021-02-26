@@ -88,6 +88,14 @@ type SolrReference struct {
 	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
+
+	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate via a
+	// kubernetes.io/basic-auth secret which must contain a username and password. If basic auth is enabled on the
+	// SolrCloud instance, the default secret (unless you are supplying your own) is named using the pattern:
+	// <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json bootstrapped by the Solr operator,
+	// then the username is "k8s-oper".
+	// +optional
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {

@@ -59,7 +59,7 @@ type SolrAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
+func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders map[string]string, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := http.DefaultClient
@@ -72,7 +72,17 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, response in
 	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
 
 	resp := &http.Response{}
-	if resp, err = client.Get(cloudUrl); err != nil {
+
+	req, err := http.NewRequest("GET", cloudUrl, nil)
+
+	// mainly for doing basic-auth
+	if httpHeaders != nil {
+		for key, header := range httpHeaders {
+			req.Header.Add(key, header)
+		}
+	}
+
+	if resp, err = client.Do(req); err != nil {
 		return err
 	}
 
