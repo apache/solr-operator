@@ -2417,6 +2417,11 @@ spec:
                             format: int32
                             type: integer
                         type: object
+                      terminationGracePeriodSeconds:
+                        description: Optional duration in seconds the pod needs to terminate gracefully.
+                        format: int64
+                        minimum: 10
+                        type: integer
                       tolerations:
                         description: Tolerations to be added for the StatefulSet.
                         items:
