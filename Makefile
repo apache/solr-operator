@@ -77,6 +77,10 @@ fmt:
 vet:
 	go vet ./...
 
+# Run go vet against code
+fetch-licenses:
+	go-licenses save . --save_path licenses --force
+
 ###
 # Tests and Checks
 ###

@@ -5,7 +5,8 @@ WORKDIR /workspace
 ARG GO111MODULE=on
 
 # Download necessary libraries
-RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1
+RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1; \
+    go get github.com/google/go-licenses
 
 # Copy the Go Modules manifests
 COPY go.mod go.mod
@@ -18,6 +19,8 @@ RUN go mod download
 COPY .git/ .git/
 COPY hack/ hack/
 COPY build/build.sh build/build.sh
+COPY LICENSE LICENSE
+COPY NOTICE NOTICE
 COPY Makefile ./
 
 # Copy the go source
@@ -29,4 +32,21 @@ ARG VERSION
 ARG GIT_SHA
 
 # Build
-RUN CGO_ENABLED=0 make build
+RUN CGO_ENABLED=0 make fetch-licenses build
+
+# =============================================================================
+# Copy the controller-manager into a thin image
+# =============================================================================
+
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
+
+WORKDIR /
+COPY --from=builder workspace/bin/solr-operator .
+COPY --from=builder workspace/LICENSE etc/LICENSE
+COPY --from=builder workspace/NOTICE etc/NOTICE
+COPY --from=builder workspace/licenses etc/licenses
+USER nonroot:nonroot
+
+ENTRYPOINT ["/solr-operator"]
