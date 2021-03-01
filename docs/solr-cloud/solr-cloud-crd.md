@@ -146,7 +146,7 @@ However, there may come a time when you need to override the built-in configurat
 In general, users can provide custom config files by providing a ConfigMap in the same namespace as the SolrCloud instance; 
 all custom config files should be stored in the same user-provided ConfigMap under different keys.
 Point your SolrCloud definition to a user-provided ConfigMap using the following structure:
-```
+```yaml
 spec:
   ...
   customSolrKubeOptions:
@@ -163,13 +163,13 @@ The default `solr.xml` is mounted into the `cp-solr-xml` initContainer from a Co
 _Note: The data in the default ConfigMap is not editable! Any changes to the `solr.xml` in the default ConfigMap created by the operator will be overwritten during the next reconcile cycle._
 
 Many of the specific values in `solr.xml` can be set using Java system properties; for instance, the following setting controls the read timeout for the HTTP client used by Solr's `HttpShardHandlerFactory`:
-```
+```xml
 <int name="socketTimeout">${socketTimeout:600000}</int>
 ```
 The `${socketTimeout:600000}` syntax means pull the value from a Java system property named `socketTimeout` with default `600000` if not set.
 
 You can set Java system properties using the `solrOpts` string in your SolrCloud definition, such as:
-```
+```yaml
 spec:
   solrOpts: -DsocketTimeout=300000
 ```
@@ -178,7 +178,7 @@ This same approach works for a number of settings in `solrconfig.xml` as well.
 However, if you need to customize `solr.xml` beyond what can be accomplished with Java system properties, 
 then you need to supply your own `solr.xml` in a ConfigMap in the same namespace where you deploy your SolrCloud instance.
 Provide your custom XML in the ConfigMap using `solr.xml` as the key as shown in the example below:
-```
+```yaml
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -194,7 +194,7 @@ data:
 **Important: Your custom `solr.xml` must include `<int name="hostPort">${hostPort:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
 
 You can get the default `solr.xml` from a Solr pod as a starting point for creating a custom config using `kubectl cp` as shown in the example below:
-```
+```bash
 SOLR_POD_ID=$(kubectl get pod -l technology=solr-cloud --no-headers -o custom-columns=":metadata.name" | head -1)
 kubectl cp $SOLR_POD_ID:/var/solr/data/solr.xml ./custom-solr.xml
 ```
@@ -203,7 +203,8 @@ This copies the default config from the first Solr pod found in the namespace an
 _Note: Using `kubectl create configmap --from-file` scrambles the XML formatting, so we recommend defining the configmap YAML as shown above to keep the XML formatted properly._
 
 Point your SolrCloud instance at the custom ConfigMap using:
-```
+```yaml
+spec:
   customSolrKubeOptions:
     configMapOptions:
       providedConfigMap: custom-solr-xml
@@ -213,7 +214,7 @@ _Note: If you set `providedConfigMap`, then the ConfigMap must include the `solr
 #### Changes to Custom Config Trigger Rolling Restarts
 
 The Solr operator stores the MD5 hash of your custom XML in the StatefulSet's pod spec annotations (`spec.template.metadata.annotations`). To see the current annotations for your Solr pods, you can do:
-```
+```bash
 kubectl annotate pod -l technology=solr-cloud --list=true
 ```
 If the custom `solr.xml` changes in the user-provided ConfigMap, then the operator triggers a rolling restart of Solr pods to apply the updated configuration settings automatically.
@@ -231,7 +232,7 @@ If your custom log config has a `monitorInterval` set, then the operator does no
 Kubernetes will automatically update the file on each pod's filesystem when the data in the ConfigMap changes. Once Kubernetes updates the file, Log4j will pick up the changes and apply them without restarting the Solr pod.
 
 If you need to customize both `solr.xml` and `log4j2.xml` then you need to supply both in the same ConfigMap using multiple keys as shown below:
-```
+```yaml
 ---
 kind: ConfigMap
 apiVersion: v1
@@ -274,7 +275,7 @@ If you do not have a TLS certificate, then we recommend installing **cert-manage
 #### Install cert-manager
 
 Given its popularity, cert-manager may already be installed in your Kubernetes cluster. To check if `cert-manager` is already installed, do:
-```
+```bash
 kubectl get crds -l app.kubernetes.io/instance=cert-manager
 ```
 If installed, you should see the following cert-manager related CRDs:
@@ -288,7 +289,7 @@ orders.acme.cert-manager.io
 ```
 
 If not intalled, use Helm to install it into the `cert-manager` namespace:
-```
+```bash
 if ! helm repo list | grep -q "https://charts.jetstack.io"; then
   helm repo add jetstack https://charts.jetstack.io
   helm repo update
@@ -311,13 +312,14 @@ Refer to the [cert-manager docs](https://cert-manager.io/docs/) on how to define
 Certificate Issuers are typically platform specific. For instance, on GKE, to create a Let’s Encrypt Issuer you need a service account with various cloud DNS permissions granted for DNS01 challenges to work, see: https://cert-manager.io/docs/configuration/acme/dns01/google/.
 
 The DNS names in your certificate should match the Solr addressability settings in your SolrCloud CRD. For instance, if your SolrCloud CRD uses the following settings:
-```
+```yaml
+spec:
   solrAddressability:
     external:
       domainName: k8s.solr.cloud
 ``` 
 Then your certificate needs the following domains specified:
-```
+```yaml
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -335,7 +337,7 @@ will not generate a certificate for K8s internal DNS names (you'll get errors du
 
 Another benefit is cert-manager can create a [PKCS12](https://cert-manager.io/docs/release-notes/release-notes-0.15/#general-availability-of-jks-and-pkcs-12-keystores) keystore automatically when issuing a `Certificate`, 
 which allows the Solr operator to mount the keystore directly on our Solr pods. Ensure your certificate instance requests **pkcs12 keystore** gets created using config similar to the following:
-```
+```yaml
   keystores:
     pkcs12:
       create: true
@@ -358,7 +360,7 @@ Caused by: java.security.UnrecoverableKeyException: Get Key failed: null
 Consequently, the Solr operator requires you to use a non-null password for your keystore. 
 
 Here's an example of how to use cert-manager to generate a self-signed certificate:
-```
+```yaml
 ---
 apiVersion: v1
 kind: Secret
@@ -399,7 +401,7 @@ spec:
 ```
 
 Once created, simply point the SolrCloud deployment at the TLS and keystore password secrets, e.g.
-```
+```yaml
 spec:
   ... other SolrCloud CRD settings ...
 
@@ -422,13 +424,13 @@ that contains a `tls.crt` file (x.509 certificate with a public key and info abo
 
 Ideally, the TLS secret will also have a `pkcs12` keystore. 
 If the supplied TLS secret does not contain a `keystore.p12` key, then the Solr operator creates an `initContainer` on the StatefulSet to generate the keystore from the TLS secret using the following command:
-```
+```bash
 openssl pkcs12 -export -in tls.crt -inkey tls.key -out keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 ```
 _The `initContainer` uses the main Solr image as it has `openssl` installed._
 
 Configure the SolrCloud deployment to point to the user-provided keystore and TLS secrets:
-```
+```yaml
 spec:
   ... other SolrCloud CRD settings ...
 
@@ -444,7 +446,7 @@ spec:
 ### Ingress
 
 The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
-```
+```yaml
 apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
@@ -469,7 +471,7 @@ However, the JVM only reads key and trust stores once during initialization and 
 
 The operator tracks the MD5 hash of the `tls.crt` from the TLS secret in an annotation on the StatefulSet pod spec so that when the TLS secret changes, it will trigger a rolling restart of the affected Solr pods.
 The operator guards this behavior with an **opt-in** flag `restartOnTLSSecretUpdate` as some users may not want to restart Solr pods when the TLS secret holding the cert changes and may instead choose to restart the pods during a maintenance window (presumably before the certs expire).
-```
+```yaml
 spec:
   ... other SolrCloud CRD settings ...
 
@@ -482,7 +484,7 @@ spec:
 ### Misc Config Settings for TLS Enabled Solr
 
 Although not required, we recommend setting the `commonServicePort` and `nodePortOverride` to `443` instead of the default port `80` under `solrAddressability` to avoid confusion when working with `https`. 
-```
+```yaml
 spec:
   ... other SolrCloud CRD settings ...
 
@@ -497,7 +499,7 @@ spec:
 
 If you're relying on a self-signed certificate (or any certificate that requires importing the CA into the Java trust store) for Solr pods, then the Prometheus Exporter will not be able to make requests for metrics. 
 You'll need to duplicate your TLS config from your SolrCloud CRD definition to your Prometheus exporter CRD definition as shown in the example below:
-```
+```yaml
   solrReference:
     cloud:
       name: "dev"
@@ -526,7 +528,7 @@ Intuitively, this makes sense because services like LetsEncrypt cannot determine
 Some CA's provide TLS certificates for private domains but that topic is beyond the scope of the Solr operator.
 You may want to use a self-signed certificate for internal traffic and then a public certificate for your Ingress.
 Alternatively, you can choose to expose Solr pods with an external name using SolrCloud `solrAddressability` settings:
-```
+```yaml
 kind: SolrCloud
 metadata:
   name: search
@@ -567,7 +569,7 @@ With option 1, the operator creates the Basic Authentication Secret for you.
 
 The easiest way to get started with Solr security is to have the operator bootstrap a `security.json` (stored in ZK) as part of the initial deployment process.
 To activate this feature, add the following configuration to your SolrCloud CRD definition YAML:
-```
+```yaml
 spec:
   ...
   solrSecurity:
@@ -577,14 +579,14 @@ spec:
 Once the cluster is up, you'll need the `admin` user password to login to the Solr Admin UI.
 The `admin` user will have a random password generated by the operator during `security.json` bootstrapping.
 Use the following command to retrieve the password from the bootstrap secret created by the operator:
-```
+```bash
 kubectl get secret <CLOUD>-solrcloud-security-bootstrap -o jsonpath='{.data.admin}' | base64 --decode
 ```
 _where `<CLOUD>` is the name of your SolrCloud_
 
 Once `security.json` is bootstrapped, the operator will not update it! You're expected to use the `admin` user to access the Security API to make further changes.
 In addition to the `admin` user, the operator defines a `solr` user, which has basic read access to Solr resources. You can retrieve the `solr` user password using:
-```
+```bash
 kubectl get secret <CLOUD>-solrcloud-security-bootstrap -o jsonpath='{.data.solr}' | base64 --decode
 ```
 
@@ -602,7 +604,7 @@ Also, changing the password for the `k8s-oper` user in the K8s secret after boot
 
 We recommend configuring Solr to allow un-authenticated access over HTTP to the probe endpoint(s) and the bootstrapped `security.json` does this for you automatically (see next sub-section). 
 However, if you want to secure the probe endpoints, then you need to set `probesRequireAuth: true` as shown below:
-```
+```yaml
 spec:
   ...
   solrSecurity:
@@ -618,7 +620,7 @@ If you customize the HTTP path for any probes (under `spec.customSolrKubeOptions
 then you must use `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
 
 If you're running Solr 8+, then we recommend using the `/admin/info/health` endpoint for your probes using the following config:
-```
+```yaml
 spec:
   ...
   customSolrKubeOptions:
@@ -635,13 +637,13 @@ spec:
           port: 8983
 ```
 Consequently, the bootstrapped `security.json` will include an additional rule to allow access to the `/admin/info/health` endpoint:
-```
+```json
       {
         "name": "k8s-probe-1",
         "role": null,
         "collection": null,
         "path": "/admin/info/health"
-      },
+      }
 ```
 
 Note, if you change the probes after creating your solrcloud, then the new probe paths will not be added to the security.json.
@@ -652,7 +654,7 @@ The security file is bootstrapped just once, so if your probes need to change yo
 The default `security.json` created by the operator during initialization is shown below; the passwords for each user are randomized for every SolrCloud you create.
 In addition to configuring the `solr.BasicAuthPlugin`, the operator initializes a set of authorization rules for the default user accounts: `admin`, `solr`, and `k8s-oper`.
 Take a moment to review these authorization rules so that you're aware of the roles and access granted to each user in your cluster.
-```
+```json
 {
   "authentication": {
     "blockUnknown": false,
@@ -723,7 +725,7 @@ Take a moment to review these authorization rules so that you're aware of the ro
 ```
 A few aspects of the default `security.json` configuration warrant a closer look. First, the `probesRequireAuth` setting 
 (defaults to `false`) governs the value for `blockUnknown` (under `authentication`) and whether the probe endpoint(s) require authentication:
-```
+```json
       {
         "name": "k8s-probe-0",
         "role": null,
@@ -735,7 +737,7 @@ In this case, the `"role":null` indicates this endpoint allows anonymous access 
 The `"collection":null` value indicates the path is not associated with any collection, i.e. it is a top-level system path.
 
 The operator sends GET requests to the `/admin/collections` endpoint to get cluster status to determine the rolling restart order:
-```
+```json
       {
         "name": "k8s-status",
         "role": "k8s",
@@ -747,7 +749,7 @@ In this case, the `"role":"k8s"` indicates the requesting user must be in the `k
 
 The Prometheus exporter sends GET requests to the `/admin/metrics` endpoint to collect metrics from each pod. 
 The exporter also hits the `/admin/ping` endpoint for every collection, which requires the following authorization rules:
-```
+```json
       {
         "name": "k8s-metrics",
         "role": "k8s",
@@ -766,7 +768,7 @@ The `"collection":"*"` setting indicates this path applies to all collections, w
 ### Option 2: User-provided Basic Auth Secret
 
 Alternatively, if users want full control over their cluster's security config, then they can provide a `kubernetes.io/basic-auth` secret containing the credentials for the user they want the operator to make API requests as:
-```
+```yaml
 spec:
   ...
   solrSecurity:
@@ -775,7 +777,7 @@ spec:
 ```
 The supplied secret must be of type [Basic Authentication Secret](https://kubernetes.io/docs/concepts/configuration/secret/#basic-authentication-secret) and define both a `username` and `password`.
 Here is an example of how to define a basic auth secret using YAML:
-```
+```yaml
 apiVersion: v1
 kind: Secret
 metadata:
@@ -810,3 +812,22 @@ Also, changing the password for this user in the K8s secret will not update Solr
 
 If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret; 
 refer to [Prometheus Exporter with Basic Auth](../solr-prometheus-exporter/README.md#prometheus-exporter-with-basic-auth) for more details.
+
+## Various Runtime Parameters
+
+There are various runtime parameters that allow you to customize the running of your Solr Cloud via the Solr Operator.
+
+### Time to wait for Solr to be killed gracefully
+
+The Solr Operator manages the Solr StatefulSet in a way that when a Solr pod needs to be stopped, or deleted, Kubernetes and Solr are on the same page for how long to wait for the process to die gracefully.
+
+The default time given is 60 seconds, before Solr or Kubernetes tries to forcefully stop the Solr process.
+You can override this default with the field:
+
+```yaml
+spec:
+  ...
+  customSolrKubeOptions:
+    podOptions:
+      terminationGracePeriodSeconds: 120
+```
