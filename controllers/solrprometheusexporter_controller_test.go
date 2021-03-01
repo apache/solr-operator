@@ -56,14 +56,15 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 		Spec: solr.SolrPrometheusExporterSpec{
 			CustomKubeOptions: solr.CustomExporterKubeOptions{
 				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-					SidecarContainers:  extraContainers2,
-					InitContainers:     extraContainers1,
-					ImagePullSecrets:   testAdditionalImagePullSecrets,
+					EnvVariables:                  extraVars,
+					PodSecurityContext:            &podSecurityContext,
+					Volumes:                       extraVolumes,
+					Affinity:                      affinity,
+					Resources:                     resources,
+					SidecarContainers:             extraContainers2,
+					InitContainers:                extraContainers1,
+					ImagePullSecrets:              testAdditionalImagePullSecrets,
+					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 				},
 			},
 			ExporterEntrypoint: "/test/entry-point",
@@ -129,6 +130,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[0].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[0].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), deployment.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
+	assert.EqualValues(t, &testTerminationGracePeriodSeconds, deployment.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
 
 	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")

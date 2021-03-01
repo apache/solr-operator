@@ -20,6 +20,7 @@ package controllers
 import (
 	"crypto/md5"
 	"fmt"
+	"strconv"
 	"time"
 
 	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
@@ -189,15 +190,16 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations:       testPodAnnotations,
-					Labels:            testPodLabels,
-					Tolerations:       testTolerations,
-					NodeSelector:      testNodeSelectors,
-					LivenessProbe:     testProbeLivenessNonDefaults,
-					ReadinessProbe:    testProbeReadinessNonDefaults,
-					StartupProbe:      testProbeStartup,
-					PriorityClassName: testPriorityClass,
-					ImagePullSecrets:  testAdditionalImagePullSecrets,
+					Annotations:                   testPodAnnotations,
+					Labels:                        testPodLabels,
+					Tolerations:                   testTolerations,
+					NodeSelector:                  testNodeSelectors,
+					LivenessProbe:                 testProbeLivenessNonDefaults,
+					ReadinessProbe:                testProbeReadinessNonDefaults,
+					StartupProbe:                  testProbeStartup,
+					PriorityClassName:             testPriorityClass,
+					ImagePullSecrets:              testAdditionalImagePullSecrets,
+					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
@@ -268,6 +270,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 		"SOLR_NODE_PORT": "8983",
 		"GC_TUNE":        "gc Options",
 		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+		"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 	}
 	expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"technology": "solr-cloud"})
 	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/"}
@@ -283,6 +286,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
+	assert.EqualValues(t, &testTerminationGracePeriodSeconds, statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
