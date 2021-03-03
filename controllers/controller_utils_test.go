@@ -543,7 +543,8 @@ var (
 		{Name: "ADDITIONAL_SECRET_1"},
 		{Name: "ADDITIONAL_SECRET_2"},
 	}
-	extraVars = []corev1.EnvVar{
+	testTerminationGracePeriodSeconds = int64(50)
+	extraVars                         = []corev1.EnvVar{
 		{
 			Name:  "VAR_1",
 			Value: "VAL_1",
