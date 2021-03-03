@@ -23,7 +23,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strconv"
 	"strings"
 )
@@ -535,4 +538,18 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 		}
 	}
 	return requireUpdate
+}
+
+// OvertakeControllerRef makes sure that the controlled object has the owner as the controller ref.
+// If the object has a different controller, then that ref will be downgraded to an "owner" and the new controller ref will be added
+func OvertakeControllerRef(owner metav1.Object, controlled metav1.Object, scheme *runtime.Scheme) (needsUpdate bool, err error) {
+	if !metav1.IsControlledBy(controlled, owner) {
+		if otherController := metav1.GetControllerOfNoCopy(controlled); otherController != nil {
+			otherController.Controller = pointer.BoolPtr(false)
+			otherController.BlockOwnerDeletion = pointer.BoolPtr(false)
+		}
+		err = controllerutil.SetControllerReference(owner, controlled, scheme)
+		needsUpdate = true
+	}
+	return needsUpdate, err
 }

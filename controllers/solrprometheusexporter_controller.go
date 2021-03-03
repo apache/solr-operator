@@ -111,9 +111,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	if prometheusExporter.Spec.Config != "" {
 		// Generate ConfigMap
 		configMap := util.GenerateMetricsConfigMap(prometheusExporter)
-		if err := controllerutil.SetControllerReference(prometheusExporter, configMap, r.scheme); err != nil {
-			return ctrl.Result{}, err
-		}
 
 		// capture the MD5 for the default config XML, otherwise we already computed it above
 		if configXmlMd5 == "" {
@@ -126,11 +123,19 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
-			err = r.Create(context.TODO(), configMap)
-		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
+			if err = controllerutil.SetControllerReference(prometheusExporter, configMap, r.scheme); err == nil {
+				err = r.Create(context.TODO(), configMap)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(prometheusExporter, foundConfigMap, r.scheme)
+			needsUpdate = util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) || needsUpdate
+
 			// Update the found ConfigMap and write the result back if there are any changes
-			configMapLogger.Info("Updating ConfigMap")
-			err = r.Update(context.TODO(), foundConfigMap)
+			if needsUpdate && err == nil {
+				configMapLogger.Info("Updating ConfigMap")
+				err = r.Update(context.TODO(), foundConfigMap)
+			}
 		}
 		if err != nil {
 			return ctrl.Result{}, err
@@ -139,9 +144,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 
 	// Generate Metrics Service
 	metricsService := util.GenerateSolrMetricsService(prometheusExporter)
-	if err := controllerutil.SetControllerReference(prometheusExporter, metricsService, r.scheme); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	// Check if the Metrics Service already exists
 	serviceLogger := logger.WithValues("service", metricsService.Name)
@@ -149,11 +151,19 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	err = r.Get(context.TODO(), types.NamespacedName{Name: metricsService.Name, Namespace: metricsService.Namespace}, foundMetricsService)
 	if err != nil && errors.IsNotFound(err) {
 		serviceLogger.Info("Creating Service")
-		err = r.Create(context.TODO(), metricsService)
-	} else if err == nil && util.CopyServiceFields(metricsService, foundMetricsService, serviceLogger) {
+		if err = controllerutil.SetControllerReference(prometheusExporter, metricsService, r.scheme); err == nil {
+			err = r.Create(context.TODO(), metricsService)
+		}
+	} else if err == nil {
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(prometheusExporter, foundMetricsService, r.scheme)
+		needsUpdate = util.CopyServiceFields(metricsService, foundMetricsService, serviceLogger) || needsUpdate
+
 		// Update the found Metrics Service and write the result back if there are any changes
-		serviceLogger.Info("Updating Service")
-		err = r.Update(context.TODO(), foundMetricsService)
+		if needsUpdate && err == nil {
+			serviceLogger.Info("Updating Service")
+			err = r.Update(context.TODO(), foundMetricsService)
+		}
 	}
 	if err != nil {
 		return ctrl.Result{}, err
@@ -225,9 +235,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	}
 
 	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions, basicAuthMd5)
-	if err := controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err != nil {
-		return ctrl.Result{}, err
-	}
 
 	ready := false
 	// Check if the Metrics Deployment already exists
@@ -236,9 +243,16 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeploy)
 	if err != nil && errors.IsNotFound(err) {
 		deploymentLogger.Info("Creating Deployment")
-		err = r.Create(context.TODO(), deploy)
+		if err = controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err == nil {
+			err = r.Create(context.TODO(), deploy)
+		}
 	} else if err == nil {
-		if util.CopyDeploymentFields(deploy, foundDeploy, deploymentLogger) {
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(prometheusExporter, foundDeploy, r.scheme)
+		needsUpdate = util.CopyDeploymentFields(deploy, foundDeploy, deploymentLogger) || needsUpdate
+
+		// Update the found Metrics Service and write the result back if there are any changes
+		if needsUpdate && err == nil {
 			deploymentLogger.Info("Updating Deployment")
 			err = r.Update(context.TODO(), foundDeploy)
 		}
