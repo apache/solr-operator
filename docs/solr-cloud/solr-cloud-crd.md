@@ -15,7 +15,9 @@ If neither is provided, ephemeral storage will be used by default.
 These options can be found in `SolrCloud.spec.dataStorage`
 
 - **`persistent`**
-  - **`reclaimPolicy`** - Either `Retain`, the default, or `Delete`.
+  - **`reclaimPolicy`** -
+    _Since v0.2.7_ -
+    Either `Retain`, the default, or `Delete`.
     This describes the lifecycle of PVCs that are deleted after the SolrCloud is deleted, or the SolrCloud is scaled down and the pods that the PVCs map to no longer exist.
     `Retain` is used by default, as that is the default Kubernetes policy, to leave PVCs in case pods, or StatefulSets are deleted accidentally.
     
@@ -37,6 +39,7 @@ These options can be found in `SolrCloud.spec.dataStorage`
   Only use this option when you require restoring the same backup to multiple SolrClouds.
 
 ## Update Strategy
+_Since v0.2.7_
 
 The SolrCloud CRD provides users the ability to define how Pod updates should be managed, through `SolrCloud.Spec.updateStrategy`.
 This provides the following options:
@@ -59,6 +62,7 @@ Under `SolrCloud.Spec.updateStrategy`:
   - **`maxShardReplicasUnavailable`** - The `maxShardReplicasUnavailable` is calculated independently for each shard, as the percentage of the number of replicas for that shard.
 
 ## Addressability
+_Since v0.2.6_
 
 The SolrCloud CRD provides users the ability to define how it is addressed, through the following options:
 
@@ -112,6 +116,7 @@ Under `spec.zookeeperRef`:
   - **`chroot`** - The chroot to use for the cluster
 
 #### ACLs
+_Since v0.2.7_
 
 The Solr Operator allows for users to specify ZK ACL references in their Solr Cloud CRDs.
 The user must specify the name of a secret that resides in the same namespace as the cloud, that contains an ACL username value and an ACL password value.
@@ -138,6 +143,7 @@ each solrCloud that has this option specified.
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
 
 ## Override Built-in Solr Configuration Files
+_Since v0.2.7_
 
 The Solr operator deploys well-configured SolrCloud instances with minimal input required from human operators. 
 As such, the operator installs various configuration files automatically, including `solr.xml` for node-level settings and `log4j2.xml` for logging. 
@@ -221,8 +227,7 @@ If the custom `solr.xml` changes in the user-provided ConfigMap, then the operat
 To summarize, if you need to customize `solr.xml`, provide your own version in a ConfigMap and changes made to the XML in the ConfigMap are automatically applied to your Solr pods.
 
 ### Custom Log Configuration
-
-_Since: 0.3.0_
+_Since v0.3.0_
 
 By default, the Solr Docker image configures Solr to load its log configuration from `/var/solr/log4j2.xml`. 
 If you need to fine-tune the log configuration, then you can provide a custom `log4j2.xml` in a ConfigMap using the same basic process as described in the previous section for customizing `solr.xml`. If supplied, the operator overrides the log config using the `LOG4J_PROPS` env var.
@@ -255,6 +260,7 @@ data:
 ```
 
 ## Enable TLS Between Solr Pods
+_Since v0.3.0_
 
 A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
 However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
@@ -547,6 +553,7 @@ The example settings above will result in your Solr pods getting names like: `<n
 which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
 
 ## Authentication and Authorization
+_Since v0.3.0_
 
 All well-configured Solr clusters should enforce users to authenticate, even for read-only operations. Even if you want
 to allow anonymous query requests from unknown users, you should make this explicit using Solr's rule-based authorization
