@@ -817,7 +817,7 @@ refer to [Prometheus Exporter with Basic Auth](../solr-prometheus-exporter/READM
 
 There are various runtime parameters that allow you to customize the running of your Solr Cloud via the Solr Operator.
 
-### Time to wait for Solr to be killed graceful
+### Time to wait for Solr to be killed gracefully
 _Since v0.3.0_
 
 The Solr Operator manages the Solr StatefulSet in a way that when a Solr pod needs to be stopped, or deleted, Kubernetes and Solr are on the same page for how long to wait for the process to die gracefully.
