@@ -222,6 +222,8 @@ To summarize, if you need to customize `solr.xml`, provide your own version in a
 
 ### Custom Log Configuration
 
+_Since: 0.3.0_
+
 By default, the Solr Docker image configures Solr to load its log configuration from `/var/solr/log4j2.xml`. 
 If you need to fine-tune the log configuration, then you can provide a custom `log4j2.xml` in a ConfigMap using the same basic process as described in the previous section for customizing `solr.xml`. If supplied, the operator overrides the log config using the `LOG4J_PROPS` env var.
 
