@@ -1,4 +1,5 @@
 # Managed SolrCloud Rolling Updates
+_Since v0.2.7_
 
 Solr Clouds are complex distributed systems, and thus require a more delicate and informed approach to rolling updates.
 
