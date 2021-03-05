@@ -96,3 +96,9 @@ annotations:
         numThreads: 4
         image:
           tag: 8.7.0
+
+dependencies:
+  - name: 'zookeeper-operator'
+    version: 0.2.9
+    repository: https://charts.pravega.io
+    condition: useZkOperator
