@@ -27,7 +27,9 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
-useZkOperator: true
+zookeeperOperator:
+  install: true # Include the zk-operator as a helm chart dependency
+  use: true # Use zk-operator to provide zookeeper clusters for solr
 
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
