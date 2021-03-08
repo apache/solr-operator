@@ -100,7 +100,7 @@ check-licenses:
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	go-licenses csv . 2>/dev/null | sort | diff dependency_licenses.csv -
+	bash -c "go-licenses csv . 2>/dev/null | sort | diff dependency_licenses.csv -"
 
 check-manifests: manifests
 	@echo "Check to make sure the manifests are up to date"
