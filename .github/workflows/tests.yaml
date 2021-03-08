@@ -52,5 +52,5 @@ jobs:
       - run: make build
 
       # Test
-      - run: make lint
+      - run: env bash -c "make lint"
       - run: make test

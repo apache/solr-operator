@@ -91,12 +91,12 @@ fetch-licenses-full:
 
 check: lint test
 
-lint: check-format check-license check-manifests check-helm
+lint: check-format check-licenses check-manifests check-generated check-helm
 
 check-format:
 	./hack/check_format.sh
 
-check-license:
+check-licenses:
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
@@ -105,6 +105,10 @@ check-license:
 check-manifests: manifests
 	@echo "Check to make sure the manifests are up to date"
 	git diff --exit-code -- config helm/solr-operator/crds
+
+check-generated: generate
+	@echo "Check to make sure the generated code is up to date"
+	git diff --exit-code -- api/*/zz_generated.deepcopy.go
 
 check-helm:
 	helm lint helm/solr-operator

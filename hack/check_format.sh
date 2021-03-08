@@ -14,7 +14,7 @@ if [ "$invalidFiles" ]; then
   for file in $invalidFiles
   do
     echo ""
-    gofmt -d $file
+    gofmt -d "${file}"
   done
 
   exit 1
