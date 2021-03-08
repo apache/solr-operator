@@ -8,9 +8,6 @@ The Apache Software Foundation (http://www.apache.org/).
 
 Includes software from other Apache Software Foundation projects.
 
-In the Docker Image built for the Solr Operator, LICENSE, NOTICE and all dependency license information can be found under /etc/licenses.
-The current license type for each code dependency can be found in dependency_licenses.csv.
-
 This includes code provided by Bloomberg Finance LP as a Software Grant
 to The ASF.
 =========================================================================
