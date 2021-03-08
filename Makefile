@@ -43,6 +43,9 @@ release: clean manifests lint
 # Building
 ###
 
+# Prepare the code for a PR or merge
+prepare: fmt generate manifests fetch-licenses-list
+
 # Build solr-operator binary
 build: generate vet
 	BIN=solr-operator VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
@@ -79,7 +82,7 @@ vet:
 
 # Run go vet against code
 fetch-licenses-list:
-	go-licenses csv . | sort > dependency_licenses.csv
+	go-licenses csv . | grep -v -E "solr-operator" | sort > dependency_licenses.csv
 
 # Run go vet against code
 fetch-licenses-full:
@@ -100,7 +103,7 @@ check-licenses:
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	go-licenses csv . 2>/dev/null | sort | diff dependency_licenses.csv -
+	go-licenses csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
 
 check-manifests: manifests
 	@echo "Check to make sure the manifests are up to date"

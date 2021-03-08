@@ -132,6 +132,9 @@ Have you had a good experience with the **Solr Operator**? Why not share some lo
 
 We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
+Before submitting a PR, please be sure to run `make prepare` before committing.
+Otherwise the github checks are likely to fail.
+
 ## License
 
 Please read the [LICENSE](LICENSE) file here.

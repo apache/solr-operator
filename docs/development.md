@@ -116,10 +116,11 @@ $ make test
 
 ## Before you create a PR
 
-The CRD should be updated anytime you update the API.
+The github actions will auto-check that linting is successful on your PR.
+To make sure that the linting will succeed, run the following command before committing.
 
 ```bash
-$ make manifests
+$ make prepare
 ```
 
 
