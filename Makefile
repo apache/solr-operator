@@ -78,7 +78,11 @@ vet:
 	go vet ./...
 
 # Run go vet against code
-fetch-licenses:
+fetch-licenses-list:
+	go-licenses csv . | sort > dependency_licenses.csv
+
+# Run go vet against code
+fetch-licenses-full:
 	go-licenses save . --save_path licenses --force
 
 ###
@@ -93,7 +97,10 @@ check-format:
 	./hack/check_format.sh
 
 check-license:
+	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
+	@echo "Check list of dependency licenses"
+	go-licenses csv . 2>/dev/null | sort | diff dependency_licenses.csv -
 
 check-manifests: manifests
 	@echo "Check to make sure the manifests are up to date"
@@ -123,29 +130,13 @@ CONTROLLER_GEN=$(shell which controller-gen)
 # Docker Building & Pushing
 ###
 
-# Build the base builder docker image
-# This can be a static go build or dynamic
-docker-base-build:
-	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator-build -f ./build/Dockerfile.build
-
-# Build the docker image for the operator only
-docker-build: docker-base-build
-	docker build --build-arg BUILD_IMG=solr-operator-build . -t solr-operator -f ./build/Dockerfile.slim
+# Build the docker image for the operator
+docker-build:
+	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
 	docker tag solr-operator ${IMG}:${VERSION}
 	docker tag solr-operator ${IMG}:latest
-
-# Build the docker image for the operator, containing the vendor deps as well
-docker-vendor-build: docker-build
-	docker build --build-arg BUILD_IMG=solr-operator-build --build-arg SLIM_IMAGE=solr-operator . -t solr-operator-vendor -f ./build/Dockerfile.vendor
-	docker tag solr-operator-vendor ${IMG}:${VERSION}-vendor
-	docker tag solr-operator-vendor ${IMG}:latest-vendor
 
 # Push the docker image for the operator
 docker-push:
 	docker push ${IMG}:${VERSION}
 	docker push ${IMG}:latest
-
-# Push the docker image for the operator with vendor deps
-docker-vendor-push:
-	docker push ${IMG}:${VERSION}-vendor
-	docker push ${IMG}:latest-vendor

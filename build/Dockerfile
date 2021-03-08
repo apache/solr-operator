@@ -32,7 +32,7 @@ ARG VERSION
 ARG GIT_SHA
 
 # Build
-RUN CGO_ENABLED=0 make fetch-licenses build
+RUN CGO_ENABLED=0 make fetch-licenses-full build
 
 # =============================================================================
 # Copy the controller-manager into a thin image
@@ -40,13 +40,14 @@ RUN CGO_ENABLED=0 make fetch-licenses build
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot
+# Debug is needed, so that the license files are viewable.
+# If there is another way to view these files, we can remove "debug-".
+FROM gcr.io/distroless/base:debug-nonroot
 
 WORKDIR /
 COPY --from=builder workspace/bin/solr-operator .
-COPY --from=builder workspace/LICENSE etc/LICENSE
-COPY --from=builder workspace/NOTICE etc/NOTICE
-COPY --from=builder workspace/licenses etc/licenses
+COPY --from=builder workspace/LICENSE workspace/NOTICE etc/licenses/
+COPY --from=builder workspace/licenses etc/licenses/dependencies
 USER nonroot:nonroot
 
 ENTRYPOINT ["/solr-operator"]
