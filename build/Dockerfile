@@ -9,8 +9,7 @@ RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1; \
     go get github.com/google/go-licenses
 
 # Copy the Go Modules manifests
-COPY go.mod go.mod
-COPY go.sum go.sum
+COPY go.mod go.sum ./
 # cache deps before building and copying source so that we don't need to re-download as much
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
@@ -19,9 +18,13 @@ RUN go mod download
 COPY .git/ .git/
 COPY hack/ hack/
 COPY build/build.sh build/build.sh
-COPY LICENSE LICENSE
-COPY NOTICE NOTICE
-COPY Makefile ./
+COPY Makefile LICENSE NOTICE build/LICENSE-ADDITION build/NOTICE-ADDITION ./
+
+# Add additional binary-release-only information to the LICENSE and NOTICES files
+RUN echo "\n\n" >> LICENSE; \
+    cat LICENSE-ADDITION >> LICENSE; \
+    echo "\n\n" >> NOTICE; \
+    cat NOTICE-ADDITION >> NOTICE
 
 # Copy the go source
 COPY main.go ./

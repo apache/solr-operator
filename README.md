@@ -139,6 +139,11 @@ Otherwise the github checks are likely to fail.
 
 Please read the [LICENSE](LICENSE) file here.
 
+### Docker Image Licenses
+
+The Solr Operator docker image contains NOTICE and LICENSE information in the `/etc/licenses` directory.
+This is different from the source release LICENSE and NOTICE files, so make sure to familiarize yourself when using the image.
+
 ## Code of Conduct
 
 This space applies the ASF [Code of Conduct](https://www.apache.org/foundation/policies/conduct)

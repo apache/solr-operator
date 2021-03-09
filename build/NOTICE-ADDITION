@@ -1,0 +1,2 @@
+This project uses the hashicorp/golang-lru project, which is MPL 2.0 licensed. The source code can be found at
+    https://github.com/hashicorp/golang-lru
