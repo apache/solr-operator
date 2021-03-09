@@ -101,4 +101,4 @@ dependencies:
   - name: 'zookeeper-operator'
     version: 0.2.9
     repository: https://charts.pravega.io
-    condition: zookeeperOperator.install
+    condition: zookeeper-operator.install

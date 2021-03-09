@@ -27,9 +27,16 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
-zookeeperOperator:
-  install: true # Include the zk-operator as a helm chart dependency
-  use: true # Use zk-operator to provide zookeeper clusters for solr
+zookeeper-operator:
+  # Include the zookeeper-operator as a helm chart dependency.
+  # Setting this to true also tells the Solr Operator it is use to use ZookeeperCluster objects.
+  # If this is set to true, then "zookeeper-operator.use" is ignored.
+  install: true
+
+  # Use the zookeeper-operator to provide zookeeper clusters for solr.
+  # This setting will not install the zookeeper-operator helm chart as a dependency, you must use "zookeeper-operator.install" instead.
+  # If "zookeeper-operator.install" = true, then this setting is ignored.
+  use: false
 
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.

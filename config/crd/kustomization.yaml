@@ -25,7 +25,3 @@ patchesStrategicMerge: []
 # the following config is for teaching kustomize how to do kustomization for CRDs.
 configurations:
 - kustomizeconfig.yaml
-
-# Uncomment if using Helm 2; not needed for Helm 3
-# commonAnnotations:
-#   helm.sh/hook: "crd-install"
