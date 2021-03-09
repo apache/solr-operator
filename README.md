@@ -158,3 +158,8 @@ can be found [here](https://www.apache.org/security/)
 
 Please do NOT open an issue in the GitHub repository, as we'd prefer to keep vulnerability reports private until
 we've had an opportunity to review and address them.
+
+## Acknowledgements
+
+The Solr Operator was donated to Apache Solr by Bloomberg, after the v0.2.8 release.
+Many thanks to their contributions over the years!
