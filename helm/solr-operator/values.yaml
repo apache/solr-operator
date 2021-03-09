@@ -38,6 +38,9 @@ zookeeper-operator:
   # If "zookeeper-operator.install" = true, then this setting is ignored.
   use: false
 
+# DEPRECATED: Please use "zookeeper-operator.use" instead.
+useZkOperator: "false"
+
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
 watchNamespaces: ""
