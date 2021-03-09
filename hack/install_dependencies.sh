@@ -13,7 +13,7 @@ arch=$(go env GOARCH)
 GO111MODULE=on go mod tidy
 
 #Install Kustomize
-if !(which kustomize); then
+if ! (which kustomize); then
   (cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- ${kustomize_version})
   sudo mv "/tmp/kustomize" /usr/local/bin
   echo "Installed kustomize at /usr/local/bin/kustomize, version: $(kustomize version --short)"
@@ -22,7 +22,7 @@ else
 fi
 
 # Install Kubebuilder
-if !(which kubebuilder && (kubebuilder version | grep ${kubebuilder_version})); then
+if ! (which kubebuilder && (kubebuilder version | grep ${kubebuilder_version})); then
   curl -sL "https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch}" | tar -xz -C /tmp/
   sudo rm -rf /usr/local/kubebuilder
   sudo mv "/tmp/kubebuilder_${kubebuilder_version}_${os}_${arch}" /usr/local/kubebuilder
@@ -32,3 +32,6 @@ if !(which kubebuilder && (kubebuilder version | grep ${kubebuilder_version})); 
 else
   echo "Kubebuilder already installed at $(which kubebuilder)"
 fi
+
+# Install go-licenses
+go get github.com/google/go-licenses

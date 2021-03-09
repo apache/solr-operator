@@ -54,13 +54,9 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 
 ## Solr Operator Docker Images
 
-Two Docker images are published to [DockerHub](https://hub.docker.com/r/apache/solr-operator), both based off of the same base image.
-
-- [Builder Image](build/Dockerfile.build) - Downloads gomod dependencies, builds operator executable (This is not published, only used to build the following images)
-- [Slim Image](build/Dockerfile.slim) - Contains only the operator executable, with the operator as the entry point
-- [Vendor Image](build/Dockerfile.slim) - Contains the operator executable as well as all dependencies (at `/solr-operator-vendor-sources`)
-
-In order to run the Solr Operator, you will only need the Slim Image.
+The Solr Operator Docker image is published to Dockerhub at [apache/solr-operator](https://hub.docker.com/r/apache/solr-operator).
+The [Dockerfile](/build/Dockerfile) builds from scratch source, and copies all necessary information to a very limited image.
+The final image will only contain the solr-operator binary and necessary License information.
 
 ## Solr Operator Input Args
 

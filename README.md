@@ -132,9 +132,17 @@ Have you had a good experience with the **Solr Operator**? Why not share some lo
 
 We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
+Before submitting a PR, please be sure to run `make prepare` before committing.
+Otherwise the github checks are likely to fail.
+
 ## License
 
 Please read the [LICENSE](LICENSE) file here.
+
+### Docker Image Licenses
+
+The Solr Operator docker image contains NOTICE and LICENSE information in the `/etc/licenses` directory.
+This is different from the source release LICENSE and NOTICE files, so make sure to familiarize yourself when using the image.
 
 ## Code of Conduct
 
@@ -150,3 +158,8 @@ can be found [here](https://www.apache.org/security/)
 
 Please do NOT open an issue in the GitHub repository, as we'd prefer to keep vulnerability reports private until
 we've had an opportunity to review and address them.
+
+## Acknowledgements
+
+The Solr Operator was donated to Apache Solr by Bloomberg, after the v0.2.8 release.
+Many thanks to their contributions over the years!

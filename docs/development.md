@@ -76,12 +76,6 @@ Building and releasing a test operator image with a custom Docker namespace.
 $ NAMESPACE=your-namespace/ make docker-build docker-push
 ```
 
-You can test the vendor docker container by running
-
-```bash
-$ NAMESPACE=your-namespace/ make docker-vendor-build docker-vendor-push
-```
-
 You can control the namespace and version for your solr-operator docker image via the ENV variables:
 - `NAMESPACE`, defaults to `apache/`. **This must end with a forward slash.** This can also include the docker repository information for private repos.
 - `NAME`, defaults to `solr-operator`.
@@ -122,10 +116,11 @@ $ make test
 
 ## Before you create a PR
 
-The CRD should be updated anytime you update the API.
+The github actions will auto-check that linting is successful on your PR.
+To make sure that the linting will succeed, run the following command before committing.
 
 ```bash
-$ make manifests
+$ make prepare
 ```
 
 
