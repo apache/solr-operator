@@ -17,4 +17,4 @@ jobs:
 
       # Cleanup & Install dependencies
       - run: docker --version
-      - run: make docker-vendor-build
+      - run: make docker-build
