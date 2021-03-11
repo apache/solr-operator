@@ -26,3 +26,7 @@ release-artifacts
 
 # Remove the kustomize file for the manager, as it contains local information
 config/manager/kustomization.yaml
+
+# Helm dependency files
+helm/solr-operator/Chart.lock
+helm/solr-operator/charts
