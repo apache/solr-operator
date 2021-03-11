@@ -185,6 +185,10 @@ spec:
   solrImage:
     tag: "8.7"
   solrJavaMem: "-Xms300m -Xmx300m"
+  solrAddressability:
+    external:
+      method: Ingress
+      domainName: "ing.local.domain"
 EOF
 
 # Apply the new config

@@ -745,8 +745,9 @@ func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.Solr
 			external = nil
 		}
 		internal := make([]string, zkCluster.Spec.Replicas)
+		kubeDomain := zkCluster.GetKubernetesClusterDomain()
 		for i := range internal {
-			internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", zkCluster.Name, i, zkCluster.Name, zkCluster.Namespace, zkCluster.ZookeeperPorts().Client)
+			internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s.svc.%s:%d", zkCluster.Name, i, zkCluster.Name, zkCluster.Namespace, kubeDomain, zkCluster.ZookeeperPorts().Client)
 		}
 		newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
 			InternalConnectionString: strings.Join(internal, ","),

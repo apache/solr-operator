@@ -106,7 +106,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.Image.Repository = from.Spec.Image.Repository
 
-	if !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
+	if from.Spec.Image.Tag != "" && !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
 		logger.Info("Update required because field changed", "field", "Spec.Image.Tag", "from", to.Spec.Image.Tag, "to", from.Spec.Image.Tag)
 		requireUpdate = true
 	}
