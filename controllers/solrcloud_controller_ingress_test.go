@@ -772,7 +772,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc."+testKubeDomain+":2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc."+testKubeDomain+":2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc."+testKubeDomain+":2181/",
+		"ZK_HOST":        "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181/",
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + expectedCloudRequest.Namespace + ".svc." + testKubeDomain,
 		"SOLR_PORT":      "3000",
 		"SOLR_NODE_PORT": "100",
