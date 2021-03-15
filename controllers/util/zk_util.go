@@ -85,6 +85,10 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 		zkCluster.Spec.Pod.NodeSelector = zkSpec.ZookeeperPod.NodeSelector
 	}
 
+	if solrCloud.Spec.SolrAddressability.KubeDomain != "" {
+		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
+	}
+
 	return zkCluster
 }
 
@@ -106,7 +110,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.Image.Repository = from.Spec.Image.Repository
 
-	if !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
+	if from.Spec.Image.Tag != "" && !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
 		logger.Info("Update required because field changed", "field", "Spec.Image.Tag", "from", to.Spec.Image.Tag, "to", from.Spec.Image.Tag)
 		requireUpdate = true
 	}
@@ -187,6 +191,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		requireUpdate = true
 	}
 	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
+
+	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
+		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)
+		requireUpdate = true
+	}
+	to.Spec.KubernetesClusterDomain = from.Spec.KubernetesClusterDomain
 
 	return requireUpdate
 }

@@ -9,4 +9,3 @@ Please visit the following pages for documentation on using and developing the S
     - [Solr Backups](solr-backup)
     - [Solr Metrics](solr-prometheus-exporter)
 - [Development](development.md)
-- [TODO: Architecture Overview](architecture-overview.md)

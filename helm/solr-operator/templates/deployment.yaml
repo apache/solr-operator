@@ -40,7 +40,10 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
-        - -zk-operator={{ .Values.useZkOperator }}
+        # TODO: v0.4.0 - Remove (eq "true" .Values.useZkOperator)
+        {{- if or ".Values.zookeeper-operator.install" (or ".Values.zookeeper-operator.use" (eq .Values.useZkOperator "true")) }}
+        - -zk-operator=true
+        {{- end}}
         {{- if .Values.watchNamespaces }}
         - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
         {{- end }}

@@ -55,7 +55,7 @@ func TestMain(m *testing.M) {
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),
-			filepath.Join("..", "example", "dependencies"),
+			filepath.Join("..", "config", "dependencies"),
 		},
 		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
 	}

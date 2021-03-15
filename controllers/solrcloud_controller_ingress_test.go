@@ -695,7 +695,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 }
 
 func TestIngressKubeDomainCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
+	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
 	replicas := int32(4)
@@ -704,11 +704,6 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
 			Replicas: &replicas,
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
 			SolrAddressability: solr.SolrAddressabilityOptions{
 				External: &solr.ExternalAddressability{
 					Method:             solr.Ingress,
@@ -777,7 +772,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
+		"ZK_HOST":        "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181/",
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + expectedCloudRequest.Namespace + ".svc." + testKubeDomain,
 		"SOLR_PORT":      "3000",
 		"SOLR_NODE_PORT": "100",

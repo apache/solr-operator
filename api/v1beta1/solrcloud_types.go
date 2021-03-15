@@ -47,7 +47,7 @@ const (
 	DefaultZkReplicas            = int32(3)
 	DefaultZkStorage             = "5Gi"
 	DefaultZkRepo                = "pravega/zookeeper"
-	DefaultZkVersion             = "0.2.6"
+	DefaultZkVersion             = ""
 	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
 	SolrTechnologyLabel      = "solr-cloud"

@@ -13,7 +13,7 @@ mkdir -p release-artifacts
 
 rm -rf release-artifacts/*
 
-helm package helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d release-artifacts/
+helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d release-artifacts/
 
 helm repo index release-artifacts/ --url https://github.com/apache/lucene-solr-operator/releases/download/${VERSION}/ --merge docs/charts/index.yaml
 

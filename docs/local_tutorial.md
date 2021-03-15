@@ -60,20 +60,15 @@ You can follow along here, or follow the instructions in the [Official Helm rele
 
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
-Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
-Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
-
-```bash
-kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
-```
-
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
 $ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
+$ helm repo update
 ```
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
+This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
 # Install the operator
@@ -81,20 +76,20 @@ $ helm install solr-operator apache-solr/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
-```
+```bash
 $ kubectl get all
 
-NAME                                       READY   STATUS             RESTARTS   AGE
-pod/solr-operator-8449d4d96f-cmf8p         1/1     Running            0          47h
-pod/zk-operator-674676769c-gd4jr           1/1     Running            0          49d
+NAME                                              READY   STATUS             RESTARTS   AGE
+pod/solr-operator-8449d4d96f-cmf8p                1/1     Running            0          47h
+pod/zookeeper-operator-674676769c-gd4jr           1/1     Running            0          49d
 
-NAME                                       READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/solr-operator              1/1     1            1           49d
-deployment.apps/zk-operator                1/1     1            1           49d
+NAME                                              READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/solr-operator                     1/1     1            1           49d
+deployment.apps/zookeeper-operator                1/1     1            1           49d
 
-NAME                                       DESIRED   CURRENT   READY   AGE
-replicaset.apps/solr-operator-8449d4d96f   1         1         1       2d1h
-replicaset.apps/zk-operator-674676769c     1         1         1       49d
+NAME                                              DESIRED   CURRENT   READY   AGE
+replicaset.apps/solr-operator-8449d4d96f          1         1         1       2d1h
+replicaset.apps/zookeeper-operator-674676769c     1         1         1       49d
 ```
 
 After inspecting the status of you Kube cluster, you should see a deployment for the Solr Operator as well as the Zookeeper Operator.
@@ -156,7 +151,7 @@ curl -XPOST -H "Content-Type: application/json" \
 
 So we wish to add more capacity. Scaling the cluster is a breeze.
 
-```
+```bash
 # Issue the scale command
 kubectl scale --replicas=5 solrcloud/example
 ```
@@ -175,7 +170,7 @@ kubectl get solrclouds -w
 
 So we wish to upgrade to a newer Solr version:
 
-```
+```bash
 # Take note of the current version, which is 8.3.1
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
@@ -190,6 +185,10 @@ spec:
   solrImage:
     tag: "8.7"
   solrJavaMem: "-Xms300m -Xmx300m"
+  solrAddressability:
+    external:
+      method: Ingress
+      domainName: "ing.local.domain"
 EOF
 
 # Apply the new config
@@ -206,7 +205,7 @@ kubectl get solrclouds -w
 
 Kubernetes Dashboard is a web interface that gives a better overview of your k8s cluster than only running command-line commands. This step is optional, you don't need it if you're comfortable with the cli.
 
-```
+```bash
 # Install the Dashboard
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.4/aio/deploy/recommended.yaml
 
@@ -226,6 +225,6 @@ open "http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/http
 
 ## Delete the solrCloud cluster named 'example'
 
-```
+```bash
 kubectl delete solrcloud example
 ```
