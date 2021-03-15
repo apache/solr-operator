@@ -20,13 +20,13 @@ package controllers
 import (
 	b64 "encoding/base64"
 	"fmt"
-	"github.com/apache/lucene-solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"strings"
 	"testing"
 
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"

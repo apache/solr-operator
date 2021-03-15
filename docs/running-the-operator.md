@@ -13,7 +13,7 @@ The official documentation for installing the Solr Operator Helm chart can be fo
 The first step is to add the Solr Operator helm repository.
 
 ```bash
-$ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://solr.apache.org/charts
 $ helm repo update
 ```
 

@@ -1,8 +1,8 @@
 # Solr Operator
-[![Latest Version](https://img.shields.io/github/tag/apache/lucene-solr-operator)](https://github.com/apache/lucene-solr-operator/releases)
+[![Latest Version](https://img.shields.io/github/tag/apache/solr-operator)](https://github.com/apache/solr-operator/releases)
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/apache-solr)](https://artifacthub.io/packages/search?repo=apache-solr)
-[![Commit since last release](https://img.shields.io/github/commits-since/apache/lucene-solr-operator/latest.svg)](https://github.com/apache/lucene-solr-operator/commits/main)
+[![Commit since last release](https://img.shields.io/github/commits-since/apache/solr-operator/latest.svg)](https://github.com/apache/solr-operator/commits/main)
 [![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 [![Mailing List]]
@@ -31,20 +31,20 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
-- [Local Tutorial](https://apache.github.io/lucene-solr-operator/docs/local_tutorial)
+- [Local Tutorial](https://apache.github.io/solr-operator/docs/local_tutorial)
 - [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
   - The released helm charts and their instructions should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
-- [Running the Solr Operator](https://apache.github.io/lucene-solr-operator/docs/running-the-operator)
+- [Running the Solr Operator](https://apache.github.io/solr-operator/docs/running-the-operator)
 - Available Solr Resources
-    - [Solr Clouds](https://apache.github.io/lucene-solr-operator/docs/solr-cloud)
-    - [Solr Backups](https://apache.github.io/lucene-solr-operator/docs/solr-backup)
-    - [Solr Metrics](https://apache.github.io/lucene-solr-operator/docs/solr-prometheus-exporter)
-- [Development](https://apache.github.io/lucene-solr-operator/docs/development)
+    - [Solr Clouds](https://apache.github.io/solr-operator/docs/solr-cloud)
+    - [Solr Backups](https://apache.github.io/solr-operator/docs/solr-backup)
+    - [Solr Metrics](https://apache.github.io/solr-operator/docs/solr-prometheus-exporter)
+- [Development](https://apache.github.io/solr-operator/docs/development)
 
 ### Examples
 
-Example uses of each CRD have been [provided](https://apache.github.io/lucene-solr-operator/example).
+Example uses of each CRD have been [provided](https://apache.github.io/solr-operator/example).
 
 ## Version Compatibility & Upgrade Notes
 
@@ -52,7 +52,7 @@ Example uses of each CRD have been [provided](https://apache.github.io/lucene-so
 - All deprecated CRD fields and Solr Operator options from `v0.2.*` have been removed.
   
 - The `SolrCollection` and `SolrCollectionAlias` have been removed. Please use the Solr APIs to manage these resources instead.
-Discussion around the removal can be found in [Issue #204](https://github.com/apache/lucene-solr-operator/issues/204).
+Discussion around the removal can be found in [Issue #204](https://github.com/apache/solr-operator/issues/204).
 
 #### v0.2.7
 - Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
@@ -148,7 +148,7 @@ This is different from the source release LICENSE and NOTICE files, so make sure
 
 This space applies the ASF [Code of Conduct](https://www.apache.org/foundation/policies/conduct)
 If you have any concerns about the Code, or behavior which you have experienced in the project, please
-contact us at private@lucene.apache.org .
+contact us at private@solr.apache.org .
 
 ## Security Vulnerability Reporting
 
