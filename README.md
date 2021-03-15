@@ -153,7 +153,7 @@ contact us at private@solr.apache.org .
 ## Security Vulnerability Reporting
 
 If you believe you have identified a security vulnerability in this project, please send email to the ASF security
-team at security@apache.org, detailing the suspected issue and any methods you've found to reproduce it. More details
+team at security@solr.apache.org, detailing the suspected issue and any methods you've found to reproduce it. More details
 can be found [here](https://www.apache.org/security/)
 
 Please do NOT open an issue in the GitHub repository, as we'd prefer to keep vulnerability reports private until
