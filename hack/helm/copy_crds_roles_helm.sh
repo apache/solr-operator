@@ -8,20 +8,24 @@ set -u
 
 echo "Copying CRDs and Role to helm repo"
 
-# Build and package CRDs
-cat hack/headers/header.yaml.txt > helm/solr-operator/crds/crds.yaml
-printf "\n\n" >> helm/solr-operator/crds/crds.yaml
-kustomize build config/crd >> helm/solr-operator/crds/crds.yaml
+# Copy and package CRDs
+{
+  cat hack/headers/header.yaml.txt
+  printf "\n"
+  cat config/crd/bases/solr.apache.org_solrbackups.yaml
+  cat config/crd/bases/solr.apache.org_solrclouds.yaml
+  cat config/crd/bases/solr.apache.org_solrprometheusexporters.yaml
+
+} > helm/solr-operator/crds/crds.yaml
 
 # Copy Kube Role for Solr Operator permissions to Helm
-rm helm/solr-operator/templates/role.yaml
-cat hack/headers/header.yaml.txt > helm/solr-operator/templates/role.yaml
-printf '\n\n{{- if .Values.rbac.create }}\n{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}\n' >> helm/solr-operator/templates/role.yaml
-cat config/rbac/role.yaml >> helm/solr-operator/templates/role.yaml
-printf '\n{{- end }}\n{{- end }}' >> helm/solr-operator/templates/role.yaml
-gawk -i inplace '/^rules:$/{print "  namespace: {{ $namespace }}"}1' helm/solr-operator/templates/role.yaml
-
-# Template the Solr Operator role as needed
-sed -i.bak -E 's/^kind: ClusterRole$/kind: {{ include "solr-operator\.roleType" \$ }}/' helm/solr-operator/templates/role.yaml
-sed -i.bak -E 's/name: solr-operator-role$/name: {{ include "solr-operator\.fullname" \$ }}-role/' helm/solr-operator/templates/role.yaml
-rm helm/solr-operator/templates/role.yaml.bak
+# Template the Solr Operator role as needed for Helm values
+{
+  cat hack/headers/header.yaml.txt
+  printf '\n\n{{- if .Values.rbac.create }}\n{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}\n'
+  cat config/rbac/role.yaml \
+    | awk '/^rules:$/{print "  namespace: {{ $namespace }}"}1' \
+    | sed -E 's/^kind: ClusterRole$/kind: {{ include "solr-operator\.roleType" \$ }}/' \
+    | sed -E 's/name: solr-operator-role$/name: {{ include "solr-operator\.fullname" \$ }}-role/'
+  printf '\n{{- end }}\n{{- end }}\n'
+} > helm/solr-operator/templates/role.yaml
