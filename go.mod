@@ -1,6 +1,6 @@
 module github.com/apache/lucene-solr-operator
 
-go 1.14
+go 1.16
 
 require (
 	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
