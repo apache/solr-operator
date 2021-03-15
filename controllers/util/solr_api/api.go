@@ -53,7 +53,7 @@ type SolrResponseHeader struct {
 }
 
 type SolrAsyncStatus struct {
-	// Possible states can be found here: https://github.com/apache/lucene-solr/blob/1d85cd783863f75cea133fb9c452302214165a4d/solr/solrj/src/java/org/apache/solr/client/solrj/response/RequestStatusState.java
+	// Possible states can be found here: https://github.com/apache/solr/blob/releases/lucene-solr%2F8.8.1/solr/solrj/src/java/org/apache/solr/client/solrj/response/RequestStatusState.java
 	AsyncState string `json:"state"`
 
 	Message string `json:"msg"`
