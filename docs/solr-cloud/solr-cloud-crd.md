@@ -564,7 +564,7 @@ use case. The Solr operator can bootstrap a default security configuration for y
 there is no reason to deploy an unsecured SolrCloud cluster when using the Solr operator. In most cases, you'll want to combine
 basic authentication with TLS to ensure credentials are never passed in clear text.
 
-For background on Solr security, please refer to the [Reference Guide](https://lucene.apache.org/solr/guide) for your version of Solr.
+For background on Solr security, please refer to the [Reference Guide](https://solr.apache.org/guide) for your version of Solr.
 
 Basic authentication is the only authentication scheme supported by the Solr operator at this time. In general, you have 
 two basic options for configuring basic authentication with the Solr operator:

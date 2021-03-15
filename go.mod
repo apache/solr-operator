@@ -1,4 +1,4 @@
-module github.com/apache/lucene-solr-operator
+module github.com/apache/solr-operator
 
 go 1.16
 

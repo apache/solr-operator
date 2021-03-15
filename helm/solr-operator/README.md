@@ -3,7 +3,7 @@ Solr Operator
 
 The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
 
-Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/lucene-solr-operator).
+Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/solr-operator).
 
 ## Using the Helm Chart
 
@@ -27,7 +27,7 @@ If you do not wish to use the Zookeeper Operator, set:
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
 ```bash
-helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
+helm repo add apache-solr https://solr.apache.org/charts
 ```
 
 ### Installing the Chart

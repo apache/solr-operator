@@ -63,7 +63,7 @@ Now that we have the prerequisites setup, let us install Solr Operator which wil
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
-$ helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://solr.apache.org/charts
 $ helm repo update
 ```
 
@@ -130,7 +130,7 @@ open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=nodes
 
 ## Create a collection and index some documents
 
-Create a collection via the [Collections API](https://lucene.apache.org/solr/guide/8_8/collection-management.html#create).
+Create a collection via the [Collections API](https://solr.apache.org/guide/8_8/collection-management.html#create).
 
 ```bash
 # Execute the Collections API command

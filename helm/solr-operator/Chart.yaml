@@ -19,9 +19,9 @@ description: The Solr Operator enables easy management of Solr resources within 
 version: 0.2.8
 appVersion: v0.2.8
 kubeVersion: ">= 1.16.0-0"
-home: https://github.com/apache/lucene-solr-operator
+home: https://github.com/apache/solr-operator
 sources:
-  - https://github.com/apache/lucene-solr-operator
+  - https://github.com/apache/solr-operator
 keywords:
   - solr
   - apache
@@ -30,10 +30,17 @@ keywords:
   - operator
 maintainers:
   - name: Solr Dev Community
-    email: dev@lucene.apache.org
+    email: dev@solr.apache.org
   - name: Houston Putman
     email: houston@apache.org
-icon: https://lucene.apache.org/theme/images/solr/identity/Solr_Logo_on_white.png
+icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
+
+dependencies:
+  - name: 'zookeeper-operator'
+    version: 0.2.9
+    repository: https://charts.pravega.io
+    condition: zookeeper-operator.install
+
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
@@ -96,9 +103,3 @@ annotations:
         numThreads: 4
         image:
           tag: 8.7.0
-
-dependencies:
-  - name: 'zookeeper-operator'
-    version: 0.2.9
-    repository: https://charts.pravega.io
-    condition: zookeeper-operator.install
