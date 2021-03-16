@@ -1,6 +1,6 @@
 # Solr Operator Upgrade Notes
 
-Please carefully read all entries
+Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
 ## Upgrading minor versions (`v_.X._`)
 
@@ -21,7 +21,8 @@ Installing the Solr Operator, especially via the [Helm Chart](https://artifacthu
 does not necessarily mean that you are installing the required CRDs for that version of the Solr Operator.
 
 If the Solr CRDs already exist in your Kubernetes cluster, then Helm will not update them even if the CRDs have changed between the Helm chart versions.
-Instead, you will need to manually install the CRDs whenever upgrading your Solr Operator.
+Instead, you will need to manually install the CRDs whenever upgrading your Solr Operator.  
+**You should always upgrade your CRDs before upgrading the Operator**
 
 You can do this via the following command, replacing `<version>` with the version of the Solr Operator you are installing:
 ```bash
@@ -39,6 +40,11 @@ It is **strongly recommended** to use `kubectl create` or `kubectl replace`, ins
 
 - The `SolrCollection` and `SolrCollectionAlias` have been removed. Please use the Solr APIs to manage these resources instead.
   Discussion around the removal can be found in [Issue #204](https://github.com/apache/solr-operator/issues/204).
+
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.6` to `v0.2.9`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
 
 ### v0.2.7
 - Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
