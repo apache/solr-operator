@@ -5,6 +5,11 @@ The Solr Operator is designed to allow easy deployment Solr Clouds and other Sol
 
 Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/solr-operator).
 
+## Upgrade Notes
+
+Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://github.com/apache/solr-operator/tree/main/docs/upgrade-notes.md).
+There may be breaking changes between the version you are running and the version you want to upgrade to.
+
 ## Using the Helm Chart
 
 ### Installing the Zookeeper Operator
@@ -32,7 +37,7 @@ helm repo add apache-solr https://solr.apache.org/charts
 
 ### Installing the Chart
 
-To install the Solr Operator with the latest version or with a specific version, run either of the following commands:
+To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
 helm install solr-operator apache-solr/solr-operator
@@ -41,6 +46,15 @@ helm install solr-operator apache-solr/solr-operator --version 0.3.0
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
 The [configuration](#chart-values) section lists the parameters that can be configured during installation.
+
+### Upgrading the Solr Operator
+
+If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
+
+```bash
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml
+helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
+```
 
 #### Namespaces
 
@@ -75,8 +89,17 @@ This can be done with the `--skip-crds` helm option.
 helm install solr-operator apache-solr/solr-operator --skip-crds --namespace solr
 ```
 
-Helm will not upgrade CRDs once they have been installed.
-Therefore, if you are upgrading from a previous Solr Operator version, be sure to install the most recent CRDs **first**.
+**Helm will not upgrade CRDs once they have been installed.
+Therefore, if you are upgrading from a previous Solr Operator version, be sure to install the most recent CRDs first.**
+
+You can find the released Solr CRDs at the following URL:
+```
+https://solr.apache.org/operator/downloads/crds/<version>/<name>.yaml
+```
+
+Examples:
+- `https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml` - Includes all CRDs in the `v0.3.0` release
+- `https://solr.apache.org/operator/downloads/crds/v0.2.8/solrclouds.yaml` - Just the SolrCloud CRD in the `v0.2.8` release
 
 ### Uninstalling the Chart
 

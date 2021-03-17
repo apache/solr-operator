@@ -17,12 +17,12 @@ $ helm repo add apache-solr https://solr.apache.org/charts
 $ helm repo update
 ```
 
-
 Next, install the Solr Operator chart. Note this is using Helm v3, use the official Helm chart documentation linked to above.
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-$ helm install solr-operator apache-solr/solr-operator
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml
+$ helm install solr-operator apache-solr/solr-operator --version 0.3.0
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
