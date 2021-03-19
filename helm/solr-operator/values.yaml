@@ -38,6 +38,11 @@ zookeeper-operator:
   # If "zookeeper-operator.install" = true, then this setting is ignored.
   use: false
 
+  # By default we do not install the CRDs.
+  # Otherwise the ZookeeperCluster CRD will be deleted when deleting the Solr Operator helm chart release.
+  crd:
+    create: false
+
 # DEPRECATED: Please use "zookeeper-operator.use" instead.
 useZkOperator: "false"
 

@@ -71,25 +71,30 @@ Next, install the Solr Operator chart. Note this is using Helm v3, in order to u
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-# Install the operator
-$ helm install solr-operator apache-solr/solr-operator
+# Install the Solr & Zookeeper CRDs
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
+# Install the Solr operator and Zookeeper Operator
+$ helm install solr-operator apache-solr/solr-operator --version 0.3.0
 ```
+
+_Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
+
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
 ```bash
 $ kubectl get all
 
-NAME                                              READY   STATUS             RESTARTS   AGE
-pod/solr-operator-8449d4d96f-cmf8p                1/1     Running            0          47h
-pod/zookeeper-operator-674676769c-gd4jr           1/1     Running            0          49d
+NAME                                                   READY   STATUS             RESTARTS   AGE
+pod/solr-operator-8449d4d96f-cmf8p                     1/1     Running            0          47h
+pod/solr-operator-zookeeper-operator-674676769c-gd4jr  1/1     Running            0          49d
 
 NAME                                              READY   UP-TO-DATE   AVAILABLE   AGE
 deployment.apps/solr-operator                     1/1     1            1           49d
-deployment.apps/zookeeper-operator                1/1     1            1           49d
+deployment.apps/solr-operator-zookeeper-operator  1/1     1            1           49d
 
-NAME                                              DESIRED   CURRENT   READY   AGE
-replicaset.apps/solr-operator-8449d4d96f          1         1         1       2d1h
-replicaset.apps/zookeeper-operator-674676769c     1         1         1       49d
+NAME                                                         DESIRED   CURRENT   READY   AGE
+replicaset.apps/solr-operator-8449d4d96f                     1         1         1       2d1h
+replicaset.apps/solr-operator-zookeeper-operator-674676769c  1         1         1       49d
 ```
 
 After inspecting the status of you Kube cluster, you should see a deployment for the Solr Operator as well as the Zookeeper Operator.
@@ -99,8 +104,8 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a spec for a 3-node cluster v8.3 with 300m RAM each:
-cat <<EOF > solrCloud-example.yaml
+# Create a  a 3-node cluster v8.3 with 300m Heap each:
+cat <<EOF | kubectl apply -f -
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
@@ -114,10 +119,8 @@ spec:
     external:
       method: Ingress
       domainName: "ing.local.domain"
+      useExternalAddress: true
 EOF
-
-# Install Solr from that spec
-kubectl apply -f solrCloud-example.yaml
 
 # The solr-operator has created a new resource type 'solrclouds' which we can query
 # Check the status live as the deploy happens
@@ -174,8 +177,8 @@ So we wish to upgrade to a newer Solr version:
 # Take note of the current version, which is 8.3.1
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
-# Update the solrCloud configuratin with the new version, keeping 5 nodes
-cat <<EOF > solrCloud-example.yaml
+# Update the solrCloud configuration with the new version, keeping 5 nodes
+cat <<EOF | kubectl apply -f -
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
@@ -189,13 +192,12 @@ spec:
     external:
       method: Ingress
       domainName: "ing.local.domain"
+      useExternalAddress: true
 EOF
 
-# Apply the new config
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column
 # You can also watch the status with the 'kubectl get solrclouds' command
-kubectl apply -f solrCloud-example.yaml
 kubectl get solrclouds -w
 
 # Hit Control-C when done

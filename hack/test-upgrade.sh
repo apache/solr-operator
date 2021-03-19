@@ -4,14 +4,14 @@
 kubectl delete crds --all; kubectl delete pvc --all; helm delete solr-operator apache
 helm ls -a --all-namespaces | awk 'NR > 1 { print  "-n "$2, $1}' | xargs -L1 helm delete
 
-helm repo add apache-solr https://apache.github.io/lucene-solr-operator/charts && helm repo update
+helm repo add apache-solr https://solr.apache.org/charts && helm repo update
 
 ####
 ##  Setup an environment using the v0.2.6 Solr Operator
 ####
 
 # Install the Zookeeper Operator
-kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/solr-operator/example/dependencies/zk_operator.yaml
 
 # Install a past version of the Solr Operator
 helm install solr-operator apache-solr/solr-operator --version 0.2.6 --set ingressBaseDomain=localhost.com
@@ -110,9 +110,24 @@ kubectl replace -f https://raw.githubusercontent.com/apache/lucene-solr-operator
 kubectl get solrcloud -w
 
 ####
-##  Install the Apache Solr Operator separately (TODO: Change to release)
+
 ####
+##  Install the Apache Solr Operator separately
+####
+# Build the Apache release (TODO: Change to release when it is cut)
 make docker-build
+helm dependency build helm/solr-operator
+
+# Uninstall Old ZK Operator
+echo "Deleting all Zookeeper Operator resources, except for CRDs" && \
+  kubectl delete deployment zk-operator && \
+  kubectl delete clusterrolebinding zookeeper-operator-cluster-role-binding && \
+  kubectl delete clusterrole zookeeper-operator && \
+  kubectl delete serviceaccount zookeeper-operator
+
+# Install new ZookeeperCluster CRD
+kubectl replace -f https://raw.githubusercontent.com/pravega/zookeeper-operator/v0.2.9/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml
+
 helm install apache helm/solr-operator --set image.tag=latest --set image.pullPolicy=Never
 
 ####
@@ -120,7 +135,7 @@ helm install apache helm/solr-operator --set image.tag=latest --set image.pullPo
 ####
 kubectl get solrclouds.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
-  yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.solrPodPolicy, .items.[].status)' - \
+  yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.solrPodPolicy, .items.[].spec.zookeeperRef.provided.image.tag)' - \
   > apache_solrclouds.yaml
 kubectl get solrprometheusexporters.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
