@@ -29,7 +29,6 @@ for filename in config/crd/bases/*.yaml; do
 done
 
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
- > release-artifacts/crds/all-with-dependencies.yaml
 {
   cat hack/headers/zookeeper-operator-header.yaml.txt;
   printf "\n\n---\n"
