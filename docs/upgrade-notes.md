@@ -2,6 +2,10 @@
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
+## Upgrading from `v0.2.x` to `v0.3.x`
+If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
+This is a special upgrade that requires different instructions.
+
 ## Upgrading minor versions (`v_.X._`)
 
 In order to upgrade minor versions (e.g. `v0.2.5` -> `v0.3.0`), you must upgrade one minor version at a time (e.g. `v0.2.0` -> `v0.3.0` -> `v0.4.0`).

@@ -136,24 +136,15 @@ helm install apache helm/solr-operator --set image.tag=latest --set image.pullPo
 kubectl get solrclouds.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
   yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.solrPodPolicy, .items.[].spec.zookeeperRef.provided.image.tag)' - \
-  > apache_solrclouds.yaml
+  | kubectl apply -f -
 kubectl get solrprometheusexporters.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
   yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.podPolicy, .items.[].status)' - \
-  > apache_solrprometheusexporters.yaml
+  | kubectl apply -f -
 kubectl get solrbackups.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
   yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].status)' - \
-  > apache_solrbackups.yaml
-
-# Make sure they look correct
-cat apache_solrclouds.yaml
-cat apache_solrprometheusexporters.yaml
-cat apache_solrbackups.yaml
-
-kubectl apply -f apache_solrclouds.yaml
-kubectl apply -f apache_solrprometheusexporters.yaml
-kubectl apply -f apache_solrbackups.yaml
+  | kubectl apply -f -
 
 
 ####
@@ -163,6 +154,7 @@ kubectl apply -f apache_solrbackups.yaml
 helm delete solr-operator
 
 # Remove finalizers for Collections and CollectionAliases
+kubectl get solrclouds.solr.bloomberg.com -o name | sed -e 's/.*\///g' | xargs -I {} kubectl patch solrclouds.solr.bloomberg.com {} --type='json' -p='[{"op": "remove", "path": "/metadata/finalizers/0"}]'
 kubectl get solrcollections.solr.bloomberg.com -o name | sed -e 's/.*\///g' | xargs -I {} kubectl patch solrcollections.solr.bloomberg.com {} --type='json' -p='[{"op": "remove", "path": "/metadata/finalizers/0"}]'
 kubectl get solrcollectionaliases.solr.bloomberg.com -o name | sed -e 's/.*\///g' | xargs -I {} kubectl patch solrcollectionaliases.solr.bloomberg.com {} --type='json' -p='[{"op": "remove", "path": "/metadata/finalizers/0"}]'
 
