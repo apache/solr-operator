@@ -96,7 +96,9 @@ Therefore, the Zookeeper Operator needs to be upgraded to `v0.2.9` when the Solr
 If you use the Solr Operator [Helm chart](https://artifacthub.io/packages/helm/apache-solr/solr-operator), then the correct version of the Zookeeper Operator will be deployed when upgrading.
 However, you will need to pre-emptively delete some Kubernetes resources so that they can be managed by Helm.
 
-_Only use the below commands if you installed the Zookeeper Operator using the URL provided in the Solr Operator repository_
+_Only use the below `kubectl` commands if you installed the Zookeeper Operator using the URL provided in the Solr Operator repository._  
+If you already have a `v0.2.9` Zookeeper Operator running, ignore this and pass the following options when installing the Solr Operator:
+`--set zookeeper-operator.install=false --set zookeeper-operator.use=true`
 
 ```bash
 kubectl delete deployment zk-operator
