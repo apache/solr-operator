@@ -2,6 +2,10 @@
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
+## Upgrading from `v0.2.x` to `v0.3.x`
+If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
+This is a special upgrade that requires different instructions.
+
 ## Upgrading minor versions (`v_.X._`)
 
 In order to upgrade minor versions (e.g. `v0.2.5` -> `v0.3.0`), you must upgrade one minor version at a time (e.g. `v0.2.0` -> `v0.3.0` -> `v0.4.0`).
@@ -26,12 +30,26 @@ Instead, you will need to manually install the CRDs whenever upgrading your Solr
 
 You can do this via the following command, replacing `<version>` with the version of the Solr Operator you are installing:
 ```bash
-kubectl replace -f http://solr.apache.org/operator/downloads/crds/<version>/all.yaml
+# Just replace the Solr CRDs
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/<version>/all.yaml"
+# Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/<version>/all-with-dependencies.yaml"
 ```
 
-For example, `kubectl replace -f http://solr.apache.org/operator/downloads/crds/v0.2.8/all.yaml`.
-
 It is **strongly recommended** to use `kubectl create` or `kubectl replace`, instead of `kubectl apply` when creating/updating CRDs.
+
+### Upgrading the Zookeeper Operator
+
+When upgrading the Solr Operator, you may need to upgrade the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) at the same time.
+If you are using the Solr Helm chart to deploy the Zookeeper operator, then you won't need to do anything besides installing the CRD's with dependencies, and upgrade the Solr Operator helm deployment.
+
+```bash
+# Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
+```
+
+_Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
 ## Upgrade Warnings and Notes
 

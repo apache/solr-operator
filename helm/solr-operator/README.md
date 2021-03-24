@@ -28,6 +28,7 @@ If you do not wish to use the Zookeeper Operator, set:
 - `zookeeper-operator.install: false`
 - `zookeeper-operator.use: false`
 
+
 ### Adding the Solr Operator Helm Chart Repository
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
@@ -40,19 +41,21 @@ helm repo add apache-solr https://solr.apache.org/charts
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install solr-operator apache-solr/solr-operator
+kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
 helm install solr-operator apache-solr/solr-operator --version 0.3.0
 ```
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
 The [configuration](#chart-values) section lists the parameters that can be configured during installation.
 
+_Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
+
 ### Upgrading the Solr Operator
 
 If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
 
 ```bash
-kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
 helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
 ```
 
@@ -80,9 +83,9 @@ Note: Passing `false` or `""` to the `watchNamespaces` variable will both result
 
 ### Managing CRDs
 
-Helm 3 automatically runs CRDs in the /crds directory, no further action is needed.
+Helm 3 automatically installs the Solr CRDs in the /crds directory, so no further action is needed when first installing the Operator.
 
-If have solr operator installations in multiple namespaces that are managed separately, you will likely want to skip installing CRDs when installing the chart.
+If you have solr operator installations in multiple namespaces that are managed separately, you will likely want to skip installing CRDs when installing the chart.
 This can be done with the `--skip-crds` helm option.
 
 ```bash
@@ -92,14 +95,45 @@ helm install solr-operator apache-solr/solr-operator --skip-crds --namespace sol
 **Helm will not upgrade CRDs once they have been installed.
 Therefore, if you are upgrading from a previous Solr Operator version, be sure to install the most recent CRDs first.**
 
-You can find the released Solr CRDs at the following URL:
-```
-https://solr.apache.org/operator/downloads/crds/<version>/<name>.yaml
+You can update the released Solr CRDs with the following URL:
+```bash
+kubectl replace -f "https://solr.apache.org/operator/downloads/crds/<version>/<name>.yaml"
 ```
 
 Examples:
-- `https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml` - Includes all CRDs in the `v0.3.0` release
-- `https://solr.apache.org/operator/downloads/crds/v0.2.8/solrclouds.yaml` - Just the SolrCloud CRD in the `v0.2.8` release
+- `https://solr.apache.org/operator/downloads/crds/v0.3.0/all.yaml`  
+  Includes all Solr CRDs in the `v0.3.0` release
+- `https://solr.apache.org/operator/downloads/crds/v0.2.7/all-with-dependencies.yaml`  
+  Includes all Solr CRDs and dependency CRDs in the `v0.2.7` release
+- `https://solr.apache.org/operator/downloads/crds/v0.2.8/solrclouds.yaml`  
+  Just the SolrCloud CRD in the `v0.2.8` release
+
+#### The ZookeeperCluster CRD
+
+If you use the provided Zookeeper Cluster in the SolrCloud Spec, it is important to make sure you have the correct `ZookeeperCluster` CRD installed as well.
+
+The Zookeeper Operator Helm chart includes its CRDs when installing, however the way the CRDs are managed can be considered risky.
+If we let the Zookeeper Operator Helm chart manage the Zookeeper CRDs, then users could see outages when [uninstalling the chart](#uninstalling-the-chart).
+Therefore, by default, we tell the Zookeeper Operator to not install the Zookeeper CRDs.
+You can override this, assuming the risks, by setting `zookeeper-operator.crd.create: true`.
+
+For manual installation of the ZookeeperCluster CRD, you can find the file in the [zookeeper-operator repo](https://github.com/pravega/zookeeper-operator/blob/master/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml), for the correct release,
+or use the convenience download locations provided below.
+The Solr CRD releases have bundled the ZookeeperCluster CRD required in each version.
+
+```bash
+# Install all Solr CRDs as well as the dependency CRDS (ZookeeperCluster) for the given version of the Solr Operator
+kubectl create -f "https://solr.apache.org/operator/downloads/crds/<solr operator version>/all-with-dependencies.yaml"
+
+# Install *just* the ZookeeperCluster CRD used in the given version of the Solr Operator
+kubectl create -f "https://solr.apache.org/operator/downloads/crds/<solr operator version>/zookeeperclusters.yaml"
+```
+
+Examples:
+- `https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml`  
+  Includes all Solr CRDs and dependency CRDs, including `ZookeeperCluster`, in the `v0.3.0` Solr Operator release
+- `https://solr.apache.org/operator/downloads/crds/v0.2.8/zookeeperclusters.yaml`  
+  Just the ZookeeperCluster CRD required in the `v0.2.8` Solr Operator release
 
 ### Uninstalling the Chart
 
@@ -111,7 +145,7 @@ helm uninstall solr-operator
 
 The command removes all the Kubernetes components associated with the chart and deletes the release, except for the Solr CRDs.
 
-**NOTE: If you are using the Zookeeper Operator helm chart as a dependency, this will also delete the ZookeeperCluster CRD, thus deleting all Zookeeper instances in the Kubernetes Cluster.**
+**NOTE: If you are using the Zookeeper Operator helm chart as a dependency and have set `zookeeper-operator.crds.install: true`, this will also delete the ZookeeperCluster CRD, thus deleting all Zookeeper instances in the Kubernetes Cluster.**
 
 
 ## Chart Values
@@ -142,3 +176,16 @@ The command removes all the Kubernetes components associated with the chart and 
 | rbac.create | boolean | true | Create the necessary RBAC rules, whether cluster-wide or namespaced, for the Solr Operator. |
 | serviceAccount.create | boolean | true | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
 | serviceAccount.name | string | "" | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | 
+
+### Configuring the Zookeeper Operator
+
+If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.9/charts/zookeeper-operator#configuration).
+You must prefix every Zookeeper Operator configuration with `zookeeper-operator.`, in order for it to be used.
+
+For example:
+```yaml
+zookeeper-operator:
+  rbac:
+    create: false
+  watchNamespace: test-namespace
+```
