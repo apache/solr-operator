@@ -38,6 +38,6 @@ export GOARCH="${ARCH}"
 export GOOS=${GOOS:-}
 
 go build \
-    -ldflags "-X main.Version=${VERSION} -X main.GitSHA=${GIT_SHA} -X 'main.BuildTime=$(date)'" \
-    -o ./bin/${BIN} \
+    -ldflags "-X 'github.com/apache/solr-operator/version.Version=${VERSION}' -X 'github.com/apache/solr-operator/version.GitSHA=${GIT_SHA}' -X 'github.com/apache/solr-operator/version.BuildTime=$(date)'" \
+    -o "./bin/${BIN}" \
     .

@@ -24,6 +24,7 @@ import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
+	"github.com/apache/solr-operator/version"
 	"net/http"
 	"os"
 	"runtime"
@@ -50,11 +51,6 @@ var (
 
 	namespace string
 	name      string
-
-	// Version information for the Solr Operator
-	Version   string
-	BuildTime string
-	GitSHA    string
 
 	// Operator scope
 	watchNamespaces string
@@ -99,9 +95,9 @@ func main() {
 
 	ctrl.SetLogger(zap.Logger(true))
 
-	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", Version))
-	setupLog.Info(fmt.Sprintf("solr-operator Git SHA: %s", GitSHA))
-	setupLog.Info(fmt.Sprintf("solr-operator Build Time: %s", BuildTime))
+	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", version.Version))
+	setupLog.Info(fmt.Sprintf("solr-operator Git SHA: %s", version.GitSHA))
+	setupLog.Info(fmt.Sprintf("solr-operator Build Time: %s", version.BuildTime))
 	setupLog.Info(fmt.Sprintf("Go Version: %v", runtime.Version()))
 	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s / %s", runtime.GOOS, runtime.GOARCH))
 
