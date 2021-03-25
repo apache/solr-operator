@@ -32,7 +32,6 @@ COPY version/ version/
 COPY api/ api/
 COPY controllers/ controllers/
 
-ARG VERSION
 ARG GIT_SHA
 
 # Build

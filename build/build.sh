@@ -28,16 +28,11 @@ if [ -z "${BIN}" ]; then
     echo "BIN must be set"
     exit 1
 fi
-if [ -z "${VERSION}" ]; then
-    echo "VERSION must be set"
-    exit 1
-fi
-
 export CGO_ENABLED=0
 export GOARCH="${ARCH}"
 export GOOS=${GOOS:-}
 
 go build \
-    -ldflags "-X 'github.com/apache/solr-operator/version.Version=${VERSION}' -X 'github.com/apache/solr-operator/version.GitSHA=${GIT_SHA}' -X 'github.com/apache/solr-operator/version.BuildTime=$(date)'" \
+    -ldflags "-X 'github.com/apache/solr-operator/version.GitSHA=${GIT_SHA}' -X 'github.com/apache/solr-operator/version.BuildTime=$(date)'" \
     -o "./bin/${BIN}" \
     .

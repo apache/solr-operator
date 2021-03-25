@@ -95,7 +95,11 @@ func main() {
 
 	ctrl.SetLogger(zap.Logger(true))
 
-	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", version.Version))
+	fullVersion := version.Version
+	if version.VersionSuffix != "" {
+		fullVersion += "-" + version.VersionSuffix
+	}
+	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", fullVersion))
 	setupLog.Info(fmt.Sprintf("solr-operator Git SHA: %s", version.GitSHA))
 	setupLog.Info(fmt.Sprintf("solr-operator Build Time: %s", version.BuildTime))
 	setupLog.Info(fmt.Sprintf("Go Version: %v", runtime.Version()))

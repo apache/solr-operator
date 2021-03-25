@@ -3,7 +3,7 @@ CRD_OPTIONS ?= "crd"
 
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
-REPOSITORY ?= $(or $(NAMESPACE:%/=%), "apache")
+REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
 IMG = $(REPOSITORY)/$(NAME)
 # Default tag from info in version/version.go
 VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)
@@ -164,7 +164,7 @@ helm-deploy-operator: helm-dependency-build docker-build
 
 # Build the docker image for the operator
 docker-build:
-	docker build --build-arg --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
+	docker build --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
 	docker tag solr-operator ${IMG}:${TAG}
 	docker tag solr-operator ${IMG}:latest
 
