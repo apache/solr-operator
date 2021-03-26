@@ -5,8 +5,8 @@ WORKDIR /workspace
 ARG GO111MODULE=on
 
 # Download necessary libraries
-RUN go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1; \
-    go get github.com/google/go-licenses
+RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0; \
+    go install github.com/google/go-licenses@latest
 
 # Copy the Go Modules manifests
 COPY go.mod go.sum ./

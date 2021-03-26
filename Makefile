@@ -17,7 +17,7 @@ TAG ?= $(VERSION)
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
-CONTROLLER_GEN_VERSION=v0.4.1
+
 GO111MODULE ?= on
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -28,7 +28,7 @@ endif
 
 all: generate
 
-.PHONY: version
+.PHONY: version tag
 version:
 	@echo $(VERSION)
 
@@ -46,6 +46,11 @@ clean:
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
+.install-dependencies:
+	./hack/install_dependencies.sh
+
+install-dependencies: .install-dependencies mod-tidy
+
 release: clean prepare helm-dependency-build
 	VERSION=${VERSION} bash hack/release/update_versions.sh
 	VERSION=${VERSION} bash hack/release/build_helm.sh
@@ -56,7 +61,7 @@ release: clean prepare helm-dependency-build
 ###
 
 # Prepare the code for a PR or merge
-prepare: fmt generate manifests fetch-licenses-list
+prepare: fmt generate manifests fetch-licenses-list mod-tidy
 
 # Build solr-operator binary
 build: generate vet
@@ -76,12 +81,12 @@ deploy: manifests install
 	kubectl apply -k config/default
 
 # Generate code
-generate: controller-gen mod-tidy
-	$(CONTROLLER_GEN) object:headerFile=./hack/headers/header.go.txt paths="./..."
+generate:
+	controller-gen object:headerFile=./hack/headers/header.go.txt paths="./..."
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen mod-tidy
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+manifests:
+	controller-gen $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	./hack/helm/copy_crds_roles_helm.sh
 
 # Run go fmt against code
@@ -106,7 +111,7 @@ fetch-licenses-full:
 
 check: lint test
 
-lint: check-format check-licenses check-manifests check-generated check-helm
+lint: check-format check-licenses check-manifests check-generated check-helm check-mod
 
 check-format:
 	./hack/check_format.sh
@@ -128,21 +133,13 @@ check-generated: generate
 check-helm:
 	helm lint helm/solr-operator
 
+check-mod:
+	@echo "Check to make sure the go mod info is up to date"
+	git diff --exit-code -- go.mod go.sum
+
 # Run tests
 test: generate vet manifests
 	go test ./... -coverprofile cover.out
-
-
-# # find or download controller-gen
-# download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	go get "sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)"
-else ifneq (Version: $(CONTROLLER_GEN_VERSION), $(shell controller-gen --version))
-	rm "$(shell which controller-gen)"
-	go get "sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION)"
-endif
-CONTROLLER_GEN=$(shell which controller-gen)
 
 
 ###

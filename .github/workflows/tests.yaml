@@ -35,9 +35,7 @@ jobs:
 
       # Cleanup & Install dependencies
       - run: make clean
-      - run: make controller-gen
-      - run: ./hack/install_dependencies.sh
-      - run: make mod-tidy
+      - run: make install-dependencies
 
       - uses: actions/cache@v2
         with:
