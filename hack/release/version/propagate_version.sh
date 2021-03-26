@@ -13,7 +13,7 @@ set -u
 # Get full version string
 VERSION="$(cat version/version.go | grep -E 'Version([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
 VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
-if [[ -n "${VERSION:-}" ]]; then
+if [[ -n "${VERSION_SUFFIX:-}" ]]; then
   VERSION="${VERSION}-${VERSION_SUFFIX}"
 fi
 
