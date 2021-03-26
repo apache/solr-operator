@@ -30,7 +30,7 @@ helm install zookeeper-operator pravega/zookeeper-operator --version 0.2.9
 Install necessary dependencies for building and deploying the operator.
 ```bash
 export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
-./hack/install_dependencies.sh
+make install-dependencies
 ```
 
 ## Build the Solr CRDs
