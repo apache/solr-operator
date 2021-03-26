@@ -6,15 +6,18 @@ set -o pipefail
 # error on unset variables
 set -u
 
+###
+# Change the Version of the project
+# Use:
+#   VERSION=v1.2.3 ./hack/release/version/update_version.sh
+#   ./hack/release/version/update_version.sh v1.2.3
+###
+
 if [[ -z "${VERSION:-}" ]]; then
   export VERSION="$1"
 fi
 
 echo "Updating the latest version throughout the repo to: ${VERSION}"
-
-###
-# Increase Version of the project
-###
 
 # Version file
 awk -i inplace '$1 == "Version"{$4 = "\"'"${VERSION}"'\""} 1' version/version.go && \
