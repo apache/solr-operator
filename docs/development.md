@@ -68,16 +68,16 @@ This is useful for testing that your code builds correctly, as well as using the
 Building and releasing a test operator image with a custom Docker namespace.
 
 ```bash
-NAMESPACE=your-namespace/ make docker-build docker-push
+REPOSITORY=your-repository make docker-build docker-push
 ```
 
-You can control the namespace and version for your solr-operator docker image via the ENV variables:
-- `NAMESPACE`, defaults to `apache/`. **This must end with a forward slash.** This can also include the docker repository information for private repos.
-- `NAME`, defaults to `solr-operator`.
-- `VERSION`, defaults to the git HEAD tag. (e.g. `v0.2.5-1-g06f4e2a`).  
-You can check what version you are using by running `make version`.
+You can control the repository and version for your solr-operator docker image via the ENV variables:
+- `REPOSITORY` - defaults to `apache`. This can also include the docker repository information for private repos.
+- `NAME` - defaults to `solr-operator`.
+- `TAG` - defaults to the full branch version (e.g. `v0.3.0-prerelease`). For github tags, this value will be the release version.
+You can check what version you are using by running `make tag`, you can check your version with `make version`.
 
-The image will be created under the tag `$(NAMESPACE)$(NAME):$(VERSION)` as well as `$(NAMESPACE)$(NAME):latest`.
+The image will be created under the tag `$(REPOSITORY)/$(NAME):$(TAG)` as well as `$(REPOSITORY)/$(NAME):latest`.
 
 
 ### Running the Solr Operator

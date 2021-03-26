@@ -28,10 +28,10 @@ RUN echo "\n\n" >> LICENSE; \
 
 # Copy the go source
 COPY main.go ./
+COPY version/ version/
 COPY api/ api/
 COPY controllers/ controllers/
 
-ARG VERSION
 ARG GIT_SHA
 
 # Build

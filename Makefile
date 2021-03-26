@@ -3,9 +3,17 @@ CRD_OPTIONS ?= "crd"
 
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
-NAMESPACE ?= apache/
-IMG = $(NAMESPACE)$(NAME)
-VERSION ?= $(or $(shell git describe --tags HEAD),"latest")
+REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
+IMG = $(REPOSITORY)/$(NAME)
+# Default tag from info in version/version.go
+VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)
+TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)
+ifneq (,$(VERSION_SUFFIX))
+VERSION = $(TMP_VERSION)-$(VERSION_SUFFIX)
+else
+VERSION = ${TMP_VERSION}
+endif
+TAG ?= $(VERSION)
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
@@ -20,8 +28,12 @@ endif
 
 all: generate
 
+.PHONY: version
 version:
 	@echo $(VERSION)
+
+tag:
+	@echo $(TAG)
 
 ###
 # Setup
@@ -34,7 +46,7 @@ clean:
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
-release: clean manifests lint
+release: clean prepare helm-dependency-build
 	VERSION=${VERSION} bash hack/release/update_versions.sh
 	VERSION=${VERSION} bash hack/release/build_helm.sh
 	VERSION=${VERSION} bash hack/release/setup_release.sh
@@ -48,7 +60,7 @@ prepare: fmt generate manifests fetch-licenses-list
 
 # Build solr-operator binary
 build: generate vet
-	BIN=solr-operator VERSION=${VERSION} GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
+	BIN=solr-operator GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet manifests
@@ -60,7 +72,7 @@ install: manifests
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests install
-	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image apache/solr-operator=${IMG}:${VERSION}
+	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit set image apache/solr-operator=${IMG}:${TAG}
 	kubectl apply -k config/default
 
 # Generate code
@@ -134,16 +146,29 @@ CONTROLLER_GEN=$(shell which controller-gen)
 
 
 ###
+# Helm
+###
+
+# Build the docker image for the operator
+helm-dependency-build:
+	helm dependency build helm/solr-operator
+
+# Push the docker image for the operator
+helm-deploy-operator: helm-dependency-build docker-build
+	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(REPOSITORY)
+
+
+###
 # Docker Building & Pushing
 ###
 
 # Build the docker image for the operator
 docker-build:
-	docker build --build-arg VERSION=$(VERSION) --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
-	docker tag solr-operator ${IMG}:${VERSION}
+	docker build --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
+	docker tag solr-operator ${IMG}:${TAG}
 	docker tag solr-operator ${IMG}:latest
 
 # Push the docker image for the operator
 docker-push:
-	docker push ${IMG}:${VERSION}
+	docker push ${IMG}:${TAG}
 	docker push ${IMG}:latest
