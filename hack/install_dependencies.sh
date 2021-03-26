@@ -36,7 +36,7 @@ printf "\n\n"
 
 # Install go-licenses
 if ! (which go-licenses); then
-  go install github.com/google/go-licenses
+  go install github.com/google/go-licenses@latest
   echo "Installed go-licenses at $(which go-licenses)"
 else
   echo "go-licenses already installed at $(which go-licenses)"

@@ -35,7 +35,6 @@ jobs:
 
       # Cleanup & Install dependencies
       - run: make clean
-      - run: make controller-gen
       - run: make install-dependencies
 
       - uses: actions/cache@v2
