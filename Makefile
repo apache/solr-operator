@@ -42,6 +42,8 @@ tag:
 clean:
 	rm -rf ./bin
 	rm -rf ./release-artifacts
+	rm -rf ./helm/solr-operator/charts ./helm/solr-operator/Chart.lock
+	rm -rf ./cover.out
 
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
@@ -51,10 +53,8 @@ mod-tidy:
 
 install-dependencies: .install-dependencies mod-tidy
 
-release: clean prepare helm-dependency-build
-	VERSION=${VERSION} bash hack/release/update_versions.sh
-	VERSION=${VERSION} bash hack/release/build_helm.sh
-	VERSION=${VERSION} bash hack/release/setup_release.sh
+release: clean prepare
+	bash hack/release/artifacts/create_artifacts.sh
 
 ###
 # Building

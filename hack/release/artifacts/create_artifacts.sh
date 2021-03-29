@@ -26,6 +26,6 @@ VERSION=$(make version)
 
 echo "Setting up Solr Operator ${VERSION} release artifacts at '${RELEASE_ARTIFACTS_DIR}'"
 
-RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifact/bundle_source.sh
-RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifact/create_crds.sh
-RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifact/build_helm.sh
+RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/bundle_source.sh
+RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/create_crds.sh
+RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/build_helm.sh
