@@ -30,3 +30,6 @@ config/manager/kustomization.yaml
 # Helm dependency files
 helm/solr-operator/Chart.lock
 helm/solr-operator/charts
+
+# Python for the release wizard
+venv
