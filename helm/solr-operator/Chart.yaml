@@ -44,7 +44,9 @@ dependencies:
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
+  artifacthub.io/changes: |
+    - Add change log here, only single-layered bulleted list allowed.
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.3.0-prerelease

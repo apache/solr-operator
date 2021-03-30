@@ -24,10 +24,15 @@ awk -i inplace '$1 == "repository:" { tag = ($2 == "apache/solr-operator") }
 tag && $1 == "tag:"{$1 = "  " $1; $2 = "'"${VERSION}"'"} 1' helm/solr-operator/values.yaml
 
 # Update Helm Chart.yaml
+IS_PRE_RELEASE="false"
+if [[ "${VERSION_SUFFIX}" =~ .*prerelease ]]; then
+  IS_PRE_RELEASE="true"
+fi
 {
   cat helm/solr-operator/Chart.yaml | \
   awk '$0 ~ /^v/ && $1 == "version:"{$1 = $1; $2 = "'"${VERSION#v}"'"} 1' | \
   awk '$0 ~ /^a/ && $1 == "appVersion:"{$1 = $1; $2 = "'"${VERSION}"'"} 1' | \
+  awk '$1 == "artifacthub.io/prerelease:"{$1 = "  "$1; $2 = "\"'"${IS_PRE_RELEASE}"'\""} 1' | \
   sed -E "s|image: apache/solr-operator:(.*)|image: apache/solr-operator:${VERSION}|g"
 } > helm/solr-operator/Chart.yaml.tmp && mv helm/solr-operator/Chart.yaml.tmp helm/solr-operator/Chart.yaml
 

@@ -53,7 +53,7 @@ mod-tidy:
 
 install-dependencies: .install-dependencies mod-tidy
 
-release: clean prepare
+build-release-artifacts: clean prepare docker-build
 	bash hack/release/artifacts/create_artifacts.sh
 
 ###

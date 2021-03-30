@@ -46,3 +46,9 @@ COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
   --exclude .github \
   --transform "s,^,solr-operator-${VERSION}/," \
   -czf "${RELEASE_ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz" .
+
+GPG_USER=""
+if [[ -n "${GPG_KEY:-}" ]]; then
+  GPG_USER="-u ${GPG_KEY}"
+fi
+gpg ${GPG_USER} -ab "${RELEASE_ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz"
