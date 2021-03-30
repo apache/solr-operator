@@ -34,19 +34,19 @@ maintainers:
   - name: Houston Putman
     email: houston@apache.org
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
-
 dependencies:
   - name: 'zookeeper-operator'
     version: 0.2.9
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
-
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
   artifacthub.io/prerelease: "true"
+  # Add change log for a single release here, only single-layered bulleted list allowed.
   artifacthub.io/changes: |
-    - Add change log here, only single-layered bulleted list allowed.
+    - Change 1
+    - Change 2
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.3.0-prerelease
