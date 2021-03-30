@@ -7,7 +7,7 @@ set -o pipefail
 set -u
 
 ###
-# Setup the release of the CRDs.
+# Setup the release of all artifacts, then create signatures.
 # Use:
 #   ./hack/release/artifact/create_artifacts.sh
 #         (RELEASE_ARTIFACTS_DIR will default to "release-artifacts")
@@ -29,3 +29,23 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${RELEASE_ARTIFA
 RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/bundle_source.sh
 RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/create_crds.sh
 RELEASE_ARTIFACTS_DIR="${RELEASE_ARTIFACTS_DIR}" ./hack/release/artifacts/build_helm.sh
+
+GPG_USER=()
+if [[ -n "${GPG_KEY:-}" ]]; then
+  GPG_USER=(-u "${GPG_KEY}")
+fi
+
+(
+  cd "${RELEASE_ARTIFACTS_DIR}"
+
+  for artifact_directory in $(find * -type d); do
+    (
+      cd "${artifact_directory}"
+
+      for artifact in $(find * -type f ! \( -name '*.asc' -o -name '*.sha512' \) ); do
+        gpg "${GPG_USER[@]}" --detach-sig -ab "${artifact}"
+        sha512sum -b "${artifact}" > "${artifact}.sha512"
+      done
+    )
+  done
+)

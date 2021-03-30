@@ -52,3 +52,4 @@ jobs:
       # Test
       - run: make lint
       - run: make test
+      - run: make check-git

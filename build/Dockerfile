@@ -35,7 +35,7 @@ COPY controllers/ controllers/
 ARG GIT_SHA
 
 # Build
-RUN CGO_ENABLED=0 make fetch-licenses-full build
+RUN CGO_ENABLED=0 GIT_SHA="${GIT_SHA}" make fetch-licenses-full build
 
 # =============================================================================
 # Copy the controller-manager into a thin image
