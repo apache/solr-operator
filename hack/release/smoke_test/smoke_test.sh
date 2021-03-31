@@ -20,8 +20,7 @@ EOF
 }
 
 OPTIND=1
-
-while getopts hvf: opt; do
+while getopts hv:t:l: opt; do
     case $opt in
         h)
             show_help
@@ -53,6 +52,6 @@ fi
 
 ./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
 ./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"
-./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
+# ./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
 
 printf "\n\nSuccessfully smoke tested the Solr Operator %s!\n" "${VERSION}"

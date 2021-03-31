@@ -20,8 +20,7 @@ EOF
 }
 
 OPTIND=1
-
-while getopts hvf: opt; do
+while getopts hv:g:d: opt; do
     case $opt in
         h)
             show_help
