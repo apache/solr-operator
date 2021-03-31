@@ -6,25 +6,46 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Setup source release artifact.
-# Use:
-#   ./hack/release/artifact/bundle_source.sh
-#         (RELEASE_ARTIFACTS_DIR will default to "release-artifacts")
-#   RELEASE_ARTIFACTS_DIR=../release-artifacts ./hack/release/artifact/bundle_source.sh
-#   ./hack/release/artifact/bundle_source.sh ../release-artifacts
-###
-if [[ -z "${RELEASE_ARTIFACTS_DIR:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    export RELEASE_ARTIFACTS_DIR="release-artifacts"
-  else
-    export RELEASE_ARTIFACTS_DIR="$1"
-  fi
+show_help() {
+cat << EOF
+Usage: ./hack/release/artifacts/bundle_source.sh [-h] [-v VERSION] -d ARTIFACTS_DIR
+
+Setup the source release artifact.
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator (Optional, will default to project version)
+    -d  Base directory of the staged artifacts.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        d)  ARTIFACTS_DIR=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
+if [[ -z "${VERSION:-}" ]]; then
+  VERSION=$(make version)
+fi
+if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
+  error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
 fi
 
-VERSION=$(make version)
-
-echo "Bundling source release for the Solr Operator ${VERSION} at '${RELEASE_ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz'"
+echo "Bundling source release for the Solr Operator ${VERSION} at '${ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz'"
 
 TAR="${TAR:=tar}"
 if ! ("${TAR}" --version | grep "GNU tar"); then
@@ -36,8 +57,8 @@ if ! ("${TAR}" --version | grep "GNU tar"); then
 fi
 
 # Setup directory
-mkdir -p "${RELEASE_ARTIFACTS_DIR}"/source
-rm -rf "${RELEASE_ARTIFACTS_DIR}"/source/*
+mkdir -p "${ARTIFACTS_DIR}"/source
+rm -rf "${ARTIFACTS_DIR}"/source/*
 
 # Package all of the code into a source release
 
@@ -45,4 +66,4 @@ COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
   --exclude .asf.yaml \
   --exclude .github \
   --transform "s,^,solr-operator-${VERSION}/," \
-  -czf "${RELEASE_ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz" .
+  -czf "${ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz" .

@@ -6,35 +6,50 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Test the release source bundle
-# Download can either be a URL of the base release directory, or a relative or absolute filepath.
-# Use:
-#   VERSION="v0.3.5" DOWNLOAD="https://dist.apache.org/repos/dist/dev/solr/solr-operator/..." ./hack/release/smoke_test/test_source.sh
-#   ./hack/release/smoke_test/test_source.sh "v0.2.8" "https://dist.apache.org/repos/dist/dev/solr/solr-operator/...."
-###
+show_help() {
+cat << EOF
+Usage: ./hack/release/smoke_test/test_source.sh [-h] -v VERSION -l LOCATION
+
+Test the source bundle artifact
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator
+    -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        l)  LOCATION=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
 if [[ -z "${VERSION:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    error "Specify a version through the first argument, or through the VERSION env var"
-    exit 1
-  else
-    export VERSION="$1"
-  fi
+  error "Specify a project version through -v, or through the VERSION env var"; exit 1
 fi
-if [[ -z "${DOWNLOAD:-}" ]]; then
-  if [[ -z "${2:-}" ]]; then
-    error "Specify a download location through the second argument, or through the DOWNLOAD env var"
-    exit 1
-  else
-    export DOWNLOAD="$2"
-  fi
+if [[ -z "${LOCATION:-}" ]]; then
+  error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
 fi
 
 TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXXXX")
 
-# If DOWNLOAD is not a URL, then get the absolute path
-if ! (echo "${DOWNLOAD}" | grep -E "http"); then
-  DOWNLOAD=$(cd "${DOWNLOAD}"; pwd)
+# If LOCATION is not a URL, then get the absolute path
+if ! (echo "${LOCATION}" | grep -E "http"); then
+  LOCATION=$(cd "${LOCATION}"; pwd)
 fi
 
 echo "Download source artifact, verify and run 'make check'"
@@ -42,11 +57,14 @@ echo "Download source artifact, verify and run 'make check'"
 (
   cd "${TMP_DIR}"
 
-  if (echo "${DOWNLOAD}" | grep -E "http"); then
-    # Download source & asc
-    wget "${DOWNLOAD}/source/solr-operator-${VERSION}.tgz"
+  if (echo "${LOCATION}" | grep -E "http"); then
+    # Download source
+    wget "${LOCATION}/source/solr-operator-${VERSION}.tgz"
+
+    # Pull docker image, since we are working with remotely staged artifacts
+    docker pull "apache/solr-operator:${TAG}"
   else
-    cp "${DOWNLOAD}/source/solr-operator-${VERSION}.tgz" .
+    cp "${LOCATION}/source/solr-operator-${VERSION}.tgz" .
   fi
 
   # Unpack the source code
@@ -65,9 +83,12 @@ echo "Download source artifact, verify and run 'make check'"
     error "Version in source release should be ${VERSION}, but found ${FOUND_VERSION}"
     exit 1
   fi
+
+  # Check the docker image for License & Notice info
+  # TODO
 )
 
-# Delete temporary source download directory
+# Delete temporary source directory
 rm -rf "${TMP_DIR}"
 
 echo "Source verification successful!"

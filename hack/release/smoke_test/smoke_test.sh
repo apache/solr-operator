@@ -6,32 +6,53 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Smoke Test the release artifacts
-# Download can either be a URL of the base release directory, or a relative or absolute filepath.
-# Use:
-#   VERSION="v0.3.5" DOWNLOAD="https://dist.apache.org/repos/dist/dev/solr/solr-operator/..." ./hack/release/smoke_test/smoke_test.sh
-#   ./hack/release/smoke_test/smoke_test.sh "v0.2.8" "release-artifacts"
-###
+show_help() {
+cat << EOF
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] -v VERSION -t TAG -l LOCATION
+
+Smoke test the Solr Operator release artifacts.
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator
+    -t  Tag of the Solr Operator docker image to use
+    -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        t)  TAG=$OPTARG
+            ;;
+        l)  LOCATION=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
 if [[ -z "${VERSION:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    error "Specify a version through the first argument, or through the VERSION env var"
-    exit 1
-  else
-    export VERSION="$1"
-  fi
+  error "Specify a project version through -v, or through the VERSION env var"; exit 1
 fi
-if [[ -z "${DOWNLOAD:-}" ]]; then
-  if [[ -z "${2:-}" ]]; then
-    error "Specify a download location through the second argument, or through the DOWNLOAD env var"
-    exit 1
-  else
-    export DOWNLOAD="$2"
-  fi
+if [[ -z "${TAG:-}" ]]; then
+  error "Specify a docker image tag through -v, or through the TAG env var"; exit 1
+fi
+if [[ -z "${LOCATION:-}" ]]; then
+  error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
 fi
 
-VERSION="${VERSION}" DOWNLOAD="${DOWNLOAD}" ./hack/release/smoke_test/verify_all.sh
-VERSION="${VERSION}" DOWNLOAD="${DOWNLOAD}" ./hack/release/smoke_test/test_source.sh
-#VERSION="${VERSION}" DOWNLOAD="${DOWNLOAD}" ./hack/release/smoke_test/test_cluster.sh
+./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
+./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"
+./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
 
-printf "\n\nSuccessfully smoke tested the Solr Operator %s!" "${VERSION}\n"
+printf "\n\nSuccessfully smoke tested the Solr Operator %s!\n" "${VERSION}"

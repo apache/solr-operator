@@ -6,27 +6,57 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Verify checksums and signatures of all release artifacts
-# Download can either be a URL of the base release directory, or a relative or absolute filepath.
-# Use:
-#   DOWNLOAD="https://dist.apache.org/repos/dist/dev/solr/solr-operator/..." ./hack/release/smoke_test/verify_all.sh
-#   ./hack/release/smoke_test/verify_all.sh "https://dist.apache.org/repos/dist/dev/solr/solr-operator/...."
-###
-if [[ -z "${DOWNLOAD:-}" ]]; then
-  if [[ -z "${2:-}" ]]; then
-    error "Specify a download location through the second argument, or through the DOWNLOAD env var"
-    exit 1
-  else
-    export DOWNLOAD="$2"
-  fi
+show_help() {
+cat << EOF
+Usage: ./hack/release/smoke_test/test_source.sh [-h] -v VERSION -t TAG -l LOCATION
+
+Verify checksums and signatures of all release artifacts.
+Check that the docker image contains the necessary LICENSE and NOTICE.
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator
+    -t  Tag of the Solr Operator docker image to use
+    -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        t)  TAG=$OPTARG
+            ;;
+        l)  LOCATION=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
+if [[ -z "${VERSION:-}" ]]; then
+  error "Specify a project version through -v, or through the VERSION env var"; exit 1
+fi
+if [[ -z "${TAG:-}" ]]; then
+  error "Specify a docker image tag through -v, or through the TAG env var"; exit 1
+fi
+if [[ -z "${LOCATION:-}" ]]; then
+  error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
 fi
 
 TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXX")
 
-# If DOWNLOAD is not a URL, then get the absolute path
-if ! (echo "${DOWNLOAD}" | grep -E "http://"); then
-  DOWNLOAD=$(cd "${DOWNLOAD}"; pwd)
+# If LOCATION is not a URL, then get the absolute path
+if ! (echo "${LOCATION}" | grep -E "http://"); then
+  LOCATION=$(cd "${LOCATION}"; pwd)
 fi
 
 echo "Import Solr Keys"
@@ -37,17 +67,17 @@ echo "Download all artifacts and verify signatures"
 (
   cd "${TMP_DIR}"
 
-  if (echo "${DOWNLOAD}" | grep -E "http"); then
+  if (echo "${LOCATION}" | grep -E "http"); then
     # Download Source files from the staged location
-    wget -r -np -nH -nd --level=1 -P "source" "${DOWNLOAD}/source/"
+    wget -r -np -nH -nd --level=1 -P "source" "${LOCATION}/source/"
 
     # Download Helm files from the staged location
-    wget -r -np -nH -nd --level=1 -P "helm" "${DOWNLOAD}/helm/"
+    wget -r -np -nH -nd --level=1 -P "helm" "${LOCATION}/helm/"
 
     # Download CRD files from the staged location
-    wget -r -np -nH -nd --level=1 -P "crds" "${DOWNLOAD}/crds/"
+    wget -r -np -nH -nd --level=1 -P "crds" "${LOCATION}/crds/"
   else
-    cp -r "${DOWNLOAD}/"* .
+    cp -r "${LOCATION}/"* .
   fi
 
   for artifact_directory in $(find * -type d); do

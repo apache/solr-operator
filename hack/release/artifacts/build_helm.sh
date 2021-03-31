@@ -6,34 +6,55 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Build Helm Chart.
-# Use:
-#   ./hack/release/artifact/build_helm.sh
-#         (RELEASE_ARTIFACTS_DIR will default to "release-artifacts")
-#   RELEASE_ARTIFACTS_DIR=../release-artifacts ./hack/release/artifact/build_helm.sh
-#   ./hack/release/artifact/build_helm.sh ../release-artifacts
-###
-if [[ -z "${RELEASE_ARTIFACTS_DIR:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    export RELEASE_ARTIFACTS_DIR="release-artifacts"
-  else
-    export RELEASE_ARTIFACTS_DIR="$1"
-  fi
-fi
+show_help() {
+cat << EOF
+Usage: ./hack/release/artifacts/build_helm.sh [-h] [-v VERSION] -d ARTIFACTS_DIR
 
-VERSION=$(make version)
+Build the helm chart & repo.
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator (Optional, will default to project version)
+    -d  Base directory of the staged artifacts.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        d)  ARTIFACTS_DIR=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
+if [[ -z "${VERSION:-}" ]]; then
+  VERSION=$(make version)
+fi
+if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
+  error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
+fi
 
 echo "Packaging helm chart for version ${VERSION} at release-artifacts/helm"
 
 # Setup directory
-mkdir -p "${RELEASE_ARTIFACTS_DIR}"/helm
-rm -rf "${RELEASE_ARTIFACTS_DIR}"/helm/*
+mkdir -p "${ARTIFACTS_DIR}"/helm
+rm -rf "${ARTIFACTS_DIR}"/helm/*
 
 # Package and Index the helm charts, create release artifacts to upload in GithubRelease
 
 helm dependency build helm/solr-operator
 
-helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d "${RELEASE_ARTIFACTS_DIR}/helm"
+helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d "${ARTIFACTS_DIR}/helm"
 
-helm repo index "${RELEASE_ARTIFACTS_DIR}/helm"
+helm repo index "${ARTIFACTS_DIR}/helm"

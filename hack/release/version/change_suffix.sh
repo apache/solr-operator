@@ -6,27 +6,42 @@ set -o pipefail
 # error on unset variables
 set -u
 
+show_help() {
+cat << EOF
+Usage: ./hack/release/version/change_suffix.sh [-h] [-s SUFFIX]
 
-###
-# Change the Version Suffix of the project.
-# Use:
-#   ./hack/release/version/change_suffix.sh
-#           (This will remove the suffix if one exists, or change it to "prerelease" if empty)
-#   VERSION_SUFFIX=new-suffix ./hack/release/version/change_suffix.sh
-#   ./hack/release/version/change_suffix.sh new-suffix
-###
+Change the Version Suffix of the project.
+If a suffix is not provided, the project suffix will flip between "" and "prerelease", depending on the current value.
 
+    -h  Display this help and exit
+    -s  New version suffix for the project. (Optional)
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        s)  VERSION_SUFFIX=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION_SUFFIX:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    EXISTING_VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
-    if [[ -z "${EXISTING_VERSION_SUFFIX}" ]]; then
-      export VERSION_SUFFIX="prerelease"
-    else
-      export VERSION_SUFFIX=""
-    fi
+  EXISTING_VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
+  if [[ -z "${EXISTING_VERSION_SUFFIX}" ]]; then
+    export VERSION_SUFFIX="prerelease"
   else
-    export VERSION_SUFFIX="$1"
+    export VERSION_SUFFIX=""
   fi
 fi
 

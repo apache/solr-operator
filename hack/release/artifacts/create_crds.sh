@@ -6,35 +6,56 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Setup the release of the CRDs.
-# Use:
-#   ./hack/release/artifact/create_crds.sh
-#         (RELEASE_ARTIFACTS_DIR will default to "release-artifacts")
-#   RELEASE_ARTIFACTS_DIR=../release-artifacts ./hack/release/artifact/create_crds.sh
-#   ./hack/release/artifact/create_crds.sh ../release-artifacts
-###
-if [[ -z "${RELEASE_ARTIFACTS_DIR:-}" ]]; then
-  if [[ -z "${1:-}" ]]; then
-    export RELEASE_ARTIFACTS_DIR="release-artifacts"
-  else
-    export RELEASE_ARTIFACTS_DIR="$1"
-  fi
-fi
+show_help() {
+cat << EOF
+Usage: ./hack/release/artifacts/create_crds.sh [-h] [-v VERSION] -d ARTIFACTS_DIR
 
-VERSION=$(make version)
+Setup the release of the CRDs.
+
+    -h  Display this help and exit
+    -v  Version of the Solr Operator (Optional, will default to project version)
+    -d  Base directory of the staged artifacts.
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        v)  VERSION=$OPTARG
+            ;;
+        d)  ARTIFACTS_DIR=$OPTARG
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
+
+if [[ -z "${VERSION:-}" ]]; then
+  VERSION=$(make version)
+fi
+if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
+  error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
+fi
 
 echo "Setting up Solr Operator ${VERSION} CRDs at ${RELEASE_ARTIFACTS_DIR}/crds."
 
 # Setup directory
-mkdir -p "${RELEASE_ARTIFACTS_DIR}"/crds
-rm -rf "${RELEASE_ARTIFACTS_DIR}"/crds/*
+mkdir -p "${ARTIFACTS_DIR}"/crds
+rm -rf "${ARTIFACTS_DIR}"/crds/*
 
 # Create Release CRD files
 {
   cat hack/headers/header.yaml.txt
   printf "\n"
-} > "${RELEASE_ARTIFACTS_DIR}/crds/all.yaml"
+} > "${ARTIFACTS_DIR}/crds/all.yaml"
 for filename in config/crd/bases/*.yaml; do
     output_file=${filename#"config/crd/bases/solr.apache.org_"}
     # Create individual file with Apache Header
@@ -42,10 +63,10 @@ for filename in config/crd/bases/*.yaml; do
       cat hack/headers/header.yaml.txt;
       printf "\n"
       cat "${filename}";
-    } > "${RELEASE_ARTIFACTS_DIR}/crds/${output_file}"
+    } > "${ARTIFACTS_DIR}/crds/${output_file}"
 
     # Add to aggregate file
-    cat "${filename}" >> "${RELEASE_ARTIFACTS_DIR}/crds/all.yaml"
+    cat "${filename}" >> "${ARTIFACTS_DIR}/crds/all.yaml"
 done
 
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
@@ -53,11 +74,11 @@ done
   cat hack/headers/zookeeper-operator-header.yaml.txt;
   printf "\n\n---\n"
   curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/v0.2.9/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
-} > "${RELEASE_ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
+} > "${ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
 
 # Package all Solr and Dependency CRDs
 {
-  cat "${RELEASE_ARTIFACTS_DIR}/crds/all.yaml"
+  cat "${ARTIFACTS_DIR}/crds/all.yaml"
   printf "\n"
-  cat "${RELEASE_ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
-} > "${RELEASE_ARTIFACTS_DIR}/crds/all-with-dependencies.yaml"
+  cat "${ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
+} > "${ARTIFACTS_DIR}/crds/all-with-dependencies.yaml"

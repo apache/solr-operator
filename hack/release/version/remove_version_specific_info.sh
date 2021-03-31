@@ -6,14 +6,33 @@ set -o pipefail
 # error on unset variables
 set -u
 
+show_help() {
+cat << EOF
+Usage: ./hack/release/version/remove_version_specific_info.sh [-h]
 
-###
-# Remove information in the project specific to a previous version.
-# Use:
-#   ./hack/release/version/remove_version_specific_info.sh
-# Requires:
-#  - yq
-###
+Remove information in the project specific to a previous version.
+Requires:
+ * yq
+
+    -h  Display this help and exit
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 echo "Removing information specific to the previous release"
 

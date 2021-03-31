@@ -6,9 +6,31 @@ set -o pipefail
 # error on unset variables
 set -u
 
-###
-# Increase Version across the project to reflect what exists in version/version.go
-###
+show_help() {
+cat << EOF
+Usage: ./hack/release/version/propagate_version.sh [-h]
+
+Make sure all files in the project reflect the version currently set in: version/version.go
+
+    -h  Display this help and exit
+EOF
+}
+
+OPTIND=1
+
+while getopts hvf: opt; do
+    case $opt in
+        h)
+            show_help
+            exit 0
+            ;;
+        *)
+            show_help >&2
+            exit 1
+            ;;
+    esac
+done
+shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 # Get full version string
 VERSION="$(cat version/version.go | grep -E 'Version([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
