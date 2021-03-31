@@ -44,7 +44,7 @@ if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
   error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
 fi
 
-echo "Setting up Solr Operator ${VERSION} CRDs at ${RELEASE_ARTIFACTS_DIR}/crds."
+echo "Setting up Solr Operator ${VERSION} CRDs at ${ARTIFACTS_DIR}/crds."
 
 # Setup directory
 mkdir -p "${ARTIFACTS_DIR}"/crds
