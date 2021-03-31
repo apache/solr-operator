@@ -8,19 +8,20 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/smoke_test.sh [-h] -v VERSION -t TAG -l LOCATION
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-g GIT_SHA] -v VERSION -l LOCATION
 
 Smoke test the Solr Operator release artifacts.
 
     -h  Display this help and exit
     -v  Version of the Solr Operator
-    -t  Tag of the Solr Operator docker image to use
+    -i  Solr Operator Docker image to use  (Optional, defaults to apache/solr-operator:<version>)
+    -g  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
 EOF
 }
 
 OPTIND=1
-while getopts hv:t:l: opt; do
+while getopts hv:i:l:g: opt; do
     case $opt in
         h)
             show_help
@@ -28,7 +29,9 @@ while getopts hv:t:l: opt; do
             ;;
         v)  VERSION=$OPTARG
             ;;
-        t)  TAG=$OPTARG
+        g)  GIT_SHA=$OPTARG
+            ;;
+        i)  IMAGE=$OPTARG
             ;;
         l)  LOCATION=$OPTARG
             ;;
@@ -43,14 +46,26 @@ shift "$((OPTIND-1))"   # Discard the options and sentinel --
 if [[ -z "${VERSION:-}" ]]; then
   error "Specify a project version through -v, or through the VERSION env var"; exit 1
 fi
-if [[ -z "${TAG:-}" ]]; then
-  error "Specify a docker image tag through -v, or through the TAG env var"; exit 1
+if [[ -z "${IMAGE:-}" ]]; then
+  IMAGE="apache/solr-operator:${VERSION}"
 fi
 if [[ -z "${LOCATION:-}" ]]; then
   error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
 fi
 
-./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
+PULL_PASS_THROUGH=""
+# If LOCATION is a URL, we want to pull the Docker image
+if (echo "${LOCATION}" | grep -E "http"); then
+  PULL_PASS_THROUGH=" -p"
+fi
+
+GIT_SHA_PASS_THROUGH=()
+if [[ -n "${GIT_SHA:-}" ]]; then
+  GIT_SHA_PASS_THROUGH=(-g "${GIT_SHA}")
+fi
+
+./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}"
+./hack/release/smoke_test/verify_docker.sh -v "${VERSION}" -i "${IMAGE}""${PULL_PASS_THROUGH}" "${GIT_SHA_PASS_THROUGH[@]}"
 ./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"
 # ./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -t "${TAG}" -l "${LOCATION}"
 

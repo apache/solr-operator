@@ -8,28 +8,25 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_source.sh [-h] -v VERSION -t TAG -l LOCATION
+Usage: ./hack/release/smoke_test/verify_all.sh [-h] -v VERSION -l LOCATION
 
 Verify checksums and signatures of all release artifacts.
 Check that the docker image contains the necessary LICENSE and NOTICE.
 
     -h  Display this help and exit
     -v  Version of the Solr Operator
-    -t  Tag of the Solr Operator docker image to use
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
 EOF
 }
 
 OPTIND=1
-while getopts hv:t:l: opt; do
+while getopts hv:l: opt; do
     case $opt in
         h)
             show_help
             exit 0
             ;;
         v)  VERSION=$OPTARG
-            ;;
-        t)  TAG=$OPTARG
             ;;
         l)  LOCATION=$OPTARG
             ;;
@@ -43,9 +40,6 @@ shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION:-}" ]]; then
   error "Specify a project version through -v, or through the VERSION env var"; exit 1
-fi
-if [[ -z "${TAG:-}" ]]; then
-  error "Specify a docker image tag through -v, or through the TAG env var"; exit 1
 fi
 if [[ -z "${LOCATION:-}" ]]; then
   error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
@@ -83,7 +77,7 @@ echo "Download all artifacts and verify signatures"
     (
       cd "${artifact_directory}"
 
-      for artifact in $(find * -type f ! \( -name '*.asc' -o -name '*.sha512' \) ); do
+      for artifact in $(find * -type f ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
         sha512sum -c "${artifact}.sha512" \
           || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
         gpg2 --verify "${artifact}.asc" "${artifact}" \

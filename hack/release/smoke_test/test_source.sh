@@ -83,8 +83,9 @@ echo "Download source artifact, verify and run 'make check'"
     exit 1
   fi
 
-  # Check the docker image for License & Notice info
-  # TODO
+  # Check the License & Notice info
+  ls "LICENSE"
+  ls "NOTICE"
 )
 
 # Delete temporary source directory
