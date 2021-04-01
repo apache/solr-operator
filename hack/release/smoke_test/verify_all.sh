@@ -1,4 +1,19 @@
 #!/usr/bin/env bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # exit immediately when a command fails
 set -e
 # only exit with zero if all commands of the pipeline exit successfully
@@ -55,6 +70,9 @@ fi
 echo "Import Solr Keys"
 curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg2 --import --quiet
 
+# First generate the temporary public key ring
+gpg --export >~/.gnupg/pubring.gpg
+
 echo "Download all artifacts and verify signatures"
 # Do all logic in temporary directory
 (
@@ -65,7 +83,7 @@ echo "Download all artifacts and verify signatures"
     wget -r -np -nH -nd --level=1 -P "source" "${LOCATION}/source/"
 
     # Download Helm files from the staged location
-    wget -r -np -nH -nd --level=1 -P "helm" "${LOCATION}/helm/"
+    wget -r -np -nH -nd --level=1 -P "helm-charts" "${LOCATION}/helm-charts/"
 
     # Download CRD files from the staged location
     wget -r -np -nH -nd --level=1 -P "crds" "${LOCATION}/crds/"
@@ -83,6 +101,10 @@ echo "Download all artifacts and verify signatures"
         gpg2 --verify "${artifact}.asc" "${artifact}" \
           || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
       done
+
+      if [[ -f "${artifact}.prov" ]]; then
+        helm verify "${artifact}"
+      fi
     )
   done
 )
