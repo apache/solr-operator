@@ -102,7 +102,7 @@ kubectl rollout status deployment/example-solr-metrics
 ####
 helm upgrade solr-operator apache-solr/solr-operator --version 0.2.8 --set ingressBaseDomain=localhost.com
 
-kubectl replace -f https://raw.githubusercontent.com/apache/solr-operator/v0.2.8/helm/solr-operator/crds/crds.yaml
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.2.8/all-with-dependencies.yaml
 
 
 
