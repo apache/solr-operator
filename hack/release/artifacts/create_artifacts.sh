@@ -62,7 +62,7 @@ if [[ -z "${VERSION:-}" ]]; then
   VERSION=$(make version)
 fi
 if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
-  error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
+  echo "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var" >&2 && exit 1
 fi
 
 GPG_USER=()

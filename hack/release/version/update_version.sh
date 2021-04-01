@@ -50,7 +50,7 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION:-}" ]]; then
-  error "Specify a new project version through -v, or through the VERSION env var"; exit 1
+  echo "Specify a new project version through -v, or through the VERSION env var" >&2 && exit 1
 fi
 
 echo "Updating the latest version throughout the repo to: ${VERSION}"

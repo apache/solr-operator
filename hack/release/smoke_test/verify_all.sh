@@ -54,10 +54,10 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION:-}" ]]; then
-  error "Specify a project version through -v, or through the VERSION env var"; exit 1
+  echo "Specify a project version through -v, or through the VERSION env var" >&2 && exit 1
 fi
 if [[ -z "${LOCATION:-}" ]]; then
-  error "Specify an base artifact location -l, or through the LOCATION env var"; exit 1
+  echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
 fi
 
 TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXX")
