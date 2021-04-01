@@ -59,7 +59,7 @@ if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
   error "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var"; exit 1
 fi
 
-echo "Bundling source release for the Solr Operator ${VERSION} at '${ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz'"
+echo "Bundling source release for the Solr Operator ${VERSION} at '${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz'"
 
 TAR="${TAR:=tar}"
 if ! ("${TAR}" --version | grep "GNU tar"); then
@@ -71,8 +71,8 @@ if ! ("${TAR}" --version | grep "GNU tar"); then
 fi
 
 # Setup directory
-mkdir -p "${ARTIFACTS_DIR}"/source
-rm -rf "${ARTIFACTS_DIR}"/source/*
+mkdir -p "${ARTIFACTS_DIR}"
+rm -rf "${ARTIFACTS_DIR}"/*.tgz*
 
 # Package all of the code into a source release
 
@@ -80,4 +80,4 @@ COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
   --exclude .asf.yaml \
   --exclude .github \
   --transform "s,^,solr-operator-${VERSION}/," \
-  -czf "${ARTIFACTS_DIR}/source/solr-operator-${VERSION}.tgz" .
+  -czf "${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz" .

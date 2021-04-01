@@ -23,20 +23,20 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/verify_docker.sh [-h] [-p] [-i IMAGE] [-g GIT_SHA] -v VERSION
+Usage: ./hack/release/smoke_test/verify_docker.sh [-h] [-p] [-i IMAGE] [-s GIT_SHA] -v VERSION
 
 Verify the Solr Operator Docker image.
 
     -h  Display this help and exit
     -p  Pull Docker image before verifying (Optional, defaults to false)
     -v  Version of the Solr Operator
-    -g  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
+    -s  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
     -i  Name of the docker image to verify (Optional, defaults to apache/solr-operator:<version>)
 EOF
 }
 
 OPTIND=1
-while getopts hpv:i:g: opt; do
+while getopts hpv:i:s: opt; do
     case $opt in
         h)
             show_help
@@ -44,7 +44,7 @@ while getopts hpv:i:g: opt; do
             ;;
         v)  VERSION=$OPTARG
             ;;
-        g)  GIT_SHA=$OPTARG
+        s)  GIT_SHA=$OPTARG
             ;;
         i)  IMAGE=$OPTARG
             ;;

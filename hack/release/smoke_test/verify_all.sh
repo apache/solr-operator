@@ -80,7 +80,7 @@ echo "Download all artifacts and verify signatures"
 
   if (echo "${LOCATION}" | grep -E "http"); then
     # Download Source files from the staged location
-    wget -r -np -nH -nd --level=1 -P "source" "${LOCATION}/source/"
+    wget -r -np -nH -nd --level=1 "${LOCATION}/"
 
     # Download Helm files from the staged location
     wget -r -np -nH -nd --level=1 -P "helm-charts" "${LOCATION}/helm-charts/"
@@ -102,6 +102,7 @@ echo "Download all artifacts and verify signatures"
           || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
       done
 
+      # If a helm chart has a provenance file, verify it
       if [[ -f "${artifact}.prov" ]]; then
         helm verify "${artifact}"
       fi

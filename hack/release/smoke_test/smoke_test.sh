@@ -23,20 +23,20 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-g GIT_SHA] -v VERSION -l LOCATION
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] -v VERSION -l LOCATION
 
 Smoke test the Solr Operator release artifacts.
 
     -h  Display this help and exit
     -v  Version of the Solr Operator
     -i  Solr Operator Docker image to use  (Optional, defaults to apache/solr-operator:<version>)
-    -g  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
+    -s  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:g: opt; do
+while getopts hv:i:l:s: opt; do
     case $opt in
         h)
             show_help
@@ -44,7 +44,7 @@ while getopts hv:i:l:g: opt; do
             ;;
         v)  VERSION=$OPTARG
             ;;
-        g)  GIT_SHA=$OPTARG
+        s)  GIT_SHA=$OPTARG
             ;;
         i)  IMAGE=$OPTARG
             ;;
@@ -76,7 +76,7 @@ fi
 
 GIT_SHA_PASS_THROUGH=()
 if [[ -n "${GIT_SHA:-}" ]]; then
-  GIT_SHA_PASS_THROUGH=(-g "${GIT_SHA}")
+  GIT_SHA_PASS_THROUGH=(-s "${GIT_SHA}")
 fi
 
 ./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}"

@@ -73,12 +73,12 @@ echo "Download source artifact, verify and run 'make check'"
 
   if (echo "${LOCATION}" | grep -E "http"); then
     # Download source
-    wget "${LOCATION}/source/solr-operator-${VERSION}.tgz"
+    wget "${LOCATION}/solr-operator-${VERSION}.tgz"
 
     # Pull docker image, since we are working with remotely staged artifacts
     docker pull "apache/solr-operator:${TAG}"
   else
-    cp "${LOCATION}/source/solr-operator-${VERSION}.tgz" .
+    cp "${LOCATION}/solr-operator-${VERSION}.tgz" .
   fi
 
   # Unpack the source code
