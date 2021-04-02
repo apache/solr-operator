@@ -28,7 +28,7 @@ Usage: ./hack/release/version/update_version.sh [-h] -v VERSION
 Change the Version of the project.
 
     -h  Display this help and exit
-    -s  New version suffix for the project. (Optional)
+    -v  New version for the project.
 EOF
 }
 

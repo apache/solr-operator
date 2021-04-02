@@ -113,4 +113,4 @@ echo "Download all artifacts and verify signatures"
 # Delete temporary source download directory
 rm -rf "${TMP_DIR}"
 
-echo "Successfully verified all artifacts!"
+printf "\n********************\nSuccessfully verified all artifacts!\n\n"

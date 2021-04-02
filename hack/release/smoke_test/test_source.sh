@@ -106,4 +106,4 @@ echo "Download source artifact, verify and run 'make check'"
 # Delete temporary source directory
 rm -rf "${TMP_DIR}"
 
-echo "Source verification successful!"
+printf "\n********************\nSource verification successful!\n\n"

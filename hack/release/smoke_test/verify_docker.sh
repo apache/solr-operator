@@ -89,4 +89,4 @@ if [[ -n "${GIT_SHA:-}" ]]; then
     }
 fi
 
-echo "Docker verification successful!"
+printf "\n********************\nDocker verification successful!\n\n"

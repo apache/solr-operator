@@ -95,7 +95,7 @@ if (kind get clusters | grep "${CLUSTER_NAME}"); then
 fi
 
 echo "Create test Kubernetes cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
-kind create cluster --name "${CLUSTER_NAME}" # --config "hack/release/smoke_test/kind_cluster.yaml"
+kind create cluster --name "${CLUSTER_NAME}"
 
 # Load the docker image into the cluster
 kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
@@ -103,19 +103,11 @@ kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
 # First generate the temporary public key ring
 gpg --export >~/.gnupg/pubring.gpg
 
-# Install the NGINX Ingress Controller
-#kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/static/provider/kind/deploy.yaml
-#sleep 10
-#kubectl wait --namespace ingress-nginx \
-#  --for=condition=ready pod \
-#  --selector=app.kubernetes.io/component=controller \
-#  --timeout=90s
-
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
 helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${HELM_CHART}" --set image.tag="${IMAGE##*:}" --set image.repository="${IMAGE%%:*}" --set image.pullPolicy="Never"
 
-# Install a test Solr Cluster
+printf "\nInstall a test Solr Cluster\n"
 cat <<EOF | kubectl apply -f -
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
@@ -124,15 +116,8 @@ metadata:
 spec:
   replicas: 3
   solrImage:
-    tag: 8.8.0
+    tag: 8.7.0
   solrJavaMem: "-Xms1g -Xmx3g"
-  solrAddressability:
-    commonServicePort: 80
-    external:
-      method: Ingress
-      useExternalAddress: true
-      domainName: "smoke.test"
-      nodePortOverride: 80
   customSolrKubeOptions:
     podOptions:
       resources:
@@ -152,22 +137,47 @@ spec:
 EOF
 
 # Wait for solrcloud to be ready
-printf 'Watch and wait for all Solr nodes to become ready. "Ready Nodes" should hit 3.\nHit Ctrl-C when this is the case.\n\n'
-kubectl get solrcloud -w || true
+printf '\nWait for all 3 Solr nodes to become ready.\n\n'
+grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
 
-# Kill child processes after completion of script
+# Expose the common Solr service to localhost
 kubectl port-forward service/example-solrcloud-common 8983:80 || true &
 sleep 2
 
-echo "Check the admin URL to make sure it works"
-curl --silent "http://localhost:8983/solr/admin/info/system" | grep '"status":0' --silent
+printf "\nCheck the admin URL to make sure it works\n"
+curl --silent "http://localhost:8983/solr/admin/info/system" | grep '"status":0' > /dev/null
 
-echo "Creating a test collection"
-curl --silent "http://localhost:8983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' --silent
+printf "\nCreating a test collection\n"
+curl --silent "http://localhost:8983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
 
-echo "Query the test collection, test for 0 docs"
-curl --silent "http://localhost:8983/solr/smoke-test/select" | grep '\"numFound\":0' --silent
+printf "\nQuery the test collection, test for 0 docs\n"
+curl --silent "http://localhost:8983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
 
+printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
+cat <<EOF | kubectl apply -f -
+apiVersion: solr.apache.org/v1beta1
+kind: SolrPrometheusExporter
+metadata:
+  name: example
+spec:
+  solrReference:
+    cloud:
+      name: "example"
+  numThreads: 4
+  image:
+    tag: 8.7.0
+EOF
+
+printf "\nWait for the Solr Prometheus Exporter to be ready\n"
+sleep 5
+kubectl rollout status deployment/example-solr-metrics
+
+# Expose the Solr Prometheus Exporter service to localhost
+kubectl port-forward service/example-solr-metrics 8984:80 || true &
+sleep 15
+
+printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr' URL being scraped.\n"
+curl --silent "http://localhost:8984/metrics" | grep http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr > /dev/null
 
 # If LOCATION is a URL, then remove the helm repo at the end
 if (echo "${LOCATION}" | grep -E "http"); then
@@ -178,4 +188,4 @@ fi
 echo "Delete test Kind Kubernetes cluster."
 kind delete clusters "${CLUSTER_NAME}"
 
-printf "\n\nSmoke test successfully run!\n"
+printf "\n********************\nLocal end-to-end cluster test successfully run!\n\n"
