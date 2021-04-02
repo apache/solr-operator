@@ -44,9 +44,6 @@ templates:
     it easy for you to know what is done and what is left to do. If you need to
     re-spin a Release Candidata (RC) the Wizard will also help.
 
-    The Lucene project has automated much of the release process with various scripts,
-    and this wizard is the glue that binds it all together.
-
     In the first TODO step in the checklist you will be asked to read up on the
     Apache release policy and other relevant documents before you start the release.
 
@@ -106,7 +103,7 @@ templates:
     (( template=announce_solr_operator_mail_body ))
     ----
   announce_solr_operator_sign_mail: |
-    The template below can be used to announce the Solr release to the
+    The template below can be used to announce the Solr Operator release to the
     `announce@apache.org` mailing list. The mail *should be signed with PGP.*
     and sent *from your `@apache.org` account*.
 
@@ -212,7 +209,6 @@ groups:
     - http://www.apache.org/dev/release-publishing.html
     - http://www.apache.org/legal/release-policy.html
     - http://www.apache.org/dev/release-signing.html
-    - https://wiki.apache.org/lucene-java/ReleaseTodo
   - !Todo
     id: tools
     title: Necessary tools are installed
@@ -249,7 +245,7 @@ groups:
       * Upload your key to the MIT key server, pgp.mit.edu
       * Put you GPG key's fingerprint in the `OpenPGP Public Key Primary Fingerprint`
         field in your id.apache.org profile
-      * The tests will complain if your GPG key has not been signed by another Lucene
+      * The tests will complain if your GPG key has not been signed by another Solr
         committer. This makes you a part of the GPG "web of trust" (WoT). Ask a committer
         that you know personally to sign your key for you, providing them with the
         fingerprint for the key.
@@ -1076,9 +1072,9 @@ groups:
   title: Update the website
   description: |
     For every release, we publish docs on the website, we need to update the
-    download pages etc. The website is hosted in https://github.com/apache/lucene-site
-    but the Javadocs and Solr Reference Guide are pushed to SVN and then included
-    in the main site through links.
+    download pages etc. The website is hosted in https://github.com/apache/solr-site
+#    but the Javadocs and Solr Reference Guide are pushed to SVN and then included
+#    in the main site through links.
   todos:
 #  - !Todo
 #    id: website_docs
@@ -1103,10 +1099,6 @@ groups:
 #      - !Command
 #        cmd: "{{ gradle_cmd }} documentation -Dversion.release={{ release_version }}"
 #        comment: Build documentation
-#      - !Command
-#        cmd: svn -m "Add docs, changes and javadocs for Lucene {{ release_version }}"  import {{ git_checkout_folder }}/lucene/build/docs  https://svn.apache.org/repos/infra/websites/production/lucene/content/core/{{ version }}
-#        logfile: add-docs-lucene.log
-#        comment: Add docs for Lucene
 #      - !Command
 #        cmd: svn -m "Add docs, changes and javadocs for Solr {{ release_version }}"  import {{ git_checkout_folder }}/solr/build/docs  https://svn.apache.org/repos/infra/websites/production/lucene/content/solr/{{ version }}
 #        logfile: add-docs-solr.log
@@ -1255,7 +1247,7 @@ groups:
         logfile: push-website.log
     post_description: |
       Wait a few minutes for the build to happen. You can follow the site build at https://ci2.apache.org/#/builders/3
-      and view the staged site at https://lucene.staged.apache.org
+      and view the staged site at https://solr.staged.apache.org/operator
       Verify that correct links and versions are mentioned in download pages, download buttons etc.
       If you find anything wrong, then commit and push any changes and check again.
 
@@ -1304,7 +1296,7 @@ groups:
   todos:
   - !Todo
     id: announce_solr_operator
-    title: Announce the SolrOperator release (@s.a.o)
+    title: Announce the Solr Operator release (@s.a.o)
     description: |
       (( template=announce_solr_operator_mail ))
   - !Todo
@@ -1328,7 +1320,7 @@ groups:
     - https://www.openpgp.org/software/mailvelope/
   - !Todo
     id: announce_solr_operator_sig
-    title: Announce the Solr release (announce@a.o)
+    title: Announce the Solr Operator release (announce@a.o)
     description: |
       (( template=announce_solr_operator_sign_mail ))
 #  - !Todo
@@ -1339,7 +1331,6 @@ groups:
 #      Major versions should have a small new paragraph under 'History'.
 #      If you know other languages than English, edit those as well.
 #    links:
-#    - https://en.wikipedia.org/wiki/Apache_Lucene
 #    - https://en.wikipedia.org/wiki/Apache_Solr
   - !Todo
     id: add_to_apache_reporter
@@ -1361,8 +1352,7 @@ groups:
     id: github_issue_unfinished
     title: Remove all unfinished Issues and PRs from the Github Milestone
     description: |-
-      Go to JIRA search in both Solr and Lucene and find all issues that were fixed in the release
-      you just made, whose Status is Resolved.
+      Go to Github and make sure that all of the Issues listed under the Milestone are either closed, or removed from the Milestone.
 
       . Go to https://github.com/apache/solr-operator/milestones/{{ release_version }}
       . If there are any Issues/PRs that are still open, then go to them and either:
