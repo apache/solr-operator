@@ -42,6 +42,9 @@ tag:
 clean:
 	rm -rf ./bin
 	rm -rf ./release-artifacts
+	rm -rf ./helm/solr-operator/charts ./helm/solr-operator/Chart.lock
+	rm -rf ./cover.out
+	rm -rf ./generated-check
 
 mod-tidy:
 	export GO111MODULE=on; go mod tidy
@@ -51,10 +54,8 @@ mod-tidy:
 
 install-dependencies: .install-dependencies mod-tidy
 
-release: clean prepare helm-dependency-build
-	VERSION=${VERSION} bash hack/release/update_versions.sh
-	VERSION=${VERSION} bash hack/release/build_helm.sh
-	VERSION=${VERSION} bash hack/release/setup_release.sh
+build-release-artifacts: clean prepare docker-build
+	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts)
 
 ###
 # Building
@@ -64,11 +65,11 @@ release: clean prepare helm-dependency-build
 prepare: fmt generate manifests fetch-licenses-list mod-tidy
 
 # Build solr-operator binary
-build: generate vet
+build: generate
 	BIN=solr-operator GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
-run: generate fmt vet manifests
+run: generate fmt manifests
 	go run ./main.go
 
 # Install CRDs into a cluster
@@ -93,15 +94,11 @@ manifests:
 fmt:
 	go fmt ./...
 
-# Run go vet against code
-vet:
-	go vet ./...
-
-# Run go vet against code
+# Fetch the list of license types
 fetch-licenses-list:
 	go-licenses csv . | grep -v -E "solr-operator" | sort > dependency_licenses.csv
 
-# Run go vet against code
+# Fetch all licenses
 fetch-licenses-full:
 	go-licenses save . --save_path licenses --force
 
@@ -111,7 +108,7 @@ fetch-licenses-full:
 
 check: lint test
 
-lint: check-format check-licenses check-manifests check-generated check-helm check-mod
+lint: check-mod vet check-format check-licenses check-manifests check-generated check-helm
 
 check-format:
 	./hack/check_format.sh
@@ -122,23 +119,51 @@ check-licenses:
 	@echo "Check list of dependency licenses"
 	go-licenses csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
 
-check-manifests: manifests
+check-manifests:
+	rm -rf generated-check
+	mkdir -p generated-check
+	mv config generated-check/existing-config; cp -r generated-check/existing-config config
+	mv helm generated-check/existing-helm; cp -r generated-check/existing-helm helm
+	make manifests
+	mv config generated-check/config; mv generated-check/existing-config config
+	mv helm generated-check/helm; mv generated-check/existing-helm helm
 	@echo "Check to make sure the manifests are up to date"
-	git diff --exit-code -- config helm/solr-operator/crds
+	diff --recursive config generated-check/config
+	diff --recursive helm generated-check/helm
 
-check-generated: generate
+check-generated:
+	rm -rf generated-check
+	mkdir -p generated-check
+	cp -r api generated-check/existing-api
+	make generate
+	mv api generated-check/api; mv generated-check/existing-api api
 	@echo "Check to make sure the generated code is up to date"
-	git diff --exit-code -- api/*/zz_generated.deepcopy.go
+	diff --recursive api generated-check/api
 
 check-helm:
 	helm lint helm/solr-operator
 
 check-mod:
+	rm -rf generated-check
+	mkdir -p generated-check/existing-go-mod generated-check/go-mod
+	cp go.* generated-check/existing-go-mod/.
+	make mod-tidy
+	cp go.* generated-check/go-mod/.
+	mv generated-check/existing-go-mod/go.* .
 	@echo "Check to make sure the go mod info is up to date"
-	git diff --exit-code -- go.mod go.sum
+	diff go.mod generated-check/go-mod/go.mod
+	diff go.sum generated-check/go-mod/go.sum
+
+# Run go vet against code
+vet:
+	go vet ./...
+
+check-git:
+	@echo "Check to make sure the repo does not have uncommitted code"
+	git diff --exit-code
 
 # Run tests
-test: generate vet manifests
+test:
 	go test ./... -coverprofile cover.out
 
 

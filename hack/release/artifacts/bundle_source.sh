@@ -23,23 +23,26 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/version/update_version.sh [-h] -v VERSION
+Usage: ./hack/release/artifacts/bundle_source.sh [-h] [-v VERSION] -d ARTIFACTS_DIR
 
-Change the Version of the project.
+Setup the source release artifact.
 
     -h  Display this help and exit
-    -v  New version for the project.
+    -v  Version of the Solr Operator (Optional, will default to project version)
+    -d  Base directory of the staged artifacts.
 EOF
 }
 
 OPTIND=1
-while getopts hv: opt; do
+while getopts hv:d: opt; do
     case $opt in
         h)
             show_help
             exit 0
             ;;
         v)  VERSION=$OPTARG
+            ;;
+        d)  ARTIFACTS_DIR=$OPTARG
             ;;
         *)
             show_help >&2
@@ -50,11 +53,31 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION:-}" ]]; then
-  echo "Specify a new project version through -v, or through the VERSION env var" >&2 && exit 1
+  VERSION=$(make version)
+fi
+if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
+  echo "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var" >&2 && exit 1
 fi
 
-echo "Updating the latest version throughout the repo to: ${VERSION}"
+echo "Bundling source release for the Solr Operator ${VERSION} at '${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz'"
 
-# Version file
-awk -i inplace '$1 == "Version"{$4 = "\"'"${VERSION}"'\""} 1' version/version.go && \
-  go fmt version/version.go
+TAR="${TAR:=tar}"
+if ! ("${TAR}" --version | grep "GNU tar"); then
+  TAR="gtar"
+  if ! ("${TAR}" --version | grep "GNU tar"); then
+    printf "\nMust have a GNU tar installed. If on OSX, then please download gnu-tar. It is available via brew.\nThe GNU version of Tar must be available at either 'tar' or 'gtar'.\n"
+    exit 1
+  fi
+fi
+
+# Setup directory
+mkdir -p "${ARTIFACTS_DIR}"
+rm -rf "${ARTIFACTS_DIR}"/*.tgz*
+
+# Package all of the code into a source release
+
+COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
+  --exclude .asf.yaml \
+  --exclude .github \
+  --transform "s,^,solr-operator-${VERSION}/," \
+  -czf "${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz" .

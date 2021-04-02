@@ -28,5 +28,11 @@ release-artifacts
 config/manager/kustomization.yaml
 
 # Helm dependency files
-helm/solr-operator/Chart.lock
-helm/solr-operator/charts
+helm/*/Chart.lock
+helm/*/charts
+
+# Directory to test generated files
+generated-check
+
+# Python for the release wizard
+venv

@@ -23,23 +23,22 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/version/update_version.sh [-h] -v VERSION
+Usage: ./hack/release/version/remove_version_specific_info.sh [-h]
 
-Change the Version of the project.
+Remove information in the project specific to a previous version.
+Requires:
+ * yq
 
     -h  Display this help and exit
-    -v  New version for the project.
 EOF
 }
 
 OPTIND=1
-while getopts hv: opt; do
+while getopts h opt; do
     case $opt in
         h)
             show_help
             exit 0
-            ;;
-        v)  VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -49,12 +48,9 @@ while getopts hv: opt; do
 done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
-if [[ -z "${VERSION:-}" ]]; then
-  echo "Specify a new project version through -v, or through the VERSION env var" >&2 && exit 1
-fi
+echo "Removing information specific to the previous release"
 
-echo "Updating the latest version throughout the repo to: ${VERSION}"
-
-# Version file
-awk -i inplace '$1 == "Version"{$4 = "\"'"${VERSION}"'\""} 1' version/version.go && \
-  go fmt version/version.go
+# Reset ArtifactHub changelog in Chart.yaml
+yq -i eval '.annotations."artifacthub.io/changes" |= "- Change 1
+- Change 2
+"' helm/solr-operator/Chart.yaml
