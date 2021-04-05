@@ -168,14 +168,19 @@ The command removes all the Kubernetes components associated with the chart and 
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
-| replicaCount | int | `1` | The number of Solr Operator pods to run |
-| resources.limits.cpu | string | `"400m"` |  |
-| resources.limits.memory | string | `"500Mi"` |  |
-| resources.requests.cpu | string | `"100m"` |  |
-| resources.requests.memory | string | `"100Mi"` |  |
-| rbac.create | boolean | true | Create the necessary RBAC rules, whether cluster-wide or namespaced, for the Solr Operator. |
-| serviceAccount.create | boolean | true | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
-| serviceAccount.name | string | "" | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | 
+| replicaCount | int | `1` | The number of Solr Operator pods to run
+| rbac.create | boolean | `true` | Create the necessary RBAC rules, whether cluster-wide or namespaced, for the Solr Operator. |
+| serviceAccount.create | boolean | `true` | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
+| serviceAccount.name | string | `""` | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | |
+| resources.limits | map[string]string |  | Provide Resource limits for the Solr Operator container |
+| resources.limits | map[string]string |  | Provide Resource requests for the Solr Operator container |
+| labels | map[string]string |  | Custom labels to add to the Solr Operator pod |
+| annotations | map[string]string |  | Custom annotations to add to the Solr Operator pod |
+| nodeSelector | map[string]string |  | Add a node selector for the Solr Operator pod, to specify where it can be scheduled |
+| affinity | object |  | Add Kubernetes affinity information for the Solr Operator pod |
+| tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr Operator pod |
+| priorityClassName | string | `""` | Give a priorityClassName for the Solr Operator pod |
+| sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr Operator in its pod |
 
 ### Configuring the Zookeeper Operator
 
