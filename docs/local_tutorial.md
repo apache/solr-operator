@@ -68,14 +68,14 @@ kubectl apply -f https://apache.github.io/solr-operator/example/dependencies/zk_
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://solr.apache.org/charts
 ```
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
 
 ```bash
 # Install the operator (specifying ingressBaseDomain to match our ingressController)
-$ helm install solr-operator solr-operator/solr-operator --set-string ingressBaseDomain=ing.local.domain
+$ helm install solr-operator apache-solr/solr-operator --set-string ingressBaseDomain=ing.local.domain
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
