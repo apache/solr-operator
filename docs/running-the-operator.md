@@ -7,7 +7,7 @@ This is because the Solr Operator, in most instances, relies on the Zookeeper Op
 Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
 
 ```bash
-kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
+kubectl apply -f https://apache.github.io/solr-operator/example/dependencies/zk_operator.yaml
 ```
 
 ## Using the Solr Operator Helm Chart
@@ -21,14 +21,14 @@ The helm chart provides abstractions over the Input Arguments described below, a
 The first step is to add the Solr Operator helm repository.
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://solr.apache.org/charts
 ```
 
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
 
 ```bash
-$ helm install solr-operator solr-operator/solr-operator
+$ helm install solr-operator apache-solr/solr-operator
 ```
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
