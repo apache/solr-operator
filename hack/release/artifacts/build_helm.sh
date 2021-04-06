@@ -75,21 +75,22 @@ helm dependency build helm/solr-operator
 
 SIGNING_INFO=()
 CREATED_SECURE_RING=false
+SECURE_RING_FILE=~/.gnupg/secring.gpg
 if [[ -n "${APACHE_ID:-}" ]]; then
   # First generate the temporary secret key ring
-  if [[ ! -f "/.gnupg/secring.gpg" ]]; then
-    gpg --export-secret-keys >~/.gnupg/secring.gpg
+  if [[ ! -f "${SECURE_RING_FILE}" ]]; then
+    gpg --export-secret-keys >"${SECURE_RING_FILE}"
     CREATED_SECURE_RING=true
   fi
 
-  SIGNING_INFO=(--sign --key "${APACHE_ID}@apache.org" --keyring ~/.gnupg/secring.gpg)
+  SIGNING_INFO=(--sign --key "${APACHE_ID}@apache.org" --keyring "${SECURE_RING_FILE}")
 fi
 
 helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d "${HELM_RELEASE_DIR}" "${SIGNING_INFO[@]}"
 
-if [[ ${CREATED_SECURE_RING} ]]; then
+if [[ "${CREATED_SECURE_RING}" = true ]]; then
   # Remove the temporary secret key ring
-  rm ~/.gnupg/secring.gpg
+  rm "${SECURE_RING_FILE}"
 fi
 
 helm repo index "${HELM_RELEASE_DIR}"

@@ -262,7 +262,7 @@ groups:
   todos:
   - !Todo
     id: decide_jira_issues
-    title: Select JIRA issues to be included
+    title: Select Github issues to be included
     description: Set the appropriate "Fix Version" in JIRA for the issues that should be included in the release.
   - !Todo
     id: decide_branch_date
@@ -328,10 +328,13 @@ groups:
   - !Todo
     id: install_dependencies
     title: Install necessary dependencies for the Solr Operator
-    description: This eliminates the risk of a dirty checkout
+    depends: checkout_base_branch
+    description: This makes sure that your versions of the necessary build tools align with what is expected for this branch.
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
-      commands_text: Run this command to install the necessary dependencies for building the operator
+      commands_text: |
+        Run this command to install the necessary dependencies for building the operator.
+        You will likely be asked to provide your password during the installation.
       commands:
         - !Command
           cmd: make install-dependencies
@@ -631,7 +634,7 @@ groups:
           cmd: "{{ editor }} helm/solr-operator/Chart.yaml"
           comment: |
             Add changelog at annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
-            This will replace the "Add change log here, only single-layered bulleted list allowed." line.
+            This will replace the "Change 1" and "Change 2" lines.
             You can only input the changelog as a single-layer bulleted list.
           tee: true
         - !Command
@@ -643,16 +646,14 @@ groups:
           logfile: git_push_changelog.log
           tee: true
   - !Todo
-    id: build_rc
-    title: Build the release candidate
-    depends: 
-    - gpg
+    id: rc_versions
+    title: Change versions for the release candidate
+    depends:
     - run_tests
     - helm_change_log
     vars:
       logfile: '{{ [rc_folder, ''logs'', ''buildAndPushRelease.log''] | path_join }}'
       git_rev: '{{ current_git_rev }}' # Note, git_rev will be recorded in todo state AFTER completion of commands
-      local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'      
     persist_vars:
     - git_rev
     commands: !Commands
@@ -689,15 +690,31 @@ groups:
         comment: "We are only committing with the new version, we will not push to the release branch until after the vote has succeeded."
         logfile: commit.log
         stdout: true
-      - !Command
-        cmd: TAG='{{ release_version }}-rc{{ release_version }}' ARTIFACTS_DIR='{{ [dist_file_path, ''tmp''] | path_join }}' APACHE_ID='{{ gpg.apache_id }}' GPG_KEY='{{ gpg_key | default("<gpg_key_id>", True) }}' make build-release-artifacts
-        comment: "NOTE: Remember to type your GPG pass-phrase at the prompt!"
-        logfile: build_rc.log
-        tee: true
-      - !Command
-        cwd: '{{ dist_file_path }}'
-        cmd: mv tmp solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ current_git_rev }}
-        tee: true
+  - !Todo
+    id: build_rc
+    title: Build the release candidate
+    depends:
+      - rc_versions
+      - gpg
+    vars:
+      rc_folder: "solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev }}"
+      local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |-
+        In this step we will build the RC artifacts.
+      confirm_each_command: false
+      env:
+        TAG: "{{ release_version }}-rc{{ rc_number }}"
+        ARTIFACTS_DIR: "{{ [dist_file_path, rc_folder] | path_join }}"
+        APACHE_ID: "{{ gpg.apache_id }}"
+        GPG_KEY: "{{ gpg_key }}"
+      commands:
+        - !Command
+          cmd: make build-release-artifacts
+          comment: "NOTE: Remember to type your GPG pass-phrase at the prompt!"
+          logfile: build_rc.log
+          tee: true
   - !Todo
     id: smoke_tester
     title: Run the smoke tester
