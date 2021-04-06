@@ -62,5 +62,6 @@ fi
 echo "Updating the version suffix for the project to: ${VERSION_SUFFIX}"
 
 # Version file
-awk -i inplace '$1 == "VersionSuffix"{$4 = "\"'"${VERSION_SUFFIX}"'\""} 1' version/version.go && \
-  go fmt version/version.go
+awk '$1 == "VersionSuffix"{$4 = "\"'"${VERSION_SUFFIX}"'\""} 1' version/version.go > version/version.tmp.go
+go fmt version/version.tmp.go
+mv version/version.tmp.go version/version.go
