@@ -261,9 +261,9 @@ groups:
   description: Work with the community to decide when the release will happen and what work must be completed before it can happen
   todos:
   - !Todo
-    id: decide_jira_issues
+    id: decide_github_issues
     title: Select Github issues to be included
-    description: Set the appropriate "Fix Version" in JIRA for the issues that should be included in the release.
+    description: Set the appropriate "Milestone" in Github for the issues that should be included in the release.
   - !Todo
     id: decide_branch_date
     title: Decide the date for branching
@@ -502,9 +502,9 @@ groups:
 
       * No new features may be committed to the branch.
       * Documentation patches, build patches and serious bug fixes may be
-        committed to the branch. However, you should submit all patches you
-        want to commit to Jira first to give others the chance to review
-        and possibly vote against the patch. Keep in mind that it is our
+        committed to the branch. However, you should submit all issues/PRs you
+        want to commit to Github first to give others the chance to review
+        and possibly vote against the PR. Keep in mind that it is our
         main intention to keep the branch as stable as possible.
       * All patches that are intended for the branch should first be committed
         to the unstable branch, merged into the stable branch, and then into
@@ -514,7 +514,7 @@ groups:
         while the branch feature freeze is in effect, think twice: can't the
         addition wait a couple more days? Merges of bug fixes into the branch
         may become more difficult.
-      * Only Github issues with Fix version {{ release_version }} and priority "Blocker" will delay
+      * Only Github issues with Milestone {{ release_version }} and priority "Blocker" will delay
         a release candidate build.
       ----
     types:
@@ -542,12 +542,12 @@ groups:
 
       * Before committing to the branch, reply to this thread and argue
         why the fix needs backporting and how long it will take.
-      * All issues accepted for backporting should be marked with {{ release_version }}
+      * All issues accepted for backporting should be marked with Milestone {{ release_version }}
         in Github, and issues that should delay the release must be marked as Blocker
       * All patches that are intended for the branch should first be committed
         to the unstable branch, merged into the stable branch, and then into
         the current release branch.
-      * Only Github issues with Fix version {{ release_version }} and priority "Blocker" will delay
+      * Only Github issues with Milestone {{ release_version }} and priority "Blocker" will delay
         a release candidate build.
       ----
     types:
@@ -591,7 +591,7 @@ groups:
   title: Build the release artifacts
   description: |-
     If after the last day of the feature freeze phase no blocking issues are
-    in JIRA with "Fix Version" {{ release_version }}, then it's time to build the
+    in Github with "Milestone" {{ release_version }}, then it's time to build the
     release artifacts, run the smoke tester and stage the RC in svn
   depends:
   - test
@@ -646,16 +646,23 @@ groups:
           logfile: git_push_changelog.log
           tee: true
   - !Todo
-    id: rc_versions
-    title: Change versions for the release candidate
+    id: build_rc
+    title: Build the release candidate and issue final commit
     depends:
-    - run_tests
-    - helm_change_log
+      #- run_tests
+      #- helm_change_log
+      #- gpg
     vars:
       logfile: '{{ [rc_folder, ''logs'', ''buildAndPushRelease.log''] | path_join }}'
-      git_rev: '{{ current_git_rev }}' # Note, git_rev will be recorded in todo state AFTER completion of commands
+      local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'
+      # Note, the following vars will be recorded in todo state AFTER completion of commands
+      git_rev: '{{ current_git_rev }}'
+      rc_folder: 'solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ current_git_rev }}'
+      git_sha: '{{ current_git_rev | default("<git_rev>", True) | truncate(7,true,"") }}'
     persist_vars:
     - git_rev
+    - rc_folder
+    - git_sha
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: |-
@@ -670,9 +677,9 @@ groups:
         comment: Make sure checkout is clean and up to date
         logfile: git_clean.log
         tee: true
-      - !Command
-        cmd: git pull --ff-only
-        tee: true
+      #- !Command
+      #  cmd: git pull --ff-only
+      #  tee: true
       - !Command
         cmd: make clean
         tee: true
@@ -690,45 +697,31 @@ groups:
         comment: "We are only committing with the new version, we will not push to the release branch until after the vote has succeeded."
         logfile: commit.log
         stdout: true
-  - !Todo
-    id: build_rc
-    title: Build the release candidate
-    depends:
-      - rc_versions
-      - gpg
-    vars:
-      rc_folder: "solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev }}"
-      local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'
-    commands: !Commands
-      root_folder: '{{ git_checkout_folder }}'
-      commands_text: |-
-        In this step we will build the RC artifacts.
-      confirm_each_command: false
-      env:
-        TAG: "{{ release_version }}-rc{{ rc_number }}"
-        ARTIFACTS_DIR: "{{ [dist_file_path, rc_folder] | path_join }}"
-        APACHE_ID: "{{ gpg.apache_id }}"
-        GPG_KEY: "{{ gpg_key }}"
-      commands:
-        - !Command
-          cmd: make build-release-artifacts
-          comment: "NOTE: Remember to type your GPG pass-phrase at the prompt!"
-          logfile: build_rc.log
-          tee: true
+      - !Command
+        vars:
+          rc_folder: 'solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ current_git_rev }}'
+        env:
+          TAG: "{{ release_version }}-rc{{ rc_number }}"
+          ARTIFACTS_DIR: "{{ [dist_file_path, rc_folder] | path_join }}"
+          APACHE_ID: "{{ gpg.apache_id }}"
+          GPG_KEY: "{{ gpg_key | default('', True) }}"
+        cmd: make build-release-artifacts
+        comment: "NOTE: Remember to type your GPG pass-phrase at the prompt!"
+        logfile: build_rc.log
+        tee: true
   - !Todo
     id: smoke_tester
     title: Run the smoke tester
     depends: build_rc
     vars:
-      dist_folder: solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
-      dist_path: '{{ [dist_file_path, dist_folder] | path_join }}'
+      dist_path: '{{ [dist_file_path, build_rc.rc_folder] | path_join }}'
       docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: Here we'll smoke test the release by 'downloading' the artifacts, running the tests, validating GPG signatures etc.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_rev | default("<git_rev>", True) | truncate(7) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
         logfile: smoketest.log
   - !Todo
     id: upload_rc_docker_image
@@ -750,9 +743,8 @@ groups:
       Here we'll import the artifacts into Subversion.
     depends: smoke_tester
     vars:
-      dist_folder: solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
-      dist_path: '{{ [dist_file_path, dist_folder] | path_join }}'
-      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ dist_folder}}
+      dist_path: '{{ [dist_file_path, build_rc.rc_folder] | path_join }}'
+      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: Have your Apache credentials handy, you'll be prompted for your password
@@ -769,15 +761,14 @@ groups:
       area and checks hash and signatures, but does not re-run all tests.
     depends: import_svn
     vars:
-      dist_folder: solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
-      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ dist_folder }}
+      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}
       docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: Here we'll verify that the staged artifacts are downloadable and hash/signatures match.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_rev | default("<git_rev>", True) | truncate(7) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
         logfile: smoketest_staged.log
 - !TodoGroup
   id: voting
@@ -800,7 +791,7 @@ groups:
       Please vote for release candidate {{ rc_number }} for the Solr Operator {{ release_version }}
 
       The artifacts can be downloaded from:
-      https://dist.apache.org/repos/dist/dev/solr/solr-operator/solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
+      https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}
 
       The artifacts are layed out in the following way:
         * solr-operator-{{ release_version }}.tgz - Contains the source release
@@ -811,16 +802,16 @@ groups:
         apache/solr-operator:{{ release_version }}-rc{{ rc_number }}
 
       The RC Helm repo can be added with:
-        helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}/helm-charts
+        helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}/helm-charts
 
       Install the RC Solr Operator and CRDs with:
-        kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}/crds/all-with-dependencies.yaml
+        kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
       You can run the smoke tester directly with this command:
 
-      ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_rev | default("<git_rev>", True) | truncate(7) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
-          -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}'
+      ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+          -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}'
 
       Make sure you have the following installed before running the smoke test:
         - Docker
@@ -990,8 +981,7 @@ groups:
     id: svn_release_mv
     title: Move release artifacts from staging to release
     vars:
-      dist_folder: solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
-      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ dist_folder }}
+      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}
       dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
@@ -1040,8 +1030,7 @@ groups:
     depends:
       - svn_release_mv
     vars:
-      dist_folder: solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ build_rc.git_rev | default("<git_rev>", True) }}
-      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ dist_folder }}
+      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder }}
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false

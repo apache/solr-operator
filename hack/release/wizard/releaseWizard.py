@@ -1437,14 +1437,14 @@ def tail_file(file, lines):
                 break
 
 
-def run_with_log_tail(command, cwd, logfile=None, tail_lines=10, tee=False, live=False, shell=None):
+def run_with_log_tail(command, cwd, logfile=None, tail_lines=10, tee=False, live=False, shell=None, env=None):
     fh = sys.stdout
     if logfile:
         logdir = os.path.dirname(logfile)
         if not os.path.exists(logdir):
             os.makedirs(logdir)
         fh = open(logfile, 'w')
-    rc = run_follow(command, cwd, fh=fh, tee=tee, live=live, shell=shell)
+    rc = run_follow(command, cwd, fh=fh, tee=tee, live=live, shell=shell, env=env)
     if logfile:
         fh.close()
         if not tee and tail_lines and tail_lines > 0:
@@ -1480,12 +1480,12 @@ def print_line_cr(line, linenum, stdout=True, tee=False):
             print(line.rstrip())
 
 
-def run_follow(command, cwd=None, fh=sys.stdout, tee=False, live=False, shell=None):
+def run_follow(command, cwd=None, fh=sys.stdout, tee=False, live=False, shell=None, env=None):
     doShell = '&&' in command or '&' in command or shell is not None
     if not doShell and not isinstance(command, list):
         command = shlex.split(command)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd,
-                               universal_newlines=True, bufsize=0, close_fds=True, shell=doShell)
+                               universal_newlines=True, bufsize=0, close_fds=True, shell=doShell, env=env)
     lines_written = 0
 
     fl = fcntl.fcntl(process.stdout, fcntl.F_GETFL)
@@ -1683,8 +1683,14 @@ class Commands(SecretYamlObject):
                                 if cmd.comment:
                                     print("# %s\n" % cmd.get_comment())
                             start_time = time.time()
+                            additional_env = None
+                            user_env = cmd.get_env()
+                            if user_env is not None:
+                                additional_env = os.environ.copy()
+                                for k in user_env:
+                                    additional_env[k] = user_env[k]
                             returncode = run_with_log_tail(cmd_to_run, cwd, logfile=logfile, tee=cmd.tee, tail_lines=25,
-                                                           live=cmd.live, shell=cmd.shell)
+                                                           live=cmd.live, shell=cmd.shell, env=additional_env)
                             elapsed = time.time() - start_time
                             if not returncode == 0:
                                 if cmd.should_fail:
@@ -1761,12 +1767,13 @@ class Command(SecretYamlObject):
     yaml_tag = u'!Command'
     hidden_fields = ['todo_id']
     def __init__(self, cmd, cwd=None, stdout=None, logfile=None, tee=None, live=None, comment=None, vars=None,
-                 todo_id=None, should_fail=None, redirect=None, redirect_append=None, shell=None):
+                 todo_id=None, should_fail=None, redirect=None, redirect_append=None, shell=None, env=None):
         self.cmd = cmd
         self.cwd = cwd
         self.comment = comment
         self.logfile = logfile
         self.vars = vars
+        self.env = env
         self.tee = tee
         self.live = live
         self.stdout = stdout
@@ -1813,6 +1820,9 @@ class Command(SecretYamlObject):
                     myvars[k] = expand_jinja(val, vars=myvars)
         return myvars
 
+    def get_env(self):
+        return self.jinjaify(self.env) if self.env is not None else None
+
     def __str__(self):
         return self.get_cmd()
 
@@ -1828,6 +1838,15 @@ class Command(SecretYamlObject):
                 for rf in data:
                     res.append(expand_jinja(rf, v))
                 return res
+        if isinstance(data, dict):
+            res = {}
+            for k in data:
+                val = data[k]
+                if callable(val):
+                    res[k] = expand_jinja(val(), vars=v)
+                else:
+                    res[k] = expand_jinja(val, vars=v)
+            return res
         else:
             return expand_jinja(data, v)
 
@@ -1841,6 +1860,10 @@ class Command(SecretYamlObject):
                 lines.append("# %s" % self.get_comment())
         if self.cwd:
             lines.append("pushd %s" % self.cwd)
+        env = self.get_env()
+        if env is not None:
+            for k in env:
+                lines.append("%s=%s \\" % (k, env[k]))
         redir = "" if self.redirect is None else " %s %s" % (">" if self.redirect_append is None else ">>" , self.get_redirect())
         line = "%s%s" % (expand_multiline(self.get_cmd(), indent=2), redir)
         # Print ~ or %HOME% rather than the full expanded homedir path

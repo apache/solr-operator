@@ -68,7 +68,7 @@ if ! (echo "${LOCATION}" | grep -E "http://"); then
 fi
 
 echo "Import Solr Keys"
-curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg2 --import --quiet
+curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
 
 # First generate the temporary public key ring
 gpg --export >~/.gnupg/pubring.gpg
@@ -98,7 +98,7 @@ echo "Download all artifacts and verify signatures"
       for artifact in $(find * -type f ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
         sha512sum -c "${artifact}.sha512" \
           || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
-        gpg2 --verify "${artifact}.asc" "${artifact}" \
+        gpg --verify "${artifact}.asc" "${artifact}" \
           || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
       done
 
