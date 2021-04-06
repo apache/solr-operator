@@ -649,9 +649,9 @@ groups:
     id: build_rc
     title: Build the release candidate and issue final commit
     depends:
-      #- run_tests
-      #- helm_change_log
-      #- gpg
+      - run_tests
+      - helm_change_log
+      - gpg
     vars:
       logfile: '{{ [rc_folder, ''logs'', ''buildAndPushRelease.log''] | path_join }}'
       local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'
@@ -677,9 +677,9 @@ groups:
         comment: Make sure checkout is clean and up to date
         logfile: git_clean.log
         tee: true
-      #- !Command
-      #  cmd: git pull --ff-only
-      #  tee: true
+      - !Command
+        cmd: git pull --ff-only
+        tee: true
       - !Command
         cmd: make clean
         tee: true
