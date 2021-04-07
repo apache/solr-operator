@@ -327,7 +327,7 @@ groups:
           stdout: true
   - !Todo
     id: install_dependencies
-    title: Install necessary dependencies for the Solr Operator
+    title: Install dependencies for this branch of the Solr Operator
     depends: checkout_base_branch
     description: This makes sure that your versions of the necessary build tools align with what is expected for this branch.
     commands: !Commands
