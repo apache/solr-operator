@@ -21,7 +21,7 @@ replicaCount: 1
 
 image:
   repository: apache/solr-operator
-  tag: v0.3.0
+  tag: v0.3.0-prerelease
   pullPolicy: IfNotPresent
 
 nameOverride: ""
@@ -62,12 +62,13 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name:
 
-resources:
-  limits:
-    cpu: 400m
-    memory: 500Mi
-  requests:
-    cpu: 100m
-    memory: 100Mi
-
+# Various Pod Options to customize the runtime of the operator
+resources: {}
 envVars: []
+labels: {}
+annotations: {}
+nodeSelector: {}
+affinity: {}
+tolerations: []
+priorityClassName: ""
+sidecarContainers: []
