@@ -6341,6 +6341,9 @@ spec:
                 description: Replicas is the number of number of desired replicas in the cluster
                 format: int32
                 type: integer
+              selector:
+                description: Selector is required by the HPA
+                type: string
               solrNodes:
                 description: SolrNodes contain the statuses of each solr node running in this solr cloud.
                 items:
@@ -6438,6 +6441,7 @@ spec:
             - internalCommonAddress
             - readyReplicas
             - replicas
+            - selector
             - solrNodes
             - upToDateNodes
             - version
@@ -6448,6 +6452,7 @@ spec:
     storage: true
     subresources:
       scale:
+        labelSelectorPath: .status.selector
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.readyReplicas
       status: {}
