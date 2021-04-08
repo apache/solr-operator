@@ -1184,6 +1184,10 @@ spec:
       jsonPath: .status.upToDateNodes
       name: UpToDateNodes
       type: integer
+    - description: Solr pods selector used by HPA
+      jsonPath: .status.selector
+      name: Selector
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
