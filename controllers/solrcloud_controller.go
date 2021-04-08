@@ -21,6 +21,11 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
@@ -34,7 +39,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,9 +47,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
-	"strings"
-	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -575,6 +576,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	updateRevision := statefulSetStatus.UpdateRevision
 
 	newStatus.Replicas = statefulSetStatus.Replicas
+	newStatus.Selector = "solr-cloud=" + selectorLabels["solr-cloud"]
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
 	for idx, p := range foundPods.Items {

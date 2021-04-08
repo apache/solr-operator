@@ -19,9 +19,10 @@ package v1beta1
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -654,6 +655,9 @@ type SolrCloudStatus struct {
 	// Replicas is the number of number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
 
+	// Selector is required by the HPA
+	Selector string `json:"selector"`
+
 	// ReadyReplicas is the number of number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
 
@@ -718,7 +722,7 @@ type SolrNodeStatus struct {
 // +kubebuilder:resource:shortName=solr
 // +kubebuilder:categories=all
 // +kubebuilder:subresource:status
-// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas
+// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas,selectorpath=.status.selector
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Solr Version of the cloud"
 // +kubebuilder:printcolumn:name="TargetVersion",type="string",JSONPath=".status.targetVersion",description="Target Solr Version of the cloud"
 // +kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
