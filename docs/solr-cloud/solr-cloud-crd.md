@@ -130,7 +130,7 @@ All ACL fields are **required** if an ACL is used.
 
 - **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the admin ACL username and password.
 - **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
-- **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL password.
+- **`passwordKey`** - The name of the key in the provided secret that stores the admin ACL password.
 
 ### Provided Instance
 
@@ -141,6 +141,23 @@ Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a
 each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+#### ACLs for Provided Ensembles
+_Since v0.3.0_
+
+If you want Solr to set ZK ACLs for znodes it creates in the `provided` ensemble, you can supply ACL credentials for an ADMIN and optionally a READ ONLY user using the following config settings: 
+- Admin: `SolrCloud.spec.zookeeperRef.provided.acl`
+- Read Only: `SolrCloud.spec.zookeeperRef.provided.readOnlyAcl`
+
+All ACL fields are **required** if an ACL is used.
+
+- **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the ACL username and password.
+- **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
+- **`passwordKey`** - The name of the key in the provided secret that stores the admin ACL password.
+
+**Warning**: There is a known issue with the Zookeeper operator where it deploys pods with `skipACL=yes`, see: https://github.com/pravega/zookeeper-operator/issues/316.
+This means that even if Solr sets the ACLs on znodes, they will not be enforced by Zookeeper. If your organization requires Solr to use ZK ACLs, then you'll need to 
+deploy Zookeeper to Kubernetes using another approach, such as using a Helm chart. 
 
 ## Override Built-in Solr Configuration Files
 _Since v0.2.7_

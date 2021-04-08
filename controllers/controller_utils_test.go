@@ -363,6 +363,73 @@ func testMapContainsOther(t *testing.T, mapName string, base map[string]string, 
 	}
 }
 
+func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
+	/*
+		This test verifies ACL related env vars are set correctly and in the correct order, but expects a very specific config to be used in your test SolrCloud config:
+
+					AllACL: &solr.ZookeeperACL{
+						SecretRef:   "secret-name",
+						UsernameKey: "user",
+						PasswordKey: "pass",
+					},
+					ReadOnlyACL: &solr.ZookeeperACL{
+						SecretRef:   "read-secret-name",
+						UsernameKey: "read-only-user",
+						PasswordKey: "read-only-pass",
+					},
+
+	*/
+	f := false
+	zkAclEnvVars := []corev1.EnvVar{
+		{
+			Name: "ZK_ALL_ACL_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
+					Key:                  "user",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_ALL_ACL_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
+					Key:                  "pass",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_READ_ACL_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+					Key:                  "read-only-user",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_READ_ACL_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+					Key:                  "read-only-pass",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name:      "SOLR_ZK_CREDS_AND_ACLS",
+			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
+			ValueFrom: nil,
+		},
+	}
+	assert.Equal(t, zkAclEnvVars, actualEnvVars, "ZK ACL Env Vars are not correct")
+}
+
 func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 	deleteOpts := []client.DeleteAllOfOption{
 		client.InNamespace(namespace),

@@ -1206,7 +1206,8 @@ func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.
 	}
 
 	// Add ACL information, if given, through Env Vars
-	if hasACLs, aclEnvs := AddACLsToEnv(solrCloud.Spec.ZookeeperRef.ConnectionInfo); hasACLs {
+	allACL, readOnlyACL := solrCloud.Spec.ZookeeperRef.GetACLs()
+	if hasACLs, aclEnvs := AddACLsToEnv(allACL, readOnlyACL); hasACLs {
 		envVars = append(envVars, aclEnvs...)
 
 		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.

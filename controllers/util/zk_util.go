@@ -85,6 +85,10 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 		zkCluster.Spec.Pod.NodeSelector = zkSpec.ZookeeperPod.NodeSelector
 	}
 
+	if zkSpec.ZookeeperPod.Env != nil {
+		zkCluster.Spec.Pod.Env = zkSpec.ZookeeperPod.Env
+	}
+
 	if solrCloud.Spec.SolrAddressability.KubeDomain != "" {
 		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
 	}
@@ -203,22 +207,23 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 
 // AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
 // info: Zookeeper Connection Information
-func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []corev1.EnvVar) {
-	if info == nil || (info.AllACL == nil && info.ReadOnlyACL == nil) {
+func AddACLsToEnv(allACL *solr.ZookeeperACL, readOnlyACL *solr.ZookeeperACL) (hasACLs bool, envVars []corev1.EnvVar) {
+	if allACL == nil && readOnlyACL == nil {
 		return false, envVars
 	}
+
 	f := false
 	var zkDigests []string
-	if info.AllACL != nil {
+	if allACL != nil {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "ZK_ALL_ACL_USERNAME",
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.AllACL.SecretRef,
+							Name: allACL.SecretRef,
 						},
-						Key:      info.AllACL.UsernameKey,
+						Key:      allACL.UsernameKey,
 						Optional: &f,
 					},
 				},
@@ -228,25 +233,25 @@ func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []c
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.AllACL.SecretRef,
+							Name: allACL.SecretRef,
 						},
-						Key:      info.AllACL.PasswordKey,
+						Key:      allACL.PasswordKey,
 						Optional: &f,
 					},
 				},
 			})
 		zkDigests = append(zkDigests, "-DzkDigestUsername=$(ZK_ALL_ACL_USERNAME)", "-DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)")
 	}
-	if info.ReadOnlyACL != nil {
+	if readOnlyACL != nil {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "ZK_READ_ACL_USERNAME",
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.ReadOnlyACL.SecretRef,
+							Name: readOnlyACL.SecretRef,
 						},
-						Key:      info.ReadOnlyACL.UsernameKey,
+						Key:      readOnlyACL.UsernameKey,
 						Optional: &f,
 					},
 				},
@@ -256,9 +261,9 @@ func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []c
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.ReadOnlyACL.SecretRef,
+							Name: readOnlyACL.SecretRef,
 						},
-						Key:      info.ReadOnlyACL.PasswordKey,
+						Key:      readOnlyACL.PasswordKey,
 						Optional: &f,
 					},
 				},

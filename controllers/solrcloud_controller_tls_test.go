@@ -55,6 +55,29 @@ func TestBasicAuthBootstrapSecurityJson(t *testing.T) {
 	verifyReconcileWithSecurity(t, instance, false)
 }
 
+func TestBasicAuthBootstrapSecurityJsonWithZkACLs(t *testing.T) {
+	UseZkCRD(true)
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic, ProbesRequireAuth: true}
+	zkReplicas := int32(1)
+	instance.Spec.ZookeeperRef = &solr.ZookeeperRef{
+		ProvidedZookeeper: &solr.ZookeeperSpec{
+			Replicas: &zkReplicas,
+			AllACL: &solr.ZookeeperACL{
+				SecretRef:   "secret-name",
+				UsernameKey: "user",
+				PasswordKey: "pass",
+			},
+			ReadOnlyACL: &solr.ZookeeperACL{
+				SecretRef:   "read-secret-name",
+				UsernameKey: "read-only-user",
+				PasswordKey: "read-only-pass",
+			},
+		},
+	}
+	verifyReconcileWithSecurity(t, instance, false)
+}
+
 func TestBasicAuthBootstrapSecurityJsonDeleteSecret(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
@@ -473,6 +496,15 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 		}
 
 		if expectBootstrapSecret {
+			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
+			allACL, _ := instance.Spec.ZookeeperRef.GetACLs()
+			if allACL != nil {
+				assert.Equal(t, 10, len(expInitContainer.Env))
+				assert.Equal(t, "SOLR_OPTS", expInitContainer.Env[len(expInitContainer.Env)-2].Name)
+				assert.Equal(t, "SECURITY_JSON", expInitContainer.Env[len(expInitContainer.Env)-1].Name)
+				testACLEnvVars(t, expInitContainer.Env[3:len(expInitContainer.Env)-2])
+			} // else this ref not using ACLs
+
 			assert.NotNil(t, expInitContainer, "Didn't find the setup-zk InitContainer in the sts!")
 			expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
 				"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
