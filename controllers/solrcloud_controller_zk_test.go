@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"testing"
@@ -166,11 +167,7 @@ func TestZKACLsCloudReconcile(t *testing.T) {
 }
 
 func TestBothZKACLsCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
 	replicas := int32(3)
-
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
@@ -198,6 +195,48 @@ func TestBothZKACLsCloudReconcile(t *testing.T) {
 			SolrOpts: "-Dextra -Dopts",
 		},
 	}
+	testZkACLsReconcile(t, false, instance, "host:7271/")
+}
+
+func TestZKACLsForProvidedReconcile(t *testing.T) {
+	replicas := int32(3)
+	zkReplicas := int32(1)
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			Replicas: &replicas,
+			ZookeeperRef: &solr.ZookeeperRef{
+				ProvidedZookeeper: &solr.ZookeeperSpec{
+					Replicas: &zkReplicas,
+					AllACL: &solr.ZookeeperACL{
+						SecretRef:   "secret-name",
+						UsernameKey: "user",
+						PasswordKey: "pass",
+					},
+					ReadOnlyACL: &solr.ZookeeperACL{
+						SecretRef:   "read-secret-name",
+						UsernameKey: "read-only-user",
+						PasswordKey: "read-only-pass",
+					},
+				},
+			},
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				PodOptions: &solr.PodOptions{
+					EnvVariables: extraVars,
+				},
+			},
+			SolrOpts: "-Dextra -Dopts",
+		},
+	}
+
+	expectedZkHost := fmt.Sprintf("%s-zookeeper-0.%s-zookeeper-headless.%s.svc.cluster.local:2181/",
+		cloudSsKey.Name, cloudSsKey.Name, cloudSsKey.Namespace)
+	testZkACLsReconcile(t, true, instance, expectedZkHost)
+}
+
+func testZkACLsReconcile(t *testing.T, useZkCRD bool, instance *solr.SolrCloud, expectedZkHost string) {
+	UseZkCRD(useZkCRD)
+	g := gomega.NewGomegaWithT(t)
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.
@@ -237,62 +276,14 @@ func TestBothZKACLsCloudReconcile(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
+		"ZK_HOST":        expectedZkHost,
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace,
 		"SOLR_PORT":      "8983",
 		"SOLR_NODE_PORT": "8983",
 		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 	}
 	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-	f := false
-	zkAclEnvVars := []corev1.EnvVar{
-		{
-			Name: "ZK_ALL_ACL_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
-					Key:                  "user",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name: "ZK_ALL_ACL_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
-					Key:                  "pass",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name: "ZK_READ_ACL_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-user",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name: "ZK_READ_ACL_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-pass",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name:      "SOLR_ZK_CREDS_AND_ACLS",
-			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
-			ValueFrom: nil,
-		},
-	}
-	assert.Equal(t, zkAclEnvVars, foundEnv[len(foundEnv)-8:len(foundEnv)-3], "ZK ACL Env Vars are not correct")
+	testACLEnvVars(t, foundEnv[len(foundEnv)-8:len(foundEnv)-3])
 	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-3:len(foundEnv)-1], "Extra Env Vars are not the same as the ones provided in podOptions")
 	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
 	// TODO: Make this not invalidate foundEnv
@@ -318,4 +309,25 @@ func TestBothZKACLsCloudReconcile(t *testing.T) {
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// now update the env vars on the zk spec
+	if instance.Spec.ZookeeperRef.ProvidedZookeeper != nil {
+		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		updateEnvVars := []corev1.EnvVar{
+			{
+				Name:  "VAR_1",
+				Value: "VAL_1",
+			},
+		}
+		instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod = solr.ZookeeperPodPolicy{Env: updateEnvVars}
+		err = testClient.Update(context.TODO(), instance)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+		lookup := &solr.SolrCloud{}
+		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, lookup)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		assert.EqualValues(t, updateEnvVars, lookup.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod.Env, "Updated ZK Pod env not reconciled!")
+	}
 }

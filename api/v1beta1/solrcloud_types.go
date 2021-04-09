@@ -556,6 +556,17 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 	return changed
 }
 
+func (ref *ZookeeperRef) GetACLs() (allACL *ZookeeperACL, readOnlyACL *ZookeeperACL) {
+	if ref.ConnectionInfo != nil {
+		allACL = ref.ConnectionInfo.AllACL
+		readOnlyACL = ref.ConnectionInfo.ReadOnlyACL
+	} else if ref.ProvidedZookeeper != nil {
+		allACL = ref.ProvidedZookeeper.AllACL
+		readOnlyACL = ref.ProvidedZookeeper.ReadOnlyACL
+	}
+	return
+}
+
 // ZookeeperSpec defines the internal zookeeper ensemble to run with the given spec
 type ZookeeperSpec struct {
 
@@ -580,6 +591,16 @@ type ZookeeperSpec struct {
 	// The ChRoot to connect solr at
 	// +optional
 	ChRoot string `json:"chroot,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK.
+	// This ACL should have ALL permission in the given chRoot.
+	// +optional
+	AllACL *ZookeeperACL `json:"acl,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK for reading operations.
+	// This ACL should have READ permission in the given chRoot.
+	// +optional
+	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 }
 
 func (z *ZookeeperSpec) withDefaults() (changed bool) {
@@ -639,6 +660,10 @@ type ZookeeperPodPolicy struct {
 	// Tolerations to be added on pods.
 	// +optional
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
+
+	// List of environment variables to set in the main ZK container.
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 
 	// Resources is the resource requirements for the container.
 	// This field cannot be updated once the cluster is created.
