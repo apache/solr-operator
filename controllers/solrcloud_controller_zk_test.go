@@ -309,4 +309,25 @@ func testZkACLsReconcile(t *testing.T, useZkCRD bool, instance *solr.SolrCloud, 
 
 	// Check the ingress
 	expectNoIngress(g, cloudIKey)
+
+	// now update the env vars on the zk spec
+	if instance.Spec.ZookeeperRef.ProvidedZookeeper != nil {
+		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		updateEnvVars := []corev1.EnvVar{
+			{
+				Name:  "VAR_1",
+				Value: "VAL_1",
+			},
+		}
+		instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod = solr.ZookeeperPodPolicy{Env: updateEnvVars}
+		err = testClient.Update(context.TODO(), instance)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+		lookup := &solr.SolrCloud{}
+		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, lookup)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		assert.EqualValues(t, updateEnvVars, lookup.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod.Env, "Updated ZK Pod env not reconciled!")
+	}
 }

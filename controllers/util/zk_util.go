@@ -176,6 +176,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		to.Spec.Pod.Resources = from.Spec.Pod.Resources
 	}
 
+	if !DeepEqualWithNils(to.Spec.Pod.Env, from.Spec.Pod.Env) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Env", "from", to.Spec.Pod.Env, "to", from.Spec.Pod.Env)
+		requireUpdate = true
+		to.Spec.Pod.Env = from.Spec.Pod.Env
+	}
+
 	if !DeepEqualWithNils(to.Spec.Pod.Tolerations, from.Spec.Pod.Tolerations) {
 		logger.Info("Update required because field changed", "field", "Spec.Pod.Tolerations", "from", to.Spec.Pod.Tolerations, "to", from.Spec.Pod.Tolerations)
 		requireUpdate = true
