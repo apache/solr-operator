@@ -655,8 +655,8 @@ type SolrCloudStatus struct {
 	// Replicas is the number of number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
 
-	// Selector is required by the HPA
-	Selector string `json:"selector"`
+	// Selector field in the CR status is required by the HPA
+	PodSelector string `json:"selector"`
 
 	// ReadyReplicas is the number of number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
@@ -729,7 +729,6 @@ type SolrNodeStatus struct {
 // +kubebuilder:printcolumn:name="Nodes",type="integer",JSONPath=".status.replicas",description="Number of solr nodes running"
 // +kubebuilder:printcolumn:name="ReadyNodes",type="integer",JSONPath=".status.readyReplicas",description="Number of solr nodes connected to the cloud"
 // +kubebuilder:printcolumn:name="UpToDateNodes",type="integer",JSONPath=".status.upToDateNodes",description="Number of solr nodes running the latest SolrCloud pod spec"
-// +kubebuilder:printcolumn:name="Selector",type="string",JSONPath=".status.selector",description="Solr pods selector used by HPA"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrCloud struct {
 	metav1.TypeMeta   `json:",inline"`
