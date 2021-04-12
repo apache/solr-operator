@@ -1184,10 +1184,6 @@ spec:
       jsonPath: .status.upToDateNodes
       name: UpToDateNodes
       type: integer
-    - description: Solr pods selector used by HPA
-      jsonPath: .status.selector
-      name: Selector
-      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -6346,7 +6342,7 @@ spec:
                 format: int32
                 type: integer
               selector:
-                description: Selector is required by the HPA
+                description: Selector field in the CR status is required by the HPA
                 type: string
               solrNodes:
                 description: SolrNodes contain the statuses of each solr node running in this solr cloud.
