@@ -723,6 +723,8 @@ groups:
       - !Command
         cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
         logfile: smoketest.log
+        tee: true
+        stdout: true
   - !Todo
     id: upload_rc_docker_image
     title: Upload RC Docker image
