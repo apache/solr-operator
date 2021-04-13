@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"crypto/md5"
+	b64 "encoding/base64"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -132,6 +133,30 @@ func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
 }
 
+// User wants a different trust store than the keystore
+func TestUserSuppliedTLSSecretWithSeparateTrustStore(t *testing.T) {
+	tlsSecretName := "tls-cert-secret-from-user"
+	keystorePassKey := "some-password-key-thingy"
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic} // with basic-auth too
+	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
+
+	trustStoreSecretName := "custom-truststore-secret"
+	trustStoreFile := "truststore.p12"
+	instance.Spec.SolrTLS.TrustStoreSecret = &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: trustStoreSecretName},
+		Key:                  trustStoreFile,
+	}
+
+	instance.Spec.SolrTLS.TrustStorePasswordSecret = &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{Name: trustStoreSecretName},
+		Key:                  "truststore-pass",
+	}
+
+	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
+	verifyReconcileUserSuppliedTLS(t, instance, false, false)
+}
+
 // Test upgrade from non-TLS cluster to TLS enabled cluster
 func TestEnableTLSOnExistingCluster(t *testing.T) {
 
@@ -231,6 +256,22 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 	}()
 
 	cleanupTest(g, instance.Namespace)
+
+	// Custom truststore?
+	if instance.Spec.SolrTLS.TrustStoreSecret != nil {
+		// create the mock truststore secret
+		secretData := map[string][]byte{}
+		secretData[instance.Spec.SolrTLS.TrustStoreSecret.Key] = []byte(b64.StdEncoding.EncodeToString([]byte("mock truststore")))
+		secretData[instance.Spec.SolrTLS.TrustStorePasswordSecret.Key] = []byte(b64.StdEncoding.EncodeToString([]byte("mock truststore password")))
+		trustStoreSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: instance.Spec.SolrTLS.TrustStoreSecret.Name, Namespace: instance.Namespace},
+			Data:       secretData,
+			Type:       corev1.SecretTypeOpaque,
+		}
+		err := testClient.Create(ctx, &trustStoreSecret)
+		g.Expect(err).NotTo(gomega.HaveOccurred())
+		defer testClient.Delete(ctx, &trustStoreSecret)
+	}
 
 	// create the secret required for reconcile, it has both keys ...
 	tlsKey := "keystore.p12"

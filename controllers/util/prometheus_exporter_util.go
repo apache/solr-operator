@@ -171,7 +171,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	if tls != nil {
 		envVars = append(envVars, TLSEnvVars(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
-		volumeMounts = append(volumeMounts, tlsVolumeMounts(tls.NeedsPkcs12InitContainer)...)
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
 		solrVolumes = append(solrVolumes, tlsVolumes(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
 		allJavaOpts = append(allJavaOpts, tlsJavaOpts(tls.TLSOptions)...)
 	}
@@ -234,7 +234,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	// if the supplied TLS secret does not have the pkcs12 keystore, use an initContainer to create its
 	if tls != nil && tls.NeedsPkcs12InitContainer {
-		pkcs12InitContainer := generatePkcs12InitContainer(tls.TLSOptions.KeyStorePasswordSecret,
+		pkcs12InitContainer := generatePkcs12InitContainer(tls.TLSOptions,
 			solrPrometheusExporter.Spec.Image.ToImageName(), solrPrometheusExporter.Spec.Image.PullPolicy)
 		initContainers = append(initContainers, pkcs12InitContainer)
 	}

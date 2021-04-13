@@ -1052,6 +1052,16 @@ type SolrTLSOptions struct {
 	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
 
+	// TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore
+	// The specified key is used as the truststore file name when mounted into Solr pods unless it's the same secret
+	// holding the keystore (with a different key of course)
+	// +optional
+	TrustStoreSecret *corev1.SecretKeySelector `json:"trustStoreSecret,omitempty"`
+
+	// Secret containing the trust store password; if not provided the keyStorePassword will be used
+	// +optional
+	TrustStorePasswordSecret *corev1.SecretKeySelector `json:"trustStorePasswordSecret,omitempty"`
+
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
 	// +kubebuilder:default=None

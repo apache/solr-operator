@@ -85,6 +85,7 @@ const (
 	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 	TLSCertKey                  = "tls.crt"
 	TLSKeyKey                   = "tls.key"
+	DefaultTrustStorePath       = "/var/solr/tls-truststore"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -170,7 +171,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	if solrCloud.Spec.SolrTLS != nil {
 		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
-		volumeMounts = append(volumeMounts, tlsVolumeMounts(createPkcs12InitContainer)...)
+		volumeMounts = append(volumeMounts, tlsVolumeMounts(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 	}
 
 	var pvcs []corev1.PersistentVolumeClaim
@@ -515,7 +516,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	if createPkcs12InitContainer {
-		pkcs12InitContainer := generatePkcs12InitContainer(solrCloud.Spec.SolrTLS.KeyStorePasswordSecret,
+		pkcs12InitContainer := generatePkcs12InitContainer(solrCloud.Spec.SolrTLS,
 			solrCloud.Spec.SolrImage.ToImageName(), solrCloud.Spec.SolrImage.PullPolicy)
 		initContainers = append(initContainers, pkcs12InitContainer)
 	}
@@ -1067,9 +1068,26 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	} else {
 		keystorePath = DefaultKeyStorePath
 	}
-	keystorePath += ("/" + Pkcs12KeystoreFile)
 
+	keystoreFile := keystorePath + "/" + Pkcs12KeystoreFile
 	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
+
+	// If using a truststore that is different from the keystore
+	truststorePath := keystoreFile
+	truststorePassFrom := passwordValueFrom
+	if opts.TrustStoreSecret != nil {
+		if opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
+			// trust store is in a different secret, so will be mounted in a different dir
+			truststorePath = DefaultTrustStorePath
+		} else {
+			// trust store is a different key in the same secret as the keystore
+			truststorePath = keystorePath
+		}
+		truststorePath += "/" + opts.TrustStoreSecret.Key
+		if opts.TrustStorePasswordSecret != nil {
+			truststorePassFrom = &corev1.EnvVarSource{SecretKeyRef: opts.TrustStorePasswordSecret}
+		}
+	}
 
 	envVars := []corev1.EnvVar{
 		{
@@ -1078,7 +1096,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		},
 		{
 			Name:  "SOLR_SSL_KEY_STORE",
-			Value: keystorePath,
+			Value: keystoreFile,
 		},
 		{
 			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
@@ -1086,11 +1104,11 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		},
 		{
 			Name:  "SOLR_SSL_TRUST_STORE",
-			Value: keystorePath,
+			Value: truststorePath,
 		},
 		{
 			Name:      "SOLR_SSL_TRUST_STORE_PASSWORD",
-			ValueFrom: passwordValueFrom,
+			ValueFrom: truststorePassFrom,
 		},
 		{
 			Name:  "SOLR_SSL_WANT_CLIENT_AUTH",
@@ -1113,13 +1131,21 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	return envVars
 }
 
-func tlsVolumeMounts(createPkcs12InitContainer bool) []corev1.VolumeMount {
+func tlsVolumeMounts(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []corev1.VolumeMount {
 	mounts := []corev1.VolumeMount{
 		{
 			Name:      "keystore",
 			ReadOnly:  true,
 			MountPath: DefaultKeyStorePath,
 		},
+	}
+
+	if opts.TrustStoreSecret != nil && opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
+		mounts = append(mounts, corev1.VolumeMount{
+			Name:      "truststore",
+			ReadOnly:  true,
+			MountPath: DefaultTrustStorePath,
+		})
 	}
 
 	// We need an initContainer to convert a TLS cert into the pkcs12 format Java wants (using openssl)
@@ -1152,6 +1178,21 @@ func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		},
 	}
 
+	// if they're using a different truststore other than the keystore, but don't mount an additional volume
+	// if it's just pointing at the same secret
+	if opts.TrustStoreSecret != nil && opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
+		vols = append(vols, corev1.Volume{
+			Name: "truststore",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  opts.TrustStoreSecret.Name,
+					DefaultMode: &defaultMode,
+					Optional:    &optional,
+				},
+			},
+		})
+	}
+
 	if createPkcs12InitContainer {
 		vols = append(vols, corev1.Volume{
 			Name: "pkcs12",
@@ -1164,9 +1205,9 @@ func tlsVolumes(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	return vols
 }
 
-func generatePkcs12InitContainer(keyStorePasswordSecret *corev1.SecretKeySelector, imageName string, imagePullPolicy corev1.PullPolicy) corev1.Container {
+func generatePkcs12InitContainer(opts *solr.SolrTLSOptions, imageName string, imagePullPolicy corev1.PullPolicy) corev1.Container {
 	// get the keystore password from the env for generating the keystore using openssl
-	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: keyStorePasswordSecret}
+	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 	envVars := []corev1.EnvVar{
 		{
 			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
@@ -1184,7 +1225,7 @@ func generatePkcs12InitContainer(keyStorePasswordSecret *corev1.SecretKeySelecto
 		TerminationMessagePath:   "/dev/termination-log",
 		TerminationMessagePolicy: "File",
 		Command:                  []string{"sh", "-c", cmd},
-		VolumeMounts:             tlsVolumeMounts(true),
+		VolumeMounts:             tlsVolumeMounts(opts, true),
 		Env:                      envVars,
 	}
 }
