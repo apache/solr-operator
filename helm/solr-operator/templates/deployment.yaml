@@ -53,6 +53,24 @@ spec:
         {{- if .Values.watchNamespaces }}
         - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
         {{- end }}
+        {{- if .Values.mTLS.clientCertSecret }}
+        - --tls-client-cert-secret={{- include "mTLS.clientCertSecret" . -}}
+        {{- end }}
+        {{- if .Values.mTLS.clientCertSecretNs }}
+        - --tls-client-cert-secret-ns={{- include "mTLS.clientCertSecretNs" . -}}
+        {{- end }}
+        {{- if .Values.mTLS.caCertSecret }}
+        - --tls-ca-cert-secret={{- include "mTLS.caCertSecret" . -}}
+        {{- end }}
+        {{- if .Values.mTLS.caCertSecretNs }}
+        - --tls-ca-cert-secret-ns={{- include "mTLS.caCertSecretNs" . -}}
+        {{- end }}
+        {{- if .Values.mTLS.caCertSecretKey }}
+        - --tls-ca-cert-secret-key={{- include "mTLS.caCertSecretKey" . -}}
+        {{- end }}
+        {{- if .Values.mTLS.insecureSkipVerify }}
+        - --tls-skip-verify-server={{- include "mTLS.insecureSkipVerify" . -}}
+        {{- end }}
         env:
           - name: POD_NAMESPACE
             valueFrom:

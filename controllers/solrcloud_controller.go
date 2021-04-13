@@ -20,9 +20,12 @@ package controllers
 import (
 	"context"
 	"crypto/md5"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
@@ -34,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"net/http"
 	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -53,6 +57,19 @@ type SolrCloudReconciler struct {
 	client.Client
 	scheme *runtime.Scheme
 	Log    logr.Logger
+}
+
+type MTLSConfig struct {
+	InsecureSkipVerify bool
+	TLSSecret          types.NamespacedName
+	CACertSecret       *types.NamespacedName
+	CACertSecretKey    string
+}
+
+var mTLSConfig *MTLSConfig
+
+func UseMTLS(config *MTLSConfig) {
+	mTLSConfig = config
 }
 
 var useZkCRD bool
@@ -80,6 +97,16 @@ func UseZkCRD(useCRD bool) {
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
+
+	// TODO: couldn't figure out a better way to initialize the mTLS HTTP transport as we need
+	// to lookup various K8s secrets so the client cache must be initialized
+	if mTLSConfig != nil && solr_api.MTLSHttpClient == nil {
+		// lazy init b/c we need to lookup a secret, which requires a cache
+		err := r.initMTLSConfig()
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+	}
 
 	logger := r.Log.WithValues("namespace", req.Namespace, "solrCloud", req.Name)
 	// Fetch the SolrCloud instance
@@ -989,4 +1016,47 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 			}),
 		},
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) initMTLSConfig() error {
+
+	ctx := context.TODO()
+
+	clientTLSSecret := &corev1.Secret{}
+	err := r.Get(ctx, mTLSConfig.TLSSecret, clientTLSSecret)
+	if err != nil {
+		return err
+	}
+
+	// verify the the expected tls.crt and tls.key are in the secret
+	if clientTLSSecret.Type != corev1.SecretTypeTLS {
+		return fmt.Errorf("Provided TLS secret %s must be of type: %s", mTLSConfig.TLSSecret, corev1.SecretTypeTLS)
+	}
+
+	clientCert, err := tls.X509KeyPair(clientTLSSecret.Data[util.TLSCertKey], clientTLSSecret.Data[util.TLSKeyKey])
+	if err != nil {
+		return err
+	}
+
+	mTLSTransport := http.DefaultTransport.(*http.Transport).Clone()
+	mTLSTransport.TLSClientConfig = &tls.Config{Certificates: []tls.Certificate{clientCert}, InsecureSkipVerify: mTLSConfig.InsecureSkipVerify}
+
+	// custom CA?
+	if mTLSConfig.CACertSecret != nil {
+		caCertSecret := &corev1.Secret{}
+		err := r.Get(context.TODO(), *mTLSConfig.CACertSecret, caCertSecret)
+		if err == nil {
+			caCertPemBytes, ok := caCertSecret.Data[mTLSConfig.CACertSecretKey]
+			if ok {
+				caCertPool := x509.NewCertPool()
+				caCertPool.AppendCertsFromPEM(caCertPemBytes)
+				mTLSTransport.TLSClientConfig.ClientCAs = caCertPool
+				r.Log.Info("Configured the custom CA pem for the mTLS transport", "secret", caCertSecret.Name)
+			}
+		}
+	}
+
+	solr_api.SetMTLSHttpClient(&http.Client{Transport: mTLSTransport})
+
+	return nil
 }

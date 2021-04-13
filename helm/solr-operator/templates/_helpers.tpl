@@ -85,3 +85,46 @@ Determine whether to use ClusterRoles or Roles
     ClusterRole
 {{- end -}}
 {{- end -}}
+
+{{/*
+mTLS vars
+*/}}
+{{- define "mTLS.clientCertSecret" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+{{ .Values.mTLS.clientCertSecret }}
+{{- end -}}
+{{- end -}}
+
+{{- define "mTLS.clientCertSecretNs" -}}
+{{- if .Values.mTLS.clientCertSecretNs -}}
+{{ .Values.mTLS.clientCertSecretNs }}
+{{- end -}}
+{{- end -}}
+
+{{- define "mTLS.caCertSecret" -}}
+{{- if .Values.mTLS.caCertSecret -}}
+{{ .Values.mTLS.caCertSecret }}
+{{- end -}}
+{{- end -}}
+
+{{- define "mTLS.caCertSecretNs" -}}
+{{- if .Values.mTLS.caCertSecretNs -}}
+{{ .Values.mTLS.caCertSecretNs }}
+{{- end -}}
+{{- end -}}
+
+{{- define "mTLS.caCertSecretKey" -}}
+{{- if .Values.mTLS.caCertSecretKey -}}
+{{ .Values.mTLS.caCertSecretKey }}
+{{- else -}}
+    ca-cert-pem
+{{- end -}}
+{{- end -}}
+
+{{- define "mTLS.insecureSkipVerify" -}}
+{{- if .Values.mTLS.insecureSkipVerify -}}
+{{ .Values.mTLS.insecureSkipVerify }}
+{{- else -}}
+    true
+{{- end -}}
+{{- end -}}

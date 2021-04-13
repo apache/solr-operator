@@ -25,6 +25,7 @@ import (
 	"github.com/apache/solr-operator/controllers"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/apache/solr-operator/version"
+	"k8s.io/apimachinery/pkg/types"
 	"net/http"
 	"os"
 	"runtime"
@@ -57,6 +58,13 @@ var (
 
 	// External Operator dependencies
 	useZookeeperCRD bool
+
+	clientSkipVerify      bool
+	clientCertTlsSecret   string
+	clientCertTlsSecretNs string
+	caCertSecret          string
+	caCertSecretKey       string
+	caCertSecretNs        string
 )
 
 func init() {
@@ -68,10 +76,20 @@ func init() {
 	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
+
+	flag.BoolVar(&clientSkipVerify, "tls-skip-verify-server", true, "Controls whether a client verifies the server's certificate chain and host name. If true (insecure), TLS accepts any certificate presented by the server and any host name in that certificate.")
+	flag.StringVar(&clientCertTlsSecret, "tls-client-cert-secret", "", "Name of a TLS secret containing the client cert and key")
+	flag.StringVar(&clientCertTlsSecretNs, "tls-client-cert-secret-ns", "", "Namespace for the client TLS secret; if not set, defaults to the same namespace where the operator is running")
+
+	flag.StringVar(&caCertSecret, "tls-ca-cert-secret", "", "Name of a generic secret containing the Certificate Authority (CA) cert in PEM format")
+	flag.StringVar(&caCertSecretKey, "tls-ca-cert-secret-key", "", "The key in the secret given by the 'tls-ca-cert-secret' option holding the Certificate Authority (CA) cert in PEM format")
+	flag.StringVar(&caCertSecretNs, "tls-ca-cert-secret-ns", "", "Namespace for the CA secret; if not set, defaults to the same namespace where the operator is running")
+
 	flag.Parse()
 }
 
 func main() {
+
 	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
 	customTransport := http.DefaultTransport.(*http.Transport).Clone()
 	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
@@ -136,6 +154,35 @@ func main() {
 	}
 
 	controllers.UseZkCRD(useZookeeperCRD)
+
+	setupLog.Info("mTLS config", "clientSkipVerify", clientSkipVerify, "clientCertTlsSecret", clientCertTlsSecret,
+		"clientCertTlsSecretNs", clientCertTlsSecretNs, "caCertSecret", caCertSecret, "caCertSecretNs", caCertSecretNs, "caCertSecretKey", caCertSecretKey)
+
+	if clientCertTlsSecret != "" {
+		if clientCertTlsSecretNs == "" {
+			clientCertTlsSecretNs = namespace
+		}
+
+		mTLSConfig := &controllers.MTLSConfig{
+			InsecureSkipVerify: clientSkipVerify,
+			TLSSecret:          types.NamespacedName{Name: clientCertTlsSecret, Namespace: clientCertTlsSecretNs},
+		}
+
+		if caCertSecret != "" {
+			if caCertSecretNs == "" {
+				caCertSecretNs = namespace
+			}
+
+			mTLSConfig.CACertSecret = &types.NamespacedName{Name: caCertSecret, Namespace: caCertSecretNs}
+			if caCertSecretKey != "" {
+				mTLSConfig.CACertSecretKey = caCertSecretKey
+			} else {
+				mTLSConfig.CACertSecretKey = "ca-cert-pem"
+			}
+		}
+		setupLog.Info("Setup for mTLS", "config", mTLSConfig)
+		controllers.UseMTLS(mTLSConfig)
+	}
 
 	if err = (&controllers.SolrCloudReconciler{
 		Client: mgr.GetClient(),

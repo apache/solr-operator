@@ -84,6 +84,7 @@ const (
 	Pkcs12KeystoreFile          = "keystore.p12"
 	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 	TLSCertKey                  = "tls.crt"
+	TLSKeyKey                   = "tls.key"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance

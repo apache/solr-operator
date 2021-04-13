@@ -31,9 +31,14 @@ import (
 // It's "insecure" but is only used for internal communication, such as getting cluster status
 // so if you're worried about this, don't use a self-signed cert
 var noVerifyTLSHttpClient *http.Client
+var MTLSHttpClient *http.Client
 
 func SetNoVerifyTLSHttpClient(client *http.Client) {
 	noVerifyTLSHttpClient = client
+}
+
+func SetMTLSHttpClient(client *http.Client) {
+	MTLSHttpClient = client
 }
 
 type SolrAsyncResponse struct {
@@ -63,7 +68,9 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := http.DefaultClient
-	if cloud.Spec.SolrTLS != nil {
+	if MTLSHttpClient != nil {
+		client = MTLSHttpClient
+	} else if cloud.Spec.SolrTLS != nil {
 		client = noVerifyTLSHttpClient
 	}
 
