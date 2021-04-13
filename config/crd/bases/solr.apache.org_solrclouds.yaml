@@ -5306,6 +5306,9 @@ spec:
               internalCommonAddress:
                 description: InternalCommonAddress is the internal common http address for all solr nodes
                 type: string
+              podSelector:
+                description: PodSelector for SolrCloud pods, required by the HPA
+                type: string
               readyReplicas:
                 description: ReadyReplicas is the number of number of ready replicas in the cluster
                 format: int32
@@ -5409,6 +5412,7 @@ spec:
             required:
             - backupRestoreReady
             - internalCommonAddress
+            - podSelector
             - readyReplicas
             - replicas
             - solrNodes
@@ -5421,6 +5425,7 @@ spec:
     storage: true
     subresources:
       scale:
+        labelSelectorPath: .status.podSelector
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.readyReplicas
       status: {}

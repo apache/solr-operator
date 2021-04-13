@@ -9,6 +9,7 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
  4. [Start your Solr cluster](#start-an-example-solr-cloud-cluster)
  5. [Create a collection and index some documents](#create-a-collection-and-index-some-documents)
  6. [Scale from 3 to 5 nodes](#scale-from-3-to-5-nodes)
+    1. [Using the Horizontal Pod Autoscaler](#horizontal-pod-autoscaler-hpa)
  7. [Upgrade to newer Solr version](#upgrade-to-newer-version)
  8. [Install Kubernetes Dashboard (optional)](#install-kubernetes-dashboard-optional)
  9. [Delete the solrCloud cluster named 'example'](#delete-the-solrcloud-cluster-named-example)
@@ -168,6 +169,29 @@ kubectl get solrclouds -w
 
 # Hit Control-C when done
 ```
+
+### Horizontal Pod Autoscaler (HPA)
+
+The SolrCloud CRD is setup so that it is able to run with the HPA.
+Merely use the following when creating an HPA object:
+```yaml
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: example-solr
+spec:
+  maxReplicas: 6
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: solr.apache.com/v1beta1
+    kind: SolrCloud
+    name: example
+  metrics:
+    ....
+ ```
+
+Make sure that you are not overwriting the `SolrCloud.Spec.replicas` field when doing `kubectl apply`,
+otherwise you will be undoing the autoscaler's work.
 
 ## Upgrade to newer version
 

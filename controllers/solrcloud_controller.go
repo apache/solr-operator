@@ -23,6 +23,11 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
@@ -38,7 +43,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"net/http"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,9 +51,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
-	"strings"
-	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -492,7 +493,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	var outOfDatePods, outOfDatePodsNotStarted []corev1.Pod
 	var availableUpdatedPodCount int
-	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, &newStatus, statefulSetStatus)
+	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, logger, &newStatus, statefulSetStatus)
 	if err != nil {
 		return requeueOrNot, err
 	}
@@ -578,7 +579,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return requeueOrNot, nil
 }
 
-func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
+func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, logger logr.Logger, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -600,10 +601,16 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	backupRestoreReadyPods := 0
 
 	updateRevision := statefulSetStatus.UpdateRevision
-
-	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: selectorLabels,
+	})
+	if err != nil {
+		logger.Error(err, "Error getting SolrCloud PodSelector labels")
+		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
+	}
+	newStatus.PodSelector = selector.String()
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
