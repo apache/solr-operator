@@ -380,20 +380,20 @@ class ReleaseState:
         ver = Version.parse(release_version)
         # print("release_version=%s, ver=%s" % (release_version, ver))
         if branch_type == BranchType.release:
-            if not branch.startswith('branch_'):
+            if not branch.startswith('release-'):
                 sys.exit("Incompatible branch and branch_type")
-            if not ver.is_bugfix_release():
+            if not ver.is_bugfix_release() and '.' in branch:
                 sys.exit("You can only release bugfix releases from an existing release branch")
         elif branch_type == BranchType.stable:
-            if not branch.startswith('branch_') and branch.endswith('x'):
+            if not branch.startswith('release-') and '.' not in branch:
                 sys.exit("Incompatible branch and branch_type")
             if not ver.is_minor_release():
                 sys.exit("You can only release minor releases from an existing stable branch")
         elif branch_type == BranchType.unstable:
             if not branch == 'main':
                 sys.exit("Incompatible branch and branch_type")
-            if not ver.is_major_release():
-                sys.exit("You can only release a new major version from main branch")
+            if not (ver.is_major_release() or ver.is_minor_release()):
+                sys.exit("You can only release a new major or minor version from main branch")
         if not getScriptVersion() == release_version:
             print("WARNING: Expected release version %s when on branch %s, but got %s" % (
                 getScriptVersion(), branch, release_version))

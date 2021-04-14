@@ -130,9 +130,9 @@ def find_branch_type():
 
   if branchName == b'main':
     return BranchType.unstable
-  if re.match(r'branch_(\d+)x', branchName.decode('UTF-8')):
+  if re.match(r'release-(\d+)', branchName.decode('UTF-8')):
     return BranchType.stable
-  if re.match(r'branch_(\d+)_(\d+)', branchName.decode('UTF-8')):
+  if re.match(r'release-(\d+)\.(\d+)', branchName.decode('UTF-8')):
     return BranchType.release
   raise Exception('Cannot run %s on feature branch' % sys.argv[0].rsplit('/', 1)[-1])
 

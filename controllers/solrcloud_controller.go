@@ -571,6 +571,8 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	backupRestoreReadyPods := 0
 
 	updateRevision := statefulSetStatus.UpdateRevision
+
+	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{

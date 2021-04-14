@@ -91,11 +91,11 @@ echo "Download all artifacts and verify signatures"
     cp -r "${LOCATION}/"* .
   fi
 
-  for artifact_directory in $(find '*' -type d); do
+  for artifact_directory in $(find * -type d -maxdepth 0); do
     (
       cd "${artifact_directory}"
 
-      for artifact in $(find '*' -type f -maxdepth 1 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+      for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
         echo "Veryifying: ${artifact_directory}/${artifact}"
         sha512sum -c "${artifact}.sha512" \
           || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
@@ -110,7 +110,7 @@ echo "Download all artifacts and verify signatures"
     )
   done
 
-  for artifact in $(find '*' -type f -maxdepth 1 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+  for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
     echo "Veryifying: ${artifact}"
     sha512sum -c "${artifact}.sha512" \
       || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
