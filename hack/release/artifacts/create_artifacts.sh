@@ -84,11 +84,11 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
 (
   cd "${ARTIFACTS_DIR}"
 
-  for artifact_directory in $(find '*' -type d); do
+  for artifact_directory in $(find * -type d -maxdepth 0); do
     (
       cd "${artifact_directory}"
 
-      for artifact in $(find '*' -type f -maxdepth 1 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+      for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
         if [ ! -f "${artifact}.asc" ]; then
           gpg "${GPG_USER[@]}" -ab "${artifact}"
         fi
@@ -99,7 +99,7 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
     )
   done
 
-  for artifact in $(find '*' -type f -maxdepth 1 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+  for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
     if [ ! -f "${artifact}.asc" ]; then
       gpg "${GPG_USER[@]}" -ab "${artifact}"
     fi

@@ -492,7 +492,7 @@ groups:
       .Mail template
       ----
       To: dev@solr.apache.org
-      Subject: New branch and feature freeze for the Solr Operator {{ release_version }}
+      Subject: [Operator] New branch and feature freeze for the Solr Operator {{ release_version }}
 
       NOTICE:
 
@@ -532,7 +532,7 @@ groups:
       .Mail template
       ----
       To: dev@solr.apache.org
-      Subject: Bugfix release Solr Operator {{ release_version }}
+      Subject: [Operator] Bugfix release Solr Operator {{ release_version }}
 
       NOTICE:
 

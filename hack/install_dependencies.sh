@@ -15,7 +15,7 @@ GO111MODULE=on go mod tidy
 
 #Install Kustomize
 if ! (which kustomize); then
-  (cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- ${kustomize_version} /usr/local/bin)
+  (cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | sudo bash -s -- ${kustomize_version} /usr/local/bin)
   echo "Installed kustomize at /usr/local/bin/kustomize, version: $(kustomize version --short)"
 else
   echo "Kustomize already installed at $(which kustomize), version: $(kustomize version --short)"
