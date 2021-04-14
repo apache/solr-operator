@@ -16,8 +16,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.3.0-prerelease
-appVersion: v0.3.0-prerelease
+version: 0.4.0-prerelease
+appVersion: v0.4.0-prerelease
 kubeVersion: ">= 1.16.0-0"
 home: https://github.com/apache/solr-operator
 sources:
@@ -49,7 +49,7 @@ annotations:
     - Change 2
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.3.0-prerelease
+      image: apache/solr-operator:v0.4.0-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
