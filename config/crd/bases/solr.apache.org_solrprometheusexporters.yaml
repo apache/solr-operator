@@ -3476,7 +3476,7 @@ spec:
                         - key
                         type: object
                       trustStoreSecret:
-                        description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods unless it's the same secret holding the keystore (with a different key of course)
+                        description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
                         properties:
                           key:
                             description: The key of the secret to select from.  Must be a valid secret key.

@@ -305,6 +305,18 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 		assert.Equal(t, expCmd, expInitContainer.Command[2])
 	}
 
+	if tls.ClientAuth == solr.Need {
+		// verify the probes use a command with SSL opts
+		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
+			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
+		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
+		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
+		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
+	}
+
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
 }
 
