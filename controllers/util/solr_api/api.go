@@ -18,6 +18,7 @@
 package solr_api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
@@ -31,14 +32,14 @@ import (
 // It's "insecure" but is only used for internal communication, such as getting cluster status
 // so if you're worried about this, don't use a self-signed cert
 var noVerifyTLSHttpClient *http.Client
-var MTLSHttpClient *http.Client
+var mTLSHttpClient *http.Client
 
 func SetNoVerifyTLSHttpClient(client *http.Client) {
 	noVerifyTLSHttpClient = client
 }
 
 func SetMTLSHttpClient(client *http.Client) {
-	MTLSHttpClient = client
+	mTLSHttpClient = client
 }
 
 type SolrAsyncResponse struct {
@@ -67,11 +68,9 @@ type SolrAsyncStatus struct {
 func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders map[string]string, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
-	client := http.DefaultClient
-	if MTLSHttpClient != nil {
-		client = MTLSHttpClient
-	} else if cloud.Spec.SolrTLS != nil {
-		client = noVerifyTLSHttpClient
+	client := noVerifyTLSHttpClient
+	if mTLSHttpClient != nil {
+		client = mTLSHttpClient
 	}
 
 	urlParams.Set("wt", "json")
@@ -105,4 +104,11 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders
 	}
 
 	return err
+}
+
+func init() {
+	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
+	customTransport := http.DefaultTransport.(*http.Transport).Clone()
+	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	SetNoVerifyTLSHttpClient(&http.Client{Transport: customTransport})
 }

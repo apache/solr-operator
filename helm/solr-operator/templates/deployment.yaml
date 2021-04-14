@@ -54,22 +54,14 @@ spec:
         - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
         {{- end }}
         {{- if .Values.mTLS.clientCertSecret }}
-        - --tls-client-cert-secret={{- include "mTLS.clientCertSecret" . -}}
-        {{- end }}
-        {{- if .Values.mTLS.clientCertSecretNs }}
-        - --tls-client-cert-secret-ns={{- include "mTLS.clientCertSecretNs" . -}}
+        - --tls-client-cert-path={{- include "solr-operator.mTLS.clientCertDirectory" . -}}/tls.crt
+        - --tls-client-cert-key-path={{- include "solr-operator.mTLS.clientCertDirectory" . -}}/tls.key
         {{- end }}
         {{- if .Values.mTLS.caCertSecret }}
-        - --tls-ca-cert-secret={{- include "mTLS.caCertSecret" . -}}
-        {{- end }}
-        {{- if .Values.mTLS.caCertSecretNs }}
-        - --tls-ca-cert-secret-ns={{- include "mTLS.caCertSecretNs" . -}}
-        {{- end }}
-        {{- if .Values.mTLS.caCertSecretKey }}
-        - --tls-ca-cert-secret-key={{- include "mTLS.caCertSecretKey" . -}}
+        - --tls-ca-cert-path={{- include "solr-operator.mTLS.caCertDirectory" . -}}/{{- include "solr-operator.mTLS.caCertName" . -}}
         {{- end }}
         {{- if .Values.mTLS.insecureSkipVerify }}
-        - --tls-skip-verify-server={{- include "mTLS.insecureSkipVerify" . -}}
+        - --tls-skip-verify-server={{ .Values.mTLS.insecureSkipVerify }}
         {{- end }}
         env:
           - name: POD_NAMESPACE
@@ -85,6 +77,15 @@ spec:
           {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
+        {{- if (include "solr-operator.mTLS.volumeMounts" .) }}
+        volumeMounts:
+          {{- include "solr-operator.mTLS.volumeMounts" .  | nindent 10 }}
+        {{- end }}
+      {{- if (include "solr-operator.mTLS.volumes" .) }}
+      volumes:
+        {{- include "solr-operator.mTLS.volumes" . | nindent 8 }}
+      {{- end }}
+
       {{- if .Values.sidecarContainers }}
       {{ toYaml .Values.sidecarContainers | nindent 6 }}
       {{- end }}

@@ -75,8 +75,6 @@ sidecarContainers: []
 
 mTLS:
   clientCertSecret: ""
-  clientCertSecretNs: ""
   caCertSecret: ""
-  caCertSecretNs: ""
-  caCertSecretKey: ca-cert-pem
+  caCertSecretKey: ca-cert.pem
   insecureSkipVerify: true

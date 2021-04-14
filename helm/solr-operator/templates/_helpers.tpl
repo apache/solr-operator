@@ -89,42 +89,44 @@ Determine whether to use ClusterRoles or Roles
 {{/*
 mTLS vars
 */}}
-{{- define "mTLS.clientCertSecret" -}}
+{{- define "solr-operator.mTLS.clientCertDirectory" -}}
+/etc/ssl/solr/client-cert
+{{- end -}}
+
+{{- define "solr-operator.mTLS.caCertDirectory" -}}
+/etc/ssl/solr/ca-cert
+{{- end -}}
+{{- define "solr-operator.mTLS.caCertName" -}}
+rootSolrCert.pem
+{{- end -}}
+
+{{- define "solr-operator.mTLS.volumeMounts" -}}
 {{- if .Values.mTLS.clientCertSecret -}}
-{{ .Values.mTLS.clientCertSecret }}
+- name: tls-client-cert
+  mountPath: {{ include "solr-operator.mTLS.clientCertDirectory" . }}
+  readOnly: true
 {{- end -}}
-{{- end -}}
-
-{{- define "mTLS.clientCertSecretNs" -}}
-{{- if .Values.mTLS.clientCertSecretNs -}}
-{{ .Values.mTLS.clientCertSecretNs }}
-{{- end -}}
-{{- end -}}
-
-{{- define "mTLS.caCertSecret" -}}
-{{- if .Values.mTLS.caCertSecret -}}
-{{ .Values.mTLS.caCertSecret }}
-{{- end -}}
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  mountPath: {{ include "solr-operator.mTLS.caCertDirectory" . }}
+  readOnly: true
+{{ end }}
 {{- end -}}
 
-{{- define "mTLS.caCertSecretNs" -}}
-{{- if .Values.mTLS.caCertSecretNs -}}
-{{ .Values.mTLS.caCertSecretNs }}
+{{- define "solr-operator.mTLS.volumes" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+- name: tls-client-cert
+  secret:
+    secretName: {{ .Values.mTLS.clientCertSecret }}
+    optional: false
 {{- end -}}
-{{- end -}}
-
-{{- define "mTLS.caCertSecretKey" -}}
-{{- if .Values.mTLS.caCertSecretKey -}}
-{{ .Values.mTLS.caCertSecretKey }}
-{{- else -}}
-    ca-cert-pem
-{{- end -}}
-{{- end -}}
-
-{{- define "mTLS.insecureSkipVerify" -}}
-{{- if .Values.mTLS.insecureSkipVerify -}}
-{{ .Values.mTLS.insecureSkipVerify }}
-{{- else -}}
-    true
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  secret:
+    secretName: {{ .Values.mTLS.caCertSecret }}
+    items:
+      - key: {{ .Values.mTLS.caCertSecretKey }}
+        path: {{ include "solr-operator.mTLS.caCertName" . }}
+    optional: false
 {{- end -}}
 {{- end -}}
