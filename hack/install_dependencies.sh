@@ -49,7 +49,7 @@ if ! (which controller-gen); then
 	go install "sigs.k8s.io/controller-tools/cmd/controller-gen@${controller_gen_version}"
   echo "Installed controller-gen at $(which controller-gen), version: $(controller-gen --version)"
 elif ! (controller-gen --version | grep "Version: ${controller_gen_version}"); then
-	rm "$(shell which controller-gen)"
+	rm "$(which controller-gen)"
 	go install "sigs.k8s.io/controller-tools/cmd/controller-gen@${controller_gen_version}"
   echo "Installed controller-gen at $(which controller-gen), version: $(controller-gen --version)"
 else

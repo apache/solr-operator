@@ -1,0 +1,1440 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# =====================================================================
+# This file contains the definition TO-DO steps and commands to run for the
+# releaseWizard.py script. It also contains Jinja2 templates for use in those
+# definitions. See documentation for "groups" below the templates.
+# Edit this file with an editor with YAML support, such as Sublime Text
+# for syntax highlighting and context sensitive tag suggestion
+# =====================================================================
+#
+# Templates may be included in any text by starting a line with this syntax:
+# (( template=my_template_name ))
+# Templates may contain other templates for easy re-use of snippets
+# And of course all Jinja2 syntax for inclusion of variables etc is supported.
+# See http://jinja.pocoo.org/docs/2.10/templates/ for details
+# To add new global variables or functions/filters, edit releaseWizard.py
+#
+templates:
+  help: |
+    Welcome to the role as Release Manager for the Solr Operator, and the releaseWizard!
+
+    The Release Wizard aims to walk you through the whole release process step by step,
+    helping you to to run the right commands in the right order, generating
+    e-mail templates for you with the correct texts, versions, paths etc, obeying
+    the voting rules and much more. It also serves as a documentation of all the
+    steps, with timestamps, preserving log files from each command etc.
+
+    As you complete each step the tool will ask you if the task is complete, making
+    it easy for you to know what is done and what is left to do. If you need to
+    re-spin a Release Candidata (RC) the Wizard will also help.
+
+    In the first TODO step in the checklist you will be asked to read up on the
+    Apache release policy and other relevant documents before you start the release.
+
+    NOTE: Even if we have great tooling and some degree of automation, there are
+          still many manual steps and it is also important that the RM validates
+          and QAs the process, validating that the right commands are run, and that
+          the output from scripts are correct before proceeding.
+  vote_logic: |
+    {% set passed = plus_binding >= 3 and minus < plus_binding %}
+    {% set too_few = plus_binding < 3 %}
+    {% set veto = plus_binding < minus %}
+    {% set reason = 'too few binding votes' if too_few else 'too many negative votes' if veto else 'unknown' %}    
+  vote_macro: |
+    {% macro end_vote_result(plus_binding, plus_other, zero, minus) -%}
+    (( template=vote_logic ))
+    .Mail template {% if passed %}successful{% else %}failed{% endif %} vote
+    ----
+    To: dev@solr.apache.org
+    Subject: [{% if passed %}RESULT{% else %}FAILED{% endif %}] [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
+
+    It's been >72h since the vote was initiated and the result is:
+
+    +1  {{ plus_binding + plus_other }}  ({{ plus_binding }} binding)
+     0  {{ zero }}
+    -1  {{ minus }}
+
+    {% if not passed %}
+    Reason for fail is {{ reason }}.
+    
+    {% endif %}
+    This vote has {% if passed %}PASSED{% else %}FAILED{% endif %} 
+    ----
+    {%- endmacro %}
+  announce_solr_operator: |
+    Title: Apache Solr Operator™ {{ release_version }} available
+    category: solr/operator/news
+    URL:
+    save_as:
+
+    The Solr PMC is pleased to announce the release of the Apache Solr Operator {{ release_version }}.
+
+    The Apache Solr Operator is a safe and easy way of managing a Solr ecosystem in Kubernetes.
+
+    This release contains numerous bug fixes, optimizations, and improvements, some of which are highlighted below. The release is available for immediate download at:
+
+      <https://spolr.apache.org/operator/downloads.html>
+
+  announce_solr_operator_mail: |
+    The template below can be used to announce the Solr Operator release to the
+    internal mailing lists.
+
+    .Mail template
+    ----
+    To: dev@solr.apache.org, users@solr.apache.org
+    Subject: [ANNOUNCE] Apache Solr Operator {{ release_version }} released
+
+    (( template=announce_solr_operator_mail_body ))
+    ----
+  announce_solr_operator_sign_mail: |
+    The template below can be used to announce the Solr Operator release to the
+    `announce@apache.org` mailing list. The mail *should be signed with PGP.*
+    and sent *from your `@apache.org` account*.
+
+    .Mail template
+    ----
+    From: {{ gpg.apache_id }}@apache.org
+    To: announce@apache.org
+    Subject: [ANNOUNCE] Apache Solr Operator {{ release_version }} released
+
+    (( template=announce_solr_operator_mail_body ))
+    ----
+  announce_solr_operator_mail_body: |
+    {% for line in load_lines(solr_news_file, 4) -%}
+    {{ line }}
+    {%- endfor %}
+
+
+    Note: The Apache Software Foundation uses an extensive mirroring network for
+    distributing releases. It is possible that the mirror you are using may not have
+    replicated the release yet. If that is the case, please try another mirror.
+    This also applies to Maven access.
+# TODOs belong to groups for easy navigation in menus. Todo objects may contain asciidoc
+# descriptions, a number of commands to execute, some links to display, user input to gather
+# etc. Here is the documentation of each type of object. For further details, please consult
+# the corresponding Python object in releaseWizard.py, as these are parsed 1:1 from yaml.
+#
+# - !TodoGroup
+#   id: unique_id
+#   title: Title which will appear in menu
+#   description: Longer description that will appear in sub-menu
+#   depends: ['group1_id', 'group2_id'] # Explicit dependencies for groups
+#   is_in_rc_loop: Tells that a group is thrown away on RC re-psin (default=False)
+#   todos:    # Array of !Todo objects beloning to the group
+#     !Todo
+#     id: todo_id
+#     title: Short title that will appear in menu and elsewhere
+#     description: |
+#         The main description being printed when selecing the todo item. Here
+#         you should introduce the task in more detail. You can use {{ jinja_var }} to
+#         reference variables. See `releaseWizard.py` for list of global vars supported.
+#         You can reference state saved from earlier TODO items using syntax
+#           {{ todi_id.var_name }}
+#         with `var_name` being either fetched from user_input or persist_vars
+#     depends:  # One or more dependencies which will bar execution
+#     - todo_id1
+#     - todo_id2
+#     vars:  # Dictionary of jinja2 variables local to this TODO, e.g.
+#       logfile_path: "{{ [rc_folder, 'logs'] | path_join }}"
+#       # Vars can contain global jinja vars or local vars earlier defined (ordered dict)
+#     persist_vars: ['var_name', 'var_name'] # List of variables to persist in TODO state
+#     asciidoc: |
+#         Some `asciidoc` text to be included in asciidoc guide 
+#         *instead of* description/post_description
+#     function: my_python_function  # Will call the named function for complex tasks
+#     commands: !Commands   # A !Commands object holding commands to execute for this todo
+#       root_folder: '{{ git_checkout_folder }}' # path to where commands will run
+#       commands_text: Introduction text to be displayed just before the commands 
+#       enable_execute: true # Set to false to never offer to run commands automatically
+#       confirm_each_command: true # Set to false to run all commands without prompting
+#       remove_files: ['file1', 'folder2'] # List of files or folders that must be gone
+#       logs_prefix: prefix # Lets you prefix logs file names with this string
+#       commands:   # List of !Commands to execute
+#       - !Command  # One single command
+#         cmd: "ls {{ folder_to_ls }}"  # A single command. May reference jinja vars
+#              # Double spaces in a cmd will trigger multi-line display with continuation char \
+#         cwd: relative_path # Where to run command, relative to root_folder
+#         comment: # Will display a # or REM comment above the command in printouts
+#         vars: {} # Possible to define local vars for this command only
+#         logfile: my.og # Overrides log file name which may grow very long :)
+#         tee: false       # If true, sends output to console and file
+#         stdout: false    # if true, sends output only to console, not log file
+#         live: false      # If true, sends output live byte-by-byte to console
+#         redirect: file.txt      # Send output to file. Use instead of >
+#         redirect_append: false  # Will cause output to be appended, like >>
+#         shell: false     $ Set to true to use built-in shell commands
+#     user_input: # An array of !UserInput objects for requesting input from user
+#     - !UserInput
+#       prompt: Please enter your gpg key ID, e.g. 0D8D0B93
+#       name: gpg_id  # This will be stored in todo state and can be referenced as {{ todo_id.name }}
+#       type: int  # if no type is given, a string is stored. Supported types are 'int'
+#     post_description: |
+#       Some `asciidoc` text (with jinja template support) 
+#       to be printed *after* commands and user_input is done.
+#     links:
+#     - http://example.com/list/of/links?to&be&displayed
+groups:
+- !TodoGroup
+  id: prerequisites
+  title: Prerequisites
+  description: |
+    Releasing software requires thorough understanding of the process and careful execution,
+    as it is easy to make mistakes. It also requires an environtment and tools such as gpg
+    correctly setup. This section makes sure you're in good shape for the job!
+  todos:
+  - !Todo
+    id: read_up
+    title: Read up on the release process
+    description: |-
+      As a Release Manager (RM) you should be familiar with Apache's release policy,
+      voting rules, create a PGP/GPG key for use with signing and more. Please familiarise
+      yourself with the resources listed below.
+    links:
+    - http://www.apache.org/dev/release-publishing.html
+    - http://www.apache.org/legal/release-policy.html
+    - http://www.apache.org/dev/release-signing.html
+  - !Todo
+    id: tools
+    title: Necessary tools are installed
+    description: |
+      You will need these tools:
+
+      * Python v3.4 or later, with dependencies listed in requirements.txt
+      * Go 1.16
+      * gpg
+      * git
+      * svn
+      * asciidoctor (to generate HTML version)
+      * gnu tar (install separately if on OSX)
+      * docker
+      * yq
+      * helm v3
+      * kubectl
+
+      You should also set the $EDITOR environment variable, else we'll fallback to
+      `vi` on Linux and `notepad.exe` on Windows, and you don't want that :)
+    function: check_prerequisites
+    links:
+    - https://gnupg.org/download/index.html
+    - https://asciidoctor.org
+  - !Todo
+    id: gpg
+    title: GPG key id is configured
+    description: |-
+      To sign the release you need to provide your GPG key ID. This must be
+      the same key ID that you have registered in your Apache account.
+      The ID is the last 8 bytes of your key fingerprint, e.g. 0D8D0B93.
+
+      * Make sure your gpg key is 4096 bits key or larger
+      * Upload your key to the MIT key server, pgp.mit.edu
+      * Put you GPG key's fingerprint in the `OpenPGP Public Key Primary Fingerprint`
+        field in your id.apache.org profile
+      * The tests will complain if your GPG key has not been signed by another Solr
+        committer. This makes you a part of the GPG "web of trust" (WoT). Ask a committer
+        that you know personally to sign your key for you, providing them with the
+        fingerprint for the key.
+    function: configure_pgp
+    links:
+    - http://www.apache.org/dev/release-signing.html
+    - http://www.apache.org/dev/openpgp.html#apache-wot
+    - https://id.apache.org
+    - https://dist.apache.org/repos/dist/release/solr/KEYS
+- !TodoGroup
+  id: preparation
+  title: Prepare for the release
+  description: Work with the community to decide when the release will happen and what work must be completed before it can happen
+  todos:
+  - !Todo
+    id: decide_github_issues
+    title: Select Github issues to be included
+    description: Set the appropriate "Milestone" in Github for the issues that should be included in the release.
+  - !Todo
+    id: decide_branch_date
+    title: Decide the date for branching
+    types:
+    - major
+    - minor
+    user_input: !UserInput
+      prompt: Enter date (YYYY-MM-DD)
+      name: branch_date
+  - !Todo
+    id: decide_freeze_length
+    title: Decide the lenght of feature freeze
+    types:
+    - major
+    - minor
+    user_input: !UserInput
+      prompt: Enter end date of feature freeze (YYYY-MM-DD)
+      name: feature_freeze_date
+- !TodoGroup
+  id: branching_versions
+  title: Create branch (if needed) and update versions
+  description: Here you'll do all the branching and version updates needed to prepare for the new release version
+  todos:
+  - !Todo
+    id: clean_git_checkout
+    title: Do a clean git clone to do the release from
+    description: This eliminates the risk of a dirty checkout
+    commands: !Commands
+      root_folder: '{{ release_folder }}'
+      commands_text: Run these commands to make a fresh clone in the release folder
+      remove_files:
+      - '{{ git_checkout_folder }}'
+      commands:
+      - !Command
+        cmd: git clone --progress https://gitbox.apache.org/repos/asf/solr-operator.git solr-operator
+        logfile: git_clone.log
+  - !Todo
+    id: checkout_base_branch
+    title: Checkout branch {{ base_branch }}
+    depends: clean_git_checkout
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |-
+        From the base branch {{ base_branch }} we'll run lint checks.
+        Fix any problems that are found by pushing fixes to the branch
+        and then running this task again. You can likely fix any errors with `make prepare`.
+        This task will always do `git pull`
+        before `make check` so it will catch changes to your branch :)
+      confirm_each_command: false
+      commands:
+        - !Command
+          cmd: git checkout {{ base_branch }}
+          stdout: true
+        - !Command
+          cmd: git clean -df && git checkout -- .
+          comment: Make sure checkout is clean and up to date
+          logfile: git_clean.log
+          tee: true
+        - !Command
+          cmd: git pull --ff-only
+          stdout: true
+  - !Todo
+    id: install_dependencies
+    title: Install dependencies for this branch of the Solr Operator
+    depends: checkout_base_branch
+    description: This makes sure that your versions of the necessary build tools align with what is expected for this branch.
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |
+        Run this command to install the necessary dependencies for building the operator.
+        You will likely be asked to provide your password during the installation.
+      commands:
+        - !Command
+          cmd: make install-dependencies
+          logfile: install-dependencies.log
+  - !Todo
+    id: make_lint
+    title: Run make lint and fix issues
+    depends:
+      - clean_git_checkout
+      - install_dependencies
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |-
+        From the base branch {{ base_branch }} we'll run lint checks.
+        Fix any problems that are found by pushing fixes to the branch
+        and then running this task again. You can likely fix any errors with `make prepare`.
+        This task will always do `git pull`
+        before `make check` so it will catch changes to your branch :)
+      confirm_each_command: false
+      commands:
+      - !Command
+        cmd: git pull --ff-only
+        stdout: true
+      - !Command
+        cmd: "make lint"
+  - !Todo
+    id: create_stable_branch
+    title: Create a new stable branch, off from main
+    description: In our case we'll create {{ stable_branch }}
+    types:
+    - major
+    depends: clean_git_checkout
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to create a stable branch
+      commands:
+      - !Command
+        cmd: git checkout main
+        tee: true
+      - !Command
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: git ls-remote --exit-code --heads origin {{ stable_branch }}
+        stdout: true
+        should_fail: true
+        comment: We expect error code 2 since {{ stable_branch }} does not already exist
+      - !Command
+        cmd: git checkout -b {{ stable_branch }}
+        tee: true
+      - !Command
+        cmd: git push origin {{ stable_branch }}
+        tee: true
+  - !Todo
+    id: create_minor_branch
+    title: Create a new minor branch off the stable branch
+    description: In our case we'll create {{ release_branch }}
+    types:
+    - major
+    - minor
+    depends: clean_git_checkout
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to create a release branch
+      commands:
+      - !Command
+        cmd: git checkout {{ stable_branch }}
+        tee: true
+      - !Command
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: git ls-remote --exit-code --heads origin {{ release_branch }}
+        stdout: true
+        should_fail: true
+        comment: This command should fail with exit code 2 to verify branch {{ release_branch }} does not already exist
+      - !Command
+        cmd: git checkout -b {{ release_branch }}
+        tee: true
+      - !Command
+        cmd: git push origin {{ release_branch }}
+        tee: true
+  - !Todo
+    id: add_version_major
+    title: Add a new major version on main branch
+    types:
+    - major
+    depends:
+      - clean_git_checkout
+      - create_minor_branch
+    vars:
+      next_version: "v{{ release_version_major + 1 }}.0.0"
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to add the new major version {{ next_version }} to the main branch
+      commands:
+      - !Command
+        cmd: git checkout main
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/propagate_version.sh
+        tee: true
+      - !Command
+        comment: Make sure the edits done by propagating the version are ok, then push
+        cmd: git add -u .  && git commit -m "Add next major version {{ next_version }}"  && git push
+        logfile: commit-stable.log
+  - !Todo
+    id: add_version_minor
+    title: Add a new minor version on stable branch
+    types:
+    - major
+    - minor
+    depends: clean_git_checkout
+    vars:
+      next_version: "v{{ release_version_major }}.{{ release_version_minor + 1 }}.0"
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to add the new minor version {{ next_version }} to the stable branch
+      commands:
+      - !Command
+        cmd: git checkout {{ stable_branch }}
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/propagate_version.sh
+        tee: true
+      - !Command
+        comment: Make sure the edits done by propagating the version are ok, then push
+        cmd: git add -u .  && git commit -m "Add next minor version {{ next_version }}"  && git push
+        logfile: commit-stable.log
+#  - !Todo
+#    id: jenkins_builds
+#    title: Add Jenkins task for the release branch
+#    description: '...so that builds run for the new branch. Consult the JenkinsReleaseBuilds page.'
+#    types:
+#    - major
+#    - minor
+#    links:
+#    - https://wiki.apache.org/lucene-java/JenkinsReleaseBuilds
+  - !Todo
+    id: inform_devs
+    title: Inform Devs of the new Release Branch
+    description: |-
+      Send a note to dev@ to inform the committers that the branch
+      has been created and the feature freeze phase has started.
+
+      This is an e-mail template you can use as a basis for
+      announcing the new branch and feature freeze.
+
+      .Mail template
+      ----
+      To: dev@solr.apache.org
+      Subject: New branch and feature freeze for the Solr Operator {{ release_version }}
+
+      NOTICE:
+
+      Branch {{ release_branch }} has been cut and versions updated to v{{ release_version_major }}.{{ release_version_minor + 1 }} on the stable branch.
+
+      Please observe the normal rules:
+
+      * No new features may be committed to the branch.
+      * Documentation patches, build patches and serious bug fixes may be
+        committed to the branch. However, you should submit all issues/PRs you
+        want to commit to Github first to give others the chance to review
+        and possibly vote against the PR. Keep in mind that it is our
+        main intention to keep the branch as stable as possible.
+      * All patches that are intended for the branch should first be committed
+        to the unstable branch, merged into the stable branch, and then into
+        the current release branch.
+      * Normal unstable and stable branch development may continue as usual.
+        However, if you plan to commit a big change to the unstable branch
+        while the branch feature freeze is in effect, think twice: can't the
+        addition wait a couple more days? Merges of bug fixes into the branch
+        may become more difficult.
+      * Only Github issues with Milestone {{ release_version }} and priority "Blocker" will delay
+        a release candidate build.
+      ----
+    types:
+    - major
+    - minor
+  - !Todo
+    id: inform_devs_bugfix
+    title: Inform Devs about the planned release
+    description: |-
+      Send a note to dev@ to inform the committers about the rules for committing to the branch.
+
+      This is an e-mail template you can use as a basis for
+      announcing the rules for committing to the release branch
+
+      .Mail template
+      ----
+      To: dev@solr.apache.org
+      Subject: Bugfix release Solr Operator {{ release_version }}
+
+      NOTICE:
+
+      I am now preparing for a Solr Operator bugfix release from branch {{ release_branch }}
+
+      Please observe the normal rules for committing to this branch:
+
+      * Before committing to the branch, reply to this thread and argue
+        why the fix needs backporting and how long it will take.
+      * All issues accepted for backporting should be marked with Milestone {{ release_version }}
+        in Github, and issues that should delay the release must be marked as Blocker
+      * All patches that are intended for the branch should first be committed
+        to the unstable branch, merged into the stable branch, and then into
+        the current release branch.
+      * Only Github issues with Milestone {{ release_version }} and priority "Blocker" will delay
+        a release candidate build.
+      ----
+    types:
+    - bugfix
+  - !Todo
+    id: draft_release_notes
+    title: Get a draft of the release notes in place
+    description: |-
+      These are typically edited on the Wiki
+
+      Clone a page for a previous version as a starting point for your release notes.
+      Edit the git history and Github Release into a more concise format for public consumption.
+      Ask on dev@ for input. Ideally the timing of this request mostly coincides with the
+      release branch creation. It's a good idea to remind the devs of this later in the release too.
+
+      NOTE: Do not add every single Github issue, but distill the Release note into important changes!
+    links:
+    - https://cwiki.apache.org/confluence/display/SOLR/Solr+Operator+Release+Notes
+    - https://github.com/apache/solr-operator/milestones/{{ release_version }}
+    - https://github.com/apache/solr-operator/commits/{{ base_branch }}
+  - !Todo
+    id: new_github_milestone_versions
+    title: Add a new milestone in Github for the next release
+    # FOR-MAJOR-RELEASE: change minor -> major below.
+    description: |-
+      Go to the Github Milestones page and add the new version:
+
+      {% if release_type == 'minor' %}
+      - Change name of version `main ({{ release_version }})` into `{{ release_version }}`
+      - Create a new (unreleased) version `main ({{ get_next_version }})`
+      {% else %}
+      - Create a new (unreleased) version `{{ get_next_version }}`
+      {% endif %}
+    types:
+    - major
+    - minor
+    links:
+    - https://github.com/apache/solr-operator/milestones
+- !TodoGroup
+  id: artifacts
+  title: Build the release artifacts
+  description: |-
+    If after the last day of the feature freeze phase no blocking issues are
+    in Github with "Milestone" {{ release_version }}, then it's time to build the
+    release artifacts, run the smoke tester and stage the RC in svn
+  depends:
+  - test
+  - prerequisites
+  is_in_rc_loop: true
+  todos:
+  - !Todo
+    id: run_tests
+    title: Run tests & lint
+    depends: clean_git_checkout
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands:
+      - !Command
+        cmd: git checkout {{ release_branch }}
+        stdout: true
+      - !Command
+        cmd: "make check"
+    post_description: Check that the task passed. If it failed, commit fixes for the failures before proceeding.
+  - !Todo
+    id: helm_change_log
+    title: Add changelog to the helm chart
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands:
+        - !Command
+          cmd: git checkout {{ release_branch }}
+          tee: true
+        - !Command
+          cmd: git clean -df && git checkout -- .
+          comment: Make sure checkout is clean and up to date
+          logfile: git_clean.log
+          tee: true
+        - !Command
+          cmd: make clean
+          stdout: true
+        - !Command
+          cmd: "{{ editor }} helm/solr-operator/Chart.yaml"
+          comment: |
+            Add changelog at annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
+            This will replace the "Change 1" and "Change 2" lines.
+            You can only input the changelog as a single-layer bulleted list.
+          tee: true
+        - !Command
+          cmd: git commit -am "Solr Operator {{ release_version }} Changelog"
+          logfile: commit.log
+          stdout: true
+        - !Command
+          cmd: git push origin {{ release_branch }}
+          logfile: git_push_changelog.log
+          tee: true
+  - !Todo
+    id: build_rc
+    title: Build the release candidate and issue final commit
+    depends:
+      - run_tests
+      - helm_change_log
+      - gpg
+    vars:
+      logfile: '{{ [rc_folder, ''logs'', ''buildAndPushRelease.log''] | path_join }}'
+      local_keys: '{% if keys_downloaded %} --local-keys "{{ [config_path, ''KEYS''] | path_join }}"{% endif %}'
+      # Note, the following vars will be recorded in todo state AFTER completion of commands
+      git_rev: '{{ current_git_rev }}'
+      rc_folder: 'solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ current_git_rev | default("<git_rev>", True) }}'
+      git_sha: '{{ current_git_rev | default("<git_sha>", True) | truncate(7,true,"") }}'
+    persist_vars:
+    - git_rev
+    - rc_folder
+    - git_sha
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |-
+        In this step we will build the RC artifacts.
+      confirm_each_command: false
+      commands:
+      - !Command
+        cmd: git checkout {{ release_branch }}
+        tee: true
+      - !Command
+        cmd: git clean -df && git checkout -- .
+        comment: Make sure checkout is clean and up to date
+        logfile: git_clean.log
+        tee: true
+      - !Command
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: make clean
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/change_suffix.sh
+        comment: Remove the prerelase suffix from the version.
+        stdout: true
+      - !Command
+        cmd: ./hack/release/version/propagate_version.sh
+        comment: Propagate the new version throughout the repo.
+        logfile: propagate_version.log
+        tee: true
+      - !Command
+        cmd: git commit -am "Solr Operator {{ release_version }} Release"
+        comment: "We are only committing with the new version, we will not push to the release branch until after the vote has succeeded."
+        logfile: commit.log
+        stdout: true
+      - !Command
+        vars:
+          rc_folder: 'solr-operator-{{ release_version }}-RC{{ rc_number }}-rev{{ current_git_rev | default("<git_rev>", True) }}'
+        env:
+          TAG: "{{ release_version }}-rc{{ rc_number }}"
+          ARTIFACTS_DIR: "{{ [dist_file_path, rc_folder] | path_join }}"
+          APACHE_ID: "{{ gpg.apache_id | default('<apache_id>', True) }}"
+          GPG_KEY: "{{ gpg_key | default('<gpg_key_id>', True) }}"
+        cmd: make build-release-artifacts
+        comment: "NOTE: Remember to type your GPG pass-phrase at the prompt!"
+        logfile: build_rc.log
+        tee: true
+  - !Todo
+    id: smoke_tester
+    title: Run the smoke tester
+    depends: build_rc
+    vars:
+      dist_path: '{{ [dist_file_path, (build_rc.rc_folder | default("<rc_folder>", True))] | path_join }}'
+      docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Here we'll smoke test the release by 'downloading' the artifacts, running the tests, validating GPG signatures etc.
+      commands:
+      - !Command
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
+        logfile: smoketest.log
+        tee: true
+        stdout: true
+  - !Todo
+    id: upload_rc_docker_image
+    title: Upload RC Docker image
+    depends: smoke_tester
+    vars:
+      docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Upload the docker image to DockerHub
+      commands:
+        - !Command
+          cmd: docker push "{{ docker_image }}"
+          logfile: rc_docker_upload.log
+  - !Todo
+    id: import_svn
+    title: Import artifacts into SVN
+    description: |
+      Here we'll import the artifacts into Subversion.
+    depends: smoke_tester
+    vars:
+      dist_path: '{{ [dist_file_path, (build_rc.rc_folder | default("<rc_folder>", True))] | path_join }}'
+      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Have your Apache credentials handy, you'll be prompted for your password
+      commands:
+      - !Command
+        cmd: svn -m "Solr Operator {{ release_version }} RC{{ rc_number }}" import  {{ dist_path }}  {{ dist_url }}
+        logfile: import_svn.log
+        tee: true
+  - !Todo
+    id: verify_staged
+    title: Verify staged artifacts
+    description: |
+      A lightweight smoke testing which downloads the artifacts from stage 
+      area and checks hash and signatures, but does not re-run all tests.
+    depends: import_svn
+    vars:
+      dist_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+      docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Here we'll verify that the staged artifacts are downloadable and hash/signatures match.
+      commands:
+      - !Command
+        cmd: ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
+        logfile: smoketest_staged.log
+- !TodoGroup
+  id: voting
+  title: Hold the vote and sum up the results
+  description: These are the steps necessary for the voting process. Read up on the link first!
+  is_in_rc_loop: true
+  todos:
+  - !Todo
+    id: initiate_vote
+    title: Initiate the vote
+    depends: verify_staged
+    description: |
+      If the smoke test passes against the staged artifacts, send an email to the dev mailing list announcing the release candidate.
+
+      .Mail template
+      ----
+      To: dev@solr.apache.org
+      Subject: [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
+
+      Please vote for release candidate {{ rc_number }} for the Solr Operator {{ release_version }}
+
+      The artifacts can be downloaded from:
+      https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+
+      The artifacts are layed out in the following way:
+        * solr-operator-{{ release_version }}.tgz - Contains the source release
+        * crds/ - Contains the CRD files
+        * helm/ - Contains the Helm release packages
+
+      The RC Docker image can be found at:
+        apache/solr-operator:{{ release_version }}-rc{{ rc_number }}
+
+      The RC Helm repo can be added with:
+        helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
+
+      Install the RC Solr Operator and CRDs with:
+        kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
+        helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
+
+      You can run the smoke tester directly with this command:
+
+      ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+          -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
+
+      Make sure you have the following installed before running the smoke test:
+        - Docker
+        - Go 1.16
+        - Kubectl
+        - GnuPG
+        - Helm
+        - yq
+        - jq
+
+      The vote will be open for at least 72 hours i.e. until {{ vote_close }}.
+
+      [ ] +1  approve
+      [ ] +0  no opinion
+      [ ] -1  disapprove (and reason why)
+
+      Here is my +1
+      ----
+
+      {% if vote_close_72h_holidays %}
+      [IMPORTANT]
+      ====
+      The voting period contains one or more holidays. Please consider extending the vote deadline.
+
+      {% for holiday in vote_close_72h_holidays %}* {{ holiday }}
+      {% endfor %}
+      ====
+      {%- endif %}
+    vars:
+      vote_close: '{{ vote_close_72h }}'
+      vote_close_epoch: '{{ vote_close_72h_epoch }}'
+    persist_vars:
+    - vote_close
+    - vote_close_epoch
+    function: create_ical
+    links:
+    - https://www.apache.org/foundation/voting.html
+  - !Todo
+    id: end_vote
+    title: End vote
+    depends: initiate_vote
+    description: |
+      At the end of the voting deadline, count the votes and send RESULT message to the mailing list.
+
+      {% set vote_close_epoch = initiate_vote.vote_close_epoch | int %}
+      {% if epoch < vote_close_epoch %}
+      WARNING: The planned voting deadline {{ initiate_vote.vote_close }} has not yet passed
+      {% else %}
+      The planned 72h voting deadline {{ initiate_vote.vote_close }} has passed.
+      {% endif %}
+    asciidoc: |
+      (( template=vote_macro ))
+      Note down how many votes were cast, summing as:
+
+      * Binding PMC-member +1 votes
+      * Non-binding +1 votes
+      * Neutral +/-0 votes
+      * Negative -1 votes
+
+      You need 3 binding +1 votes and more +1 than -1 votes for the release to happen.
+      A release cannot be vetoed, see more in provided links.
+
+      Here are some mail templates for successful and failed vote results with sample numbers:
+
+      {{ end_vote_result(3,1,0,2) }}
+
+      {{ end_vote_result(3,1,0,4) }}
+
+      {{ end_vote_result(2,9,0,0) }}
+    user_input:
+    - !UserInput
+      type: int
+      prompt: Number of binding +1 votes (PMC members)
+      name: plus_binding
+    - !UserInput
+      type: int
+      prompt: Number of other +1 votes
+      name: plus_other
+    - !UserInput
+      type: int
+      prompt: Number of 0 votes
+      name: zero
+    - !UserInput
+      type: int
+      prompt: Number of -1 votes
+      name: minus
+    post_description: |
+        (( template=vote_logic ))
+        (( template=vote_macro ))
+        {% if passed -%}
+        Congratulations! The vote has passed.
+
+        {% if minus > 0 %}
+        However, there were negative votes. A release cannot be vetoed, and as long as
+        there are more positive than negative votes you can techically release
+        the software. However, please review the negative votes and consider
+        a re-spin.
+        
+        {% endif %}
+        {%- endif %}
+        {{ end_vote_result(plus_binding,plus_other,zero,minus) }}
+    links:
+    - https://www.apache.org/foundation/voting.html
+- !TodoGroup
+  id: publish
+  title: Publishing to the ASF Mirrors
+  description: Once the vote has passed, the release may be published to the ASF Mirrors and to Maven Central.
+  todos:
+  - !Todo
+    id: tag_release
+    title: Tag the release
+    description: Tag the release from the same revision from which the passing release candidate's was built
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: This will tag the release in git
+      logs_prefix: tag_release
+      commands:
+      - !Command
+        cmd: git tag -a {{ release_version }}  -m "Solr Operator {{ release_version }} release"  {{ build_rc.git_rev | default("<git_rev>", True) }}
+        logfile: git_tag.log
+        tee: true
+      - !Command
+        cmd: git push origin {{ release_version }}
+        logfile: git_push_tag.log
+        tee: true
+  - !Todo
+    id: increment_release_version
+    title: Add the next version on release branch
+    description: Add the next version after the just-released version on the release branch
+    depends: tag_release
+    vars:
+      next_version: "v{{ release_version_major }}.{{ release_version_minor }}.{{ release_version_bugfix + 1 }}"
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to add the new bugfix version {{ next_version }} to the release branch
+      commands:
+        - !Command
+          cmd: git checkout {{ release_branch }}
+          tee: true
+        - !Command
+          cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
+          tee: true
+        - !Command
+          cmd: ./hack/release/version/change_suffix.sh -s "prerelease"
+          tee: true
+        - !Command
+          cmd: ./hack/release/version/propagate_version.sh
+          tee: true
+        - !Command
+          cmd: ./hack/release/version/remove_version_specific_info.sh
+          tee: true
+        - !Command
+          cmd: git diff
+          logfile: diff.log
+          comment: Check the git diff before committing. Do any edits if necessary
+          tee: true
+        - !Command
+          cmd: git add -u .  && git commit -m "Add next patch version {{ next_version }}"
+          logfile: commit-release-next-version.log
+        - !Command
+          cmd: git push {{ release_branch }}
+          comment: |
+            This will push both the release commit as well as the commit to increase version.
+            The release commit will correspond to the previously pushed tag.
+          logfile: push-release-next-version.log
+  - !Todo
+    id: svn_release_mv
+    title: Move release artifacts from staging to release
+    vars:
+      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: This will move the new release artifacts from staging repo to the release repo
+      commands:
+      - !Command
+        cmd: svn move -m "Move Solr Operator {{ release_version }} RC{{ rc_number }} to release repo"  {{ dist_stage_url }}  {{ dist_release_url }}
+        logfile: svn_mv_solr_operator.log
+        tee: true
+  - !Todo
+    id: publish_helm_charts
+    title: Publish the staged Helm charts
+    depends: svn_release_mv
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      official_helm_charts_url: https://nightlies.apache.org/solr/release/helm-charts
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: This will upload the staged Helm chart to the release location in nightlies.apache.org
+      commands:
+        - !Command
+          cmd: ./hack/release/upload/upload_helm.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -a "{{ gpg.apache_id | default("<apache_id>", True) }}" -c "{{ official_helm_charts_url }}" -r "{{ dist_release_url }}"
+          logfile: upload_helm.log
+          tee: true
+  - !Todo
+    id: publish_crds
+    title: Publish the staged CRDs
+    depends: svn_release_mv
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      crds_release_url: https://nightlies.apache.org/solr/release/operator/crds
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: This will upload the staged CRDs to the release location in nightlies.apache.org
+      commands:
+        - !Command
+          cmd: ./hack/release/upload/upload_crds.sh  -a "{{ gpg.apache_id | default('<apache_id>', True) }}" -c "{{ crds_release_url }}" -r "{{ dist_release_url }}" -v "{{ release_version }}"
+          logfile: upload_crds.log
+          tee: true
+  - !Todo
+    id: cleanup_svn_rc_folder
+    title: Cleanup RC folder in SVN
+    depends:
+      - svn_release_mv
+    vars:
+      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: This will remove the release artifacts from staging repo
+      commands:
+        - !Command
+          cmd: svn rm -m "Clean up the RC folder for {{ release_version }} RC{{ rc_number }}"  {{ dist_stage_url }}
+          logfile: svn_rm_containing.log
+          comment: Clean up containing folder on the staging repo
+          tee: true
+  - !Todo
+    id: publish_docker_image
+    title: Publish the staged Docker image
+    vars:
+      rc_tag: '{{ release_version }}-rc{{ rc_number }}'
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: This will pull the RC Docker image, tag it as a release, and push the release image to DockerHub.
+      commands:
+        - !Command
+          cmd: docker pull "apache/solr-operator:{{ rc_tag }}"
+          logfile: docker_pull.log
+          tee: true
+        - !Command
+          cmd: docker tag "apache/solr-operator:{{ rc_tag }}" "apache/solr-operator:{{ release_version }}"
+          tee: true
+        - !Command
+          cmd: docker push "apache/solr-operator:{{ release_version }}"
+          logfile: docker_push.log
+          tee: true
+  - !Todo
+    id: check_mirroring
+    title: Check state of mirroring so far
+    description: Mark this as complete once a good spread is confirmed
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run this script to check the number and percentage of mirrors that have the release
+      commands:
+      - !Command
+        cmd: python3 -u hack/release/wizard/poll-mirrors.py -version {{ release_version }} -o
+        live: true
+- !TodoGroup
+  id: website
+  title: Update the website
+  description: |
+    For every release, we publish docs on the website, we need to update the
+    download pages etc. The website is hosted in https://github.com/apache/solr-site
+#    but the Javadocs and Solr Reference Guide are pushed to SVN and then included
+#    in the main site through links.
+  todos:
+#  - !Todo
+#    id: website_docs
+#    title: Publish docs, changes and javadocs
+#    description: |
+#      Ensure your refrigerator has at least 2 beers - the svn import operation can take a while,
+#      depending on your upload bandwidth. We'll publish this directly to the production tree.
+#      At the end of the task, the two links below shall work.
+#    links:
+#    - http://solr.apache.org/operator/{{ version }}
+#    vars:
+#      version: "{{ release_version_major }}_{{ release_version_minor }}_{{ release_version_bugfix }}"
+#    commands: !Commands
+#      root_folder: '{{ git_checkout_folder }}'
+#      commands_text: Build the documentation and add it to SVN production tree
+#      commands:
+#      - !Command
+#        cmd: git fetch && git checkout {{ release_version }}
+#        comment: Checkout the release branch
+#        logfile: checkout-release-tag.log
+#        tee: true
+#      - !Command
+#        cmd: "{{ gradle_cmd }} documentation -Dversion.release={{ release_version }}"
+#        comment: Build documentation
+#      - !Command
+#        cmd: svn -m "Add docs, changes and javadocs for Solr {{ release_version }}"  import {{ git_checkout_folder }}/solr/build/docs  https://svn.apache.org/repos/infra/websites/production/lucene/content/solr/{{ version }}
+#        logfile: add-docs-solr.log
+#        comment: Add docs for Solr
+  - !Todo
+    id: website_git_clone
+    title: Do a clean git clone of the website repo
+    description: This is where we'll commit later updates for the website.
+    commands: !Commands
+      root_folder: '{{ release_folder }}'
+      commands_text: Run this command to clone the website git repo
+      remove_files:
+        - '{{ git_website_folder }}'
+      commands:
+        - !Command
+          cmd: git clone --progress https://gitbox.apache.org/repos/asf/solr-site.git solr-site
+          logfile: website_git_clone.log
+  - !Todo
+    id: website_update_versions
+    title: Update website versions
+    depends: website_git_clone
+    description: |
+      We need to update the website so that the download pages list the new release.
+
+      Fortunately the only thing you need to change is a few variables in `pelicanconf.py`.
+      If you release a current latest release, change the `SOLR_OPERATOR_LATEST_RELEASE` and `SOLR_OPERATOR_LATEST_RELEASE_DATE`
+      variables.
+      If you relese a bugfix release for previous version, then change the `SOLR_OPERATOR_PREVIOUS_MAJOR_RELEASE` variable.
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands_text: Edit pelicanconf.py to update version numbers
+      commands:
+        - !Command
+          cmd: "{{ editor }} pelicanconf.py"
+          comment: Edit the pelicanconf.file. Make sure to include the "v" prefix in the version.
+          stdout: true
+        - !Command
+          cmd: git commit -am "Update version variables for release {{ release_version }}"
+          logfile: commit.log
+          stdout: true
+    post_description: |
+      You will push and verify all changes in a later step
+  - !Todo
+    id: prepare_announce
+    title: Author the Solr Operator release news
+    depends: website_git_clone
+    description: |
+      Edit a news text for the Solr Operator website. This text will be the basis for the release announcement email later.
+      This step will open an editor with a template. You will need to copy/paste the final release announcement text
+      from the Wiki page and format it as Markdown.
+    function: prepare_announce
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands_text: |
+        Copy the Solr Operator announcement from https://cwiki.apache.org/confluence/display/SOLR/Solr+Operator+Release+Notes
+        You have to exit the editor after edit to continue.
+      commands:
+      - !Command
+        cmd: "{{ editor }} {{ solr_operator_news_file }}"
+        comment: Edit the for Solr Operator announcement news
+        stdout: true
+      - !Command
+        cmd: git add . && git commit -m "Adding news for Solr Operator release {{ release_version }}"
+        logfile: commit.log
+        stdout: true
+    post_description: |
+      You will push and verify all changes in a later step
+  - !Todo
+    id: website_update_doap
+    title: Update the Solr Opertator DOAP file
+    depends:
+      - website_update_versions
+      - prepare_announce
+    description: Update the Solr Operator DOAP RDF file to reflect the new version.
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands_text: Edit DOAP file
+      commands:
+        - !Command
+          cmd: "{{ editor }} content/doap/solr-operator.rdf"
+          comment: Edit Solr Operator DOAP, add version {{ release_version }}
+          stdout: true
+        - !Command
+          cmd: git add content/doap/solr-operator.rdf  && git commit -m "DOAP changes for Solr Operator release {{ release_version }}"
+          logfile: commit.log
+          stdout: true
+  - !Todo
+    id: update_other
+    title: Update rest of webpage
+    depends: website_update_doap
+    description: |
+      Update the rest of the web page. Please review all files in the checkout
+      and consider if any need change based on what changes there are in the
+      release you are doing. Things to consider:
+
+      * System requirements
+      * Quickstart and tutorial?
+
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands_text: |
+        We'll open an editor on the root folder of the site checkout
+        You have to exit the editor after edit to continue.
+      commands:
+        - !Command
+          cmd: "{{ editor }} ."
+          comment: Open an editor on the root folder
+          stdout: true
+        - !Command
+          cmd: git commit -am "Other website changes for Solr Operator release {{ release_version }}"
+          comment: Commit the other changes
+          logfile: commit.log
+          stdout: true
+  - !Todo
+    id: stage_website
+    title: Stage the website changes
+    depends:
+      - prepare_announce
+      - website_update_doap
+      - website_update_versions
+    description: |
+      Push the website changes to 'main' branch, and check the staging site.
+      You will get a chance to preview the diff of all changes before you push.
+      If you need to do changes, do the changes (e.g. by re-running previous step 'Update rest of webpage')
+      and commit your changes. Then re-run this step and push when everything is OK.
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands_text: |
+        Verify that changes look good, and then publish.
+        You have to exit the editor after review to continue.
+      commands:
+      - !Command
+        cmd: git checkout main && git status
+        stdout: true
+      - !Command
+        cmd: git diff
+        redirect: "{{ [release_folder, 'website.diff'] | path_join }}"
+        comment: Make a diff of all edits. Will open in next step
+      - !Command
+        cmd: "{{ editor }} {{ [release_folder, 'website.diff'] | path_join }}"
+        comment: View the diff of the website changes. Abort if you need to do changes.
+        stdout: true
+      - !Command
+        cmd: git push origin
+        comment: Push all changes
+        logfile: push-website.log
+    post_description: |
+      Wait a few minutes for the build to happen. You can follow the site build at https://ci2.apache.org/#/builders/3
+      and view the staged site at https://solr.staged.apache.org/operator
+      Verify that correct links and versions are mentioned in download pages, download buttons etc.
+      If you find anything wrong, then commit and push any changes and check again.
+
+      Next step is to merge the changes to branch 'production' in order to publish the site.
+      Make sure that you do "Merge with Commit", do NOT use a Squash Merge.
+    links:
+    - https://ci2.apache.org/#/builders/3
+    - https://solr.staged.apache.org/operator
+  - !Todo
+    id: publish_website
+    title: Publish the website changes
+    depends: stage_website
+    description: |
+      Push the website changes to 'production' branch. This will build and publish the live site on
+      https://solr.apache.org/operator
+    commands: !Commands
+      root_folder: '{{ git_website_folder }}'
+      commands:
+        - !Command
+          cmd: git checkout production && git pull --ff-only
+          stdout: true
+        - !Command
+          cmd: git merge main
+          stdout: true
+        - !Command
+          cmd: git push origin
+          comment: Push all changes to production branch
+          logfile: push-website.log
+    post_description: |
+      Wait a few minutes for the build to happen. You can follow the site build at https://ci2.apache.org/#/builders/3
+
+      Verify on https://solr.apache.org/operator that the site is OK.
+    links:
+      - https://ci2.apache.org/#/builders/3
+      - https://solr.apache.org
+      - https://solr.apache.org/operator
+- !TodoGroup
+  id: announce
+  title: Announce the release
+  description: |
+    For feature releases, your announcement should describe the main features included 
+    in the release. *Send the announce as Plain-text email, not HTML.*
+
+    This step will generate email templates based on the news files you edited earler for the website.
+    Do any last-minute necessary edits to the text as you copy it over to the email.
+  todos:
+  - !Todo
+    id: announce_solr_operator
+    title: Announce the Solr Operator release (@s.a.o)
+    description: |
+      (( template=announce_solr_operator_mail ))
+  - !Todo
+    id: setup_pgp_mail
+    title: Setup your mail client for PGP
+    description: |
+      The announce mail to `announce@apache.org` should be cryptographically signed.
+      Make sure you have a PGP enabled email client with your apache key installed.
+      There are plugins for popular email programs, as well as browser plugins for webmail.
+      See links for help on how to setup your email client for PGP.
+
+      If you prefer to sign the announcements manually rather than using a plugin,
+      you can do so from the command line and then copy the output into your mail program.
+
+      gpg --output - --clearsign solr_operator_announce.txt
+    links:
+    - https://www.openpgp.org/software/
+    - https://ssd.eff.org/en/module/how-use-pgp-mac-os-x
+    - https://ssd.eff.org/en/module/how-use-pgp-linux
+    - https://ssd.eff.org/en/module/how-use-pgp-windows
+    - https://www.openpgp.org/software/mailvelope/
+  - !Todo
+    id: announce_solr_operator_sig
+    title: Announce the Solr Operator release (announce@a.o)
+    description: |
+      (( template=announce_solr_operator_sign_mail ))
+#  - !Todo
+#    id: add_to_wikipedia
+#    title: Add the new version to Wikipedia
+#    description: |
+#      Go to Wikipedia and edit the page to include the new release.
+#      Major versions should have a small new paragraph under 'History'.
+#      If you know other languages than English, edit those as well.
+#    links:
+#    - https://en.wikipedia.org/wiki/Apache_Solr
+  - !Todo
+    id: add_to_apache_reporter
+    title: Add the new version to the Apache Release Reporter
+    description: |
+      Go to the Apache Release Reporter and add a release for the Solr Operator.
+      Fill in the same date that you used for the release in previous steps.
+      Use a product name prefix for the version, as this is not the main release of the Solr PMC.
+      The version you input should be:
+        solr-operator-{{ release_version }}
+    links:
+      - https://reporter.apache.org/addrelease.html?solr
+- !TodoGroup
+  id: post_release
+  title: Tasks to do after release.
+  description: There are many more tasks to do now that the new version is out there, so hang in there for a few more hours.
+  todos:
+  - !Todo
+    id: github_issue_unfinished
+    title: Remove all unfinished Issues and PRs from the Github Milestone
+    description: |-
+      Go to Github and make sure that all of the Issues listed under the Milestone are either closed, or removed from the Milestone.
+
+      . Go to https://github.com/apache/solr-operator/milestones/{{ release_version }}
+      . If there are any Issues/PRs that are still open, then go to them and either:
+        . Close the Issue if it is actually completed
+        . Remove the Milestone from the Issue/PR if it is still not complete
+    links:
+    - https://github.com/apache/solr-operator/milestones/{{ release_version }}
+  - !Todo
+    id: github_milestone_close
+    title: Mark milestone as closed in Github
+    depends: github_issue_unfinished
+    description: |-
+      Go to the Github "Manage Milestones" Administration pages.
+
+      . Find version {{ release_version }}, click "edit" under the progress bar
+      . Set the "Due Date" to the release date of this version
+      . Click "Close milestone"
+
+    links:
+      - https://github.com/apache/solr-operator/milestones?state=open
+#  - !Todo
+#    id: jira_clear_security
+#    title: Clear Security Level of Public Solr JIRA Issues
+#    description: |-
+#      ASF JIRA has a deficiency in which issues that have a security level of "Public" are nonetheless not searchable.
+#      As a maintenance task, we'll clear the security flag for all public Solr JIRAs, even if it is not a task directly
+#      related to the release:
+#
+#      . Open in browser: https://issues.apache.org/jira/issues/?jql=project+=+SOLR+AND+level+=+%22Public%22
+#      . In the `Tools` menu, start a bulk change, select all issues and click `Next`
+#      . Select operation="Edit issues" and click `Next`
+#      . Click the checkbox next to `Change security level` and choose `None` in the dropdown.
+#      . On the bottom of the form, uncheck the box that says `Send mail for this update`
+#      . Click `Next`, review the changes and click `Confirm`
+#    links:
+#    - https://issues.apache.org/jira/issues/?jql=project+=+SOLR+AND+level+=+%22Public%22
+  - !Todo
+    id: new_github_milestone_version_bugfix
+    title: Add a new milestone in Github for the next release
+    description: |-
+      Go to the Github Milestones page and add the new version:
+
+      - Create a new (unreleased) version `{{ get_next_version }}`
+    types:
+      - bugfix
+    links:
+      - https://github.com/apache/solr-operator/milestones
+  - !Todo
+    id: stop_mirroring
+    title: Stop mirroring old releases
+    description: |
+      Shortly after new releases are first mirrored, they are automatically copied to the archives. 
+      Only the latest point release from each active branch should be kept under the Solr PMC
+      svnpubsub areas `dist/releases/solr/solr-operator`. Older releases can be
+      safely deleted, since they are already backed up in the archives.
+
+      Currenlty these versions are in the mirrors:
+
+      *{{ mirrored_versions|join(', ') }}*
+
+      The commands below will remove old versions automatically. If this suggestion is wrong,
+      please do *not* execute the commands automatically, but edit the command and run manually.
+      Versions to be deleted from the mirrors are:
+
+      *{{ mirrored_versions_to_delete|join(', ') }}*
+
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: |
+        Run these commands to delete proposed versions from mirrors.
+
+        WARNING: Validate that the proposal is correct!
+      commands:
+      - !Command
+        cmd: |
+          svn rm -m "Stop mirroring old Solr Operator releases"{% for ver in mirrored_versions_to_delete %}  https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ ver }}{% endfor %}
+        logfile: svn-rm-solr-operator.log

@@ -37,3 +37,4 @@ generated-check
 
 # Python for the release wizard
 venv
+__pycache__

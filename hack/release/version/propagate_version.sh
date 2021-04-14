@@ -56,8 +56,9 @@ fi
 echo "Updating the version throughout the repo to: ${VERSION}"
 
 # Update default solr-operator version and the helm chart versions.
-awk -i inplace '$1 == "repository:" { tag = ($2 == "apache/solr-operator") }
-tag && $1 == "tag:"{$1 = "  " $1; $2 = "'"${VERSION}"'"} 1' helm/solr-operator/values.yaml
+awk '$1 == "repository:" { tag = ($2 == "apache/solr-operator") }
+tag && $1 == "tag:"{$1 = "  " $1; $2 = "'"${VERSION}"'"} 1' helm/solr-operator/values.yaml > helm/solr-operator/values.yaml.tmp
+mv helm/solr-operator/values.yaml.tmp helm/solr-operator/values.yaml
 
 # Update Helm Chart.yaml
 IS_PRE_RELEASE="false"

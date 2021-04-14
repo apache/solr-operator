@@ -56,5 +56,6 @@ fi
 echo "Updating the latest version throughout the repo to: ${VERSION}"
 
 # Version file
-awk -i inplace '$1 == "Version"{$4 = "\"'"${VERSION}"'\""} 1' version/version.go && \
-  go fmt version/version.go
+awk '$1 == "Version"{$4 = "\"'"${VERSION}"'\""} 1' version/version.go > version/version.tmp.go
+go fmt version/version.tmp.go
+mv version/version.tmp.go version/version.go
