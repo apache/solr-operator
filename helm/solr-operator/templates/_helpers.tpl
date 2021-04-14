@@ -85,3 +85,48 @@ Determine whether to use ClusterRoles or Roles
     ClusterRole
 {{- end -}}
 {{- end -}}
+
+{{/*
+mTLS vars
+*/}}
+{{- define "solr-operator.mTLS.clientCertDirectory" -}}
+/etc/ssl/solr/client-cert
+{{- end -}}
+
+{{- define "solr-operator.mTLS.caCertDirectory" -}}
+/etc/ssl/solr/ca-cert
+{{- end -}}
+{{- define "solr-operator.mTLS.caCertName" -}}
+rootSolrCert.pem
+{{- end -}}
+
+{{- define "solr-operator.mTLS.volumeMounts" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+- name: tls-client-cert
+  mountPath: {{ include "solr-operator.mTLS.clientCertDirectory" . }}
+  readOnly: true
+{{- end -}}
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  mountPath: {{ include "solr-operator.mTLS.caCertDirectory" . }}
+  readOnly: true
+{{ end }}
+{{- end -}}
+
+{{- define "solr-operator.mTLS.volumes" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+- name: tls-client-cert
+  secret:
+    secretName: {{ .Values.mTLS.clientCertSecret }}
+    optional: false
+{{- end -}}
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  secret:
+    secretName: {{ .Values.mTLS.caCertSecret }}
+    items:
+      - key: {{ .Values.mTLS.caCertSecretKey }}
+        path: {{ include "solr-operator.mTLS.caCertName" . }}
+    optional: false
+{{- end -}}
+{{- end -}}

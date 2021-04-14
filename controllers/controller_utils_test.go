@@ -189,7 +189,14 @@ func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expecte
 	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
 	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
 	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
-	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer)
+
+	// is there a separate truststore?
+	expectedTrustStorePath := ""
+	if tls.TrustStoreSecret != nil {
+		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
+	}
+
+	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer, expectedTrustStorePath)
 }
 
 func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLSSecretUpdate bool) *solr.SolrTLSOptions {
@@ -249,7 +256,28 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 	mainContainer := podTemplate.Spec.Containers[0]
 	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
 	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
-	expectTLSEnvVars(t, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer)
+
+	// is there a separate truststore?
+	expectedTrustStorePath := ""
+	if tls.TrustStoreSecret != nil {
+		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
+	}
+
+	expectTLSEnvVars(t, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer, expectedTrustStorePath)
+
+	// different trust store?
+	if tls.TrustStoreSecret != nil {
+		var truststoreVol *corev1.Volume = nil
+		for _, vol := range podTemplate.Spec.Volumes {
+			if vol.Name == "truststore" {
+				truststoreVol = &vol
+				break
+			}
+		}
+		assert.NotNil(t, truststoreVol, fmt.Sprintf("truststore volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+		assert.NotNil(t, truststoreVol.VolumeSource.Secret, "Didn't find TLS truststore volume in sts config!")
+		assert.Equal(t, tls.TrustStoreSecret.Name, truststoreVol.VolumeSource.Secret.SecretName)
+	}
 
 	// initContainers
 	if needsPkcs12InitContainer {
@@ -277,11 +305,23 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 		assert.Equal(t, expCmd, expInitContainer.Command[2])
 	}
 
+	if tls.ClientAuth == solr.Need {
+		// verify the probes use a command with SSL opts
+		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
+			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
+		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
+		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
+		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
+	}
+
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
 }
 
 // ensure the TLS related env vars are set for the Solr pod
-func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool) {
+func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool, expectedTruststorePath string) {
 	assert.NotNil(t, envVars)
 	envVars = filterVarsByName(envVars, func(n string) bool {
 		return strings.HasPrefix(n, "SOLR_SSL_")
@@ -292,13 +332,22 @@ func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePas
 	if needsPkcs12InitContainer {
 		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
 	}
+
+	if expectedTruststorePath == "" {
+		expectedTruststorePath = expectedKeystorePath
+	}
+
 	for _, envVar := range envVars {
 		if envVar.Name == "SOLR_SSL_ENABLED" {
 			assert.Equal(t, "true", envVar.Value)
 		}
 
-		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+		if envVar.Name == "SOLR_SSL_KEY_STORE" {
 			assert.Equal(t, expectedKeystorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+			assert.Equal(t, expectedTruststorePath, envVar.Value)
 		}
 
 		if envVar.Name == "SOLR_SSL_KEY_STORE_PASSWORD" {

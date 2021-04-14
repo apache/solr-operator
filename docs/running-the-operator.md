@@ -114,4 +114,30 @@ The final image will only contain the solr-operator binary and necessary License
                           If _true_, then a Zookeeper Operator must be running for the cluster.
                           (_true_ | _false_ , defaults to _false_)
                         
-    
+## Client Auth for mTLS-enabled Solr clusters
+
+For SolrCloud instances that run with mTLS enabled (see `spec.solrTLS.clientAuth`), the operator needs to supply a trusted certificate when making API calls to the Solr pods it is managing.
+
+This means that the client certificate used by the operator must be added to the truststore on all Solr pods.
+Alternatively, the certificate for the Certificate Authority (CA) that signed the client certificate can be trusted by adding the CA's certificate to the Solr truststore.
+In the latter case, any client certificates issued by the trusted CA will be accepted by Solr, so make sure this is appropriate for your environment.
+
+The client certificate used by the operator should be stored in a [TLS secret](https://kubernetes.io/docs/concepts/configuration/secret/#tls-secrets); you must create this secret before deploying the Solr operator.
+
+When deploying the operator, supply the client certificate using the `mTLS.clientCertSecret` Helm chart variable, such as:
+```
+  --set mTLS.clientCertSecret=my-client-cert \
+```
+The specified secret must exist in the same namespace where the operator is deployed.
+
+In addition, if the CA used to sign the server certificate used by Solr is not built into the operator's Docker image, 
+then you'll need to add the CA's certificate to the operator so its HTTP client will trust the server certificates during the TLS handshake.
+
+The CA certificate needs to be stored in Kubernetes secret in PEM format and provided via the following Helm chart variables:
+```
+  --set mTLS.caCertSecret=my-client-ca-cert \
+  --set mTLS.caCertSecretKey=ca-cert-pem
+```
+
+In most cases, you'll also want to configure the operator with `mTLS.insecureSkipVerify=true` (the default) as you'll want the operator to skip hostname verification for Solr pods.
+Setting `mTLS.insecureSkipVerify` to `false` means the operator will enforce hostname verification for the certificate provided by Solr pods.

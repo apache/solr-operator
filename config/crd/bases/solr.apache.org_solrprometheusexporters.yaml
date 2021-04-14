@@ -3460,6 +3460,36 @@ spec:
                       restartOnTLSSecretUpdate:
                         description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
                         type: boolean
+                      trustStorePasswordSecret:
+                        description: Secret containing the trust store password; if not provided the keyStorePassword will be used
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      trustStoreSecret:
+                        description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
                       verifyClientHostname:
                         description: Verify client's hostname during SSL handshake
                         type: boolean
