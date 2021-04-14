@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"math/rand"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -379,45 +380,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
-
-		// mount the secret in a file so it gets updated; env vars do not see:
-		// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-		secretName := solrCloud.BasicAuthSecretName()
-		defaultMode := int32(420)
-		vol := &corev1.Volume{
-			Name: strings.ReplaceAll(secretName, ".", "-"),
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  secretName,
-					DefaultMode: &defaultMode,
-				},
-			},
+	if (solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.ClientAuth != solr.None) || (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) {
+		probeCommand, vol, volMount := configureSecureProbeCommand(solrCloud, defaultHandler.HTTPGet)
+		if vol != nil {
+			solrVolumes = append(solrVolumes, *vol)
 		}
-		solrVolumes = append(solrVolumes, *vol)
-		mountPath := fmt.Sprintf("/etc/secrets/%s", vol.Name)
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: vol.Name, MountPath: mountPath})
-		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
-		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-
-		// Is TLS enabled? If so we need some additional SSL related props
-		tlsProps := ""
-		if solrCloud.Spec.SolrTLS != nil {
-			tlsProps = " -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		if volMount != nil {
+			volumeMounts = append(volumeMounts, *volMount)
 		}
-		javaToolOptions := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat %s):$(cat %s)%s\"", usernameFile, passwordFile, tlsProps)
-
-		// construct the probe command to invoke the SolrCLI "api" action
-		//
-		// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
-		// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-		probeCommand := fmt.Sprintf("%s java -Dsolr.ssl.checkPeerName=false "+
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
-			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-			"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-			javaToolOptions, solrCloud.UrlScheme(), defaultHandler.HTTPGet.Port.IntVal, defaultHandler.HTTPGet.Path)
-
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
 	}
@@ -1073,17 +1043,17 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 
 	// If using a truststore that is different from the keystore
-	truststorePath := keystoreFile
+	truststoreFile := keystoreFile
 	truststorePassFrom := passwordValueFrom
 	if opts.TrustStoreSecret != nil {
 		if opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
 			// trust store is in a different secret, so will be mounted in a different dir
-			truststorePath = DefaultTrustStorePath
+			truststoreFile = DefaultTrustStorePath
 		} else {
 			// trust store is a different key in the same secret as the keystore
-			truststorePath = keystorePath
+			truststoreFile = DefaultKeyStorePath
 		}
-		truststorePath += "/" + opts.TrustStoreSecret.Key
+		truststoreFile += "/" + opts.TrustStoreSecret.Key
 		if opts.TrustStorePasswordSecret != nil {
 			truststorePassFrom = &corev1.EnvVarSource{SecretKeyRef: opts.TrustStorePasswordSecret}
 		}
@@ -1104,7 +1074,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		},
 		{
 			Name:  "SOLR_SSL_TRUST_STORE",
-			Value: truststorePath,
+			Value: truststoreFile,
 		},
 		{
 			Name:      "SOLR_SSL_TRUST_STORE_PASSWORD",
@@ -1502,4 +1472,56 @@ func uniqueProbePaths(paths []string) []string {
 		}
 	}
 	return set
+}
+
+// When running with TLS and clientAuth=Need or if the probe endpoints require auth, we need to use a command instead of HTTP Get
+// This function builds the custom probe command and returns any associated volume / mounts needed for the auth secrets
+func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetAction *corev1.HTTPGetAction) (string, *corev1.Volume, *corev1.VolumeMount) {
+	// mount the secret in a file so it gets updated; env vars do not see:
+	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
+	basicAuthOption := ""
+	enableBasicAuth := ""
+	var volMount *corev1.VolumeMount
+	var vol *corev1.Volume
+	if solrCloud.Spec.SolrSecurity != nil {
+		secretName := solrCloud.BasicAuthSecretName()
+		defaultMode := int32(420)
+		vol = &corev1.Volume{
+			Name: strings.ReplaceAll(secretName, ".", "-"),
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName:  secretName,
+					DefaultMode: &defaultMode,
+				},
+			},
+		}
+		mountPath := fmt.Sprintf("/etc/secrets/%s", vol.Name)
+		volMount = &corev1.VolumeMount{Name: vol.Name, MountPath: mountPath}
+		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
+		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
+		basicAuthOption = fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile)
+		enableBasicAuth = " -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "
+	}
+
+	// Is TLS enabled? If so we need some additional SSL related props
+	tlsProps := ""
+	if solrCloud.Spec.SolrTLS != nil {
+		tlsProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
+			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+	}
+
+	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsProps)
+
+	// construct the probe command to invoke the SolrCLI "api" action
+	//
+	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
+	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
+	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java -Dsolr.ssl.checkPeerName=false %s "+
+		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
+		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
+		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
+		javaToolOptions, enableBasicAuth, solrCloud.UrlScheme(), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
+	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
+
+	return probeCommand, vol, volMount
 }

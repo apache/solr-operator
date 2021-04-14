@@ -1053,8 +1053,7 @@ type SolrTLSOptions struct {
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
 
 	// TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore
-	// The specified key is used as the truststore file name when mounted into Solr pods unless it's the same secret
-	// holding the keystore (with a different key of course)
+	// The specified key is used as the truststore file name when mounted into Solr pods
 	// +optional
 	TrustStoreSecret *corev1.SecretKeySelector `json:"trustStoreSecret,omitempty"`
 

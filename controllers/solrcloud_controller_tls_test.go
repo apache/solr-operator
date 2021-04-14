@@ -153,6 +153,8 @@ func TestUserSuppliedTLSSecretWithSeparateTrustStore(t *testing.T) {
 		Key:                  "truststore-pass",
 	}
 
+	instance.Spec.SolrTLS.ClientAuth = solr.Need // require client auth too (mTLS between the pods)
+
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
 }
@@ -226,6 +228,7 @@ func TestTLSSecretUpdate(t *testing.T) {
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
 	instance.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
+	instance.Spec.SolrTLS.ClientAuth = solr.Need
 	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, false)
 	verifyReconcileUserSuppliedTLS(t, instance, false, true)
 }
