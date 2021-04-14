@@ -73,6 +73,7 @@ tolerations: []
 priorityClassName: ""
 sidecarContainers: []
 
+# Use mTLS when connecting to Solr Clouds from the Solr Operator
 mTLS:
   clientCertSecret: ""
   caCertSecret: ""

@@ -158,6 +158,10 @@ The command removes all the Kubernetes components associated with the chart and 
 | zookeeper-operator.install | boolean | `true` | This option installs the Zookeeper Operator as a helm dependency |
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |
 | useZkOperator | string | `"true"` | **DEPRECATED** Replaced by the _boolean_ "zookeeper-operator.use" option. This option will be removed in v0.4.0 |
+| mTLS.clientCertSecret | string | `""` | Name of a Kubernetes TLS secret, in the same namespace, that contains a Client certificate to load into the operator. If provided, this is used when communicating with Solr. |
+| mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
+| mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |
+| mTLS.insecureSkipVerify | boolean | `true` | Skip server certificate and hostname verification when connecting to Solr with ClientAuth. |
 
 ### Running the Solr Operator
 
