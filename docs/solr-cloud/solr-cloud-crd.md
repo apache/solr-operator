@@ -468,6 +468,30 @@ spec:
       key: keystore.p12
 ```
 
+### Separate TrustStore
+
+A truststore holds public keys for certificates you trust. By default, Solr pods are configured to use the keystore as the truststore.
+However, you may have a separate truststore you want to use for Solr TLS. As with the keystore, you need to provide a PKCS12 truststore in a secret and then configure your SolrCloud TLS settings as shown below:
+```yaml
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-keystore-manual
+      key: password-key
+    pkcs12Secret:
+      name: pkcs12-keystore-manual
+      key: keystore.p12
+    trustStorePasswordSecret:
+      name: pkcs12-truststore
+      key: password-key
+    trustStoreSecret:
+      name: pkcs12-truststore
+      key: truststore.p12
+``` 
+_Tip: if your truststore is not in PKCS12 format, use `openssl` to convert it._ 
+
 ### Ingress
 
 The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
@@ -570,6 +594,28 @@ spec:
 ```
 The example settings above will result in your Solr pods getting names like: `<ns>-search-solrcloud-0.k8s.solr.cloud` 
 which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
+
+#### mTLS
+
+Mutual TLS (mTLS) provides an additional layer of security by ensuring the client applications sending requests to Solr are trusted.
+To enable mTLS, simply set `spec.solrTLS.clientAuth` to either `Want` or `Need`. When mTLS is enabled, the Solr operator needs to
+supply a client certificate that is trusted by Solr; the operator makes API calls to Solr to get cluster status. 
+To configure the client certificate for the operator, see [Running the Operator > mTLS](../running-the-operator.md#Client-Auth-for-mTLS-enabled-Solr-clusters)
+
+When mTLS is enabled, the liveness and readiness probes are configured to execute a local command on each Solr pod instead of the default HTTP Get request.
+Using a command is required so that we can use the correct TLS certificate when making an HTTPs call to the probe endpoints.
+
+To help with debugging the TLS handshake between client and server,
+you can add the `-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake` Java system property to the `spec.solrOpts` for your SolrCloud instance. 
+
+To verify mTLS is working for your Solr pods, you can supply the client certificate (and CA cert if needed) via curl after opening a port-forward to one of your Solr pods:
+```
+curl "https://localhost:8983/solr/admin/info/system" -v \
+  --key client/private_key.pem \
+  --cert client/client.pem \
+  --cacert root-ca/root-ca.pem
+```
+The `--cacert` option supplies the CA's certificate needed to trust the server certificate provided by the Solr pods during TLS handshake.
 
 ## Authentication and Authorization
 _Since v0.3.0_
