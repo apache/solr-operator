@@ -87,6 +87,7 @@ generate:
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
+	rm -r config/crd/bases
 	controller-gen $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	./hack/helm/copy_crds_roles_helm.sh
 

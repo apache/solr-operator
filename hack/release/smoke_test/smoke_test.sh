@@ -70,8 +70,8 @@ fi
 
 PULL_PASS_THROUGH=""
 # If LOCATION is a URL, we want to pull the Docker image
-if (echo "${LOCATION}" | grep -E "http"); then
-  PULL_PASS_THROUGH=" -p"
+if (echo "${LOCATION}" | grep "http"); then
+  PULL_PASS_THROUGH="-p"
 fi
 
 GIT_SHA_PASS_THROUGH=()
@@ -80,7 +80,7 @@ if [[ -n "${GIT_SHA:-}" ]]; then
 fi
 
 ./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}"
-./hack/release/smoke_test/verify_docker.sh -v "${VERSION}" -i "${IMAGE}""${PULL_PASS_THROUGH}" "${GIT_SHA_PASS_THROUGH[@]}"
+./hack/release/smoke_test/verify_docker.sh -v "${VERSION}" -i "${IMAGE}" "${GIT_SHA_PASS_THROUGH[@]}" "${PULL_PASS_THROUGH}"
 ./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"
 ./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -i "${IMAGE}" -l "${LOCATION}"
 

@@ -62,7 +62,7 @@ fi
 TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXXXX")
 
 # If LOCATION is not a URL, then get the absolute path
-if ! (echo "${LOCATION}" | grep -E "http"); then
+if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
 fi
 
@@ -71,12 +71,9 @@ echo "Download source artifact, verify and run 'make check'"
 (
   cd "${TMP_DIR}"
 
-  if (echo "${LOCATION}" | grep -E "http"); then
+  if (echo "${LOCATION}" | grep "http"); then
     # Download source
     wget "${LOCATION}/solr-operator-${VERSION}.tgz"
-
-    # Pull docker image, since we are working with remotely staged artifacts
-    docker pull "apache/solr-operator:${TAG}"
   else
     cp "${LOCATION}/solr-operator-${VERSION}.tgz" .
   fi
