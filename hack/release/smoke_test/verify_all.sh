@@ -63,7 +63,7 @@ fi
 TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXX")
 
 # If LOCATION is not a URL, then get the absolute path
-if ! (echo "${LOCATION}" | grep -E "http://"); then
+if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
 fi
 
@@ -78,7 +78,7 @@ echo "Download all artifacts and verify signatures"
 (
   cd "${TMP_DIR}"
 
-  if (echo "${LOCATION}" | grep -E "http"); then
+  if (echo "${LOCATION}" | grep "http"); then
     # Download Source files from the staged location
     wget -r -np -nH -nd --level=1 "${LOCATION}/"
 
@@ -95,7 +95,7 @@ echo "Download all artifacts and verify signatures"
     (
       cd "${artifact_directory}"
 
-      for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+      for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' -o -name '*.html*' -o -name '*.txt*' \) ); do
         echo "Veryifying: ${artifact_directory}/${artifact}"
         sha512sum -c "${artifact}.sha512" \
           || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
@@ -110,7 +110,7 @@ echo "Download all artifacts and verify signatures"
     )
   done
 
-  for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+  for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' -o -name '*.html*' -o -name '*.txt*' \) ); do
     echo "Veryifying: ${artifact}"
     sha512sum -c "${artifact}.sha512" \
       || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }

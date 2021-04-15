@@ -180,6 +180,7 @@ type SolrPrometheusExporterStatus struct {
 // SolrPrometheusExporter is the Schema for the solrprometheusexporters API
 // +kubebuilder:resource:shortName=solrmetrics
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Whether the prometheus exporter is ready"
 // +kubebuilder:printcolumn:name="Scrape Interval",type="integer",JSONPath=".spec.scrapeInterval",description="Scrape interval for metrics (in ms)"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

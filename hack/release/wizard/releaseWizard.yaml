@@ -62,7 +62,7 @@ templates:
     .Mail template {% if passed %}successful{% else %}failed{% endif %} vote
     ----
     To: dev@solr.apache.org
-    Subject: [{% if passed %}RESULT{% else %}FAILED{% endif %}] [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
+    Subject: [Operator] [{% if passed %}RESULT{% else %}FAILED{% endif %}] [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
 
     It's been >72h since the vote was initiated and the result is:
 
@@ -98,7 +98,7 @@ templates:
     .Mail template
     ----
     To: dev@solr.apache.org, users@solr.apache.org
-    Subject: [ANNOUNCE] Apache Solr Operator {{ release_version }} released
+    Subject: [Operator] [ANNOUNCE] Apache Solr Operator {{ release_version }} released
 
     (( template=announce_solr_operator_mail_body ))
     ----
@@ -648,6 +648,11 @@ groups:
   - !Todo
     id: build_rc
     title: Build the release candidate and issue final commit
+    description: |-
+      The release branch "{{ release_branch }}" will have all local changes wiped before the final commit is made.
+      Therefore any local commits or unstaged changes you might have in the release wizard checkout will be lost.
+      If you want to test with local changes, either change the git repo you are using in the release wizard
+      or uncomment the command to remove local changes below.
     depends:
       - run_tests
       - helm_change_log
@@ -679,6 +684,10 @@ groups:
         tee: true
       - !Command
         cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: git reset --hard origin/{{ release_branch }}
+        comment: Make sure checkout is the same as the remote branch. The release candidate should only have one local commit, the version change.
         tee: true
       - !Command
         cmd: make clean
@@ -770,7 +779,7 @@ groups:
       commands_text: Here we'll verify that the staged artifacts are downloadable and hash/signatures match.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
         logfile: smoketest_staged.log
 - !TodoGroup
   id: voting
@@ -788,12 +797,17 @@ groups:
       .Mail template
       ----
       To: dev@solr.apache.org
-      Subject: [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
+      Subject: [Operator] [VOTE] Release the Solr Operator {{ release_version }} RC{{ rc_number }}
 
       Please vote for release candidate {{ rc_number }} for the Solr Operator {{ release_version }}
 
       The artifacts can be downloaded from:
       https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
+
+      You can run the full smoke tester, with instructions below.
+      However, it is also encouraged to go and use the artifacts yourself in a test Kubernetes cluster.
+      The smoke tester does not require you to download or install the RC artifacts before running.
+      If you plan on just running the smoke tests, then ignore all other instructions.
 
       The artifacts are layed out in the following way:
         * solr-operator-{{ release_version }}.tgz - Contains the source release
@@ -806,21 +820,22 @@ groups:
       The RC Helm repo can be added with:
         helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
 
-      Install the RC Solr Operator and CRDs with:
+      You can install the RC Solr Operator and CRDs with:
         kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
-      You can run the smoke tester directly with this command:
+      You can run the full smoke tester directly with this command:
 
-      ./hack/release/smoke_test/smoke_test.sh -p -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+      ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
 
       Make sure you have the following installed before running the smoke test:
-        - Docker
+        - Docker (Give it enough memory and CPU to run ~12 containers, 3 of which are Solr nodes)
         - Go 1.16
         - Kubectl
         - GnuPG
-        - Helm
+        - Helm v3.4.0+
+        - Kustomize (v4.0.0+) This will be installed for you, but NOT upgraded if a lower version is already installed.
         - yq
         - jq
 

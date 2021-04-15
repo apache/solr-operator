@@ -66,7 +66,7 @@ if [[ -z "${LOCATION:-}" ]]; then
 fi
 
 # If LOCATION is not a URL, then get the absolute path
-if ! (echo "${LOCATION}" | grep -E "http"); then
+if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
   LOCATION=${LOCATION%%/}
 
@@ -177,10 +177,10 @@ kubectl port-forward service/example-solr-metrics 8984:80 || true &
 sleep 15
 
 printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr' URL being scraped.\n"
-curl --silent "http://localhost:8984/metrics" | grep http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr > /dev/null
+curl --silent "http://localhost:8984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
 # If LOCATION is a URL, then remove the helm repo at the end
-if (echo "${LOCATION}" | grep -E "http"); then
+if (echo "${LOCATION}" | grep "http"); then
   helm repo remove "apache-solr-test-${VERSION}"
 fi
 

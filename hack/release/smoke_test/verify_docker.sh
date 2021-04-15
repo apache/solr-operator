@@ -67,7 +67,7 @@ fi
 
 # Pull the image, if requested
 if [[ ${PULL_FIRST:-} ]]; then
-  docker pull "apache/solr-operator:${IMAGE}"
+  docker pull "${IMAGE}"
 fi
 
 echo "Verify the Docker image ${IMAGE}"
