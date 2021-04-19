@@ -733,7 +733,6 @@ groups:
         cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
         logfile: smoketest.log
         tee: true
-        stdout: true
   - !Todo
     id: upload_rc_docker_image
     title: Build multi-arch RC Docker image & Upload
@@ -746,7 +745,6 @@ groups:
       commands:
         - !Command
           cmd: docker buildx create --use
-          stdout: true
           tee: true
         - !Command
           cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
@@ -1065,7 +1063,8 @@ groups:
           tee: true
   - !Todo
     id: publish_docker_image
-    title: Publish the staged Docker image
+    title: Publish the final release Docker image
+    depends: tag_release
     vars:
       rc_tag: '{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
@@ -1074,16 +1073,16 @@ groups:
       commands_text: This will pull the RC Docker image, tag it as a release, and push the release image to DockerHub.
       commands:
         - !Command
-          cmd: docker pull "apache/solr-operator:{{ rc_tag }}"
-          logfile: docker_pull.log
+          cmd: git checkout {{ release_version }}
           tee: true
         - !Command
-          cmd: docker tag "apache/solr-operator:{{ rc_tag }}" "apache/solr-operator:{{ release_version }}"
+          cmd: git clean -df && git checkout -- .
+          comment: Make sure checkout is clean and up to date
+          logfile: git_clean.log
           tee: true
         - !Command
-          cmd: docker push "apache/solr-operator:{{ release_version }}"
-          logfile: docker_push.log
-          tee: true
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
+          logfile: docker_upload.log
   - !Todo
     id: check_mirroring
     title: Check state of mirroring so far
