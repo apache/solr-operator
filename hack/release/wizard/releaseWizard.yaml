@@ -825,6 +825,7 @@ groups:
         helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
 
       You can install the RC Solr Operator and CRDs with:
+        gpg --export >~/.gnupg/pubring.gpg # This will export your public keys into a format that helm can understand. Skip verification by removing "--verify" in the helm command below.
         kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
