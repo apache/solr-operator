@@ -14,7 +14,7 @@
 # limitations under the License.
 
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd"
+CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
@@ -104,7 +104,8 @@ generate:
 manifests:
 	rm -r config/crd/bases
 	controller-gen $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	./hack/helm/copy_crds_roles_helm.sh
+	./hack/config/copy_crds_roles_helm.sh
+	./hack/config/add_crds_roles_headers.sh
 
 # Run go fmt against code
 fmt:
