@@ -87,7 +87,7 @@ echo "Pulling Helm chart from the staged url and uploading to release Helm repo.
     APACHE_PASSWORD=""
   fi
 
-  TMP_DIR=$(mktemp -d --tmpdir "solr-operator-release-helm-XXXXXXXX")
+  TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/solr-operator-release-helm-XXXXXXXX")
 
   # Do all logic in temporary directory
   (

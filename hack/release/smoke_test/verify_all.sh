@@ -60,7 +60,7 @@ if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
 fi
 
-TMP_DIR=$(mktemp -d --tmpdir "solr-operator-smoke-test-source-XXXXXX")
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/solr-operator-smoke-verify-XXXXXX")
 
 # If LOCATION is not a URL, then get the absolute path
 if ! (echo "${LOCATION}" | grep "http"); then
