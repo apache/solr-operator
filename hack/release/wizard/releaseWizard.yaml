@@ -736,16 +736,20 @@ groups:
         stdout: true
   - !Todo
     id: upload_rc_docker_image
-    title: Upload RC Docker image
+    title: Build multi-arch RC Docker image & Upload
     depends: smoke_tester
     vars:
       docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
-      commands_text: Upload the docker image to DockerHub
+      commands_text: Build a multi-architecture docker image and upload to DockerHub
       commands:
         - !Command
-          cmd: docker push "{{ docker_image }}"
+          cmd: docker buildx create --use
+          stdout: true
+          tee: true
+        - !Command
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
           logfile: rc_docker_upload.log
   - !Todo
     id: import_svn
@@ -824,7 +828,7 @@ groups:
         kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
-      You can run the full smoke tester directly with this command:
+      You can run the full smoke tester directly with this command: (First checkout the {{ release_branch }} branch of the solr-operator)
 
       ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
