@@ -32,7 +32,7 @@ if [ -n "${licRes}" ]; then
 fi
 
 licRes=$(
-    find . -type f -iname '*.yaml' -not -name '*zookeeper*' ! -exec \
+    find . -type f -iname '*.yaml' -not -regex '.*/generated-check/.*' -not -name '*zookeeper*' ! -exec \
          sh -c 'head -n5 $1 | grep -Eq "(Licensed to the Apache Software Foundation)" || echo -e  $1' {} {} \;
 )
 
@@ -42,7 +42,7 @@ if [ -n "${licRes}" ]; then
 fi
 
 licRes=$(
-    find . -type f -iname '*.sh' ! -exec \
+    find . -type f -iname '*.sh' -not -name 'build.sh' ! -exec \
          sh -c 'head -n5 $1 | grep -Eq "(Licensed to the Apache Software Foundation)" || echo -e  $1' {} {} \;
 )
 
