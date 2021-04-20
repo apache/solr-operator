@@ -152,17 +152,17 @@ printf '\nWait for all 3 Solr nodes to become ready.\n\n'
 grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
 
 # Expose the common Solr service to localhost
-kubectl port-forward service/example-solrcloud-common 8983:80 || true &
+kubectl port-forward service/example-solrcloud-common 18983:80 || true &
 sleep 2
 
 printf "\nCheck the admin URL to make sure it works\n"
-curl --silent "http://localhost:8983/solr/admin/info/system" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/info/system" | grep '"status":0' > /dev/null
 
 printf "\nCreating a test collection\n"
-curl --silent "http://localhost:8983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
 
 printf "\nQuery the test collection, test for 0 docs\n"
-curl --silent "http://localhost:8983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
+curl --silent "http://localhost:18983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
 
 printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
 cat <<EOF | kubectl apply -f -
@@ -184,11 +184,11 @@ sleep 5
 kubectl rollout status deployment/example-solr-metrics
 
 # Expose the Solr Prometheus Exporter service to localhost
-kubectl port-forward service/example-solr-metrics 8984:80 || true &
+kubectl port-forward service/example-solr-metrics 18984:80 || true &
 sleep 15
 
-printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr' URL being scraped.\n"
-curl --silent "http://localhost:8984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
+printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:18983/solr' URL being scraped.\n"
+curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:18983/solr' > /dev/null
 
 # If LOCATION is a URL, then remove the helm repo at the end
 if (echo "${LOCATION}" | grep "http"); then
