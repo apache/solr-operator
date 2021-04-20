@@ -24,6 +24,8 @@ controller_gen_version=v0.5.0
 os=$(go env GOOS)
 arch=$(go env GOARCH)
 
+printf "\n\nThis script may require elevated privileges. Be ready to enter your password for installation.\n\n"
+
 # Install go modules 
 GO111MODULE=on go mod tidy
 # Add GOBIN to PATH

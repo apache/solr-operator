@@ -84,6 +84,7 @@ if [[ -n "${APACHE_ID:-}" ]]; then
   fi
 
   SIGNING_INFO=(--sign --key "${APACHE_ID}@apache.org" --keyring "${SECURE_RING_FILE}")
+  printf "\n\nPackaging and signing helm chart. Please provide the passphrase for your GPG key when prompted below.\nThe prompt may be subtle, but look at the cursor.\n"
 fi
 
 helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d "${HELM_RELEASE_DIR}" "${SIGNING_INFO[@]}"

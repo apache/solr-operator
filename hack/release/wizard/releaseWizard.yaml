@@ -592,7 +592,7 @@ groups:
   description: |-
     If after the last day of the feature freeze phase no blocking issues are
     in Github with "Milestone" {{ release_version }}, then it's time to build the
-    release artifacts, run the smoke tester and stage the RC in svn
+    release artifacts, run the smoke tester and stage the RC in svn.
   depends:
   - test
   - prerequisites
@@ -653,6 +653,10 @@ groups:
       Therefore any local commits or unstaged changes you might have in the release wizard checkout will be lost.
       If you want to test with local changes, either change the git repo you are using in the release wizard
       or uncomment the command to remove local changes below.
+
+      You will need to enter your GPG Key Passphrase multiple times, so be ready for that.
+      This includes a prompt that will likely not spinup a separate window.
+      If the script pauses for a long time and has a key in the prompt, please enter your passphrase.
     depends:
       - run_tests
       - helm_change_log
