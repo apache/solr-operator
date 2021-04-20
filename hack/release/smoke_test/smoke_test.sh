@@ -85,6 +85,12 @@ if [[ -n "${GIT_SHA:-}" ]]; then
   GIT_SHA_PASS_THROUGH=(-s "${GIT_SHA}")
 fi
 
+# Add GOBIN to PATH
+if [[ -z "${GOBIN:-}" ]]; then
+  export GOBIN="$(cd ${GOPATH:-~/go}/bin && pwd)"
+fi
+export PATH="${PATH}:${GOBIN}"
+
 ./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}" -g "${GPG_KEY}"
 ./hack/release/smoke_test/verify_docker.sh -v "${VERSION}" -i "${IMAGE}" "${GIT_SHA_PASS_THROUGH[@]}" "${PULL_PASS_THROUGH}"
 ./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"

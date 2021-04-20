@@ -82,12 +82,6 @@ echo "Download source artifact, verify and run 'make check'"
   tar -xzf "solr-operator-${VERSION}.tgz"
   cd "solr-operator-${VERSION}"
 
-  # Add GOBIN to PATH
-  if [[ -z "${GOBIN:-}" ]]; then
-    export GOBIN="$(cd "${GOPATH:-~/go}/bin" && pwd)"
-  fi
-  export PATH="${PATH}:${GOBIN}"
-
   # Install the dependencies
   make install-dependencies
 

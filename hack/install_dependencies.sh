@@ -30,7 +30,7 @@ printf "\n\nThis script may require elevated privileges. Be ready to enter your 
 GO111MODULE=on go mod tidy
 # Add GOBIN to PATH
 if [[ -z "${GOBIN:-}" ]]; then
-  export GOBIN="$(cd "${GOPATH:-~/go}/bin" && pwd)"
+  export GOBIN="$(cd ${GOPATH:-~/go}/bin && pwd)"
 fi
 export PATH="${PATH}:${GOBIN}"
 
