@@ -849,6 +849,7 @@ groups:
         - Kustomize (v4.0.0+) This will be installed for you, but NOT upgraded if a lower version is already installed.
         - yq
         - jq
+        - coreutils (if using Mac OS)
 
       The vote will be open for at least 72 hours i.e. until {{ vote_close }}.
 
