@@ -730,7 +730,7 @@ groups:
       commands_text: Here we'll smoke test the release by 'downloading' the artifacts, running the tests, validating GPG signatures etc.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}"
         logfile: smoketest.log
         tee: true
   - !Todo
@@ -781,7 +781,7 @@ groups:
       commands_text: Here we'll verify that the staged artifacts are downloadable and hash/signatures match.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}"
         logfile: smoketest_staged.log
 - !TodoGroup
   id: voting
@@ -823,13 +823,16 @@ groups:
         helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
 
       You can install the RC Solr Operator and CRDs with:
-        gpg --export >~/.gnupg/pubring.gpg # This will export your public keys into a format that helm can understand. Skip verification by removing "--verify" in the helm command below.
+        curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
+        # This will export your public keys into a format that helm can understand.
+        # Skip verification by removing "--verify" in the helm command below.
+        if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "{{ gpg_key | default("<gpg_key_id>", True) }}"); then gpg --export >~/.gnupg/pubring.gpg; fi
         kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
       You can run the full smoke tester directly with this command: (First checkout the {{ release_branch }} branch of the solr-operator)
 
-      ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+      ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
 
       Make sure you have the following installed before running the smoke test:
