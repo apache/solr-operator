@@ -65,7 +65,7 @@ mod-tidy:
 	export GO111MODULE=on; go mod tidy
 
 .install-dependencies:
-	. ./hack/install_dependencies.sh
+	./hack/install_dependencies.sh
 
 install-dependencies: .install-dependencies mod-tidy
 
