@@ -26,6 +26,11 @@ arch=$(go env GOARCH)
 
 # Install go modules 
 GO111MODULE=on go mod tidy
+# Add GOBIN to PATH
+if [[ -z "${GOBIN:-}" ]]; then
+  export GOBIN="${GOPATH:-~/go}/bin"
+fi
+export PATH="${PATH}:${GOBIN}"
 
 #Install Kustomize
 if ! (which kustomize); then
@@ -69,3 +74,5 @@ elif ! (controller-gen --version | grep "Version: ${controller_gen_version}"); t
 else
   echo "controller-gen already installed at $(which controller-gen), version: $(controller-gen --version)"
 fi
+
+echo "Make sure to add \$GOBIN or \${GOPATH}/bin to your \$PATH"
