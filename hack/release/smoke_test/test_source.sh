@@ -84,7 +84,7 @@ echo "Download source artifact, verify and run 'make check'"
 
   # Add GOBIN to PATH
   if [[ -z "${GOBIN:-}" ]]; then
-    export GOBIN="${GOPATH:-~/go}/bin"
+    export GOBIN="$(cd "${GOPATH:-~/go}/bin" && pwd)"
   fi
   export PATH="${PATH}:${GOBIN}"
 
