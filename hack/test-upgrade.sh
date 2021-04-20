@@ -14,8 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# ********   WARNING   ******
+# Only run this script on a clean testing cluster. It will test the upgrade from v0.2.8 -> v0.3.0
+# ***************************
+
 # Clear your kube environment
-kubectl delete crds --all; kubectl delete pvc --all; helm delete solr-operator apache
+kubectl delete crds zookeeperclusters.zookeeper.pravega.io solrbackups.solr.apache.org solrclouds.solr.apache.org solrprometheusexporters.solr.apache.org \
+    solrclouds.solr.bloomberg.com solrprometheusexporters.solr.bloomberg.com solrbackups.solr.bloomberg.com solrcollections.solr.bloomberg.com solrcollectionaliases.solr.bloomberg.com; \
+    kubectl delete pvc --all; helm delete solr-operator apache
 helm ls -a --all-namespaces | awk 'NR > 1 { print  "-n "$2, $1}' | xargs -L1 helm delete
 
 helm repo add apache-solr https://solr.apache.org/charts && helm repo update
