@@ -1009,7 +1009,7 @@ func (r *SolrCloudReconciler) verifyTLSSecretConfig(secretName string, secretNam
 		keyStorePasswordSecret := &corev1.Secret{}
 		err := r.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
 		if err != nil {
-			return nil, lookupErr
+			return nil, err
 		}
 
 		// we found the keystore secret, but does it have the key we expect?
