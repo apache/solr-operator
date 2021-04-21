@@ -56,7 +56,7 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyRetain,
 					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
 						ObjectMeta: solr.TemplateMeta{
-							Name:   "other-data",
+							Name:   "other-data-1",
 							Labels: map[string]string{"base": "here"},
 						},
 					},
@@ -102,6 +102,7 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Fetch new value of instance to check finalizers
 	foundInstance := &solr.SolrCloud{}
@@ -141,7 +142,7 @@ func TestPersistentStorageVolumesDelete(t *testing.T) {
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyDelete,
 					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
 						ObjectMeta: solr.TemplateMeta{
-							Name:        "other-data",
+							Name:        "other-data-2",
 							Annotations: map[string]string{"base": "here"},
 						},
 					},
