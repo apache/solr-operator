@@ -89,8 +89,9 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
       cd "${artifact_directory}"
 
       for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+        echo "Signing ${artifact_directory}/${artifact}"
         if [ ! -f "${artifact}.asc" ]; then
-          gpg "${GPG_USER[@]}" -ab "${artifact}"
+          gpg "${GPG_USER[@]}" --pinentry-mode loopback -ab "${artifact}"
         fi
         if [ ! -f "${artifact}.sha512" ]; then
           sha512sum -b "${artifact}" > "${artifact}.sha512"
@@ -100,8 +101,9 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
   done
 
   for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
+    echo "Signing ${artifact}"
     if [ ! -f "${artifact}.asc" ]; then
-      gpg "${GPG_USER[@]}" -ab "${artifact}"
+      gpg "${GPG_USER[@]}" --pinentry-mode loopback -ab "${artifact}"
     fi
     if [ ! -f "${artifact}.sha512" ]; then
       sha512sum -b "${artifact}" > "${artifact}.sha512"

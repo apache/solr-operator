@@ -600,7 +600,7 @@ groups:
   todos:
   - !Todo
     id: run_tests
-    title: Run tests & lint
+    title: Run tests & lint clean checkout of {{ release_branch }} branch
     depends: clean_git_checkout
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
@@ -609,6 +609,18 @@ groups:
       - !Command
         cmd: git checkout {{ release_branch }}
         stdout: true
+      - !Command
+        cmd: git clean -df && git checkout -- .
+        comment: Make sure checkout is clean and up to date
+        logfile: git_clean.log
+        tee: true
+      - !Command
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: git reset --hard origin/{{ release_branch }}
+        comment: Make sure checkout is the same as the remote branch. The release candidate should only have one local commit, the version change.
+        tee: true
       - !Command
         cmd: "make check"
     post_description: Check that the task passed. If it failed, commit fixes for the failures before proceeding.
