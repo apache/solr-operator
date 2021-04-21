@@ -71,7 +71,7 @@ templates:
     -1  {{ minus }}
 
     {% if not passed %}
-    Reason for fail is {{ reason }}.
+    Reason for failing is {{ reason }}.
     
     {% endif %}
     This vote has {% if passed %}PASSED{% else %}FAILED{% endif %} 
@@ -89,7 +89,7 @@ templates:
 
     This release contains numerous bug fixes, optimizations, and improvements, some of which are highlighted below. The release is available for immediate download at:
 
-      <https://spolr.apache.org/operator/downloads.html>
+      <https://solr.apache.org/operator/downloads.html>
 
   announce_solr_operator_mail: |
     The template below can be used to announce the Solr Operator release to the
