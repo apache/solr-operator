@@ -73,6 +73,8 @@ if [[ -n "${GPG_KEY:-}" ]]; then
   GPG_USER=(-u "${GPG_KEY}")
 fi
 
+export YAML_HEADER_FILE="$(pwd)/hack/headers/header.yaml.txt"
+
 echo "Pulling Helm chart from the staged url and uploading to release Helm repo. ${CHART_REPO}"
 
 # Put in a sub-shell so that the Password can't leak
@@ -102,8 +104,14 @@ echo "Pulling Helm chart from the staged url and uploading to release Helm repo.
     # Add the newly released Helm chart to the index
     helm repo index . --merge "index.yaml"
 
+    {
+      cat "${YAML_HEADER_FILE}"
+      printf "\n\n"
+      cat "index.yaml"
+    } > "index.yaml.tmp" && mv "index.yaml.tmp" "index.yaml"
+
     # Generate signature and checksum for new index file
-    gpg "${GPG_USER[@]}" -ab "index.yaml"
+    gpg "${GPG_USER[@]}" --pinentry-mode loopback -ab "index.yaml"
     sha512sum -b "index.yaml" > "index.yaml.sha512"
 
     # Upload the newly released Helm charts

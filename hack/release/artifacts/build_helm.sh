@@ -69,9 +69,7 @@ echo "Packaging helm chart for version ${VERSION} at: ${HELM_RELEASE_DIR}"
 mkdir -p "${HELM_RELEASE_DIR}"
 rm -rf "${HELM_RELEASE_DIR}"/*
 
-# Package and Index the helm charts, create release artifacts to upload in GithubRelease
-
-helm dependency build helm/solr-operator
+# Package and Index the helm charts
 
 SIGNING_INFO=()
 CREATED_SECURE_RING=false
@@ -95,3 +93,10 @@ if [[ "${CREATED_SECURE_RING}" = true ]]; then
 fi
 
 helm repo index "${HELM_RELEASE_DIR}"
+
+{
+  cat hack/headers/header.yaml.txt
+  printf "\n\n"
+  cat "${HELM_RELEASE_DIR}/index.yaml"
+} > "${HELM_RELEASE_DIR}/index.yaml.tmp" && mv "${HELM_RELEASE_DIR}/index.yaml.tmp" "${HELM_RELEASE_DIR}/index.yaml"
+

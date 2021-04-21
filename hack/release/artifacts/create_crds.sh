@@ -65,6 +65,8 @@ echo "Setting up Solr Operator ${VERSION} CRDs at ${ARTIFACTS_DIR}/crds."
 mkdir -p "${ARTIFACTS_DIR}"/crds
 rm -rf "${ARTIFACTS_DIR}"/crds/*
 
+header_end="+$((1 + $(grep -c '^' hack/headers/header.yaml.txt)))"
+
 # Create Release CRD files
 {
   cat hack/headers/header.yaml.txt
@@ -72,15 +74,14 @@ rm -rf "${ARTIFACTS_DIR}"/crds/*
 } > "${ARTIFACTS_DIR}/crds/all.yaml"
 for filename in config/crd/bases/*.yaml; do
     output_file=${filename#"config/crd/bases/solr.apache.org_"}
-    # Create individual file with Apache Header
-    {
-      cat hack/headers/header.yaml.txt;
-      printf "\n"
-      cat "${filename}";
-    } > "${ARTIFACTS_DIR}/crds/${output_file}"
+    # Copy individual yaml with condensed name
+    cp "${filename}" "${ARTIFACTS_DIR}/crds/${output_file}"
 
-    # Add to aggregate file
-    cat "${filename}" >> "${ARTIFACTS_DIR}/crds/all.yaml"
+    # Add to aggregate file, without header
+    {
+      tail -n "${header_end}" "${filename}";
+      printf "\n"
+    } >> "${ARTIFACTS_DIR}/crds/all.yaml"
 done
 
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
