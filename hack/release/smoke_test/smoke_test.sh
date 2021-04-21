@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] -v VERSION -l LOCATION
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] -v VERSION -l LOCATION -g GPG_KEY
 
 Smoke test the Solr Operator release artifacts.
 
@@ -32,11 +32,12 @@ Smoke test the Solr Operator release artifacts.
     -i  Solr Operator Docker image to use  (Optional, defaults to apache/solr-operator:<version>)
     -s  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
+    -g  GPG Key (fingerprint) used to sign the artifacts
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:s: opt; do
+while getopts hv:i:l:s:g: opt; do
     case $opt in
         h)
             show_help
@@ -49,6 +50,8 @@ while getopts hv:i:l:s: opt; do
         i)  IMAGE=$OPTARG
             ;;
         l)  LOCATION=$OPTARG
+            ;;
+        g)  GPG_KEY=$OPTARG
             ;;
         *)
             show_help >&2
@@ -67,6 +70,9 @@ fi
 if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
 fi
+if [[ -z "${GPG_KEY:-}" ]]; then
+  echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
+fi
 
 PULL_PASS_THROUGH=""
 # If LOCATION is a URL, we want to pull the Docker image
@@ -79,9 +85,15 @@ if [[ -n "${GIT_SHA:-}" ]]; then
   GIT_SHA_PASS_THROUGH=(-s "${GIT_SHA}")
 fi
 
-./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}"
+# Add GOBIN to PATH
+if [[ -z "${GOBIN:-}" ]]; then
+  export GOBIN="$(cd ${GOPATH:-~/go}/bin && pwd)"
+fi
+export PATH="${PATH}:${GOBIN}"
+
+./hack/release/smoke_test/verify_all.sh -v "${VERSION}" -l "${LOCATION}" -g "${GPG_KEY}"
 ./hack/release/smoke_test/verify_docker.sh -v "${VERSION}" -i "${IMAGE}" "${GIT_SHA_PASS_THROUGH[@]}" "${PULL_PASS_THROUGH}"
 ./hack/release/smoke_test/test_source.sh -v "${VERSION}" -l "${LOCATION}"
-./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -i "${IMAGE}" -l "${LOCATION}"
+./hack/release/smoke_test/test_cluster.sh -v "${VERSION}" -i "${IMAGE}" -l "${LOCATION}" -g "${GPG_KEY}"
 
 printf "\n\n********************\nSuccessfully smoke tested the Solr Operator %s!\n" "${VERSION}"

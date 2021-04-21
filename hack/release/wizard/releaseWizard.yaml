@@ -71,7 +71,7 @@ templates:
     -1  {{ minus }}
 
     {% if not passed %}
-    Reason for fail is {{ reason }}.
+    Reason for failing is {{ reason }}.
     
     {% endif %}
     This vote has {% if passed %}PASSED{% else %}FAILED{% endif %} 
@@ -89,7 +89,7 @@ templates:
 
     This release contains numerous bug fixes, optimizations, and improvements, some of which are highlighted below. The release is available for immediate download at:
 
-      <https://spolr.apache.org/operator/downloads.html>
+      <https://solr.apache.org/operator/downloads.html>
 
   announce_solr_operator_mail: |
     The template below can be used to announce the Solr Operator release to the
@@ -592,7 +592,7 @@ groups:
   description: |-
     If after the last day of the feature freeze phase no blocking issues are
     in Github with "Milestone" {{ release_version }}, then it's time to build the
-    release artifacts, run the smoke tester and stage the RC in svn
+    release artifacts, run the smoke tester and stage the RC in svn.
   depends:
   - test
   - prerequisites
@@ -653,6 +653,10 @@ groups:
       Therefore any local commits or unstaged changes you might have in the release wizard checkout will be lost.
       If you want to test with local changes, either change the git repo you are using in the release wizard
       or uncomment the command to remove local changes below.
+
+      You will need to enter your GPG Key Passphrase multiple times, so be ready for that.
+      This includes a prompt that will likely not spinup a separate window.
+      If the script pauses for a long time and has a key in the prompt, please enter your passphrase.
     depends:
       - run_tests
       - helm_change_log
@@ -730,22 +734,24 @@ groups:
       commands_text: Here we'll smoke test the release by 'downloading' the artifacts, running the tests, validating GPG signatures etc.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_path }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}"
         logfile: smoketest.log
         tee: true
-        stdout: true
   - !Todo
     id: upload_rc_docker_image
-    title: Upload RC Docker image
+    title: Build multi-arch RC Docker image & Upload
     depends: smoke_tester
     vars:
       docker_image: 'apache/solr-operator:{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
-      commands_text: Upload the docker image to DockerHub
+      commands_text: Build a multi-architecture docker image and upload to DockerHub
       commands:
         - !Command
-          cmd: docker push "{{ docker_image }}"
+          cmd: docker buildx create --use
+          tee: true
+        - !Command
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
           logfile: rc_docker_upload.log
   - !Todo
     id: import_svn
@@ -779,7 +785,7 @@ groups:
       commands_text: Here we'll verify that the staged artifacts are downloadable and hash/signatures match.
       commands:
       - !Command
-        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}"
+        cmd: ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "{{ docker_image }}" -l "{{ dist_url }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}"
         logfile: smoketest_staged.log
 - !TodoGroup
   id: voting
@@ -820,13 +826,18 @@ groups:
       The RC Helm repo can be added with:
         helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
 
-      You can install the RC Solr Operator and CRDs with:
-        kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
+      You can install the RC Solr Operator and Solr CRDs with:
+        curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
+        # This will export your public keys into a format that helm can understand.
+        # Skip verification by removing "--verify" in the helm command below.
+        if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "{{ gpg_key | default("<gpg_key_id>", True) }}"); then gpg --export >~/.gnupg/pubring.gpg; fi
+        kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml || \
+          kubectl replace -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
         helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
 
-      You can run the full smoke tester directly with this command:
+      You can run the full smoke tester directly with this command: (First checkout the {{ release_branch }} branch of the solr-operator)
 
-      ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+      ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
 
       Make sure you have the following installed before running the smoke test:
@@ -838,6 +849,7 @@ groups:
         - Kustomize (v4.0.0+) This will be installed for you, but NOT upgraded if a lower version is already installed.
         - yq
         - jq
+        - coreutils (if using Mac OS)
 
       The vote will be open for at least 72 hours i.e. until {{ vote_close }}.
 
@@ -1060,7 +1072,8 @@ groups:
           tee: true
   - !Todo
     id: publish_docker_image
-    title: Publish the staged Docker image
+    title: Publish the final release Docker image
+    depends: tag_release
     vars:
       rc_tag: '{{ release_version }}-rc{{ rc_number }}'
     commands: !Commands
@@ -1069,16 +1082,16 @@ groups:
       commands_text: This will pull the RC Docker image, tag it as a release, and push the release image to DockerHub.
       commands:
         - !Command
-          cmd: docker pull "apache/solr-operator:{{ rc_tag }}"
-          logfile: docker_pull.log
+          cmd: git checkout {{ release_version }}
           tee: true
         - !Command
-          cmd: docker tag "apache/solr-operator:{{ rc_tag }}" "apache/solr-operator:{{ release_version }}"
+          cmd: git clean -df && git checkout -- .
+          comment: Make sure checkout is clean and up to date
+          logfile: git_clean.log
           tee: true
         - !Command
-          cmd: docker push "apache/solr-operator:{{ release_version }}"
-          logfile: docker_push.log
-          tee: true
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
+          logfile: docker_upload.log
   - !Todo
     id: check_mirroring
     title: Check state of mirroring so far

@@ -1,4 +1,18 @@
 #!/bin/bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
 set -o errexit
 set -o nounset
@@ -10,8 +24,15 @@ controller_gen_version=v0.5.0
 os=$(go env GOOS)
 arch=$(go env GOARCH)
 
+printf "\n\nThis script may require elevated privileges. Be ready to enter your password for installation.\n\n"
+
 # Install go modules 
 GO111MODULE=on go mod tidy
+# Add GOBIN to PATH
+if [[ -z "${GOBIN:-}" ]]; then
+  export GOBIN="$(cd ${GOPATH:-~/go}/bin && pwd)"
+fi
+export PATH="${PATH}:${GOBIN}"
 
 #Install Kustomize
 if ! (which kustomize); then
@@ -55,3 +76,5 @@ elif ! (controller-gen --version | grep "Version: ${controller_gen_version}"); t
 else
   echo "controller-gen already installed at $(which controller-gen), version: $(controller-gen --version)"
 fi
+
+echo "Make sure to add \$GOBIN or \${GOPATH}/bin to your \$PATH"

@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] -v VERSION -l LOCATION
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] -v VERSION -l LOCATION -g GPG_KEY
 
 Test the release candidate in a Kind cluster
 
@@ -31,11 +31,12 @@ Test the release candidate in a Kind cluster
     -v  Version of the Solr Operator
     -i  Solr Operator docker image to use  (Optional, defaults to apache/solr-operator:<version>)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
+    -g  GPG Key (fingerprint) used to sign the artifacts
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l: opt; do
+while getopts hv:i:l:g: opt; do
     case $opt in
         h)
             show_help
@@ -46,6 +47,8 @@ while getopts hv:i:l: opt; do
         i)  IMAGE=$OPTARG
             ;;
         l)  LOCATION=$OPTARG
+            ;;
+        g)  GPG_KEY=$OPTARG
             ;;
         *)
             show_help >&2
@@ -63,6 +66,9 @@ if [[ -z "${IMAGE:-}" ]]; then
 fi
 if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
+fi
+if [[ -z "${GPG_KEY:-}" ]]; then
+  echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
 fi
 
 # If LOCATION is not a URL, then get the absolute path
@@ -100,8 +106,13 @@ kind create cluster --name "${CLUSTER_NAME}"
 # Load the docker image into the cluster
 kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
 
-# First generate the temporary public key ring
-gpg --export >~/.gnupg/pubring.gpg
+echo "Import Solr Keys"
+curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
+
+# First generate the old-style public key ring, if it doesn't already exist and contain the information we want
+if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "${GPG_KEY}"); then
+  gpg --export >~/.gnupg/pubring.gpg
+fi
 
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
@@ -141,17 +152,17 @@ printf '\nWait for all 3 Solr nodes to become ready.\n\n'
 grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
 
 # Expose the common Solr service to localhost
-kubectl port-forward service/example-solrcloud-common 8983:80 || true &
+kubectl port-forward service/example-solrcloud-common 18983:80 || true &
 sleep 2
 
 printf "\nCheck the admin URL to make sure it works\n"
-curl --silent "http://localhost:8983/solr/admin/info/system" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/info/system" | grep '"status":0' > /dev/null
 
 printf "\nCreating a test collection\n"
-curl --silent "http://localhost:8983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
 
 printf "\nQuery the test collection, test for 0 docs\n"
-curl --silent "http://localhost:8983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
+curl --silent "http://localhost:18983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
 
 printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
 cat <<EOF | kubectl apply -f -
@@ -173,17 +184,16 @@ sleep 5
 kubectl rollout status deployment/example-solr-metrics
 
 # Expose the Solr Prometheus Exporter service to localhost
-kubectl port-forward service/example-solr-metrics 8984:80 || true &
+kubectl port-forward service/example-solr-metrics 18984:80 || true &
 sleep 15
 
-printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:8983/solr' URL being scraped.\n"
-curl --silent "http://localhost:8984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
+printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
+curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
 # If LOCATION is a URL, then remove the helm repo at the end
 if (echo "${LOCATION}" | grep "http"); then
   helm repo remove "apache-solr-test-${VERSION}"
 fi
-
 
 echo "Delete test Kind Kubernetes cluster."
 kind delete clusters "${CLUSTER_NAME}"

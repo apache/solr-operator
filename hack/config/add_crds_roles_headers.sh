@@ -21,16 +21,15 @@ set -o pipefail
 # error on unset variables
 set -u
 
-goFiles=$(find . -name \*.go -not -path "./vendor/*" -print)
-invalidFiles=$(gofmt -l $goFiles)
+echo "Copying CRDs and Role to helm repo"
 
-if [ "$invalidFiles" ]; then
-  echo -e "These files did not pass the 'go fmt' check, please run 'go fmt' on them:"
-  for file in $invalidFiles
-  do
-    echo ""
-    gofmt -d "${file}"
-  done
+files=(config/crd/bases/* config/rbac/role.yaml)
 
-  exit 1
-fi
+# Copy and package CRDs
+for file in "${files[@]}"; do
+  {
+    cat hack/headers/header.yaml.txt
+    printf "\n"
+    cat "${file}"
+  } > "${file}.tmp" && mv "${file}.tmp" "${file}"
+done
