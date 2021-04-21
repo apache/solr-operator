@@ -187,14 +187,13 @@ kubectl rollout status deployment/example-solr-metrics
 kubectl port-forward service/example-solr-metrics 18984:80 || true &
 sleep 15
 
-printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-0.example-solrcloud-headless.default:18983/solr' URL being scraped.\n"
-curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:18983/solr' > /dev/null
+printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
+curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
 # If LOCATION is a URL, then remove the helm repo at the end
 if (echo "${LOCATION}" | grep "http"); then
   helm repo remove "apache-solr-test-${VERSION}"
 fi
-
 
 echo "Delete test Kind Kubernetes cluster."
 kind delete clusters "${CLUSTER_NAME}"
