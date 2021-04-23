@@ -219,6 +219,12 @@ rules:
 - apiGroups:
   - solr.apache.org
   resources:
+  - solrclouds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - solr.apache.org
+  resources:
   - solrclouds/status
   verbs:
   - get
