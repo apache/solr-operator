@@ -16,8 +16,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.3.0-prerelease
-appVersion: v0.3.0-prerelease
+version: 0.3.0
+appVersion: v0.3.0
 kubeVersion: ">= 1.16.0-0"
 home: https://github.com/apache/solr-operator
 sources:
@@ -42,7 +42,7 @@ dependencies:
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   # Add change log for a single release here, only single-layered bulleted list allowed.
   artifacthub.io/changes: |
     - The Solr Operator is now an Apache project managed by the Apache Solr PMC.
@@ -59,7 +59,7 @@ annotations:
     - SolrCloud can now be used with the Kubernetes HPA to autoscale Solr Cloud pods.
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.3.0-prerelease
+      image: apache/solr-operator:v0.3.0
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1

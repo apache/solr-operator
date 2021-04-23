@@ -41,8 +41,8 @@ helm repo add apache-solr https://solr.apache.org/charts
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0-prerelease/all-with-dependencies.yaml
-helm install solr-operator apache-solr/solr-operator --version 0.3.0-prerelease
+kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
+helm install solr-operator apache-solr/solr-operator --version 0.3.0
 ```
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
@@ -55,8 +55,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
 
 ```bash
-kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.3.0-prerelease/all-with-dependencies.yaml
-helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0-prerelease
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
+helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
 ```
 
 #### Namespaces
@@ -168,7 +168,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"apache/solr-operator"` | The repository of the Solr Operator image |
-| image.tag | string | `"v0.3.0-prerelease"` | The tag/version of the Solr Operator to run |
+| image.tag | string | `"v0.3.0"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |

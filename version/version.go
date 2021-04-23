@@ -20,7 +20,7 @@ package version
 var (
 	// Version information for the Solr Operator
 	Version       string = "v0.3.0"
-	VersionSuffix string = "prerelease"
+	VersionSuffix string = ""
 	BuildTime     string
 	GitSHA        string
 )
