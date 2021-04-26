@@ -214,16 +214,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 		}
 	} else {
-		emptyDirVolume := corev1.Volume{
-			Name: solrDataVolumeName,
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
+		ephemeralVolume := corev1.Volume{
+			Name:         solrDataVolumeName,
+			VolumeSource: corev1.VolumeSource{},
 		}
 		if solrCloud.Spec.StorageOptions.EphemeralStorage != nil {
-			emptyDirVolume.VolumeSource.EmptyDir = &solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir
+			if nil != solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath {
+				ephemeralVolume.VolumeSource.HostPath = solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath
+			} else if nil != solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir {
+				ephemeralVolume.VolumeSource.EmptyDir = solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir
+			} else {
+				ephemeralVolume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
+			}
+		} else {
+			ephemeralVolume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
 		}
-		solrVolumes = append(solrVolumes, emptyDirVolume)
+		solrVolumes = append(solrVolumes, ephemeralVolume)
 	}
 	// Add backup volumes
 	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {

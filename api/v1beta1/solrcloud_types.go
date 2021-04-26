@@ -315,9 +315,14 @@ type TemplateMeta struct {
 }
 
 type SolrEphemeralDataStorageOptions struct {
+	// HostPathVolumeSource is an optional config to specify a path on the host machine to store Solr data.
+	//
+	// If hostPath is omitted, then the default EmptyDir is used, otherwise hostPath takes precedence over EmptyDir.
+	// +optional
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
 	//EmptyDirVolumeSource is an optional config for the emptydir volume that will store Solr data.
 	// +optional
-	EmptyDir corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
 type SolrBackupRestoreOptions struct {
