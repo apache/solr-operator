@@ -73,9 +73,9 @@ This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-
 
 ```bash
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.1-prerelease/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.3.0
+$ helm install solr-operator apache-solr/solr-operator --version 0.3.1-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._

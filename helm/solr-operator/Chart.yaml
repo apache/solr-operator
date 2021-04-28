@@ -16,8 +16,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.3.0
-appVersion: v0.3.0
+version: 0.3.1-prerelease
+appVersion: v0.3.1-prerelease
 kubeVersion: ">= 1.16.0-0"
 home: https://github.com/apache/solr-operator
 sources:
@@ -42,24 +42,14 @@ dependencies:
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here, only single-layered bulleted list allowed.
   artifacthub.io/changes: |
-    - The Solr Operator is now an Apache project managed by the Apache Solr PMC.
-    - The Solr CRDs now use the solr.apache.org API group instead of solr.bloomberg.com.
-    - The Solr Operator now fully supports running Solr in a secure and locked down way:
-    - Basic Auth support is now built in when requested in the SolrCloud CRD
-    - Solr can be run with TLS (optional mTLS, if provided to the operator)
-    - More helm chart options are provided to customize running the Solr Operator
-    - The Zookeeper Operator is now up-to-date with the most recent release, v0.2.9.
-      It can now be installed as a helm-chart dependency with the Solr Operator.
-    - Users can now provide custom Solr log4j.xml and Prometheus Exporter config xml configMaps
-    - Fix bug in custom probes for Solr pods
-    - Solr pod shutdown is more graceful, has better coordination between Kubernetes and Solr.
-    - SolrCloud can now be used with the Kubernetes HPA to autoscale Solr Cloud pods.
+    - Change 1
+    - Change 2
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.3.0
+      image: apache/solr-operator:v0.3.1-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
