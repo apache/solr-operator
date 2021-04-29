@@ -98,6 +98,8 @@ echo "Pulling Helm chart from the staged url and uploading to release Helm repo.
     # Pull Helm charts from staged location
     wget -r -np -nH -nd --level=1 -A "*.tgz*" "${RELEASE_URL}/helm-charts"
 
+    rm -f robots.txt*
+
     # Pull the official Helm repo index.yaml
     wget "${CHART_REPO}/index.yaml"
 

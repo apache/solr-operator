@@ -1013,7 +1013,7 @@ groups:
           cmd: git add -u .  && git commit -m "Add next patch version {{ next_version }}"
           logfile: commit-release-next-version.log
         - !Command
-          cmd: git push {{ release_branch }}
+          cmd: git push origin {{ release_branch }}
           comment: |
             This will push both the release commit as well as the commit to increase version.
             The release commit will correspond to the previously pushed tag.
@@ -1043,7 +1043,10 @@ groups:
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false
-      commands_text: This will upload the staged Helm chart to the release location in nightlies.apache.org
+      commands_text: |
+        This will upload the staged Helm chart to the release location in nightlies.apache.org.
+        You will be prompted for your Apache password in the beggining, to use when uploading.
+        Next you will be prompted for your GPG Key passphrase, to sign the helm index.yaml.
       commands:
         - !Command
           cmd: ./hack/release/upload/upload_helm.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -a "{{ gpg.apache_id | default("<apache_id>", True) }}" -c "{{ official_helm_charts_url }}" -r "{{ dist_release_url }}"
@@ -1059,7 +1062,9 @@ groups:
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false
-      commands_text: This will upload the staged CRDs to the release location in nightlies.apache.org
+      commands_text: |
+        This will upload the staged CRDs to the release location in nightlies.apache.org.
+        You will be prompted for your Apache password in the beggining, to use when uploading.
       commands:
         - !Command
           cmd: ./hack/release/upload/upload_crds.sh  -a "{{ gpg.apache_id | default('<apache_id>', True) }}" -c "{{ crds_release_url }}" -r "{{ dist_release_url }}" -v "{{ release_version }}"
@@ -1115,6 +1120,17 @@ groups:
       - !Command
         cmd: python3 -u hack/release/wizard/poll-mirrors.py -version {{ release_version }} -o
         live: true
+  - !Todo
+    id: check_artifact_hub
+    title: Check state of ArtifactHub entries
+    depends:
+      - publish_docker_image
+      - publish_helm_charts
+    description: |
+      Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} Helm Chart.
+      Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
+    links:
+      - https://artifacthub.io/packages/helm/apache-solr/solr-operator
 - !TodoGroup
   id: website
   title: Update the website
