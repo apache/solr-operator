@@ -28,8 +28,12 @@ These options can be found in `SolrCloud.spec.dataStorage`
     Note: This template cannot be changed unless the SolrCloud is deleted and recreated.
     This is a [limitation of StatefulSets and PVCs in Kubernetes](https://github.com/kubernetes/enhancements/issues/661).
 - **`ephemeral`**
+
+  There are two types of ephemeral volumes that can be specified.
+  Both are optional, and if none are specified then an empty `emptyDir` volume source is used.
+  If both are specified then the `hostPath` volume source will take precedence.
   - **`emptyDir`** - An [`emptyDir` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) that describes the desired emptyDir volume to use in each SolrCloud pod to store data.
-  This option is optional, and if not provided an empty `emptyDir` volume source will be used.
+  - **`hostPath`** - A [`hostPath` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) that describes the desired hostPath volume to use in each SolrCloud pod to store data.
     
 - **`backupRestoreOptions`** (Required for integration with [`SolrBackups`](../solr-backup/README.md))
   - **`volume`** - This is a [volume source](https://kubernetes.io/docs/concepts/storage/volumes/), that supports `ReadWriteMany` access.
