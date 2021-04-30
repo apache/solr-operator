@@ -11,7 +11,3 @@ The following examples are provided in helping explain various options provided 
   - [Basic](test_solrprometheusexporter.yaml)
 - Solr Backup
   - [Basic](test_solrbackup.yaml)
-- Solr Collection
-  - [Basic](test_solrcollection.yaml)
-- Solr Collection Alias
-  - [Basic](test_solrcollection_alias.yaml)

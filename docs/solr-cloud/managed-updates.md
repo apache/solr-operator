@@ -1,10 +1,11 @@
 # Managed SolrCloud Rolling Updates
+_Since v0.2.7_
 
 Solr Clouds are complex distributed systems, and thus require a more delicate and informed approach to rolling updates.
 
 If the [`Managed` update strategy](solr-cloud-crd.md#update-strategy) is specified in the Solr Cloud CRD, then the Solr Operator will take control over deleting SolrCloud pods when they need to be updated.
 
-The operator will find all pods that have not been updated yet and choose the next set of pods to delete for an udpate, given the following workflow.
+The operator will find all pods that have not been updated yet and choose the next set of pods to delete for an update, given the following workflow.
 
 ## Pod Update Workflow
 

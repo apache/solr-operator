@@ -26,3 +26,16 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+The Solr Operator project is built using Kubebuilder, which is Apache 2.0 licensed.
+    https://github.com/kubernetes-sigs/kubebuilder
+
+The reconcileStorageFinalizer login in
+    controllers/solrcloud_controller.go
+was influenced by the same logic in the Zookeeper Operator, which is Apache 2.0 licensed.
+    https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629)
+Copyright (c) 2020 Dell Inc., or its subsidiaries. All Rights Reserved.
+
+The Zookeeper Operator is used as an optional dependency, however the ZookeeperCluster CRD is used within the repository.
+    config/dependencies/zookeeper_cluster_crd.yaml
+This was taken from https://github.com/pravega/zookeeper-operator (version v0.2.9)

@@ -19,23 +19,18 @@ Please follow the instructions from the [local tutorial](local_tutorial.md#setup
 
 ### Install the necessary dependencies
 
-Install the Zookeeper, which this operator depends on by default.
-Each is optional, as described in the [Zookeeper Reference](solr-cloud/solr-cloud-crd.md#zookeeper-reference) section in the CRD docs.
+Install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator), which this operator depends on by default.
+It is optional, however, as described in the [Zookeeper Reference](solr-cloud/solr-cloud-crd.md#zookeeper-reference) section in the CRD docs.
 
 ```bash
-$ kubectl apply -f example/dependencies
+helm repo add pravega https://charts.pravega.io
+helm install zookeeper-operator pravega/zookeeper-operator --version 0.2.9
 ```
 
 Install necessary dependencies for building and deploying the operator.
 ```bash
-$ export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
-$ ./hack/install_dependencies.sh
-```
-
-Beware that you must be running an updated version of `controller-gen`. To update to a compatible version, run:
-
-```bash
-$ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
+export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.bashrc or ~/.bash_aliases
+make install-dependencies
 ```
 
 ## Build the Solr CRDs
@@ -43,13 +38,13 @@ $ go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.2.2
 If you have changed anything in the [APIs directory](/api/v1beta1), you will need to run the following command to regenerate all Solr CRDs.
 
 ```bash
-$ make manifests
+make manifests
 ```
 
 In order to apply these CRDs to your kube cluster, merely run the following:
 
 ```bash
-$ make install
+make install
 ```
 
 ## Build and Run local versions
@@ -63,7 +58,7 @@ It is very useful to build and run your local version of the operator to test fu
 Building the Go binary files is quite straightforward:
 
 ```bash
-$ go build
+make build
 ```
 
 This is useful for testing that your code builds correctly, as well as using the `make run` command detailed below.
@@ -73,22 +68,16 @@ This is useful for testing that your code builds correctly, as well as using the
 Building and releasing a test operator image with a custom Docker namespace.
 
 ```bash
-$ NAMESPACE=your-namespace/ make docker-build docker-push
+REPOSITORY=your-repository make docker-build docker-push
 ```
 
-You can test the vendor docker container by running
+You can control the repository and version for your solr-operator docker image via the ENV variables:
+- `REPOSITORY` - defaults to `apache`. This can also include the docker repository information for private repos.
+- `NAME` - defaults to `solr-operator`.
+- `TAG` - defaults to the full branch version (e.g. `v0.3.0-prerelease`). For github tags, this value will be the release version.
+You can check what version you are using by running `make tag`, you can check your version with `make version`.
 
-```bash
-$ NAMESPACE=your-namespace/ make docker-vendor-build docker-vendor-push
-```
-
-You can control the namespace and version for your solr-operator docker image via the ENV variables:
-- `NAMESPACE`, defaults to `bloomberg/`. **This must end with a forward slash.** This can also include the docker repository information for private repos.
-- `NAME`, defaults to `solr-operator`.
-- `VERSION`, defaults to the git HEAD tag. (e.g. `v0.2.5-1-g06f4e2a`).  
-You can check what version you are using by running `make version`.
-
-The image will be created under the tag `$(NAMESPACE)$(NAME):$(VERSION)` as well as `$(NAMESPACE)$(NAME):latest`.
+The image will be created under the tag `$(REPOSITORY)/$(NAME):$(TAG)` as well as `$(REPOSITORY)/$(NAME):latest`.
 
 
 ### Running the Solr Operator
@@ -117,20 +106,20 @@ PRs will automatically run the unit tests, and will block merging if the tests f
 You can run these tests locally via the following make command:
 
 ```bash
-$ make test
+make test
 ```
 
 ## Before you create a PR
 
-The CRD should be updated anytime you update the API.
+The github actions will auto-check that linting is successful on your PR.
+To make sure that the linting will succeed, run the following command before committing.
 
 ```bash
-$ make manifests
+make prepare
 ```
-
 
 Make sure that you have updated the go.mod file:
 
 ```bash
-$ make mod-tidy
+make mod-tidy
 ```

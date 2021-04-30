@@ -1,9 +1,0 @@
-apiVersion: solr.bloomberg.com/v1beta1
-kind: SolrCollectionAlias
-metadata:
-  name: collection-alias-example
-spec:
-  solrCloud: example
-  aliasType: standard
-  collections:
-    - example-collection-1
