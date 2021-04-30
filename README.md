@@ -3,9 +3,8 @@
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/apache-solr)](https://artifacthub.io/packages/search?repo=apache-solr)
 [![Commit since last release](https://img.shields.io/github/commits-since/apache/solr-operator/latest.svg)](https://github.com/apache/solr-operator/commits/main)
-[![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/apache/solr-operator)](https://hub.docker.com/r/apache/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
-[![Mailing List]]
 
 The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 
