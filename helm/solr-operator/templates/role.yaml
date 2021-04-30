@@ -1,3 +1,18 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 {{- if .Values.rbac.create }}
 {{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
 
@@ -59,6 +74,18 @@ rules:
   - pods/status
   verbs:
   - get
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ""
   resources:
@@ -138,7 +165,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - extensions
+  - networking.k8s.io
   resources:
   - ingresses
   verbs:
@@ -150,7 +177,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - extensions
+  - networking.k8s.io
   resources:
   - ingresses/status
   verbs:
@@ -180,20 +207,6 @@ rules:
 - apiGroups:
   - solr.apache.org
   resources:
-  - solrcloud
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrcloud/status
-  verbs:
-  - get
-- apiGroups:
-  - solr.apache.org
-  resources:
   - solrclouds
   verbs:
   - create
@@ -206,47 +219,13 @@ rules:
 - apiGroups:
   - solr.apache.org
   resources:
+  - solrclouds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - solr.apache.org
+  resources:
   - solrclouds/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrcollectionaliases
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrcollectionaliases/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrcollections
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrcollections/status
   verbs:
   - get
   - patch

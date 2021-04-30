@@ -19,8 +19,8 @@ package util
 
 import (
 	"fmt"
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
-	"github.com/apache/lucene-solr-operator/controllers/util/solr_api"
+	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -42,7 +42,7 @@ const (
 // TODO:
 //  - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
 //    - Might be too much complexity for very little gain.
-func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, totalPods int, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, retryLater bool) {
+func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, totalPods int, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger, httpHeaders map[string]string) (podsToUpdate []corev1.Pod, retryLater bool) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
 	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, totalPods, len(outOfDatePods), outOfDatePodsNotStartedCount, availableUpdatedPodCount)
 	if maxPodsToUpdate <= 0 {
@@ -55,13 +55,13 @@ func DeterminePodsSafeToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod
 		if readyPods > 0 {
 			queryParams := url.Values{}
 			queryParams.Add("action", "CLUSTERSTATUS")
-			err := solr_api.CallCollectionsApi(cloud.Name, cloud.Namespace, queryParams, clusterResp)
+			err := solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, clusterResp)
 			if err == nil {
 				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
 					err = apiErr
 				} else {
 					queryParams.Set("action", "OVERSEERSTATUS")
-					err = solr_api.CallCollectionsApi(cloud.Name, cloud.Namespace, queryParams, overseerResp)
+					err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, overseerResp)
 					if hasError, apiErr := solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
 						err = apiErr
 					}

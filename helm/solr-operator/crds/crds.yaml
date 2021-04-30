@@ -1,8 +1,24 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
   name: solrbackups.solr.apache.org
 spec:
@@ -399,7 +415,7 @@ spec:
                                           type: string
                                         type: array
                                       dataSource:
-                                        description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                        description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                         properties:
                                           apiGroup:
                                             description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -847,8 +863,6 @@ spec:
                                       type: object
                                   type: object
                                 type: array
-                            required:
-                            - sources
                             type: object
                           quobyte:
                             description: Quobyte represents a Quobyte mount on the host that shares a pod's lifetime
@@ -1125,12 +1139,13 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
   name: solrclouds.solr.apache.org
 spec:
@@ -1706,6 +1721,16 @@ spec:
                           - name
                           type: object
                         type: array
+                      imagePullSecrets:
+                        description: ImagePullSecrets to apply to the pod. These are for init/sidecarContainers in addition to the imagePullSecret defined for the solr image.
+                        items:
+                          description: LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.
+                          properties:
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                          type: object
+                        type: array
                       initContainers:
                         description: Additional init containers to run in the pod. These will run along with the init container that sets up the "solr.xml".
                         items:
@@ -2282,7 +2307,7 @@ spec:
                                   type: object
                               type: object
                             startupProbe:
-                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. This is a beta feature enabled by the StartupProbe feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                               properties:
                                 exec:
                                   description: One and only one of the following should be specified. Exec specifies the action to take.
@@ -2535,7 +2560,7 @@ spec:
                             format: int64
                             type: integer
                           fsGroupChangePolicy:
-                            description: 'fsGroupChangePolicy defines behavior of changing ownership and permission of the volume before being exposed inside Pod. This field will only apply to volume types which support fsGroup based ownership(and permissions). It will have no effect on ephemeral volume types such as: secret, configmaps and emptydir. Valid values are "OnRootMismatch" and "Always". If not specified defaults to "Always".'
+                            description: 'fsGroupChangePolicy defines behavior of changing ownership and permission of the volume before being exposed inside Pod. This field will only apply to volume types which support fsGroup based ownership(and permissions). It will have no effect on ephemeral volume types such as: secret, configmaps and emptydir. Valid values are "OnRootMismatch" and "Always". If not specified, "Always" is used.'
                             type: string
                           runAsGroup:
                             description: The GID to run the entrypoint of the container process. Uses runtime default if unset. May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container.
@@ -3298,7 +3323,7 @@ spec:
                                   type: object
                               type: object
                             startupProbe:
-                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. This is a beta feature enabled by the StartupProbe feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                               properties:
                                 exec:
                                   description: One and only one of the following should be specified. Exec specifies the action to take.
@@ -3533,6 +3558,11 @@ spec:
                             format: int32
                             type: integer
                         type: object
+                      terminationGracePeriodSeconds:
+                        description: Optional duration in seconds the pod needs to terminate gracefully.
+                        format: int64
+                        minimum: 10
+                        type: integer
                       tolerations:
                         description: Tolerations to be added for the StatefulSet.
                         items:
@@ -3855,7 +3885,7 @@ spec:
                                                 type: string
                                               type: array
                                             dataSource:
-                                              description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                              description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                               properties:
                                                 apiGroup:
                                                   description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -4303,8 +4333,6 @@ spec:
                                             type: object
                                         type: object
                                       type: array
-                                  required:
-                                  - sources
                                   type: object
                                 quobyte:
                                   description: Quobyte represents a Quobyte mount on the host that shares a pod's lifetime
@@ -4788,7 +4816,7 @@ spec:
                                           type: string
                                         type: array
                                       dataSource:
-                                        description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                        description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                         properties:
                                           apiGroup:
                                             description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -5236,8 +5264,6 @@ spec:
                                       type: object
                                   type: object
                                 type: array
-                            required:
-                            - sources
                             type: object
                           quobyte:
                             description: Quobyte represents a Quobyte mount on the host that shares a pod's lifetime
@@ -5472,7 +5498,7 @@ spec:
                                   type: string
                                 type: array
                               dataSource:
-                                description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                 properties:
                                   apiGroup:
                                     description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -5632,6 +5658,105 @@ spec:
               solrOpts:
                 description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
                 type: string
+              solrSecurity:
+                description: Options to enable Solr security
+                properties:
+                  authenticationType:
+                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the Solr operator but support for other authentication plugins may be added in the future.
+                    enum:
+                    - Basic
+                    type: string
+                  basicAuthSecret:
+                    description: "Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be  locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting). \n If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password for the \"k8s-oper\" user. All API requests from the operator are made as the \"k8s-oper\" user, which is configured with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
+                    type: string
+                  probesRequireAuth:
+                    description: Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults to false. If you set to true, then probes will use a local command on the main container to hit the secured endpoints with credentials sourced from an env var instead of HTTP directly.
+                    type: boolean
+                type: object
+              solrTLS:
+                description: Options to enable TLS between Solr pods
+                properties:
+                  checkPeerName:
+                    description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                    type: boolean
+                  clientAuth:
+                    default: None
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                    enum:
+                    - None
+                    - Want
+                    - Need
+                    type: string
+                  keyStorePasswordSecret:
+                    description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  pkcs12Secret:
+                    description: TLS Secret containing a pkcs12 keystore
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  restartOnTLSSecretUpdate:
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                    type: boolean
+                  trustStorePasswordSecret:
+                    description: Secret containing the trust store password; if not provided the keyStorePassword will be used
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  trustStoreSecret:
+                    description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  verifyClientHostname:
+                    description: Verify client's hostname during SSL handshake
+                    type: boolean
+                required:
+                - keyStorePasswordSecret
+                - pkcs12Secret
+                type: object
               updateStrategy:
                 description: Define how Solr rolling updates are executed.
                 properties:
@@ -5712,6 +5837,23 @@ spec:
                   provided:
                     description: 'Create a new Zookeeper Ensemble with the following spec Note: This option will not allow the SolrCloud to run across kube-clusters. Note: Requires   - The zookeeperOperator flag to be provided to the Solr Operator   - A zookeeper operator to be running'
                     properties:
+                      acl:
+                        description: ZooKeeper ACL to use when connecting with ZK. This ACL should have ALL permission in the given chRoot.
+                        properties:
+                          passwordKey:
+                            description: The name of the key in the given secret that contains the ACL password
+                            type: string
+                          secret:
+                            description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                            type: string
+                          usernameKey:
+                            description: The name of the key in the given secret that contains the ACL username
+                            type: string
+                        required:
+                        - passwordKey
+                        - secret
+                        - usernameKey
+                        type: object
                       chroot:
                         description: The ChRoot to connect solr at
                         type: string
@@ -5733,9 +5875,12 @@ spec:
                         properties:
                           reclaimPolicy:
                             description: VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete, the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted. The default value is Retain.
+                            enum:
+                            - Delete
+                            - Retain
                             type: string
                           spec:
-                            description: PersistentVolumeClaimSpec is the spec to describe PVC for the container This field is optional. If no PVC spec, stateful containers will use emptyDir as volume.
+                            description: PersistentVolumeClaimSpec is the spec to describe PVC for the container This field is optional. If no PVC is specified default persistentvolume will get created.
                             properties:
                               accessModes:
                                 description: 'AccessModes contains the desired access modes the volume should have. More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#access-modes-1'
@@ -5743,7 +5888,7 @@ spec:
                                   type: string
                                 type: array
                               dataSource:
-                                description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                 properties:
                                   apiGroup:
                                     description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -5820,6 +5965,23 @@ spec:
                                 description: VolumeName is the binding reference to the PersistentVolume backing this claim.
                                 type: string
                             type: object
+                        type: object
+                      readOnlyAcl:
+                        description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                        properties:
+                          passwordKey:
+                            description: The name of the key in the given secret that contains the ACL password
+                            type: string
+                          secret:
+                            description: The name of the Kubernetes Secret that stores the username and password for the ACL. This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
+                            type: string
+                          usernameKey:
+                            description: The name of the key in the given secret that contains the ACL username
+                            type: string
+                        required:
+                        - passwordKey
+                        - secret
+                        - usernameKey
                         type: object
                       replicas:
                         description: Number of members to create up for the ZK ensemble Defaults to 3
@@ -6169,6 +6331,86 @@ spec:
                                     type: array
                                 type: object
                             type: object
+                          env:
+                            description: List of environment variables to set in the main ZK container.
+                            items:
+                              description: EnvVar represents an environment variable present in a Container.
+                              properties:
+                                name:
+                                  description: Name of the environment variable. Must be a C_IDENTIFIER.
+                                  type: string
+                                value:
+                                  description: 'Variable references $(VAR_NAME) are expanded using the previous defined environment variables in the container and any service environment variables. If a variable cannot be resolved, the reference in the input string will be unchanged. The $(VAR_NAME) syntax can be escaped with a double $$, ie: $$(VAR_NAME). Escaped references will never be expanded, regardless of whether the variable exists or not. Defaults to "".'
+                                  type: string
+                                valueFrom:
+                                  description: Source for the environment variable's value. Cannot be used if value is not empty.
+                                  properties:
+                                    configMapKeyRef:
+                                      description: Selects a key of a ConfigMap.
+                                      properties:
+                                        key:
+                                          description: The key to select.
+                                          type: string
+                                        name:
+                                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                          type: string
+                                        optional:
+                                          description: Specify whether the ConfigMap or its key must be defined
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                    fieldRef:
+                                      description: 'Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels[''<KEY>'']`, `metadata.annotations[''<KEY>'']`, spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.'
+                                      properties:
+                                        apiVersion:
+                                          description: Version of the schema the FieldPath is written in terms of, defaults to "v1".
+                                          type: string
+                                        fieldPath:
+                                          description: Path of the field to select in the specified API version.
+                                          type: string
+                                      required:
+                                      - fieldPath
+                                      type: object
+                                    resourceFieldRef:
+                                      description: 'Selects a resource of the container: only resources limits and requests (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.'
+                                      properties:
+                                        containerName:
+                                          description: 'Container name: required for volumes, optional for env vars'
+                                          type: string
+                                        divisor:
+                                          anyOf:
+                                          - type: integer
+                                          - type: string
+                                          description: Specifies the output format of the exposed resources, defaults to "1"
+                                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                          x-kubernetes-int-or-string: true
+                                        resource:
+                                          description: 'Required: resource to select'
+                                          type: string
+                                      required:
+                                      - resource
+                                      type: object
+                                    secretKeyRef:
+                                      description: Selects a key of a secret in the pod's namespace
+                                      properties:
+                                        key:
+                                          description: The key of the secret to select from.  Must be a valid secret key.
+                                          type: string
+                                        name:
+                                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                          type: string
+                                        optional:
+                                          description: Specify whether the Secret or its key must be defined
+                                          type: boolean
+                                      required:
+                                      - key
+                                      type: object
+                                  type: object
+                              required:
+                              - name
+                              type: object
+                            type: array
                           nodeSelector:
                             additionalProperties:
                               type: string
@@ -6234,6 +6476,9 @@ spec:
                 type: string
               internalCommonAddress:
                 description: InternalCommonAddress is the internal common http address for all solr nodes
+                type: string
+              podSelector:
+                description: PodSelector for SolrCloud pods, required by the HPA
                 type: string
               readyReplicas:
                 description: ReadyReplicas is the number of number of ready replicas in the cluster
@@ -6338,6 +6583,7 @@ spec:
             required:
             - backupRestoreReady
             - internalCommonAddress
+            - podSelector
             - readyReplicas
             - replicas
             - solrNodes
@@ -6350,6 +6596,7 @@ spec:
     storage: true
     subresources:
       scale:
+        labelSelectorPath: .status.podSelector
         specReplicasPath: .spec.replicas
         statusReplicasPath: .status.readyReplicas
       status: {}
@@ -6359,183 +6606,13 @@ status:
     plural: ""
   conditions: []
   storedVersions: []
+
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
-  creationTimestamp: null
-  name: solrcollectionaliases.solr.apache.org
-spec:
-  group: solr.apache.org
-  names:
-    kind: SolrCollectionAlias
-    listKind: SolrCollectionAliasList
-    plural: solrcollectionaliases
-    singular: solrcollectionalias
-  scope: Namespaced
-  versions:
-  - name: v1beta1
-    schema:
-      openAPIV3Schema:
-        description: SolrCollectionAlias is the Schema for the solrcollectionaliases API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: SolrCollectionAliasSpec defines the desired state of SolrCollectionAlias
-            properties:
-              aliasType:
-                description: AliasType is a either standard or routed, right now we support standard
-                type: string
-              collections:
-                description: Collections is a list of collections to apply alias to
-                items:
-                  type: string
-                type: array
-              solrCloud:
-                description: A reference to the SolrCloud to create alias on
-                type: string
-            required:
-            - aliasType
-            - collections
-            - solrCloud
-            type: object
-          status:
-            description: SolrCollectionAliasStatus defines the observed state of SolrCollectionAlias
-            properties:
-              collections:
-                description: Associated collections to the alias
-                items:
-                  type: string
-                type: array
-              created:
-                description: Created or not status
-                type: boolean
-              createdTime:
-                description: Time the alias was created
-                format: date-time
-                type: string
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
-  creationTimestamp: null
-  name: solrcollections.solr.apache.org
-spec:
-  group: solr.apache.org
-  names:
-    kind: SolrCollection
-    listKind: SolrCollectionList
-    plural: solrcollections
-    singular: solrcollection
-  scope: Namespaced
-  versions:
-  - name: v1beta1
-    schema:
-      openAPIV3Schema:
-        description: SolrCollection is the Schema for the solrcollections API
-        properties:
-          apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
-            type: string
-          kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
-            type: string
-          metadata:
-            type: object
-          spec:
-            description: SolrCollectionSpec defines the desired state of SolrCollection
-            properties:
-              autoAddReplicas:
-                description: When set to true, enables automatic addition of replicas when the number of active replicas falls below the value set for replicationFactor
-                type: boolean
-              collection:
-                description: The name of the collection to perform the action on
-                type: string
-              collectionConfigName:
-                description: Define a configset to use for the collection. Use '_default' if you don't have a custom configset
-                type: string
-              maxShardsPerNode:
-                description: Max shards per node
-                format: int64
-                type: integer
-              numShards:
-                description: The num of shards to create, used if RouteName is compositeId
-                format: int64
-                type: integer
-              replicationFactor:
-                description: The replication factor to be used
-                format: int64
-                type: integer
-              routerField:
-                description: If this parameter is specified, the router will look at the value of the field in an input document to compute the hash and identify a shard instead of looking at the uniqueKey field. If the field specified is null in the document, the document will be rejected.
-                type: string
-              routerName:
-                description: The router name that will be used. The router defines how documents will be distributed
-                enum:
-                - implicit
-                - compositeId
-                type: string
-              shards:
-                description: A comma separated list of shard names, e.g., shard-x,shard-y,shard-z. This is a required parameter when the router.name is implicit
-                type: string
-              solrCloud:
-                description: A reference to the SolrCloud to create a collection for
-                type: string
-            required:
-            - collection
-            - collectionConfigName
-            - solrCloud
-            type: object
-          status:
-            description: SolrCollectionStatus defines the observed state of SolrCollection
-            properties:
-              created:
-                description: Whether the collection has been created or not
-                type: boolean
-              createdTime:
-                description: Time the collection was created
-                format: date-time
-                type: string
-              inProgressCreation:
-                description: Set the status of the collection creation process
-                type: boolean
-            type: object
-        type: object
-    served: true
-    storage: true
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []
----
-apiVersion: apiextensions.k8s.io/v1
-kind: CustomResourceDefinition
-metadata:
-  annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.5.0
   creationTimestamp: null
   name: solrprometheusexporters.solr.apache.org
 spec:
@@ -7040,6 +7117,16 @@ spec:
                           - name
                           type: object
                         type: array
+                      imagePullSecrets:
+                        description: ImagePullSecrets to apply to the pod. These are for init/sidecarContainers in addition to the imagePullSecret defined for the solr image.
+                        items:
+                          description: LocalObjectReference contains enough information to let you locate the referenced object inside the same namespace.
+                          properties:
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                          type: object
+                        type: array
                       initContainers:
                         description: Additional init containers to run in the pod. These will run along with the init container that sets up the "solr.xml".
                         items:
@@ -7616,7 +7703,7 @@ spec:
                                   type: object
                               type: object
                             startupProbe:
-                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. This is a beta feature enabled by the StartupProbe feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                               properties:
                                 exec:
                                   description: One and only one of the following should be specified. Exec specifies the action to take.
@@ -7869,7 +7956,7 @@ spec:
                             format: int64
                             type: integer
                           fsGroupChangePolicy:
-                            description: 'fsGroupChangePolicy defines behavior of changing ownership and permission of the volume before being exposed inside Pod. This field will only apply to volume types which support fsGroup based ownership(and permissions). It will have no effect on ephemeral volume types such as: secret, configmaps and emptydir. Valid values are "OnRootMismatch" and "Always". If not specified defaults to "Always".'
+                            description: 'fsGroupChangePolicy defines behavior of changing ownership and permission of the volume before being exposed inside Pod. This field will only apply to volume types which support fsGroup based ownership(and permissions). It will have no effect on ephemeral volume types such as: secret, configmaps and emptydir. Valid values are "OnRootMismatch" and "Always". If not specified, "Always" is used.'
                             type: string
                           runAsGroup:
                             description: The GID to run the entrypoint of the container process. Uses runtime default if unset. May also be set in SecurityContext.  If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence for that container.
@@ -8632,7 +8719,7 @@ spec:
                                   type: object
                               type: object
                             startupProbe:
-                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. This is a beta feature enabled by the StartupProbe feature flag. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
+                              description: 'StartupProbe indicates that the Pod has successfully initialized. If specified, no other probes are executed until this completes successfully. If this probe fails, the Pod will be restarted, just as if the livenessProbe failed. This can be used to provide different probe parameters at the beginning of a Pod''s lifecycle, when it might take a long time to load data or warm a cache, than during steady-state operation. This cannot be updated. More info: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle#container-probes'
                               properties:
                                 exec:
                                   description: One and only one of the following should be specified. Exec specifies the action to take.
@@ -8867,6 +8954,11 @@ spec:
                             format: int32
                             type: integer
                         type: object
+                      terminationGracePeriodSeconds:
+                        description: Optional duration in seconds the pod needs to terminate gracefully.
+                        format: int64
+                        minimum: 10
+                        type: integer
                       tolerations:
                         description: Tolerations to be added for the StatefulSet.
                         items:
@@ -9189,7 +9281,7 @@ spec:
                                                 type: string
                                               type: array
                                             dataSource:
-                                              description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot - Beta) * An existing PVC (PersistentVolumeClaim) * An existing custom resource/object that implements data population (Alpha) In order to use VolumeSnapshot object types, the appropriate feature gate must be enabled (VolumeSnapshotDataSource or AnyVolumeDataSource) If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source. If the specified data source is not supported, the volume will not be created and the failure will be reported as an event. In the future, we plan to support more data source types and the behavior of the provisioner may change.'
+                                              description: 'This field can be used to specify either: * An existing VolumeSnapshot object (snapshot.storage.k8s.io/VolumeSnapshot) * An existing PVC (PersistentVolumeClaim) * An existing custom resource that implements data population (Alpha) In order to use custom resource types that implement data population, the AnyVolumeDataSource feature gate must be enabled. If the provisioner or an external controller can support the specified data source, it will create a new volume based on the contents of the specified data source.'
                                               properties:
                                                 apiGroup:
                                                   description: APIGroup is the group for the resource being referenced. If APIGroup is not specified, the specified Kind must be in the core API group. For any other third-party types, APIGroup is required.
@@ -9637,8 +9729,6 @@ spec:
                                             type: object
                                         type: object
                                       type: array
-                                  required:
-                                  - sources
                                   type: object
                                 quobyte:
                                   description: Quobyte represents a Quobyte mount on the host that shares a pod's lifetime
@@ -9871,6 +9961,9 @@ spec:
               solrReference:
                 description: Reference of the Solr instance to collect metrics for
                 properties:
+                  basicAuthSecret:
+                    description: 'If Solr is secured, you''ll need to provide credentials for the Prometheus exporter to authenticate via a kubernetes.io/basic-auth secret which must contain a username and password. If basic auth is enabled on the SolrCloud instance, the default secret (unless you are supplying your own) is named using the pattern: <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json bootstrapped by the Solr operator, then the username is "k8s-oper".'
+                    type: string
                   cloud:
                     description: Reference of a solrCloud instance
                     properties:
@@ -9927,6 +10020,90 @@ spec:
                             - usernameKey
                             type: object
                         type: object
+                    type: object
+                  solrTLS:
+                    description: Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+                    properties:
+                      checkPeerName:
+                        description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                        type: boolean
+                      clientAuth:
+                        default: None
+                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                        enum:
+                        - None
+                        - Want
+                        - Need
+                        type: string
+                      keyStorePasswordSecret:
+                        description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      pkcs12Secret:
+                        description: TLS Secret containing a pkcs12 keystore
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      restartOnTLSSecretUpdate:
+                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                        type: boolean
+                      trustStorePasswordSecret:
+                        description: Secret containing the trust store password; if not provided the keyStorePassword will be used
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      trustStoreSecret:
+                        description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
+                        properties:
+                          key:
+                            description: The key of the secret to select from.  Must be a valid secret key.
+                            type: string
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                          optional:
+                            description: Specify whether the Secret or its key must be defined
+                            type: boolean
+                        required:
+                        - key
+                        type: object
+                      verifyClientHostname:
+                        description: Verify client's hostname during SSL handshake
+                        type: boolean
+                    required:
+                    - keyStorePasswordSecret
+                    - pkcs12Secret
                     type: object
                   standalone:
                     description: Reference of a standalone solr instance

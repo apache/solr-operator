@@ -18,7 +18,7 @@
 package util
 
 import (
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -85,6 +85,14 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 		zkCluster.Spec.Pod.NodeSelector = zkSpec.ZookeeperPod.NodeSelector
 	}
 
+	if zkSpec.ZookeeperPod.Env != nil {
+		zkCluster.Spec.Pod.Env = zkSpec.ZookeeperPod.Env
+	}
+
+	if solrCloud.Spec.SolrAddressability.KubeDomain != "" {
+		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
+	}
+
 	return zkCluster
 }
 
@@ -106,7 +114,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.Image.Repository = from.Spec.Image.Repository
 
-	if !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
+	if from.Spec.Image.Tag != "" && !DeepEqualWithNils(to.Spec.Image.Tag, from.Spec.Image.Tag) {
 		logger.Info("Update required because field changed", "field", "Spec.Image.Tag", "from", to.Spec.Image.Tag, "to", from.Spec.Image.Tag)
 		requireUpdate = true
 	}
@@ -168,6 +176,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		to.Spec.Pod.Resources = from.Spec.Pod.Resources
 	}
 
+	if !DeepEqualWithNils(to.Spec.Pod.Env, from.Spec.Pod.Env) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Env", "from", to.Spec.Pod.Env, "to", from.Spec.Pod.Env)
+		requireUpdate = true
+		to.Spec.Pod.Env = from.Spec.Pod.Env
+	}
+
 	if !DeepEqualWithNils(to.Spec.Pod.Tolerations, from.Spec.Pod.Tolerations) {
 		logger.Info("Update required because field changed", "field", "Spec.Pod.Tolerations", "from", to.Spec.Pod.Tolerations, "to", from.Spec.Pod.Tolerations)
 		requireUpdate = true
@@ -188,27 +202,34 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
 
+	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
+		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)
+		requireUpdate = true
+	}
+	to.Spec.KubernetesClusterDomain = from.Spec.KubernetesClusterDomain
+
 	return requireUpdate
 }
 
 // AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
 // info: Zookeeper Connection Information
-func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []corev1.EnvVar) {
-	if info == nil || (info.AllACL == nil && info.ReadOnlyACL == nil) {
+func AddACLsToEnv(allACL *solr.ZookeeperACL, readOnlyACL *solr.ZookeeperACL) (hasACLs bool, envVars []corev1.EnvVar) {
+	if allACL == nil && readOnlyACL == nil {
 		return false, envVars
 	}
+
 	f := false
 	var zkDigests []string
-	if info.AllACL != nil {
+	if allACL != nil {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "ZK_ALL_ACL_USERNAME",
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.AllACL.SecretRef,
+							Name: allACL.SecretRef,
 						},
-						Key:      info.AllACL.UsernameKey,
+						Key:      allACL.UsernameKey,
 						Optional: &f,
 					},
 				},
@@ -218,25 +239,25 @@ func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []c
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.AllACL.SecretRef,
+							Name: allACL.SecretRef,
 						},
-						Key:      info.AllACL.PasswordKey,
+						Key:      allACL.PasswordKey,
 						Optional: &f,
 					},
 				},
 			})
 		zkDigests = append(zkDigests, "-DzkDigestUsername=$(ZK_ALL_ACL_USERNAME)", "-DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)")
 	}
-	if info.ReadOnlyACL != nil {
+	if readOnlyACL != nil {
 		envVars = append(envVars,
 			corev1.EnvVar{
 				Name: "ZK_READ_ACL_USERNAME",
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.ReadOnlyACL.SecretRef,
+							Name: readOnlyACL.SecretRef,
 						},
-						Key:      info.ReadOnlyACL.UsernameKey,
+						Key:      readOnlyACL.UsernameKey,
 						Optional: &f,
 					},
 				},
@@ -246,9 +267,9 @@ func AddACLsToEnv(info *solr.ZookeeperConnectionInfo) (hasACLs bool, envVars []c
 				ValueFrom: &corev1.EnvVarSource{
 					SecretKeyRef: &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: info.ReadOnlyACL.SecretRef,
+							Name: readOnlyACL.SecretRef,
 						},
-						Key:      info.ReadOnlyACL.PasswordKey,
+						Key:      readOnlyACL.PasswordKey,
 						Optional: &f,
 					},
 				},

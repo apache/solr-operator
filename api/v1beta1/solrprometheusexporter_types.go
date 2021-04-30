@@ -29,7 +29,7 @@ const (
 // SolrPrometheusExporterSpec defines the desired state of SolrPrometheusExporter
 type SolrPrometheusExporterSpec struct {
 	// Reference of the Solr instance to collect metrics for
-	SolrReference `json:"solrReference"`
+	SolrReference SolrReference `json:"solrReference"`
 
 	// Image of Solr Prometheus Exporter to run.
 	// +optional
@@ -84,6 +84,18 @@ type SolrReference struct {
 	// Reference of a standalone solr instance
 	// +optional
 	Standalone *StandaloneSolrReference `json:"standalone,omitempty"`
+
+	// Settings to configure the SolrJ client used to request metrics from TLS enabled Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
+
+	// If Solr is secured, you'll need to provide credentials for the Prometheus exporter to authenticate via a
+	// kubernetes.io/basic-auth secret which must contain a username and password. If basic auth is enabled on the
+	// SolrCloud instance, the default secret (unless you are supplying your own) is named using the pattern:
+	// <SOLR_CLOUD_NAME>-solrcloud-basic-auth. If using the security.json bootstrapped by the Solr operator,
+	// then the username is "k8s-oper".
+	// +optional
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
 }
 
 func (sr *SolrReference) withDefaults(namespace string) (changed bool) {
@@ -168,6 +180,7 @@ type SolrPrometheusExporterStatus struct {
 // SolrPrometheusExporter is the Schema for the solrprometheusexporters API
 // +kubebuilder:resource:shortName=solrmetrics
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Whether the prometheus exporter is ready"
 // +kubebuilder:printcolumn:name="Scrape Interval",type="integer",JSONPath=".spec.scrapeInterval",description="Scrape interval for metrics (in ms)"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"

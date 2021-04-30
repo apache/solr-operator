@@ -18,14 +18,29 @@
 package solr_api
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
 )
+
+// Used to call a Solr pod over https when using a self-signed cert
+// It's "insecure" but is only used for internal communication, such as getting cluster status
+// so if you're worried about this, don't use a self-signed cert
+var noVerifyTLSHttpClient *http.Client
+var mTLSHttpClient *http.Client
+
+func SetNoVerifyTLSHttpClient(client *http.Client) {
+	noVerifyTLSHttpClient = client
+}
+
+func SetMTLSHttpClient(client *http.Client) {
+	mTLSHttpClient = client
+}
 
 type SolrAsyncResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
@@ -44,21 +59,36 @@ type SolrResponseHeader struct {
 }
 
 type SolrAsyncStatus struct {
-	// Possible states can be found here: https://github.com/apache/lucene-solr/blob/1d85cd783863f75cea133fb9c452302214165a4d/solr/solrj/src/java/org/apache/solr/client/solrj/response/RequestStatusState.java
+	// Possible states can be found here: https://github.com/apache/solr/blob/releases/lucene-solr%2F8.8.1/solr/solrj/src/java/org/apache/solr/client/solrj/response/RequestStatusState.java
 	AsyncState string `json:"state"`
 
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, response interface{}) (err error) {
-	cloudUrl := solr.InternalURLForCloud(cloud, namespace)
+func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders map[string]string, response interface{}) (err error) {
+	cloudUrl := solr.InternalURLForCloud(cloud)
+
+	client := noVerifyTLSHttpClient
+	if mTLSHttpClient != nil {
+		client = mTLSHttpClient
+	}
 
 	urlParams.Set("wt", "json")
 
 	cloudUrl = cloudUrl + "/solr/admin/collections?" + urlParams.Encode()
 
 	resp := &http.Response{}
-	if resp, err = http.Get(cloudUrl); err != nil {
+
+	req, err := http.NewRequest("GET", cloudUrl, nil)
+
+	// mainly for doing basic-auth
+	if httpHeaders != nil {
+		for key, header := range httpHeaders {
+			req.Header.Add(key, header)
+		}
+	}
+
+	if resp, err = client.Do(req); err != nil {
 		return err
 	}
 
@@ -74,4 +104,11 @@ func CallCollectionsApi(cloud string, namespace string, urlParams url.Values, re
 	}
 
 	return err
+}
+
+func init() {
+	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
+	customTransport := http.DefaultTransport.(*http.Transport).Clone()
+	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	SetNoVerifyTLSHttpClient(&http.Client{Transport: customTransport})
 }

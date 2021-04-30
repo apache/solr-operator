@@ -22,10 +22,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 
-	"github.com/apache/lucene-solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
 
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -56,7 +56,7 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyRetain,
 					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
 						ObjectMeta: solr.TemplateMeta{
-							Name:   "other-data",
+							Name:   "other-data-1",
 							Labels: map[string]string{"base": "here"},
 						},
 					},
@@ -102,6 +102,7 @@ func TestPersistentStorageVolumesRetain(t *testing.T) {
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Fetch new value of instance to check finalizers
 	foundInstance := &solr.SolrCloud{}
@@ -141,7 +142,7 @@ func TestPersistentStorageVolumesDelete(t *testing.T) {
 					VolumeReclaimPolicy: solr.VolumeReclaimPolicyDelete,
 					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
 						ObjectMeta: solr.TemplateMeta{
-							Name:        "other-data",
+							Name:        "other-data-2",
 							Annotations: map[string]string{"base": "here"},
 						},
 					},

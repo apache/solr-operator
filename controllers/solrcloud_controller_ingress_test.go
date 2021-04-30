@@ -23,10 +23,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/apache/lucene-solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
 
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -108,6 +108,7 @@ func TestIngressCloudReconcile(t *testing.T) {
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
@@ -239,8 +240,7 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// The default value of UseExternalAddress needs to be set to False
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
@@ -371,6 +371,7 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -499,8 +500,7 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// Additional reconcile for defaulting of Spec
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
@@ -633,6 +633,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -694,7 +695,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 }
 
 func TestIngressKubeDomainCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
+	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
 
 	replicas := int32(4)
@@ -703,11 +704,6 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
 			Replicas: &replicas,
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
 			SolrAddressability: solr.SolrAddressabilityOptions{
 				External: &solr.ExternalAddressability{
 					Method:             solr.Ingress,
@@ -762,8 +758,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
+	// Additional reconcile for defaulting of Spec
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
@@ -777,7 +772,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 
 	// Env Variable Tests
 	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
+		"ZK_HOST":        "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc." + testKubeDomain + ":2181/",
 		"SOLR_HOST":      "$(POD_HOSTNAME)." + expectedCloudRequest.Namespace + ".svc." + testKubeDomain,
 		"SOLR_PORT":      "3000",
 		"SOLR_NODE_PORT": "100",

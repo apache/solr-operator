@@ -21,9 +21,12 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/pointer"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strconv"
 	"strings"
 )
@@ -180,7 +183,7 @@ func CopyServiceFields(from, to *corev1.Service, logger logr.Logger) bool {
 }
 
 // CopyIngressFields copies the owned fields from one Ingress to another
-func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
+func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 	logger = logger.WithValues("kind", "ingress")
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
 
@@ -246,6 +249,11 @@ func CopyIngressFields(from, to *extv1.Ingress, logger logr.Logger) bool {
 				}
 			}
 		}
+	}
+
+	if !DeepEqualWithNils(to.Spec.TLS, from.Spec.TLS) {
+		requireUpdate = true
+		to.Spec.TLS = from.Spec.TLS
 	}
 
 	return requireUpdate
@@ -321,7 +329,7 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet, logger logr.Logger) boo
 		}
 	*/
 
-	requireUpdate = requireUpdate || CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger)
+	requireUpdate = CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger) || requireUpdate
 
 	return requireUpdate
 }
@@ -344,7 +352,7 @@ func CopyDeploymentFields(from, to *appsv1.Deployment, logger logr.Logger) bool 
 		to.Spec.Selector = from.Spec.Selector
 	}
 
-	requireUpdate = requireUpdate || CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger)
+	requireUpdate = CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger) || requireUpdate
 
 	return requireUpdate
 }
@@ -365,9 +373,9 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		to.Annotations = from.Annotations
 	}
 
-	requireUpdate = requireUpdate || CopyPodContainers(&from.Spec.Containers, &to.Spec.Containers, basePath+"Spec.Containers", logger)
+	requireUpdate = CopyPodContainers(&from.Spec.Containers, &to.Spec.Containers, basePath+"Spec.Containers", logger) || requireUpdate
 
-	requireUpdate = requireUpdate || CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger)
+	requireUpdate = CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger) || requireUpdate
 
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
 		requireUpdate = true
@@ -417,14 +425,21 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		to.Spec.PriorityClassName = from.Spec.PriorityClassName
 	}
 
+	if !DeepEqualWithNils(to.Spec.TerminationGracePeriodSeconds, from.Spec.TerminationGracePeriodSeconds) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.TerminationGracePeriodSeconds", "from", to.Spec.TerminationGracePeriodSeconds, "to", from.Spec.TerminationGracePeriodSeconds)
+		to.Spec.TerminationGracePeriodSeconds = from.Spec.TerminationGracePeriodSeconds
+	}
+
 	return requireUpdate
 }
 
 func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logger logr.Logger) (requireUpdate bool) {
 	to := *toPtr
 	from := *fromPtr
-	if len(to) < len(from) {
+	if len(to) != len(from) {
 		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
 		*toPtr = from
 	} else {
 		for i := 0; i < len(from); i++ {
@@ -500,7 +515,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 			if !DeepEqualWithNils(to[i].ReadinessProbe, from[i].ReadinessProbe) {
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"ReadinessProbe", "from", to[i].ReadinessProbe, "to", from[i].ReadinessProbe)
-				to[i].LivenessProbe = from[i].ReadinessProbe
+				to[i].ReadinessProbe = from[i].ReadinessProbe
 			}
 
 			if !DeepEqualWithNils(to[i].StartupProbe, from[i].StartupProbe) {
@@ -523,4 +538,18 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 		}
 	}
 	return requireUpdate
+}
+
+// OvertakeControllerRef makes sure that the controlled object has the owner as the controller ref.
+// If the object has a different controller, then that ref will be downgraded to an "owner" and the new controller ref will be added
+func OvertakeControllerRef(owner metav1.Object, controlled metav1.Object, scheme *runtime.Scheme) (needsUpdate bool, err error) {
+	if !metav1.IsControlledBy(controlled, owner) {
+		if otherController := metav1.GetControllerOfNoCopy(controlled); otherController != nil {
+			otherController.Controller = pointer.BoolPtr(false)
+			otherController.BlockOwnerDeletion = pointer.BoolPtr(false)
+		}
+		err = controllerutil.SetControllerReference(owner, controlled, scheme)
+		needsUpdate = true
+	}
+	return needsUpdate, err
 }

@@ -287,6 +287,7 @@ func (sb *SolrBackup) PersistenceJobName() string {
 // SolrBackup is the Schema for the solrbackups API
 // +kubebuilder:categories=all
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
 // +kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
 // +kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"

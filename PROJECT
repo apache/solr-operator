@@ -1,6 +1,6 @@
 version: "2"
 domain: apache.org
-repo: github.com/apache/lucene-solr-operator
+repo: github.com/apache/solr-operator
 resources:
 - group: solr
   version: v1beta1
@@ -10,10 +10,4 @@ resources:
   kind: SolrBackup
 - group: solr
   version: v1beta1
-  kind: SolrCollection
-- group: solr
-  version: v1beta1
   kind: SolrPrometheusExporter
-- group: solr
-  version: v1beta1
-  kind: SolrCollectionAlias

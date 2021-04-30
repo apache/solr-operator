@@ -1,3 +1,20 @@
+{{/*
+   * Licensed to the Apache Software Foundation (ASF) under one or more
+   * contributor license agreements.  See the NOTICE file distributed with
+   * this work for additional information regarding copyright ownership.
+   * The ASF licenses this file to You under the Apache License, Version 2.0
+   * (the "License"); you may not use this file except in compliance with
+   * the License.  You may obtain a copy of the License at
+   *
+   *     http://www.apache.org/licenses/LICENSE-2.0
+   *
+   * Unless required by applicable law or agreed to in writing, software
+   * distributed under the License is distributed on an "AS IS" BASIS,
+   * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   * See the License for the specific language governing permissions and
+   * limitations under the License.
+   */}}
+
 {{/* vim: set filetype=mustache: */}}
 {{/*
 Expand the name of the chart.
@@ -66,5 +83,50 @@ Determine whether to use ClusterRoles or Roles
     Role
 {{- else -}}
     ClusterRole
+{{- end -}}
+{{- end -}}
+
+{{/*
+mTLS vars
+*/}}
+{{- define "solr-operator.mTLS.clientCertDirectory" -}}
+/etc/ssl/solr/client-cert
+{{- end -}}
+
+{{- define "solr-operator.mTLS.caCertDirectory" -}}
+/etc/ssl/solr/ca-cert
+{{- end -}}
+{{- define "solr-operator.mTLS.caCertName" -}}
+rootSolrCert.pem
+{{- end -}}
+
+{{- define "solr-operator.mTLS.volumeMounts" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+- name: tls-client-cert
+  mountPath: {{ include "solr-operator.mTLS.clientCertDirectory" . }}
+  readOnly: true
+{{- end -}}
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  mountPath: {{ include "solr-operator.mTLS.caCertDirectory" . }}
+  readOnly: true
+{{ end }}
+{{- end -}}
+
+{{- define "solr-operator.mTLS.volumes" -}}
+{{- if .Values.mTLS.clientCertSecret -}}
+- name: tls-client-cert
+  secret:
+    secretName: {{ .Values.mTLS.clientCertSecret }}
+    optional: false
+{{- end -}}
+{{ if .Values.mTLS.caCertSecret }}
+- name: tls-ca-cert
+  secret:
+    secretName: {{ .Values.mTLS.caCertSecret }}
+    items:
+      - key: {{ .Values.mTLS.caCertSecretKey }}
+        path: {{ include "solr-operator.mTLS.caCertName" . }}
+    optional: false
 {{- end -}}
 {{- end -}}

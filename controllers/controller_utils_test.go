@@ -18,10 +18,15 @@
 package controllers
 
 import (
+	b64 "encoding/base64"
+	"fmt"
+	"github.com/apache/solr-operator/controllers/util"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
+	"strings"
 	"testing"
 
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
@@ -178,6 +183,193 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 	return deploy
 }
 
+func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
+	assert.NotNil(t, tls)
+	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
+	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
+	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
+	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
+
+	// is there a separate truststore?
+	expectedTrustStorePath := ""
+	if tls.TrustStoreSecret != nil {
+		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
+	}
+
+	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer, expectedTrustStorePath)
+}
+
+func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLSSecretUpdate bool) *solr.SolrTLSOptions {
+	return &solr.SolrTLSOptions{
+		KeyStorePasswordSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  keystorePassKey,
+		},
+		PKCS12Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  util.Pkcs12KeystoreFile,
+		},
+		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
+	}
+}
+
+func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string, keystorePasswordKey string) (corev1.Secret, error) {
+	secretData := map[string][]byte{}
+	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
+	secretData[util.TLSCertKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock tls.crt")))
+
+	if keystorePasswordKey != "" {
+		secretData[keystorePasswordKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore password")))
+	}
+
+	mockTLSSecret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+		Data:       secretData,
+		Type:       corev1.SecretTypeOpaque,
+	}
+	err := apiClient.Create(ctx, &mockTLSSecret)
+	return mockTLSSecret, err
+}
+
+func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
+	secretData := map[string][]byte{corev1.BasicAuthUsernameKey: []byte(key), corev1.BasicAuthPasswordKey: []byte("secret password")}
+	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
+}
+
+// Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
+func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool) *corev1.Container {
+	assert.NotNil(t, podTemplate.Spec.Volumes)
+	var keystoreVol *corev1.Volume = nil
+	for _, vol := range podTemplate.Spec.Volumes {
+		if vol.Name == "keystore" {
+			keystoreVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, keystoreVol, fmt.Sprintf("keystore volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
+	assert.Equal(t, tls.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
+
+	// check the SOLR_SSL_ related env vars on the sts
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
+	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
+
+	// is there a separate truststore?
+	expectedTrustStorePath := ""
+	if tls.TrustStoreSecret != nil {
+		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
+	}
+
+	expectTLSEnvVars(t, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer, expectedTrustStorePath)
+
+	// different trust store?
+	if tls.TrustStoreSecret != nil {
+		var truststoreVol *corev1.Volume = nil
+		for _, vol := range podTemplate.Spec.Volumes {
+			if vol.Name == "truststore" {
+				truststoreVol = &vol
+				break
+			}
+		}
+		assert.NotNil(t, truststoreVol, fmt.Sprintf("truststore volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+		assert.NotNil(t, truststoreVol.VolumeSource.Secret, "Didn't find TLS truststore volume in sts config!")
+		assert.Equal(t, tls.TrustStoreSecret.Name, truststoreVol.VolumeSource.Secret.SecretName)
+	}
+
+	// initContainers
+	if needsPkcs12InitContainer {
+		var pkcs12Vol *corev1.Volume = nil
+		for _, vol := range podTemplate.Spec.Volumes {
+			if vol.Name == "pkcs12" {
+				pkcs12Vol = &vol
+				break
+			}
+		}
+
+		assert.NotNil(t, pkcs12Vol, "Didn't find TLS keystore volume in sts config!")
+		assert.NotNil(t, pkcs12Vol.EmptyDir, "pkcs12 vol should by an emptyDir")
+
+		assert.NotNil(t, podTemplate.Spec.InitContainers)
+		var expInitContainer *corev1.Container = nil
+		for _, cnt := range podTemplate.Spec.InitContainers {
+			if cnt.Name == "gen-pkcs12-keystore" {
+				expInitContainer = &cnt
+				break
+			}
+		}
+		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		assert.NotNil(t, expInitContainer, "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
+		assert.Equal(t, expCmd, expInitContainer.Command[2])
+	}
+
+	if tls.ClientAuth == solr.Need {
+		// verify the probes use a command with SSL opts
+		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
+			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
+		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
+		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
+		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
+		assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
+	}
+
+	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+// ensure the TLS related env vars are set for the Solr pod
+func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool, expectedTruststorePath string) {
+	assert.NotNil(t, envVars)
+	envVars = filterVarsByName(envVars, func(n string) bool {
+		return strings.HasPrefix(n, "SOLR_SSL_")
+	})
+	assert.True(t, len(envVars) == 9)
+
+	expectedKeystorePath := util.DefaultKeyStorePath + "/keystore.p12"
+	if needsPkcs12InitContainer {
+		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
+	}
+
+	if expectedTruststorePath == "" {
+		expectedTruststorePath = expectedKeystorePath
+	}
+
+	for _, envVar := range envVars {
+		if envVar.Name == "SOLR_SSL_ENABLED" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_KEY_STORE" {
+			assert.Equal(t, expectedKeystorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+			assert.Equal(t, expectedTruststorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_KEY_STORE_PASSWORD" {
+			assert.NotNil(t, envVar.ValueFrom)
+			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
+			assert.Equal(t, expectedKeystorePasswordSecretName, envVar.ValueFrom.SecretKeyRef.Name)
+			assert.Equal(t, expectedKeystorePasswordSecretKey, envVar.ValueFrom.SecretKeyRef.Key)
+		}
+	}
+}
+
+// filter env vars by name using a supplied match function
+func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.EnvVar {
+	filtered := make([]corev1.EnvVar, 0)
+	for _, v := range envVars {
+		if f(v.Name) {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered
+}
+
 func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
 	testGenericPodEnvVariables(t, expectedEnvVars, foundEnvVars, "SOLR_OPTS")
 }
@@ -220,6 +412,73 @@ func testMapContainsOther(t *testing.T, mapName string, base map[string]string, 
 	}
 }
 
+func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
+	/*
+		This test verifies ACL related env vars are set correctly and in the correct order, but expects a very specific config to be used in your test SolrCloud config:
+
+					AllACL: &solr.ZookeeperACL{
+						SecretRef:   "secret-name",
+						UsernameKey: "user",
+						PasswordKey: "pass",
+					},
+					ReadOnlyACL: &solr.ZookeeperACL{
+						SecretRef:   "read-secret-name",
+						UsernameKey: "read-only-user",
+						PasswordKey: "read-only-pass",
+					},
+
+	*/
+	f := false
+	zkAclEnvVars := []corev1.EnvVar{
+		{
+			Name: "ZK_ALL_ACL_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
+					Key:                  "user",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_ALL_ACL_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
+					Key:                  "pass",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_READ_ACL_USERNAME",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+					Key:                  "read-only-user",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name: "ZK_READ_ACL_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+					Key:                  "read-only-pass",
+					Optional:             &f,
+				},
+			},
+		},
+		{
+			Name:      "SOLR_ZK_CREDS_AND_ACLS",
+			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
+			ValueFrom: nil,
+		},
+	}
+	assert.Equal(t, zkAclEnvVars, actualEnvVars, "ZK ACL Env Vars are not correct")
+}
+
 func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 	deleteOpts := []client.DeleteAllOfOption{
 		client.InNamespace(namespace),
@@ -227,12 +486,13 @@ func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 
 	cleanupObjects := []runtime.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
-		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrCollection{}, &solr.SolrCollectionAlias{}, &solr.SolrPrometheusExporter{},
+		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrPrometheusExporter{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
 		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
+		&corev1.Secret{},
 	}
 	cleanupTestObjects(g, namespace, deleteOpts, cleanupObjects)
 
@@ -360,10 +620,8 @@ var (
 		FailureThreshold:    3,
 		PeriodSeconds:       5,
 		Handler: corev1.Handler{
-			HTTPGet: &corev1.HTTPGetAction{
-				Scheme: corev1.URISchemeHTTP,
-				Path:   "/solr/admin/info/system",
-				Port:   intstr.FromInt(8983),
+			TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt(8983),
 			},
 		},
 	}
@@ -395,8 +653,14 @@ var (
 			Operator: "Exists",
 		},
 	}
-	testPriorityClass = "p4"
-	extraVars         = []corev1.EnvVar{
+	testPriorityClass              = "p4"
+	testImagePullSecretName        = "MAIN_SECRET"
+	testAdditionalImagePullSecrets = []corev1.LocalObjectReference{
+		{Name: "ADDITIONAL_SECRET_1"},
+		{Name: "ADDITIONAL_SECRET_2"},
+	}
+	testTerminationGracePeriodSeconds = int64(50)
+	extraVars                         = []corev1.EnvVar{
 		{
 			Name:  "VAR_1",
 			Value: "VAL_1",

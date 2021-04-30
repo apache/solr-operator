@@ -1,3 +1,18 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Default values for solr-operator.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
@@ -5,14 +20,31 @@
 replicaCount: 1
 
 image:
-  repository: bloomberg/solr-operator
-  tag: v0.2.8
-  pullPolicy: Always
+  repository: apache/solr-operator
+  tag: v0.4.0-prerelease
+  pullPolicy: IfNotPresent
 
 nameOverride: ""
 fullnameOverride: ""
 
-useZkOperator: "true"
+zookeeper-operator:
+  # Include the zookeeper-operator as a helm chart dependency.
+  # Setting this to true also tells the Solr Operator it is use to use ZookeeperCluster objects.
+  # If this is set to true, then "zookeeper-operator.use" is ignored.
+  install: true
+
+  # Use the zookeeper-operator to provide zookeeper clusters for solr.
+  # This setting will not install the zookeeper-operator helm chart as a dependency, you must use "zookeeper-operator.install" instead.
+  # If "zookeeper-operator.install" = true, then this setting is ignored.
+  use: false
+
+  # By default we do not install the CRDs.
+  # Otherwise the ZookeeperCluster CRD will be deleted when deleting the Solr Operator helm chart release.
+  crd:
+    create: false
+
+# DEPRECATED: Please use "zookeeper-operator.use" instead.
+useZkOperator: "false"
 
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
@@ -30,12 +62,20 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name:
 
-resources:
-  limits:
-    cpu: 400m
-    memory: 500Mi
-  requests:
-    cpu: 100m
-    memory: 100Mi
-
+# Various Pod Options to customize the runtime of the operator
+resources: {}
 envVars: []
+labels: {}
+annotations: {}
+nodeSelector: {}
+affinity: {}
+tolerations: []
+priorityClassName: ""
+sidecarContainers: []
+
+# Use mTLS when connecting to Solr Clouds from the Solr Operator
+mTLS:
+  clientCertSecret: ""
+  caCertSecret: ""
+  caCertSecretKey: ca-cert.pem
+  insecureSkipVerify: true

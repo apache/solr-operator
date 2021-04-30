@@ -118,6 +118,17 @@ type PodOptions struct {
 	// These will run along with the init container that sets up the "solr.xml".
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+
+	// ImagePullSecrets to apply to the pod.
+	// These are for init/sidecarContainers in addition to the imagePullSecret defined for the
+	// solr image.
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// Optional duration in seconds the pod needs to terminate gracefully.
+	// +kubebuilder:validation:Minimum=10
+	// +optional
+	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

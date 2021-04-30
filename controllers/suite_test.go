@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	"fmt"
 	stdlog "log"
 	"os"
 	"path/filepath"
@@ -29,7 +30,7 @@ import (
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	solrv1beta1 "github.com/apache/lucene-solr-operator/api/v1beta1"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
 	zkOp "github.com/pravega/zookeeper-operator/pkg/apis"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -54,8 +55,9 @@ func TestMain(m *testing.M) {
 	t := &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),
-			filepath.Join("..", "example", "dependencies"),
+			filepath.Join("..", "config", "dependencies"),
 		},
+		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
 	zkOp.AddToScheme(scheme.Scheme)
@@ -76,6 +78,9 @@ func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan 
 	requests := make(chan reconcile.Request)
 	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
 		result, err := inner.Reconcile(req)
+		if err != nil {
+			fmt.Printf("\n\nReconcile Error: %s\n\n", err)
+		}
 		requests <- req
 		return result, err
 	})

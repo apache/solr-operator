@@ -17,8 +17,6 @@
 
 package solr_api
 
-import solr "github.com/apache/lucene-solr-operator/api/v1beta1"
-
 type SolrOverseerStatusResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
@@ -89,7 +87,7 @@ type SolrCollectionStatus struct {
 }
 
 type SolrCollectionRouter struct {
-	Name solr.CollectionRouterName `json:"name"`
+	Name CollectionRouterName `json:"name"`
 }
 
 type SolrShardStatus struct {
@@ -140,4 +138,12 @@ const (
 	NRT  SolrReplicaType = "NRT"
 	TLOG SolrReplicaType = "TLOG"
 	PULL SolrReplicaType = "PULL"
+)
+
+// CollectionRouterName is a string enumeration type that enumerates the ways that documents can be routed for a collection.
+type CollectionRouterName string
+
+const (
+	ImplicitRouter    CollectionRouterName = "implicit"
+	CompositeIdRouter CollectionRouterName = "compositeId"
 )

@@ -21,20 +21,24 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
-	"github.com/apache/lucene-solr-operator/controllers/util"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
+	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,9 +47,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
-	"strings"
-	"time"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -67,15 +68,17 @@ func UseZkCRD(useCRD bool) {
 // +kubebuilder:rbac:groups="",resources=services/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=extensions,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=extensions,resources=ingresses/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
-// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/finalizers,verbs=update
 
 func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	_ = context.Background()
@@ -109,16 +112,12 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	newStatus := solr.SolrCloudStatus{}
 
 	blockReconciliationOfStatefulSet := false
-
 	if err := reconcileZk(r, logger, instance, &newStatus); err != nil {
 		return requeueOrNot, err
 	}
 
 	// Generate Common Service
 	commonService := util.GenerateCommonService(instance)
-	if err := controllerutil.SetControllerReference(instance, commonService, r.scheme); err != nil {
-		return requeueOrNot, err
-	}
 
 	// Check if the Common Service already exists
 	commonServiceLogger := logger.WithValues("service", commonService.Name)
@@ -126,11 +125,19 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	err = r.Get(context.TODO(), types.NamespacedName{Name: commonService.Name, Namespace: commonService.Namespace}, foundCommonService)
 	if err != nil && errors.IsNotFound(err) {
 		commonServiceLogger.Info("Creating Common Service")
-		err = r.Create(context.TODO(), commonService)
-	} else if err == nil && util.CopyServiceFields(commonService, foundCommonService, commonServiceLogger) {
+		if err = controllerutil.SetControllerReference(instance, commonService, r.scheme); err == nil {
+			err = r.Create(context.TODO(), commonService)
+		}
+	} else if err == nil {
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(instance, foundCommonService, r.scheme)
+		needsUpdate = util.CopyServiceFields(commonService, foundCommonService, commonServiceLogger) || needsUpdate
+
 		// Update the found Service and write the result back if there are any changes
-		commonServiceLogger.Info("Updating Common Service")
-		err = r.Update(context.TODO(), foundCommonService)
+		if needsUpdate && err == nil {
+			commonServiceLogger.Info("Updating Common Service")
+			err = r.Update(context.TODO(), foundCommonService)
+		}
 	}
 	if err != nil {
 		return requeueOrNot, err
@@ -161,65 +168,88 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Generate HeadlessService
 	if instance.UsesHeadlessService() {
 		headless := util.GenerateHeadlessService(instance)
-		if err := controllerutil.SetControllerReference(instance, headless, r.scheme); err != nil {
-			return requeueOrNot, err
-		}
 
 		// Check if the HeadlessService already exists
 		headlessServiceLogger := logger.WithValues("service", headless.Name)
 		foundHeadless := &corev1.Service{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
 		if err != nil && errors.IsNotFound(err) {
-			headlessServiceLogger.Info("Creating HeadlessService")
-			err = r.Create(context.TODO(), headless)
-		} else if err == nil && util.CopyServiceFields(headless, foundHeadless, headlessServiceLogger) {
+			headlessServiceLogger.Info("Creating Headless Service")
+			if err = controllerutil.SetControllerReference(instance, headless, r.scheme); err == nil {
+				err = r.Create(context.TODO(), headless)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundHeadless, r.scheme)
+			needsUpdate = util.CopyServiceFields(headless, foundHeadless, headlessServiceLogger) || needsUpdate
+
 			// Update the found HeadlessService and write the result back if there are any changes
-			headlessServiceLogger.Info("Updating HeadlessService")
-			err = r.Update(context.TODO(), foundHeadless)
+			if needsUpdate && err == nil {
+				headlessServiceLogger.Info("Updating Headless Service")
+				err = r.Update(context.TODO(), foundHeadless)
+			}
 		}
 		if err != nil {
 			return requeueOrNot, err
 		}
 	}
 
-	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml ... but the provided ConfigMap
-	// might be for the Prometheus exporter, so we only care if they provide a solr.xml in the CM
-	solrXmlConfigMapName := instance.ConfigMapName()
-	solrXmlMd5 := ""
+	// Use a map to hold additional config info that gets determined during reconcile
+	// needed for creating the STS and supporting objects (secrets, config maps, and so on)
+	reconcileConfigInfo := make(map[string]string)
+
+	// Generate ConfigMap unless the user supplied a custom ConfigMap for solr.xml
 	if instance.Spec.CustomSolrKubeOptions.ConfigMapOptions != nil && instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
+		providedConfigMapName := instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap
 		foundConfigMap := &corev1.ConfigMap{}
-		nn := types.NamespacedName{Name: instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: instance.Namespace}
+		nn := types.NamespacedName{Name: providedConfigMapName, Namespace: instance.Namespace}
 		err = r.Get(context.TODO(), nn, foundConfigMap)
 		if err != nil {
 			return requeueOrNot, err // if they passed a providedConfigMap name, then it must exist
 		}
 
-		// ConfigMap doesn't have to have a solr.xml, but if it does, then it needs to be valid!
 		if foundConfigMap.Data != nil {
-			solrXml, ok := foundConfigMap.Data["solr.xml"]
-			if ok {
+			logXml, hasLogXml := foundConfigMap.Data[util.LogXmlFile]
+			solrXml, hasSolrXml := foundConfigMap.Data[util.SolrXmlFile]
+
+			// if there's a user-provided config, it must have one of the expected keys
+			if !hasLogXml && !hasSolrXml {
+				// TODO: Create event for the CRD.
+				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
+					providedConfigMapName)
+			}
+
+			if hasSolrXml {
+				// make sure the user-provided solr.xml is valid
 				if !strings.Contains(solrXml, "${hostPort:") {
 					return requeueOrNot,
 						fmt.Errorf("Custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
-							instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+							providedConfigMapName)
 				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
-				solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
-				solrXmlConfigMapName = foundConfigMap.Name
-			} else {
-				return requeueOrNot, fmt.Errorf("Required 'solr.xml' key not found in provided ConfigMap %s",
-					instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+				reconcileConfigInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
+				reconcileConfigInfo[util.SolrXmlFile] = foundConfigMap.Name
 			}
+
+			if hasLogXml {
+				if !strings.Contains(logXml, "monitorInterval=") {
+					// stored in the pod spec annotations on the statefulset so that we get a restart when the log config changes
+					reconcileConfigInfo[util.LogXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(logXml)))
+				} // else log4j will automatically refresh for us, so no restart needed
+				reconcileConfigInfo[util.LogXmlFile] = foundConfigMap.Name
+			}
+
 		} else {
-			return requeueOrNot, fmt.Errorf("Provided ConfigMap %s has no data",
-				instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap)
+			return requeueOrNot, fmt.Errorf("Provided ConfigMap %s has no data", providedConfigMapName)
 		}
-	} else {
+	}
+
+	if reconcileConfigInfo[util.SolrXmlFile] == "" {
+		// no user provided solr.xml, so create the default
 		configMap := util.GenerateConfigMap(instance)
-		if err := controllerutil.SetControllerReference(instance, configMap, r.scheme); err != nil {
-			return requeueOrNot, err
-		}
-		solrXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))
+
+		reconcileConfigInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))
+		reconcileConfigInfo[util.SolrXmlFile] = configMap.Name
 
 		// Check if the ConfigMap already exists
 		configMapLogger := logger.WithValues("configMap", configMap.Name)
@@ -227,15 +257,106 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
-			err = r.Create(context.TODO(), configMap)
-		} else if err == nil && util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) {
+			if err = controllerutil.SetControllerReference(instance, configMap, r.scheme); err == nil {
+				err = r.Create(context.TODO(), configMap)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundConfigMap, r.scheme)
+			needsUpdate = util.CopyConfigMapFields(configMap, foundConfigMap, configMapLogger) || needsUpdate
+
 			// Update the found ConfigMap and write the result back if there are any changes
-			configMapLogger.Info("Updating ConfigMap")
-			err = r.Update(context.TODO(), foundConfigMap)
+			if needsUpdate && err == nil {
+				configMapLogger.Info("Updating ConfigMap")
+				err = r.Update(context.TODO(), foundConfigMap)
+			}
 		}
 		if err != nil {
 			return requeueOrNot, err
 		}
+	}
+
+	basicAuthHeader := ""
+	if instance.Spec.SolrSecurity != nil {
+		sec := instance.Spec.SolrSecurity
+
+		if sec.AuthenticationType != solr.Basic {
+			return requeueOrNot, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator.",
+				instance.Spec.SolrSecurity.AuthenticationType)
+		}
+
+		// for now, we don't support 'solrSecurity.probesRequireAuth=true' and custom probe paths,
+		// so make the user fix that so there are no surprises later
+		if sec.ProbesRequireAuth && instance.Spec.CustomSolrKubeOptions.PodOptions != nil {
+			for _, path := range util.GetCustomProbePaths(instance) {
+				if path != util.DefaultProbePath {
+					return requeueOrNot, fmt.Errorf(
+						"custom probe path %s not supported when 'solrSecurity.probesRequireAuth=true'; must use 'solrSecurity.probesRequireAuth=false' when using custom probe endpoints", path)
+				}
+			}
+		}
+
+		ctx := context.TODO()
+		basicAuthSecret := &corev1.Secret{}
+
+		// user has the option of providing a secret with credentials the operator should use to make requests to Solr
+		if sec.BasicAuthSecret != "" {
+			if err := r.Get(ctx, types.NamespacedName{Name: sec.BasicAuthSecret, Namespace: instance.Namespace}, basicAuthSecret); err != nil {
+				return requeueOrNot, err
+			}
+
+			err = util.ValidateBasicAuthSecret(basicAuthSecret)
+			if err != nil {
+				return requeueOrNot, err
+			}
+
+		} else {
+			// We're supplying a secret with random passwords and a default security.json
+			// since we randomly generate the passwords, we need to lookup the secret first and only create if not exist
+			err = r.Get(ctx, types.NamespacedName{Name: instance.BasicAuthSecretName(), Namespace: instance.Namespace}, basicAuthSecret)
+			if err != nil && errors.IsNotFound(err) {
+				authSecret, bootstrapSecret := util.GenerateBasicAuthSecretWithBootstrap(instance)
+				if err := controllerutil.SetControllerReference(instance, authSecret, r.scheme); err != nil {
+					return requeueOrNot, err
+				}
+				if err := controllerutil.SetControllerReference(instance, bootstrapSecret, r.scheme); err != nil {
+					return requeueOrNot, err
+				}
+				err = r.Create(ctx, authSecret)
+				if err != nil {
+					return requeueOrNot, err
+				}
+				err = r.Create(ctx, bootstrapSecret)
+				if err == nil {
+					// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
+					reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
+				}
+
+				basicAuthSecret = authSecret
+			}
+			if err != nil {
+				return requeueOrNot, err
+			}
+
+			if reconcileConfigInfo[util.SecurityJsonFile] == "" {
+				// the bootstrap secret already exists, so just stash the security.json needed for constructing initContainers
+				bootstrapSecret := &corev1.Secret{}
+				err = r.Get(ctx, types.NamespacedName{Name: instance.SecurityBootstrapSecretName(), Namespace: instance.Namespace}, bootstrapSecret)
+				if err != nil {
+					if !errors.IsNotFound(err) {
+						return requeueOrNot, err
+					} // else perhaps the user deleted it after security was bootstrapped ... this is ok but may trigger a restart on the STS
+				} else {
+					// stash this so we can configure the setup-zk initContainer to bootstrap the security.json in ZK
+					reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
+				}
+			}
+		}
+
+		reconcileConfigInfo[corev1.BasicAuthUsernameKey] = string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey])
+
+		// need the creds below for getting CLUSTERSTATUS
+		basicAuthHeader = util.BasicAuthHeader(basicAuthSecret)
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -243,15 +364,51 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		blockReconciliationOfStatefulSet = true
 	}
 
+	tlsCertMd5 := ""
+	needsPkcs12InitContainer := false // flag if the StatefulSet needs an additional initCont to create PKCS12 keystore
+	// don't start reconciling TLS until we have ZK connectivity, avoids TLS code having to check for ZK
+	if !blockReconciliationOfStatefulSet && instance.Spec.SolrTLS != nil {
+		foundTLSSecret, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret)
+		if err != nil {
+			return requeueOrNot, err
+		} else {
+			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
+					tlsCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+				} else {
+					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
+						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
+						util.TLSCertKey, foundTLSSecret.Name)
+				}
+			}
+
+			if _, ok := foundTLSSecret.Data[instance.Spec.SolrTLS.PKCS12Secret.Key]; !ok {
+				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+				needsPkcs12InitContainer = true
+			}
+		}
+
+		if instance.Spec.SolrTLS.TrustStoreSecret != nil {
+			// verify the TrustStore secret is configured correctly
+			passwordSecret := instance.Spec.SolrTLS.TrustStorePasswordSecret
+			if passwordSecret == nil {
+				passwordSecret = instance.Spec.SolrTLS.KeyStorePasswordSecret
+			}
+			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.TrustStoreSecret.Name, instance.Namespace, passwordSecret)
+			if err != nil {
+				return requeueOrNot, err
+			}
+		}
+	}
+
 	pvcLabelSelector := make(map[string]string, 0)
 	var statefulSetStatus appsv1.StatefulSetStatus
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, solrXmlConfigMapName, solrXmlMd5)
-		if err := controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err != nil {
-			return requeueOrNot, err
-		}
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, needsPkcs12InitContainer, tlsCertMd5)
 
 		// Check if the StatefulSet already exists
 		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
@@ -259,18 +416,26 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 		if err != nil && errors.IsNotFound(err) {
 			statefulSetLogger.Info("Creating StatefulSet")
-			err = r.Create(context.TODO(), statefulSet)
+			if err = controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err == nil {
+				err = r.Create(context.TODO(), statefulSet)
+			}
 			// Find which labels the PVCs will be using, to use for the finalizer
 			pvcLabelSelector = statefulSet.Spec.Selector.MatchLabels
 		} else if err == nil {
 			statefulSetStatus = foundStatefulSet.Status
-			if util.CopyStatefulSetFields(statefulSet, foundStatefulSet, statefulSetLogger) {
-				// Update the found StatefulSet and write the result back if there are any changes
+			// Find which labels the PVCs will be using, to use for the finalizer
+			pvcLabelSelector = foundStatefulSet.Spec.Selector.MatchLabels
+
+			// Check to see if the StatefulSet needs an update
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundStatefulSet, r.scheme)
+			needsUpdate = util.CopyStatefulSetFields(statefulSet, foundStatefulSet, statefulSetLogger) || needsUpdate
+
+			// Update the found StatefulSet and write the result back if there are any changes
+			if needsUpdate && err == nil {
 				statefulSetLogger.Info("Updating StatefulSet")
 				err = r.Update(context.TODO(), foundStatefulSet)
 			}
-			// Find which labels the PVCs will be using, to use for the finalizer
-			pvcLabelSelector = foundStatefulSet.Spec.Selector.MatchLabels
 		}
 		if err != nil {
 			return requeueOrNot, err
@@ -299,7 +464,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	var outOfDatePods, outOfDatePodsNotStarted []corev1.Pod
 	var availableUpdatedPodCount int
-	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, &newStatus, statefulSetStatus)
+	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = reconcileCloudStatus(r, instance, logger, &newStatus, statefulSetStatus)
 	if err != nil {
 		return requeueOrNot, err
 	}
@@ -315,9 +480,16 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		for _, pod := range outOfDatePodsNotStarted {
 			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
+
+		// If authn enabled on Solr, we need to pass the basic auth header
+		var authHeader map[string]string
+		if basicAuthHeader != "" {
+			authHeader = map[string]string{"Authorization": basicAuthHeader}
+		}
+
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger, authHeader)
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {
@@ -340,21 +512,26 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solr.Ingress {
 		// Generate Ingress
 		ingress := util.GenerateIngress(instance, solrNodeNames)
-		if err := controllerutil.SetControllerReference(instance, ingress, r.scheme); err != nil {
-			return requeueOrNot, err
-		}
 
 		// Check if the Ingress already exists
 		ingressLogger := logger.WithValues("ingress", ingress.Name)
-		foundIngress := &extv1.Ingress{}
+		foundIngress := &netv1.Ingress{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
 		if err != nil && errors.IsNotFound(err) {
 			ingressLogger.Info("Creating Ingress")
-			err = r.Create(context.TODO(), ingress)
-		} else if err == nil && util.CopyIngressFields(ingress, foundIngress, ingressLogger) {
+			if err = controllerutil.SetControllerReference(instance, ingress, r.scheme); err == nil {
+				err = r.Create(context.TODO(), ingress)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.scheme)
+			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
+
 			// Update the found Ingress and write the result back if there are any changes
-			ingressLogger.Info("Updating Ingress")
-			err = r.Update(context.TODO(), foundIngress)
+			if needsUpdate && err == nil {
+				ingressLogger.Info("Updating Ingress")
+				err = r.Update(context.TODO(), foundIngress)
+			}
 		}
 		if err != nil {
 			return requeueOrNot, err
@@ -363,7 +540,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		instance.Status = newStatus
-		logger.Info("Updating SolrCloud Status")
+		logger.Info("Updating SolrCloud Status", "status", instance.Status)
 		err = r.Status().Update(context.TODO(), instance)
 		if err != nil {
 			return requeueOrNot, err
@@ -373,7 +550,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return requeueOrNot, nil
 }
 
-func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
+func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, logger logr.Logger, newStatus *solr.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -399,14 +576,22 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
+	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+		MatchLabels: selectorLabels,
+	})
+	if err != nil {
+		logger.Error(err, "Error getting SolrCloud PodSelector labels")
+		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
+	}
+	newStatus.PodSelector = selector.String()
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
 		nodeStatus.NodeName = p.Spec.NodeName
-		nodeStatus.InternalAddress = "http://" + solrCloud.InternalNodeUrl(nodeStatus.Name, true)
+		nodeStatus.InternalAddress = solrCloud.UrlScheme() + "://" + solrCloud.InternalNodeUrl(nodeStatus.Name, true)
 		if solrCloud.Spec.SolrAddressability.External != nil && !solrCloud.Spec.SolrAddressability.External.HideNodes {
-			nodeStatus.ExternalAddress = "http://" + solrCloud.ExternalNodeUrl(nodeStatus.Name, solrCloud.Spec.SolrAddressability.External.DomainName, true)
+			nodeStatus.ExternalAddress = solrCloud.UrlScheme() + "://" + solrCloud.ExternalNodeUrl(nodeStatus.Name, solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		}
 		if len(p.Status.ContainerStatuses) > 0 {
 			// The first container should always be running solr
@@ -486,9 +671,9 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 		newStatus.Version = solrCloud.Spec.SolrImage.Tag
 	}
 
-	newStatus.InternalCommonAddress = "http://" + solrCloud.InternalCommonUrl(true)
+	newStatus.InternalCommonAddress = solrCloud.UrlScheme() + "://" + solrCloud.InternalCommonUrl(true)
 	if solrCloud.Spec.SolrAddressability.External != nil && !solrCloud.Spec.SolrAddressability.External.HideCommon {
-		extAddress := "http://" + solrCloud.ExternalCommonUrl(solrCloud.Spec.SolrAddressability.External.DomainName, true)
+		extAddress := solrCloud.UrlScheme() + "://" + solrCloud.ExternalCommonUrl(solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		newStatus.ExternalCommonAddress = &extAddress
 	}
 
@@ -498,9 +683,6 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, new
 func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, nodeName string) (err error, ip string) {
 	// Generate Node Service
 	service := util.GenerateNodeService(instance, nodeName)
-	if err := controllerutil.SetControllerReference(instance, service, r.scheme); err != nil {
-		return err, ip
-	}
 
 	// Check if the Node Service already exists
 	nodeServiceLogger := logger.WithValues("service", service.Name)
@@ -508,14 +690,22 @@ func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *
 	err = r.Get(context.TODO(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
 	if err != nil && errors.IsNotFound(err) {
 		nodeServiceLogger.Info("Creating Node Service")
-		err = r.Create(context.TODO(), service)
+		if err = controllerutil.SetControllerReference(instance, service, r.scheme); err == nil {
+			err = r.Create(context.TODO(), service)
+		}
 	} else if err == nil {
-		if util.CopyServiceFields(service, foundService, nodeServiceLogger) {
+		ip = foundService.Spec.ClusterIP
+
+		// Check to see if the Service needs an update
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(instance, foundService, r.scheme)
+		needsUpdate = util.CopyServiceFields(service, foundService, nodeServiceLogger) || needsUpdate
+
+		if needsUpdate && err == nil {
 			// Update the found Node service because there are differences between our version and the existing version
 			nodeServiceLogger.Info("Updating Node Service")
 			err = r.Update(context.TODO(), foundService)
 		}
-		ip = foundService.Spec.ClusterIP
 	}
 	if err != nil {
 		return err, ip
@@ -536,9 +726,6 @@ func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.Solr
 			return errors.NewBadRequest("Cannot create a Zookeeper Cluster, as the Solr Operator is not configured to use the Zookeeper CRD")
 		}
 		zkCluster := util.GenerateZookeeperCluster(instance, pzk)
-		if err := controllerutil.SetControllerReference(instance, zkCluster, r.scheme); err != nil {
-			return err
-		}
 
 		// Check if the ZookeeperCluster already exists
 		zkLogger := logger.WithValues("zookeeperCluster", zkCluster.Name)
@@ -546,26 +733,33 @@ func reconcileZk(r *SolrCloudReconciler, logger logr.Logger, instance *solr.Solr
 		err := r.Get(context.TODO(), types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
 		if err != nil && errors.IsNotFound(err) {
 			zkLogger.Info("Creating Zookeeer Cluster")
-			err = r.Create(context.TODO(), zkCluster)
+			if err = controllerutil.SetControllerReference(instance, zkCluster, r.scheme); err == nil {
+				err = r.Create(context.TODO(), zkCluster)
+			}
 		} else if err == nil {
-			if util.CopyZookeeperClusterFields(zkCluster, foundZkCluster, zkLogger) {
-				// Update the found ZookeeperCluster and write the result back if there are any changes
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundZkCluster, r.scheme)
+			needsUpdate = util.CopyZookeeperClusterFields(zkCluster, foundZkCluster, zkLogger) || needsUpdate
+
+			// Update the found ZookeeperCluster and write the result back if there are any changes
+			if needsUpdate && err == nil {
 				zkLogger.Info("Updating Zookeeer Cluster")
 				err = r.Update(context.TODO(), foundZkCluster)
 			}
-			external := &foundZkCluster.Status.ExternalClientEndpoint
-			if "" == *external {
-				external = nil
-			}
-			internal := make([]string, zkCluster.Spec.Replicas)
-			for i, _ := range internal {
-				internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s:%d", foundZkCluster.Name, i, foundZkCluster.Name, foundZkCluster.Namespace, foundZkCluster.ZookeeperPorts().Client)
-			}
-			newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
-				InternalConnectionString: strings.Join(internal, ","),
-				ExternalConnectionString: external,
-				ChRoot:                   pzk.ChRoot,
-			}
+		}
+		external := &foundZkCluster.Status.ExternalClientEndpoint
+		if "" == *external {
+			external = nil
+		}
+		internal := make([]string, zkCluster.Spec.Replicas)
+		kubeDomain := zkCluster.GetKubernetesClusterDomain()
+		for i := range internal {
+			internal[i] = fmt.Sprintf("%s-%d.%s-headless.%s.svc.%s:%d", zkCluster.Name, i, zkCluster.Name, zkCluster.Namespace, kubeDomain, zkCluster.ZookeeperPorts().Client)
+		}
+		newStatus.ZookeeperConnectionInfo = solr.ZookeeperConnectionInfo{
+			InternalConnectionString: strings.Join(internal, ","),
+			ExternalConnectionString: external,
+			ChRoot:                   pzk.ChRoot,
 		}
 		return err
 	} else {
@@ -636,9 +830,6 @@ func (r *SolrCloudReconciler) cleanupOrphanPVCs(cloud *solr.SolrCloud, pvcLabelS
 			return err
 		}
 		if len(pvcList.Items) > int(*cloud.Spec.Replicas) {
-			if err != nil {
-				return err
-			}
 			for _, pvcItem := range pvcList.Items {
 				// delete only Orphan PVCs
 				if util.IsPVCOrphan(pvcItem.Name, *cloud.Spec.Replicas) {
@@ -698,10 +889,16 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		Owns(&corev1.ConfigMap{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
-		Owns(&extv1.Ingress{})
+		Owns(&corev1.Secret{}). /* for authentication */
+		Owns(&netv1.Ingress{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
+	ctrlBuilder, err = r.indexAndWatchForTLSSecret(mgr, ctrlBuilder)
 	if err != nil {
 		return err
 	}
@@ -739,7 +936,11 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 					FieldSelector: fields.OneTermEqualSelector(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", a.Meta.GetName()),
 					Namespace:     a.Meta.GetNamespace(),
 				}
-				r.List(context.TODO(), foundClouds, listOps)
+				err := r.List(context.TODO(), foundClouds, listOps)
+				if err != nil {
+					return []reconcile.Request{}
+				}
+
 				requests := make([]reconcile.Request, len(foundClouds.Items))
 				for i, item := range foundClouds.Items {
 					requests[i] = reconcile.Request{
@@ -753,4 +954,70 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 			}),
 		},
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, ".spec.solrTLS.pkcs12Secret", func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		solrCloud := rawObj.(*solr.SolrCloud)
+		if solrCloud.Spec.SolrTLS == nil {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{solrCloud.Spec.SolrTLS.PKCS12Secret.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.Secret{}},
+		&handler.EnqueueRequestsFromMapFunc{
+			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+				foundClouds := &solr.SolrCloudList{}
+				listOps := &client.ListOptions{
+					FieldSelector: fields.OneTermEqualSelector(".spec.solrTLS.pkcs12Secret", a.Meta.GetName()),
+					Namespace:     a.Meta.GetNamespace(),
+				}
+				err := r.List(context.TODO(), foundClouds, listOps)
+				if err != nil {
+					return []reconcile.Request{}
+				}
+
+				requests := make([]reconcile.Request, len(foundClouds.Items))
+				for i, item := range foundClouds.Items {
+					requests[i] = reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					}
+				}
+				return requests
+			}),
+		},
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) verifyTLSSecretConfig(secretName string, secretNamespace string, passwordSecret *corev1.SecretKeySelector) (*corev1.Secret, error) {
+	ctx := context.TODO()
+
+	foundTLSSecret := &corev1.Secret{}
+	lookupErr := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, foundTLSSecret)
+	if lookupErr != nil {
+		return nil, lookupErr
+	} else {
+		// Make sure the secret containing the keystore password exists as well
+		keyStorePasswordSecret := &corev1.Secret{}
+		err := r.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+		if err != nil {
+			return nil, err
+		}
+
+		// we found the keystore secret, but does it have the key we expect?
+		if _, ok := keyStorePasswordSecret.Data[passwordSecret.Key]; !ok {
+			return nil, fmt.Errorf("%s key not found in keystore password secret %s", passwordSecret.Key, keyStorePasswordSecret.Name)
+		}
+	}
+
+	return foundTLSSecret, nil
 }

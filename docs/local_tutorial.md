@@ -5,10 +5,11 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
  1. [Setup Kubernetes and Dependencies](#setup-kubernetes-and-dependencies)
     1. [Setup Docker for Mac with K8S](#setup-docker-for-mac-with-k8s)
     2. [Install an Ingress Controller to reach the cluster on localhost](#install-an-ingress-controller)
- 3. [Install Solr Operator](#install-solr-operator)
- 4. [Start your Solr cluster](#start-your-solr-cluster)
+ 3. [Install Solr Operator](#install-the-solr-operator)
+ 4. [Start your Solr cluster](#start-an-example-solr-cloud-cluster)
  5. [Create a collection and index some documents](#create-a-collection-and-index-some-documents)
  6. [Scale from 3 to 5 nodes](#scale-from-3-to-5-nodes)
+    1. [Using the Horizontal Pod Autoscaler](#horizontal-pod-autoscaler-hpa)
  7. [Upgrade to newer Solr version](#upgrade-to-newer-version)
  8. [Install Kubernetes Dashboard (optional)](#install-kubernetes-dashboard-optional)
  9. [Delete the solrCloud cluster named 'example'](#delete-the-solrcloud-cluster-named-example)
@@ -56,43 +57,45 @@ Once we have installed Solr to our k8s, this will allow us to address the nodes 
 
 ## Install the Solr Operator
 
+You can follow along here, or follow the instructions in the [Official Helm release](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
-
-Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
-Eventually this will be a dependency on the helm chart, but for now we can run an easy `kubectl apply`.
-
-```bash
-kubectl apply -f https://apache.github.io/lucene-solr-operator/example/dependencies/zk_operator.yaml
-```
 
 Now add the Solr Operator Helm repository. (You should only need to do this once)
 
 ```bash
-$ helm repo add solr-operator https://apache.github.io/lucene-solr-operator/charts
+$ helm repo add apache-solr https://solr.apache.org/charts
+$ helm repo update
 ```
 
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the [Helm Chart documentation](https://hub.helm.sh/charts/solr-operator/solr-operator).
+This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-# Install the operator
-$ helm install solr-operator solr-operator/solr-operator
+# Install the Solr & Zookeeper CRDs
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
+# Install the Solr operator and Zookeeper Operator
+$ helm install solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
 ```
+
+_Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
+
 
 After installing, you can check to see what lives in the cluster to make sure that the Solr and ZooKeeper operators have started correctly.
-```
+```bash
 $ kubectl get all
 
-NAME                                       READY   STATUS             RESTARTS   AGE
-pod/solr-operator-8449d4d96f-cmf8p         1/1     Running            0          47h
-pod/zk-operator-674676769c-gd4jr           1/1     Running            0          49d
+NAME                                                   READY   STATUS             RESTARTS   AGE
+pod/solr-operator-8449d4d96f-cmf8p                     1/1     Running            0          47h
+pod/solr-operator-zookeeper-operator-674676769c-gd4jr  1/1     Running            0          49d
 
-NAME                                       READY   UP-TO-DATE   AVAILABLE   AGE
-deployment.apps/solr-operator              1/1     1            1           49d
-deployment.apps/zk-operator                1/1     1            1           49d
+NAME                                              READY   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/solr-operator                     1/1     1            1           49d
+deployment.apps/solr-operator-zookeeper-operator  1/1     1            1           49d
 
-NAME                                       DESIRED   CURRENT   READY   AGE
-replicaset.apps/solr-operator-8449d4d96f   1         1         1       2d1h
-replicaset.apps/zk-operator-674676769c     1         1         1       49d
+NAME                                                         DESIRED   CURRENT   READY   AGE
+replicaset.apps/solr-operator-8449d4d96f                     1         1         1       2d1h
+replicaset.apps/solr-operator-zookeeper-operator-674676769c  1         1         1       49d
 ```
 
 After inspecting the status of you Kube cluster, you should see a deployment for the Solr Operator as well as the Zookeeper Operator.
@@ -102,8 +105,8 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a spec for a 3-node cluster v8.3 with 300m RAM each:
-cat <<EOF > solrCloud-example.yaml
+# Create a  a 3-node cluster v8.3 with 300m Heap each:
+cat <<EOF | kubectl apply -f -
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
@@ -117,10 +120,8 @@ spec:
     external:
       method: Ingress
       domainName: "ing.local.domain"
+      useExternalAddress: true
 EOF
-
-# Install Solr from that spec
-kubectl apply -f solrCloud-example.yaml
 
 # The solr-operator has created a new resource type 'solrclouds' which we can query
 # Check the status live as the deploy happens
@@ -133,28 +134,11 @@ open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=nodes
 
 ## Create a collection and index some documents
 
-We'll use the Operator's built in collection creation option
+Create a collection via the [Collections API](https://solr.apache.org/guide/8_8/collection-management.html#create).
 
 ```bash
-# Create the spec
-cat <<EOF > collection.yaml
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCollection
-metadata:
-  name: mycoll
-spec:
-  solrCloud: example
-  collection: mycoll
-  autoAddReplicas: true
-  routerName: compositeId
-  numShards: 1
-  replicationFactor: 3
-  maxShardsPerNode: 2
-  collectionConfigName: "_default"
-EOF
-
-# Execute the command and check in Admin UI that it succeeds
-kubectl apply -f collection.yaml
+# Execute the Collections API command
+curl "http://default-example-solrcloud.ing.local.domain/admin/collections?action=CREATE&name=mycoll&numShards=1&replicationFactor=3&maxShardsPerNode=2&collection.configName=_default"
 
 # Check in Admin UI that collection is created
 open "http://default-example-solrcloud.ing.local.domain/solr/#/~cloud?view=graph"
@@ -171,7 +155,7 @@ curl -XPOST -H "Content-Type: application/json" \
 
 So we wish to add more capacity. Scaling the cluster is a breeze.
 
-```
+```bash
 # Issue the scale command
 kubectl scale --replicas=5 solrcloud/example
 ```
@@ -186,16 +170,39 @@ kubectl get solrclouds -w
 # Hit Control-C when done
 ```
 
+### Horizontal Pod Autoscaler (HPA)
+
+The SolrCloud CRD is setup so that it is able to run with the HPA.
+Merely use the following when creating an HPA object:
+```yaml
+apiVersion: autoscaling/v2beta2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: example-solr
+spec:
+  maxReplicas: 6
+  minReplicas: 3
+  scaleTargetRef:
+    apiVersion: solr.apache.com/v1beta1
+    kind: SolrCloud
+    name: example
+  metrics:
+    ....
+ ```
+
+Make sure that you are not overwriting the `SolrCloud.Spec.replicas` field when doing `kubectl apply`,
+otherwise you will be undoing the autoscaler's work.
+
 ## Upgrade to newer version
 
 So we wish to upgrade to a newer Solr version:
 
-```
+```bash
 # Take note of the current version, which is 8.3.1
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
-# Update the solrCloud configuratin with the new version, keeping 5 nodes
-cat <<EOF > solrCloud-example.yaml
+# Update the solrCloud configuration with the new version, keeping 5 nodes
+cat <<EOF | kubectl apply -f -
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
@@ -205,13 +212,16 @@ spec:
   solrImage:
     tag: "8.7"
   solrJavaMem: "-Xms300m -Xmx300m"
+  solrAddressability:
+    external:
+      method: Ingress
+      domainName: "ing.local.domain"
+      useExternalAddress: true
 EOF
 
-# Apply the new config
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column
 # You can also watch the status with the 'kubectl get solrclouds' command
-kubectl apply -f solrCloud-example.yaml
 kubectl get solrclouds -w
 
 # Hit Control-C when done
@@ -221,7 +231,7 @@ kubectl get solrclouds -w
 
 Kubernetes Dashboard is a web interface that gives a better overview of your k8s cluster than only running command-line commands. This step is optional, you don't need it if you're comfortable with the cli.
 
-```
+```bash
 # Install the Dashboard
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.0.4/aio/deploy/recommended.yaml
 
@@ -241,6 +251,6 @@ open "http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/http
 
 ## Delete the solrCloud cluster named 'example'
 
-```
+```bash
 kubectl delete solrcloud example
 ```

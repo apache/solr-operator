@@ -19,9 +19,10 @@ package v1beta1
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -47,11 +48,13 @@ const (
 	DefaultZkReplicas            = int32(3)
 	DefaultZkStorage             = "5Gi"
 	DefaultZkRepo                = "pravega/zookeeper"
-	DefaultZkVersion             = "0.2.6"
+	DefaultZkVersion             = ""
 	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
+
+	DefaultBasicAuthUsername = "k8s-oper"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -104,6 +107,14 @@ type SolrCloudSpec struct {
 	// Set GC Tuning configuration through GC_TUNE environment variable
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
+
+	// Options to enable TLS between Solr pods
+	// +optional
+	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
+
+	// Options to enable Solr security
+	// +optional
+	SolrSecurity *SolrSecurityOptions `json:"solrSecurity,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -546,6 +557,17 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 	return changed
 }
 
+func (ref *ZookeeperRef) GetACLs() (allACL *ZookeeperACL, readOnlyACL *ZookeeperACL) {
+	if ref.ConnectionInfo != nil {
+		allACL = ref.ConnectionInfo.AllACL
+		readOnlyACL = ref.ConnectionInfo.ReadOnlyACL
+	} else if ref.ProvidedZookeeper != nil {
+		allACL = ref.ProvidedZookeeper.AllACL
+		readOnlyACL = ref.ProvidedZookeeper.ReadOnlyACL
+	}
+	return
+}
+
 // ZookeeperSpec defines the internal zookeeper ensemble to run with the given spec
 type ZookeeperSpec struct {
 
@@ -570,6 +592,16 @@ type ZookeeperSpec struct {
 	// The ChRoot to connect solr at
 	// +optional
 	ChRoot string `json:"chroot,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK.
+	// This ACL should have ALL permission in the given chRoot.
+	// +optional
+	AllACL *ZookeeperACL `json:"acl,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK for reading operations.
+	// This ACL should have READ permission in the given chRoot.
+	// +optional
+	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 }
 
 func (z *ZookeeperSpec) withDefaults() (changed bool) {
@@ -630,6 +662,10 @@ type ZookeeperPodPolicy struct {
 	// +optional
 	Tolerations []corev1.Toleration `json:"tolerations,omitempty"`
 
+	// List of environment variables to set in the main ZK container.
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
+
 	// Resources is the resource requirements for the container.
 	// This field cannot be updated once the cluster is created.
 	// +optional
@@ -643,6 +679,9 @@ type SolrCloudStatus struct {
 
 	// Replicas is the number of number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
+
+	// PodSelector for SolrCloud pods, required by the HPA
+	PodSelector string `json:"podSelector"`
 
 	// ReadyReplicas is the number of number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
@@ -708,7 +747,8 @@ type SolrNodeStatus struct {
 // +kubebuilder:resource:shortName=solr
 // +kubebuilder:categories=all
 // +kubebuilder:subresource:status
-// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas
+// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas,selectorpath=.status.podSelector
+// +kubebuilder:storageversion
 // +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Solr Version of the cloud"
 // +kubebuilder:printcolumn:name="TargetVersion",type="string",JSONPath=".status.targetVersion",description="Target Solr Version of the cloud"
 // +kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
@@ -742,6 +782,18 @@ func (sc *SolrCloud) GetAllSolrNodeNames() []string {
 	return nodeNames
 }
 
+func (sc *SolrCloud) BasicAuthSecretName() string {
+	if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret != "" {
+		return sc.Spec.SolrSecurity.BasicAuthSecret
+	} else {
+		return fmt.Sprintf("%s-solrcloud-basic-auth", sc.Name)
+	}
+}
+
+func (sc *SolrCloud) SecurityBootstrapSecretName() string {
+	return fmt.Sprintf("%s-solrcloud-security-bootstrap", sc.Name)
+}
+
 // ConfigMapName returns the name of the cloud config-map
 func (sc *SolrCloud) ConfigMapName() string {
 	return fmt.Sprintf("%s-solrcloud-configmap", sc.GetName())
@@ -758,8 +810,8 @@ func (sc *SolrCloud) CommonServiceName() string {
 }
 
 // InternalURLForCloud returns the name of the common service for the cloud
-func InternalURLForCloud(cloudName string, namespace string) string {
-	return fmt.Sprintf("http://%s-solrcloud-common.%s", cloudName, namespace)
+func InternalURLForCloud(sc *SolrCloud) string {
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(), sc.Name, sc.Namespace, sc.CommonPortSuffix())
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -860,11 +912,11 @@ func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string)
 }
 
 func (sc *SolrCloud) CommonPortSuffix() string {
-	return PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
 }
 
 func (sc *SolrCloud) NodePortSuffix() string {
-	return PortToSuffix(sc.NodePort())
+	return sc.PortToSuffix(sc.NodePort())
 }
 
 func (sc *SolrCloud) NodePort() int {
@@ -877,13 +929,18 @@ func (sc *SolrCloud) NodePort() int {
 	return port
 }
 
-// PortToSuffix returns the url suffix for a port.
-// Port 80 does not require a suffix, as it is the default port for HTTP.
-func PortToSuffix(port int) string {
-	if port == 80 {
-		return ""
+func (sc *SolrCloud) PortToSuffix(port int) string {
+	suffix := ""
+	if sc.UrlScheme() == "https" {
+		if port != 443 {
+			suffix = ":" + strconv.Itoa(port)
+		}
+	} else {
+		if port != 80 {
+			suffix = ":" + strconv.Itoa(port)
+		}
 	}
-	return ":" + strconv.Itoa(port)
+	return suffix
 }
 
 func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
@@ -929,6 +986,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	return url
 }
 
+func (sc *SolrCloud) UrlScheme() string {
+	urlScheme := "http"
+	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	}
+	return urlScheme
+}
+
 func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
 	external := sc.Spec.SolrAddressability.External
 	if external != nil && external.UseExternalAddress {
@@ -970,4 +1035,81 @@ type SolrCloudList struct {
 
 func init() {
 	SchemeBuilder.Register(&SolrCloud{}, &SolrCloudList{})
+}
+
+// +kubebuilder:validation:Enum=None;Want;Need
+type ClientAuthType string
+
+const (
+	None ClientAuthType = "None"
+	Want ClientAuthType = "Want"
+	Need ClientAuthType = "Need"
+)
+
+type SolrTLSOptions struct {
+	// TLS Secret containing a pkcs12 keystore
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+
+	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
+
+	// TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore
+	// The specified key is used as the truststore file name when mounted into Solr pods
+	// +optional
+	TrustStoreSecret *corev1.SecretKeySelector `json:"trustStoreSecret,omitempty"`
+
+	// Secret containing the trust store password; if not provided the keyStorePassword will be used
+	// +optional
+	TrustStorePasswordSecret *corev1.SecretKeySelector `json:"trustStorePasswordSecret,omitempty"`
+
+	// Determines the client authentication method, either None, Want, or Need;
+	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// +kubebuilder:default=None
+	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
+
+	// Verify client's hostname during SSL handshake
+	// +optional
+	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
+
+	// TLS certificates contain host/ip "peer name" information that is validated by default.
+	// +optional
+	CheckPeerName bool `json:"checkPeerName,omitempty"`
+
+	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// +optional
+	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
+}
+
+// +kubebuilder:validation:Enum=Basic
+type AuthenticationType string
+
+const (
+	Basic AuthenticationType = "Basic"
+)
+
+type SolrSecurityOptions struct {
+	// Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the
+	// Solr operator but support for other authentication plugins may be added in the future.
+	AuthenticationType AuthenticationType `json:"authenticationType,omitempty"`
+
+	// Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods.
+	// If you provide this secret, then the operator assumes you've also configured your own security.json file and
+	// uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update
+	// the secret with the new password or the operator will be  locked out of Solr and API requests will fail,
+	// ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting).
+	//
+	// If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password
+	// for the "k8s-oper" user. All API requests from the operator are made as the "k8s-oper" user, which is configured
+	// with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json
+	// file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr
+	// resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the
+	// 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation.
+	// +optional
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
+
+	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
+	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
+	// endpoints with credentials sourced from an env var instead of HTTP directly.
+	// +optional
+	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 }

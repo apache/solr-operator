@@ -20,10 +20,11 @@ package controllers
 import (
 	"crypto/md5"
 	"fmt"
+	"strconv"
 	"time"
 
-	solr "github.com/apache/lucene-solr-operator/api/v1beta1"
-	"github.com/apache/lucene-solr-operator/controllers/util"
+	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	"github.com/onsi/gomega"
 	zookeeperv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	"github.com/stretchr/testify/assert"
@@ -106,6 +107,11 @@ func TestCloudReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	// Update the status of the SolrCloud
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
 	// Check the statefulSet
 	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
@@ -153,7 +159,9 @@ func TestCloudReconcile(t *testing.T) {
 	assert.Equal(t, extraVolumes[0].Source, statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 
 	// Check the client Service
-	expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+	clientService := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
+	expetedLabels, _ := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{MatchLabels: clientService.Spec.Selector})
+	assert.EqualValues(t, expetedLabels.String(), instance.Status.PodSelector, "Incorrect pod selector object in ")
 
 	// Check the headless Service
 	expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
@@ -174,6 +182,9 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			Labels:    map[string]string{"base": "here"},
 		},
 		Spec: solr.SolrCloudSpec{
+			SolrImage: &solr.ContainerImage{
+				ImagePullSecret: testImagePullSecretName,
+			},
 			Replicas: &replicas,
 			ZookeeperRef: &solr.ZookeeperRef{
 				ConnectionInfo: &solr.ZookeeperConnectionInfo{
@@ -186,14 +197,16 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
-					Annotations:       testPodAnnotations,
-					Labels:            testPodLabels,
-					Tolerations:       testTolerations,
-					NodeSelector:      testNodeSelectors,
-					LivenessProbe:     testProbeLivenessNonDefaults,
-					ReadinessProbe:    testProbeReadinessNonDefaults,
-					StartupProbe:      testProbeStartup,
-					PriorityClassName: testPriorityClass,
+					Annotations:                   testPodAnnotations,
+					Labels:                        testPodLabels,
+					Tolerations:                   testTolerations,
+					NodeSelector:                  testNodeSelectors,
+					LivenessProbe:                 testProbeLivenessNonDefaults,
+					ReadinessProbe:                testProbeReadinessNonDefaults,
+					StartupProbe:                  testProbeStartup,
+					PriorityClassName:             testPriorityClass,
+					ImagePullSecrets:              testAdditionalImagePullSecrets,
+					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
@@ -264,6 +277,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 		"SOLR_NODE_PORT": "8983",
 		"GC_TUNE":        "gc Options",
 		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+		"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 	}
 	expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"technology": "solr-cloud"})
 	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/"}
@@ -278,6 +292,8 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
+	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
+	assert.EqualValues(t, &testTerminationGracePeriodSeconds, statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
@@ -351,7 +367,7 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 
 	// Check that the ZkConnectionInformation is correct
-	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default:2181"
+	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 	assert.Equal(t, expectedZkConnStr, instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
 	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
 	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
@@ -540,7 +556,7 @@ func TestDefaults(t *testing.T) {
 
 	foundConfigMap := &corev1.ConfigMap{}
 	err = testClient.Get(context.TODO(), types.NamespacedName{Name: instance.ConfigMapName(), Namespace: instance.Namespace}, foundConfigMap)
-	solrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data["solr.xml"])))
+	solrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(foundConfigMap.Data[util.SolrXmlFile])))
 	assert.True(t, stateful.Spec.Template.Annotations[util.SolrXmlMd5Annotation] == solrXmlMd5,
 		"solr.xml MD5 annotation should be set on the pod template!")
 }
@@ -659,11 +675,6 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	instance := &solr.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
 		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					ChRoot: "solr-xml",
-				},
-			},
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				ConfigMapOptions: &solr.ConfigMapOptions{
 					ProvidedConfigMap: testCustomSolrXmlConfigMap,
@@ -716,7 +727,7 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
-	invalidConfigMap.Data["solr.xml"] = "Invalid XML"
+	invalidConfigMap.Data[util.SolrXmlFile] = "Invalid XML"
 	err = testClient.Update(context.TODO(), invalidConfigMap)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
@@ -759,18 +770,269 @@ func TestCloudWithCustomSolrXmlConfigMapReconcile(t *testing.T) {
 	// update the embedded solr.xml to trigger a pod rolling restart
 	foundConfigMap = &corev1.ConfigMap{}
 	err = testClient.Get(context.TODO(), types.NamespacedName{Name: testCustomSolrXmlConfigMap, Namespace: instance.Namespace}, foundConfigMap)
-	updateSolrXml := foundConfigMap.Data["solr.xml"]
-	foundConfigMap.Data["solr.xml"] = strings.Replace(updateSolrXml, "${zkClientTimeout:30000}", "${zkClientTimeout:15000}", 1)
+	updateSolrXml := foundConfigMap.Data[util.SolrXmlFile]
+	foundConfigMap.Data[util.SolrXmlFile] = strings.Replace(updateSolrXml, "${zkClientTimeout:30000}", "${zkClientTimeout:15000}", 1)
 	err = testClient.Update(context.TODO(), foundConfigMap)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the annotation on the pod template to make sure a rolling restart will take place
-	updateSolrXml = foundConfigMap.Data["solr.xml"]
+	updateSolrXml = foundConfigMap.Data[util.SolrXmlFile]
 	updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(updateSolrXml)))
 	time.Sleep(time.Millisecond * 250)
 	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	assert.Equal(t, updateSolrXmlMd5, stateful.Spec.Template.Annotations[util.SolrXmlMd5Annotation], "Custom solr.xml MD5 annotation should be updated on the pod template.")
+}
+
+func TestCloudWithUserProvidedLogConfigMapReconcile(t *testing.T) {
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+
+	testCustomLogXmlConfigMap := "my-custom-log4j2-xml"
+
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				ConfigMapOptions: &solr.ConfigMapOptions{
+					ProvidedConfigMap: testCustomLogXmlConfigMap,
+				},
+			},
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+
+	// reconcile will have failed b/c the provided ConfigMap doesn't exist ...
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	userProvidedConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testCustomLogXmlConfigMap,
+			Namespace: instance.Namespace,
+		},
+		Data: map[string]string{
+			util.LogXmlFile: "<Configuration/>",
+		},
+	}
+	err = testClient.Create(context.TODO(), userProvidedConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), userProvidedConfigMap)
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	emptyRequests(requests)
+
+	stateful := &appsv1.StatefulSet{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), cloudSsKey, stateful) }, timeout).Should(gomega.Succeed())
+	assert.NotEmpty(t, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should be set on the pod template!")
+
+	assert.NotNil(t, stateful.Spec.Template.Spec.Volumes)
+	var logXmlVol *corev1.Volume = nil
+	for _, vol := range stateful.Spec.Template.Spec.Volumes {
+		if vol.Name == "log4j2-xml" {
+			logXmlVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, logXmlVol, "Didn't find custom log4j2-xml volume in sts config!")
+	assert.NotNil(t, logXmlVol.VolumeSource.ConfigMap, "log4j2-xml Volume should have a ConfigMap source")
+	assert.Equal(t, logXmlVol.VolumeSource.ConfigMap.Name, testCustomLogXmlConfigMap, "log4j2-xml Volume should have a ConfigMap source")
+
+	var logXmlVolMount *corev1.VolumeMount = nil
+	for _, mount := range stateful.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == "log4j2-xml" {
+			logXmlVolMount = &mount
+			break
+		}
+	}
+	assert.NotNil(t, logXmlVolMount, "Didn't find the log4j2-xml Volume mount")
+	expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomLogXmlConfigMap)
+	assert.Equal(t, expectedMountPath, logXmlVolMount.MountPath, "Custom log4j2.xml mount path is incorrect.")
+
+	solrXmlConfigName := fmt.Sprintf("%s-solrcloud-configmap", instance.GetName())
+	foundConfigMap := &corev1.ConfigMap{}
+	err = testClient.Get(context.TODO(), types.NamespacedName{Name: solrXmlConfigName, Namespace: instance.Namespace}, foundConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred(), "Built-in solr.xml ConfigMap should still exist! ")
+
+	emptyRequests(requests)
+	// update the user-provided log XML to trigger a pod rolling restart
+	updatedXml := "<Configuration>Updated!</Configuration>"
+	foundConfigMap = &corev1.ConfigMap{}
+	err = testClient.Get(context.TODO(), types.NamespacedName{Name: testCustomLogXmlConfigMap, Namespace: instance.Namespace}, foundConfigMap)
+	foundConfigMap.Data[util.LogXmlFile] = updatedXml
+	err = testClient.Update(context.TODO(), foundConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// capture all reconcile requests
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	// Check the annotation on the pod template to make sure a rolling restart will take place
+	updateLogXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(updatedXml)))
+	time.Sleep(time.Millisecond * 250)
+	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	assert.Equal(t, updateLogXmlMd5, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should be updated on the pod template.")
+	expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+	testPodEnvVariables(t, expectedEnvVars, stateful.Spec.Template.Spec.Containers[0].Env)
+
+	// switch the log4j config over to using monitorInterval, so no more rolling restart on change to config
+	emptyRequests(requests)
+	// update the user-provided log XML to trigger a pod rolling restart
+	updatedXml = "<Configuration monitorInterval=\"30\">Updated!</Configuration>"
+	foundConfigMap = &corev1.ConfigMap{}
+	err = testClient.Get(context.TODO(), types.NamespacedName{Name: testCustomLogXmlConfigMap, Namespace: instance.Namespace}, foundConfigMap)
+	foundConfigMap.Data[util.LogXmlFile] = updatedXml
+	err = testClient.Update(context.TODO(), foundConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+
+	time.Sleep(time.Millisecond * 250)
+	err = testClient.Get(context.TODO(), cloudSsKey, stateful)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	// log xml md5 annotation should no longer be on the pod template
+	assert.Equal(t, "", stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should not be set on the pod template.")
+}
+
+func TestCloudWithUserProvidedSolrXmlAndLogConfigReconcile(t *testing.T) {
+	UseZkCRD(true)
+	g := gomega.NewGomegaWithT(t)
+
+	testCustomConfigMap := "my-custom-config-xml"
+
+	instance := &solr.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
+		Spec: solr.SolrCloudSpec{
+			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
+				ConfigMapOptions: &solr.ConfigMapOptions{
+					ProvidedConfigMap: testCustomConfigMap,
+				},
+			},
+		},
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// Create the user-provided ConfigMap first to streamline reconcile,
+	// other tests cover creating it after the reconcile loop starts on the SolrCloud
+	userProvidedConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      testCustomConfigMap,
+			Namespace: instance.Namespace,
+		},
+		Data: map[string]string{
+			util.LogXmlFile:  "<Configuration/>",
+			util.SolrXmlFile: "<solr> ${hostPort: </solr>", // the controller checks for ${hostPort: in the solr.xml
+		},
+	}
+	err = testClient.Create(context.TODO(), userProvidedConfigMap)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), userProvidedConfigMap)
+
+	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
+	err = testClient.Create(context.TODO(), instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+	emptyRequests(requests)
+
+	stateful := &appsv1.StatefulSet{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), cloudSsKey, stateful) }, timeout).Should(gomega.Succeed())
+	assert.NotEmpty(t, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log XML MD5 annotation should be set on the pod template!")
+
+	assert.NotNil(t, stateful.Spec.Template.Spec.Volumes)
+	var customConfigVol *corev1.Volume = nil
+	for _, vol := range stateful.Spec.Template.Spec.Volumes {
+		if vol.Name == "solr-xml" {
+			customConfigVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, customConfigVol, "Didn't find custom solr-xml volume in sts config!")
+	assert.NotNil(t, customConfigVol.VolumeSource.ConfigMap, "solr-xml Volume should have a ConfigMap source")
+	assert.Equal(t, customConfigVol.VolumeSource.ConfigMap.Name, testCustomConfigMap, "solr-xml Volume should have a ConfigMap source")
+
+	var logXmlVolMount *corev1.VolumeMount = nil
+	for _, mount := range stateful.Spec.Template.Spec.Containers[0].VolumeMounts {
+		if mount.Name == "solr-xml" {
+			logXmlVolMount = &mount
+			break
+		}
+	}
+	assert.NotNil(t, logXmlVolMount, "Didn't find the log4j2-xml Volume mount")
+	expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
+	assert.Equal(t, expectedMountPath, logXmlVolMount.MountPath)
+
+	solrXmlConfigName := fmt.Sprintf("%s-solrcloud-configmap", instance.GetName())
+	foundConfigMap := &corev1.ConfigMap{}
+	err = testClient.Get(context.TODO(), types.NamespacedName{Name: solrXmlConfigName, Namespace: instance.Namespace}, foundConfigMap)
+	g.Expect(err).To(gomega.HaveOccurred(), "Built-in solr.xml ConfigMap should NOT exist! ")
+
+	emptyRequests(requests)
+
+	customSolrXml := userProvidedConfigMap.Data[util.SolrXmlFile]
+	expectedSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(customSolrXml)))
+	assert.Equal(t, expectedSolrXmlMd5, stateful.Spec.Template.Annotations[util.SolrXmlMd5Annotation], "Custom solr.xml MD5 annotation should be set on the pod template.")
+
+	customLogXml := userProvidedConfigMap.Data[util.LogXmlFile]
+	expectedLogXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(customLogXml)))
+	assert.Equal(t, expectedLogXmlMd5, stateful.Spec.Template.Annotations[util.LogXmlMd5Annotation], "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+	expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+	testPodEnvVariables(t, expectedEnvVars, stateful.Spec.Template.Spec.Containers[0].Env)
 }
