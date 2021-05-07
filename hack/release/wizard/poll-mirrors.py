@@ -125,7 +125,7 @@ if __name__ == '__main__':
     p('Unable to fetch the Apache mirrors list!\n')
     sys.exit(1)
 
-  mirror_path = args.path if args.path is not None else 'solr/solr-operator/{}/solr-operator-{}.tgz.sha512'.format(args.version, args.version)
+  mirror_path = args.path if args.path is not None else 'solr/solr-operator/{}/solr-operator-{}.tgz'.format(args.version, args.version)
 
   pending_mirrors = []
   for match in re.finditer('<TR>(.*?)</TR>', str(html), re.MULTILINE | re.IGNORECASE | re.DOTALL):

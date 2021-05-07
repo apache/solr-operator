@@ -100,6 +100,9 @@ def expand_jinja(text, vars=None):
         'gpg_key': state.get_gpg_key(),
         'epoch': unix_time_millis(datetime.utcnow()),
         'get_next_version': state.get_next_version(),
+        'get_next_major_version': state.get_next_major_version(),
+        'get_next_minor_version': state.get_next_minor_version(),
+        'get_next_bugfix_version': state.get_next_bugfix_version(),
         'current_git_rev': state.get_current_git_rev(),
         'keys_downloaded': keys_downloaded(),
         'editor': get_editor(),
@@ -580,11 +583,20 @@ class ReleaseState:
 
     def get_next_version(self):
         if self.release_type == 'major':
-            return "v%s.0.0" % (self.release_version_major + 1)
+            return self.get_next_major_version()
         if self.release_type == 'minor':
-            return "v%s.%s.0" % (self.release_version_major, self.release_version_minor + 1)
+            return self.get_next_minor_version()
         if self.release_type == 'bugfix':
-            return "v%s.%s.%s" % (self.release_version_major, self.release_version_minor, self.release_version_bugfix + 1)
+            return self.get_next_bugfix_version()
+
+    def get_next_major_version(self):
+        return "v%s.0.0" % (self.release_version_major + 1)
+
+    def get_next_minor_version(self):
+        return "v%s.%s.0" % (self.release_version_major, self.release_version_minor + 1)
+
+    def get_next_bugfix_version(self):
+        return "v%s.%s.%s" % (self.release_version_major, self.release_version_minor, self.release_version_bugfix + 1)
 
     def get_refguide_release(self):
         return "%s_%s" % (self.release_version_major, self.release_version_minor)
@@ -1949,7 +1961,7 @@ def vote_close_72h_holidays():
     return holidays if len(holidays) > 0 else None
 
 
-def prepare_announce_solr_operator(todo):
+def prepare_announce(todo):
     if not os.path.exists(solr_operator_news_file):
         solr_operator_text = expand_jinja("(( template=announce_solr_operator ))")
         with open(solr_operator_news_file, 'w') as fp:
