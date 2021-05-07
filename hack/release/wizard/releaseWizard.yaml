@@ -82,7 +82,7 @@ templates:
     category: solr/operator/news
     save_as:
 
-    The Solr PMC is pleased to announce the release of the Apache Solr Operator {{ release_version }}.
+    The Apache Solr PMC is pleased to announce the release of the Apache Solr Operator {{ release_version }}.
 
     The Apache Solr Operator is a safe and easy way of managing a Solr ecosystem in Kubernetes.
 
