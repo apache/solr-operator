@@ -98,68 +98,68 @@ def check_mirror(url):
     p('.')
     return None
   else:
-    p('\nFAIL: ' + url + '\n' if args.details else 'X')
+    # p('\nFAIL: ' + url + '\n')
+    p('X')
     return url
 
+if __name__ == '__main__':
+  desc = 'Periodically checks that all Solr mirrors contain either a copy of a release or a specified path'
+  parser = argparse.ArgumentParser(description=desc)
+  parser.add_argument('-version', '-v', help='Solr Operator version to check')
+  parser.add_argument('-path', '-p', help='instead of a versioned release, check for some/explicit/path')
+  parser.add_argument('-interval', '-i', help='seconds to wait before re-querying mirrors', type=int, default=300)
+  parser.add_argument('-once', '-o', help='run only once', action='store_true', default=False)
+  args = parser.parse_args()
 
-desc = 'Periodically checks that all Lucene/Solr mirrors contain either a copy of a release or a specified path'
-parser = argparse.ArgumentParser(description=desc)
-parser.add_argument('-version', '-v', help='Solr Operator version to check')
-parser.add_argument('-path', '-p', help='instead of a versioned release, check for some/explicit/path')
-parser.add_argument('-interval', '-i', help='seconds to wait before re-querying mirrors', type=int, default=300)
-parser.add_argument('-details', '-d', help='print missing mirror URLs', action='store_true', default=False)
-parser.add_argument('-once', '-o', help='run only once', action='store_true', default=False)
-args = parser.parse_args()
+  if (args.version is None and args.path is None) \
+      or (args.version is not None and args.path is not None):
+    p('You must specify either -version or -path but not both!\n')
+    sys.exit(1)
 
-if (args.version is None and args.path is None) \
-    or (args.version is not None and args.path is not None):
-  p('You must specify either -version or -path but not both!\n')
-  sys.exit(1)
+  try:
+    conn = http.HTTPSConnection('www.apache.org')
+    conn.request('GET', '/mirrors/')
+    response = conn.getresponse()
+    html = response.read()
+  except Exception as e:
+    p('Unable to fetch the Apache mirrors list!\n')
+    sys.exit(1)
 
-try:
-  conn = http.HTTPConnection('www.apache.org')
-  conn.request('GET', '/mirrors/')
-  response = conn.getresponse()
-  html = response.read()
-except Exception as e:
-  p('Unable to fetch the Apache mirrors list!\n')
-  sys.exit(1)
+  mirror_path = args.path if args.path is not None else 'solr/solr-operator/{}/solr-operator-{}.tgz'.format(args.version, args.version)
 
-mirror_path = args.path if args.path is not None else 'solr/solr-operator/{}/solr-operator-{}.tgz.sha512'.format(args.version, args.version)
+  pending_mirrors = []
+  for match in re.finditer('<TR>(.*?)</TR>', str(html), re.MULTILINE | re.IGNORECASE | re.DOTALL):
+    row = match.group(1)
+    if not '<TD>ok</TD>' in row:
+      # skip bad mirrors
+      continue
 
-pending_mirrors = []
-for match in re.finditer('<TR>(.*?)</TR>', str(html), re.MULTILINE | re.IGNORECASE | re.DOTALL):
-  row = match.group(1)
-  if not '<TD>ok</TD>' in row:
-    # skip bad mirrors
-    continue
+    match = re.search('<A\s+HREF\s*=\s*"([^"]+)"\s*>', row, re.MULTILINE | re.IGNORECASE)
+    if match:
+      pending_mirrors.append(match.group(1) + mirror_path)
 
-  match = re.search('<A\s+HREF\s*=\s*"([^"]+)"\s*>', row, re.MULTILINE | re.IGNORECASE)
-  if match:
-    pending_mirrors.append(match.group(1) + mirror_path)
+  total_mirrors = len(pending_mirrors)
 
-total_mirrors = len(pending_mirrors)
+  label = args.version if args.version is not None else args.path
+  while True:
+    p('\n{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
+    p('\nPolling {} Apache Mirrors'.format(len(pending_mirrors)))
+    p('...\n')
 
-label = args.version if args.version is not None else args.path
-while True:
-  p('\n{:%Y-%m-%d %H:%M:%S}'.format(datetime.datetime.now()))
-  p('\nPolling {} Apache Mirrors'.format(len(pending_mirrors)))
-  p('...\n')
+    start = time.time()
+    with Pool(processes=5) as pool:
+      pending_mirrors = list(filter(lambda x: x is not None, pool.map(check_mirror, pending_mirrors)))
+    stop = time.time()
+    remaining = args.interval - (stop - start)
 
-  start = time.time()
-  with Pool(processes=5) as pool:
-    pending_mirrors = list(filter(lambda x: x is not None, pool.map(check_mirror, pending_mirrors)))
-  stop = time.time()
-  remaining = args.interval - (stop - start)
+    available_mirrors = total_mirrors - len(pending_mirrors)
 
-  available_mirrors = total_mirrors - len(pending_mirrors)
+    p('\n{} is downloadable from {}/{} Apache Mirrors ({:.2f}%)\n'
+      .format(label, available_mirrors, total_mirrors, available_mirrors * 100 / (1 if total_mirrors == 0 else total_mirrors) ))
+    if len(pending_mirrors) == 0 or args.once == True:
+      break
 
-  p('\n{} is downloadable from {}/{} Apache Mirrors ({:.2f}%)\n'
-    .format(label, available_mirrors, total_mirrors, available_mirrors * 100 / total_mirrors))
-  if len(pending_mirrors) == 0 or args.once == True:
-    break
-
-  if remaining > 0:
-    p('Sleeping for {:d} seconds...\n'.format(int(remaining + 0.5)))
-    time.sleep(remaining)
+    if remaining > 0:
+      p('Sleeping for {:d} seconds...\n'.format(int(remaining + 0.5)))
+      time.sleep(remaining)
 
