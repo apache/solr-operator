@@ -6,7 +6,9 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/apache/solr-operator)](https://hub.docker.com/r/apache/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
-The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
+The __[Solr Operator](https://solr.apache.org/operator/)__ manages Apache Solr Clouds within Kubernetes.
+It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
+Please visit the [official site](https://solr.apache.org/operator/) for more information.
 
 The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
 
