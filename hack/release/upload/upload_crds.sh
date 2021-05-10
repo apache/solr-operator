@@ -97,6 +97,8 @@ echo "Pulling CRDs from the staged url and uploading to release location ${CRDS_
     # Download CRD files from the staged location
     wget -r -np -nH -nd --level=1 -A "*.yaml*" "${RELEASE_URL}/crds/"
 
+    rm -f robots.txt*
+
     # Create base release directory for CRDs
     curl "${WITH_APACHE_ID[@]}" -X MKCOL "${CRDS_FULL_URL}"
 

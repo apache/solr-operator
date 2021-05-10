@@ -80,16 +80,27 @@ templates:
   announce_solr_operator: |
     Title: Apache Solr Operator™ {{ release_version }} available
     category: solr/operator/news
-    URL:
     save_as:
 
-    The Solr PMC is pleased to announce the release of the Apache Solr Operator {{ release_version }}.
+    The Apache Solr PMC is pleased to announce the release of the Apache Solr Operator {{ release_version }}.
 
     The Apache Solr Operator is a safe and easy way of managing a Solr ecosystem in Kubernetes.
 
     This release contains numerous bug fixes, optimizations, and improvements, some of which are highlighted below. The release is available for immediate download at:
 
       <https://solr.apache.org/operator/downloads.html>
+
+    ### Solr Operator {{ release_version }} Release Highlights:
+
+    * Copy from the draft release notes
+
+    A summary of important changes is published in the documentation at:
+
+      <https://apache.github.io/solr-operator/docs/upgrade-notes.html>
+
+    For the most exhaustive list, see the full release notes in the Github Releases or by viewing the git history in the solr-operator repo.
+
+      <https://github.com/apache/solr-operator/releases/tag/{{ release_version }}>
 
   announce_solr_operator_mail: |
     The template below can be used to announce the Solr Operator release to the
@@ -116,7 +127,7 @@ templates:
     (( template=announce_solr_operator_mail_body ))
     ----
   announce_solr_operator_mail_body: |
-    {% for line in load_lines(solr_news_file, 4) -%}
+    {% for line in load_lines(solr_operator_news_file, 4) -%}
     {{ line }}
     {%- endfor %}
 
@@ -124,7 +135,6 @@ templates:
     Note: The Apache Software Foundation uses an extensive mirroring network for
     distributing releases. It is possible that the mirror you are using may not have
     replicated the release yet. If that is the case, please try another mirror.
-    This also applies to Maven access.
 # TODOs belong to groups for easy navigation in menus. Todo objects may contain asciidoc
 # descriptions, a number of commands to execute, some links to display, user input to gather
 # etc. Here is the documentation of each type of object. For further details, please consult
@@ -959,7 +969,7 @@ groups:
 - !TodoGroup
   id: publish
   title: Publishing to the ASF Mirrors
-  description: Once the vote has passed, the release may be published to the ASF Mirrors and to Maven Central.
+  description: Once the vote has passed, the release may be published to the ASF Mirrors.
   todos:
   - !Todo
     id: tag_release
@@ -1013,7 +1023,7 @@ groups:
           cmd: git add -u .  && git commit -m "Add next patch version {{ next_version }}"
           logfile: commit-release-next-version.log
         - !Command
-          cmd: git push {{ release_branch }}
+          cmd: git push origin {{ release_branch }}
           comment: |
             This will push both the release commit as well as the commit to increase version.
             The release commit will correspond to the previously pushed tag.
@@ -1043,7 +1053,10 @@ groups:
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false
-      commands_text: This will upload the staged Helm chart to the release location in nightlies.apache.org
+      commands_text: |
+        This will upload the staged Helm chart to the release location in nightlies.apache.org.
+        You will be prompted for your Apache password in the beggining, to use when uploading.
+        Next you will be prompted for your GPG Key passphrase, to sign the helm index.yaml.
       commands:
         - !Command
           cmd: ./hack/release/upload/upload_helm.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -a "{{ gpg.apache_id | default("<apache_id>", True) }}" -c "{{ official_helm_charts_url }}" -r "{{ dist_release_url }}"
@@ -1059,7 +1072,9 @@ groups:
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false
-      commands_text: This will upload the staged CRDs to the release location in nightlies.apache.org
+      commands_text: |
+        This will upload the staged CRDs to the release location in nightlies.apache.org.
+        You will be prompted for your Apache password in the beggining, to use when uploading.
       commands:
         - !Command
           cmd: ./hack/release/upload/upload_crds.sh  -a "{{ gpg.apache_id | default('<apache_id>', True) }}" -c "{{ crds_release_url }}" -r "{{ dist_release_url }}" -v "{{ release_version }}"
@@ -1115,6 +1130,17 @@ groups:
       - !Command
         cmd: python3 -u hack/release/wizard/poll-mirrors.py -version {{ release_version }} -o
         live: true
+  - !Todo
+    id: check_artifact_hub
+    title: Check state of ArtifactHub entries
+    depends:
+      - publish_docker_image
+      - publish_helm_charts
+    description: |
+      Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} Helm Chart.
+      Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
+    links:
+      - https://artifacthub.io/packages/helm/apache-solr/solr-operator
 - !TodoGroup
   id: website
   title: Update the website
@@ -1282,7 +1308,7 @@ groups:
         cmd: git checkout main && git status
         stdout: true
       - !Command
-        cmd: git diff
+        cmd: git diff origin/main
         redirect: "{{ [release_folder, 'website.diff'] | path_join }}"
         comment: Make a diff of all edits. Will open in next step
       - !Command
@@ -1332,6 +1358,41 @@ groups:
       - https://ci2.apache.org/#/builders/3
       - https://solr.apache.org
       - https://solr.apache.org/operator
+  - !Todo
+    id: create_github_release
+    title: Create a Github Release
+    description: |
+      Create a github release named "{{ release_version }}" based off of the git tag "{{ release_version }}".
+      You can use the previous releases as a template.
+      (You can hit "edit" on a previous release, to get the markdown version of the notes to copy.)
+    links:
+      - https://github.com/apache/solr-operator/releases
+  - !Todo
+    id: migrate_docs_to_gh_pages
+    title: Migrate documentation to github pages.
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      commands_text: Run these commands to copy the documentation to the repo's Github Pages site.
+      commands:
+        - !Command
+          cmd: git checkout gh-pages
+          stdout: true
+        - !Command
+          cmd: git rm -r *
+          comment: Delete all current docs
+          tee: true
+        - !Command
+          cmd: git checkout {{ release_version }} -- LICENSE NOTICE README.md docs example .gitignore
+          comment: Checkout relevant docs & examples from the release tag.
+          stdout: true
+        - !Command
+          cmd: git status
+          stdout: true
+          logfile: github-pages-status.log
+        - !Command
+          cmd: git commit -a -m "Upgrade documentation for {{ release_version }} release" && git push origin gh-pages
+          stdout: true
+          logfile: github-pages-push.log
 - !TodoGroup
   id: announce
   title: Announce the release
@@ -1438,14 +1499,15 @@ groups:
 #    links:
 #    - https://issues.apache.org/jira/issues/?jql=project+=+SOLR+AND+level+=+%22Public%22
   - !Todo
-    id: new_github_milestone_version_bugfix
-    title: Add a new milestone in Github for the next release
+    id: new_github_milestone_version_bugfix_minor
+    title: Add a new milestone in Github for the next releases
     description: |-
-      Go to the Github Milestones page and add the new version:
+      Go to the Github Milestones page and add the new versions:
 
-      - Create a new (unreleased) version `{{ get_next_version }}`
-    types:
-      - bugfix
+      {% if release_type == 'major' %}
+      - New (unreleased) version `{{ get_next_minor_version }}`
+      {% endif %}
+      - New (unreleased) version `{{ get_next_bugfix_version }}`
     links:
       - https://github.com/apache/solr-operator/milestones
   - !Todo
