@@ -3,11 +3,13 @@ Solr Operator
 
 The Solr Operator is designed to allow easy deployment Solr Clouds and other Solr Resources to Kubernetes.
 
-Documentation around using the Solr Operator can be found in it's [source repo](https://github.com/apache/solr-operator).
+Documentation around using the Solr Operator can be found at it's [official site](https://solr.apache.org/operator) or [source repo](https://github.com/apache/solr-operator).
+
+[Tutorials](https://solr.apache.org/operator/resources.html#tutorials) have been provided for both basic and advanced usage of the Solr Operator.
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://github.com/apache/solr-operator/tree/main/docs/upgrade-notes.md).
+Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html).
 There may be breaking changes between the version you are running and the version you want to upgrade to.
 
 ## Using the Helm Chart
