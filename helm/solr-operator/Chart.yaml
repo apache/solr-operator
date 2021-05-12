@@ -19,7 +19,7 @@ description: The Solr Operator enables easy management of Solr resources within 
 version: 0.4.0-prerelease
 appVersion: v0.4.0-prerelease
 kubeVersion: ">= 1.16.0-0"
-home: https://github.com/apache/solr-operator
+home: https://solr.apache.org/operator
 sources:
   - https://github.com/apache/solr-operator
 keywords:

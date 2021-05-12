@@ -17,7 +17,7 @@
 
 github:
   description: "Kubernetes Operator for Apache Solr"
-  homepage: https://solr.apache.org/
+  homepage: https://solr.apache.org/operator
   labels:
     - solr
     - search
