@@ -1,0 +1,18 @@
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "solrcloud.fullname" . }}-test-connection"
+  labels:
+    sdr.appname: {{ include "solrcloud.fullname" . }}
+    {{- include "solrcloud.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['{{ include "solrcloud.commonServiceAddress" . }}']
+  restartPolicy: Never

@@ -1,0 +1,107 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: solr.apache.org/v1beta1
+kind: SolrCloud
+metadata:
+  name: {{ include "solr.fullname-no-suffix" . }}
+  labels:
+    {{ include "solr.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  solrImage:
+    repository: {{ .Values.image.repository }}
+    tag: {{ .Values.image.tag }}
+    {{- if .Values.image.pullPolicy }}
+    pullPolicy: {{ .Values.image.pullPolicy }}
+    {{- end }}
+  solrJavaMem: {{ .Values.solrOptions.memory }}
+  solrAddressability:
+    kubeDomain: {{ include "solr.kubeDomain" . }}
+  updateStrategy:
+    method: {{ .Values.updateOptions.method }}
+    {{- if and (eq .Values.updateOptions.method "Managed") .Values.updateOptions.managedUpdate }}
+    managed:
+      {{- toYaml .Values.updateOptions.managedUpdate | nindent 6 }}
+    {{- end }}
+  customSolrKubeOptions:
+    podOptions:
+      labels:
+        sdr.appname: {{ include "solr.sdr-appname" . }}
+      {{- with .Values.podOptions.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      resources:
+        {{- toYaml .Values.resources | nindent 8 }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- if .Values.logs.splunk.enabled }}
+      volumes:
+        {{- include "solr.splunk.volume" . | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.podOptions.sidecarContainers .Values.logs.splunk.enabled }}
+      sidecarContainers:
+        {{- if .Values.logs.splunk.enabled }}
+        {{- include "solr.splunk.sidecar" . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.podOptions.sidecarContainers }}
+        {{- toYaml .Values.podOptions.sidecarContainers | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.podOptions.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.podOptions.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if .Values.podOptions.initContainers }}
+      initContainers:
+        {{- toYaml .Values.podOptions.initContainers | nindent 8 }}
+      {{- end }}
+    {{- if .Values.updateOptions.podManagementPolicy }}
+    statefulSetOptions:
+      podManagementPolicy: {{ .Values.updateOptions.podManagementPolicy }}
+    {{- end }}
+    {{- if .Values.customSolrXmlConfigMap }}
+    configMapOptions:
+      providedConfigMap: {{ .Values.customSolrXmlConfigMap }}
+    {{- end }}
+  {{- if eq .Values.storage.type "persistent" }}
+  dataStorage:
+    persistent:
+      reclaimPolicy: {{ .Values.storage.persistent.reclaimPolicy }}
+      pvcTemplate:
+        spec:
+          {{- if .Values.storage.capacity }}
+          resources:
+            requests:
+              storage: {{ .Values.storage.capacity }}
+          {{- end }}
+          {{- if .Values.storage.persistent.storageClassName }}
+          storageClassName: {{ .Values.storage.persistent.storageClassName }}
+          {{- end }}
+  {{- else if and (eq .Values.storage.type "ephemeral") .Values.storage.capacity }}
+  dataStorage:
+    ephemeral:
+      emptyDir:
+        sizeLimit: {{ .Values.storage.capacity }}
+  {{- end }}
+  zookeeperRef:
+    connectionInfo:
+      internalConnectionString: "{{ trim (include "solr.zkAddress" .) }}"
+      chroot: "{{ trim (include "solr.zkChroot" .) }}"
+      {{- if .Values.zk.acl }}
+      acl:
+        secret: {{ .Values.zk.acl.secret }}
+        usernameKey: {{ .Values.zk.acl.usernameKey }}
+        passwordKey: {{ .Values.zk.acl.passwordKey }}
+      {{- end }}

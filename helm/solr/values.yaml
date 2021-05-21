@@ -1,0 +1,138 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Default values for solr.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 2
+
+image:
+  repository: "solr"
+  # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
+  # pullPolicy: IfNotPresent
+  tag: "8.8.2"
+
+nameOverride: ""
+fullnameOverride: ""
+
+solrOptions:
+  memory: "-Xms4g -Xmx4g"
+
+solrPort: 8983
+
+updateOptions:
+  # Specify a podManagementPolicy when you want control over how scale-ups and scale-downs occur
+  # https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies
+  # podManagementPolicy: Parallel
+
+  # Specify how rolling updates should be managed for the Solr StatefulSet
+  # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
+  method: "Managed"
+  # Options for the managed updateMethod
+  managedUpdate: {}
+    # The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart.
+    # More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.
+    # Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet.
+    # maxPodsUnavailable: "25%"
+
+    # The number of replicas for each shard allowed to be unavailable during the restart.
+    # Either a static number, or a percentage representing the percentage of the number of replicas for a shard.
+    # Defaults to 1
+    # maxShardReplicasUnavailable: 1
+
+# More information can be found at: https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
+storage:
+  # Either persistent or ephemeral
+  type: "persistent"
+  capacity: "20Gi"
+  persistent:
+    storageClassName: ""
+    reclaimPolicy: "Retain"
+  # ephemeral: {}
+
+
+zk:
+  # This will create a VERY unstable 1-node zk cluster to test with. Do not use for production systems
+  # Remove this option once helm has the ability to use expressions in dependency conditions: !zk.address instead of zk.create
+  create: true
+  # Use this if you have an existing Zookeeper ensemble you want to use for the SolrCloud
+  address: ""
+  # Fill in this field if the ACI Coordination team has given you a namespace.
+  chroot: ""
+  # If true, this will add the "/<namespace>/<name>" to the end of the provided chroot, if any is provided.
+  # This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself.
+  uniqueChroot: true
+  acl: {}
+  # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace
+  #
+  # acl:
+  #   secret: zk-acls
+  #   usernameKey: username
+  #   passwordKey: password
+
+# This will add an ingress for the common Solr Service (Round robin between all nodes)
+ingress:
+  enabled: true
+  annotations: {}
+
+
+
+# Enable this to use have a Solr Prometheus Exporter spun up to monitor the created Solr Cloud
+metrics:
+  enabled: false
+
+  # Customize the metrics Pod for your needs
+  podOptions:
+    annotations: {}
+
+  resources:
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    limits:
+      cpu: 500m
+      memory: 2G
+    requests:
+      cpu: 200m
+      memory: 2G
+
+# Customize the Solr Pod for your needs
+podOptions:
+  priorityClassName: "p4"
+
+  annotations: {}
+
+  # Add extra sidecar or init containers, e.g. for log or metrics forwarding
+  sidecarContainers: []
+  initContainers: []
+
+  terminationGracePeriodSeconds: 30
+
+  resources:
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+    # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    limits:
+      cpu: "2"
+      memory: 10G
+    requests:
+      cpu: 500m
+      memory: 4G
+
+# This is an extremely advanced option, do not use it without understanding the requirements of the solr.xml you provide.
+customSolrXmlConfigMap: ""

@@ -13,25 +13,26 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Patterns to ignore when building packages.
-# This supports shell glob matching, relative path matching, and
-# negation (prefixed with !). Only one pattern per line.
-.DS_Store
-# Common VCS dirs
-.git/
-.gitignore
-.bzr/
-.bzrignore
-.hg/
-.hgignore
-.svn/
-# Common backup files
-*.swp
-*.bak
-*.tmp
-*~
-# Various IDEs
-.project
-.idea/
-*.tmproj
-.vscode/
+apiVersion: v2
+name: solr
+description: A SolrCloud cluser running on Kubernetes via the Solr Operator
+
+version: 0.4.0-prerelease
+appVersion: 8.8.2
+kubeVersion: ">= 1.16.0-0"
+home: https://solr.apache.org
+sources:
+  - https://github.com/apache/solr
+  - https://github.com/apache/solr-operator
+
+keywords:
+  - solr
+  - apache
+  - search
+  - lucene
+maintainers:
+  - name: Solr Dev Community
+    email: dev@solr.apache.org
+  - name: Houston Putman
+    email: houston@apache.org
+icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
