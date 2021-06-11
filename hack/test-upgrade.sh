@@ -155,7 +155,7 @@ helm install apache helm/solr-operator --set image.tag=latest --set image.pullPo
 ####
 kubectl get solrclouds.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
-  yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.solrPodPolicy, .items.[].spec.zookeeperRef.provided.image.tag)' - \
+  yq eval 'del(.items.[].metadata.annotations."kubectl.kubernetes.io/last-applied-configuration", .items.[].metadata.managedFields, .items.[].metadata.resourceVersion, .items.[].metadata.creationTimestamp, .items.[].metadata.generation, .items.[].metadata.selfLink, .items.[].metadata.uid, .items.[].spec.solrPodPolicy, .items.[].spec.zookeeperRef.provided.image.tag, .items.[].status)' - \
   | kubectl apply -f -
 kubectl get solrprometheusexporters.solr.bloomberg.com --all-namespaces -o yaml | \
   sed "s#solr.bloomberg.com#solr.apache.org#g" | \
