@@ -17,29 +17,60 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 2
-
-image:
-  repository: "solr"
-  # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
-  # pullPolicy: IfNotPresent
-  tag: "8.8.2"
 
 nameOverride: ""
 fullnameOverride: ""
 
+replicaCount: 3
+
+global:
+  imagePullSecrets: []
+  clusterDomain: ""
+
+image:
+  repository: "solr"
+  tag: "8.8.2"
+  # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
+  pullPolicy: ""
+  pullSecrets: null
+
+busyBoxImage: {}
+  # repository: "busybox"
+  # tag: "1.28.0-glibc"
+  # pullPolicy: ""
+  # pullSecrets: null
+
 solrOptions:
-  memory: "-Xms4g -Xmx4g"
+  memory: ""
+  solrOpts: ""
+  solrLogLevel: ""
+  solrGCTune: ""
 
-solrPort: 8983
+  # Enable authentication for the Solr Cloud
+  # More information can be found at:
+  # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#authentication-and-authorization
+  security: {}
+  # authenticationType: Basic
+  # basicAuthSecret: secret-name
+  # probesRequireAuth: false
 
+
+# Specify how the SolrCloud should be addressable
+# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability
+addressability:
+  podPort: 8983
+  commonServicePort: null
+  # external:
+  #   method: "Ingress"
+  #   domainName: "example.com"
+  #   additionalDomainNames: []
+  #   hideNodes: false
+  #   hideCommon: false
+  #   nodePortOverride: null
+
+# Specify how rolling updates should be managed for the Solr StatefulSet
+# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
 updateOptions:
-  # Specify a podManagementPolicy when you want control over how scale-ups and scale-downs occur
-  # https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies
-  # podManagementPolicy: Parallel
-
-  # Specify how rolling updates should be managed for the Solr StatefulSet
-  # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
   method: "Managed"
   # Options for the managed updateMethod
   managedUpdate: {}
@@ -53,16 +84,35 @@ updateOptions:
     # Defaults to 1
     # maxShardReplicasUnavailable: 1
 
-# More information can be found at: https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
+# More information can be found at:
+# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
 storage:
   # Either persistent or ephemeral
-  type: "persistent"
-  capacity: "20Gi"
-  persistent:
-    storageClassName: ""
-    reclaimPolicy: "Retain"
-  # ephemeral: {}
+  type: "ephemeral"
 
+  # Specify a capacity for your data storage.
+  # This effects both ephemeral and persistent storage.
+  capacity: "20Gi"
+
+  # Options for ephemeral storage. Only used if type = "ephemeral"
+  ephemeral: {}
+    # emptyDir: {}
+    # hostPath: {}
+
+  # Options for persistent storage. Only used if type = "ephemeral"
+  persistent: {}
+    # storageClassName: ""
+    # reclaimPolicy: "Retain"
+    # pvc:
+    #   name: ""
+    #   label: ""
+    #   annotations: ""
+    #   storageClass: ""
+
+  # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
+  backupRestoreOptions: {}
+    # volume: {}
+    # directory: ""
 
 zk:
   # This will create a VERY unstable 1-node zk cluster to test with. Do not use for production systems
@@ -75,64 +125,97 @@ zk:
   # If true, this will add the "/<namespace>/<name>" to the end of the provided chroot, if any is provided.
   # This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself.
   uniqueChroot: true
-  acl: {}
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace
-  #
-  # acl:
-  #   secret: zk-acls
-  #   usernameKey: username
-  #   passwordKey: password
+  acl: {}
+  # secret: zk-acls
+  # usernameKey: username
+  # passwordKey: password
 
-# This will add an ingress for the common Solr Service (Round robin between all nodes)
-ingress:
-  enabled: true
-  annotations: {}
-
-
-
-# Enable this to use have a Solr Prometheus Exporter spun up to monitor the created Solr Cloud
-metrics:
-  enabled: false
-
-  # Customize the metrics Pod for your needs
-  podOptions:
-    annotations: {}
-
-  resources:
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    limits:
-      cpu: 500m
-      memory: 2G
-    requests:
-      cpu: 200m
-      memory: 2G
+# Enable TLS between your SolrCloud nodes
+# More information can be found at:
+# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods
+tls: {}
+  # pkcs12Secret:
+  #   name: secret-name
+  #   key: pkcs12-key
+  # keyStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # trustStoreSecret:
+  #   name: secret-name
+  #   key: truststore-key
+  # trustStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # clientAuth: None
+  # verifyClientHostname: false
+  # checkPeerName: false
+  # restartOnTLSSecretUpdate: false
 
 # Customize the Solr Pod for your needs
 podOptions:
-  priorityClassName: "p4"
-
   annotations: {}
+  labels: {}
 
   # Add extra sidecar or init containers, e.g. for log or metrics forwarding
   sidecarContainers: []
   initContainers: []
 
-  terminationGracePeriodSeconds: 30
+  priorityClassName: ""
+  envVars: []
+  affinity: {}
+  tolerations: []
+  nodeSelector: {}
+  podSecurityContext: {}
+  terminationGracePeriodSeconds: null
 
-  resources:
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    limits:
-      cpu: "2"
-      memory: 10G
-    requests:
-      cpu: 500m
-      memory: 4G
+  # Probes for the Solr pods
+  livenessProbe: {}
+  readinessProbe: {}
+  startupProbe: {}
 
-# This is an extremely advanced option, do not use it without understanding the requirements of the solr.xml you provide.
-customSolrXmlConfigMap: ""
+  imagePullSecrets: []
+
+  resources: {}
+    # limits:
+    #   cpu: "2"
+    #   memory: 10G
+    # requests:
+    #   cpu: 500m
+    #   memory: 4G
+
+  volumes: []
+    # - name:
+    #   defaultContainerMount: {}
+    #   source: {}
+
+statefulSetOptions:
+  annotations: {}
+  labels: {}
+
+  # Specify a podManagementPolicy when you want control over how scale-ups and scale-downs occur
+  # https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies
+  podManagementPolicy: Parallel
+
+commonServiceOptions:
+  annotations: {}
+  labels: {}
+
+headlessServiceOptions:
+  annotations: {}
+  labels: {}
+
+nodeServiceOptions:
+  annotations: {}
+  labels: {}
+
+ingressOptions:
+  annotations: {}
+  labels: {}
+
+configMapOptions:
+  annotations: {}
+  labels: {}
+
+  # This is an extremely advanced option, do not use it without understanding the requirements of the solr.xml you provide.
+  providedConfigMap: ""
