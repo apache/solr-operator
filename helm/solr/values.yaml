@@ -17,7 +17,6 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-
 nameOverride: ""
 fullnameOverride: ""
 
@@ -32,27 +31,27 @@ image:
   tag: "8.8.2"
   # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
   pullPolicy: ""
-  pullSecrets: null
+  imagePullSecret: null
 
 busyBoxImage: {}
   # repository: "busybox"
   # tag: "1.28.0-glibc"
   # pullPolicy: ""
-  # pullSecrets: null
+  # imagePullSecret: null
 
 solrOptions:
   memory: ""
-  solrOpts: ""
-  solrLogLevel: ""
-  solrGCTune: ""
+  javaOpts: ""
+  logLevel: ""
+  gcTune: ""
 
   # Enable authentication for the Solr Cloud
   # More information can be found at:
   # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#authentication-and-authorization
   security: {}
-  # authenticationType: Basic
-  # basicAuthSecret: secret-name
-  # probesRequireAuth: false
+    # authenticationType: Basic
+    # basicAuthSecret: secret-name
+    # probesRequireAuth: false
 
 
 # Specify how the SolrCloud should be addressable
@@ -60,17 +59,20 @@ solrOptions:
 addressability:
   podPort: 8983
   commonServicePort: null
-  # external:
-  #   method: "Ingress"
-  #   domainName: "example.com"
-  #   additionalDomainNames: []
-  #   hideNodes: false
-  #   hideCommon: false
-  #   nodePortOverride: null
+  # kubeDomain is defaulted by global.clusterDomain if it's not provided
+  kubeDomain: ""
+  # Use external to provide endpoint(s) for your SolrCloud outside of Kubernetes
+  external: {}
+    # method: "Ingress"
+    # domainName: "example.com"
+    # additionalDomainNames: []
+    # hideNodes: false
+    # hideCommon: false
+    # nodePortOverride: null
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
-updateOptions:
+updateStrategy:
   method: "Managed"
   # Options for the managed updateMethod
   managedUpdate: {}
@@ -99,15 +101,15 @@ storage:
     # emptyDir: {}
     # hostPath: {}
 
-  # Options for persistent storage. Only used if type = "ephemeral"
-  persistent: {}
-    # storageClassName: ""
-    # reclaimPolicy: "Retain"
-    # pvc:
-    #   name: ""
-    #   label: ""
-    #   annotations: ""
-    #   storageClass: ""
+  # Options for persistent storage. Only used if type = "persistent"
+  persistent:
+    storageClassName: ""
+    reclaimPolicy: "Retain"
+    pvc:
+      name: ""
+      labels: {}
+      annotations: {}
+      storageClass: ""
 
   # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
   backupRestoreOptions: {}
@@ -127,14 +129,14 @@ zk:
   uniqueChroot: true
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace
   acl: {}
-  # secret: zk-acls
-  # usernameKey: username
-  # passwordKey: password
+    # secret: zk-acls
+    # usernameKey: username
+    # passwordKey: password
 
 # Enable TLS between your SolrCloud nodes
 # More information can be found at:
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods
-tls: {}
+solrTLS: {}
   # pkcs12Secret:
   #   name: secret-name
   #   key: pkcs12-key
@@ -195,7 +197,8 @@ statefulSetOptions:
 
   # Specify a podManagementPolicy when you want control over how scale-ups and scale-downs occur
   # https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies
-  podManagementPolicy: Parallel
+  # The default is: Parallel
+  podManagementPolicy: ""
 
 commonServiceOptions:
   annotations: {}

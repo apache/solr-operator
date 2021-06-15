@@ -27,74 +27,108 @@ spec:
     {{- if .Values.image.pullPolicy }}
     pullPolicy: {{ .Values.image.pullPolicy }}
     {{- end }}
-  solrJavaMem: {{ .Values.solrOptions.memory }}
+    {{- if .Values.image.imagePullSecret }}
+    imagePullSecret: {{ .Values.image.imagePullSecret }}
+    {{- end }}
+
+  {{- if .Values.busyBoxImage }}
+  busyBoxImage:
+    repository: {{ .Values.busyBoxImage.repository }}
+    tag: {{ .Values.busyBoxImage.tag }}
+    {{- if .Values.busyBoxImage.pullPolicy }}
+    pullPolicy: {{ .Values.busyBoxImage.pullPolicy }}
+    {{- end }}
+    {{- if .Values.busyBoxImage.imagePullSecret }}
+    imagePullSecret: {{ .Values.busyBoxImage.imagePullSecret }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.solrOptions.javaMemory }}
+  solrJavaMem: {{ .Values.solrOptions.javaMemory }}
+  {{- end }}
+  {{- if .Values.solrOptions.logLevel }}
+  solrLogLevel: {{ .Values.solrOptions.logLevel }}
+  {{- end }}
+  {{- if .Values.solrOptions.gcTune }}
+  solrGCTune: {{ .Values.solrOptions.gcTune }}
+  {{- end }}
+  {{- if .Values.solrOptions.javaOpts }}
+  solrOpts: {{ .Values.solrOptions.javaOpts }}
+  {{- end }}
+
+  {{- if .Values.solrOptions.security }}
+  solrSecurity:
+    {{- toYaml .Values.solrOptions.security | nindent 4 -}}
+  {{- end }}
+
+  {{- if (or .Values.solrAddressability .Values.global.clusterDomain) }}
   solrAddressability:
-    kubeDomain: {{ include "solr.kubeDomain" . }}
+    {{- if .Values.solrAddressability.podPort }}
+    podPort: {{ .Values.solrAddressability.podPort }}
+    {{- end }}
+    {{- if .Values.solrAddressability.commonServicePort }}
+    commonServicePort: {{ .Values.solrAddressability.commonServicePort }}
+    {{- end }}
+    {{- if .Values.solrAddressability.external }}
+    external:
+      {{- toYaml .Values.solrAddressability.external | nindent 6 -}}
+    {{- end }}
+    kubeDomain: {{ .Values.solrAddressability.kubeDomain | default .Values.global.clusterDomain | quote }}
+  {{- end }}
+
+  {{- if .Values.updateStrategy }}
   updateStrategy:
-    method: {{ .Values.updateOptions.method }}
-    {{- if and (eq .Values.updateOptions.method "Managed") .Values.updateOptions.managedUpdate }}
-    managed:
-      {{- toYaml .Values.updateOptions.managedUpdate | nindent 6 }}
-    {{- end }}
-  customSolrKubeOptions:
-    podOptions:
-      labels:
-        sdr.appname: {{ include "solr.sdr-appname" . }}
-      {{- with .Values.podOptions.annotations }}
-      annotations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      resources:
-        {{- toYaml .Values.resources | nindent 8 }}
-      priorityClassName: {{ .Values.priorityClassName }}
-      {{- if .Values.logs.splunk.enabled }}
-      volumes:
-        {{- include "solr.splunk.volume" . | nindent 8 }}
-      {{- end }}
-      {{- if or .Values.podOptions.sidecarContainers .Values.logs.splunk.enabled }}
-      sidecarContainers:
-        {{- if .Values.logs.splunk.enabled }}
-        {{- include "solr.splunk.sidecar" . | nindent 8 }}
-        {{- end }}
-        {{- if .Values.podOptions.sidecarContainers }}
-        {{- toYaml .Values.podOptions.sidecarContainers | nindent 8 }}
-        {{- end }}
-      {{- end }}
-      {{- if .Values.podOptions.terminationGracePeriodSeconds }}
-      terminationGracePeriodSeconds: {{ .Values.podOptions.terminationGracePeriodSeconds }}
-      {{- end }}
-      {{- if .Values.podOptions.initContainers }}
-      initContainers:
-        {{- toYaml .Values.podOptions.initContainers | nindent 8 }}
-      {{- end }}
-    {{- if .Values.updateOptions.podManagementPolicy }}
-    statefulSetOptions:
-      podManagementPolicy: {{ .Values.updateOptions.podManagementPolicy }}
-    {{- end }}
-    {{- if .Values.customSolrXmlConfigMap }}
-    configMapOptions:
-      providedConfigMap: {{ .Values.customSolrXmlConfigMap }}
-    {{- end }}
-  {{- if eq .Values.storage.type "persistent" }}
+    {{ toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+
   dataStorage:
+    {{- if eq .Values.storage.type "persistent" }}
     persistent:
       reclaimPolicy: {{ .Values.storage.persistent.reclaimPolicy }}
       pvcTemplate:
+        metadata:
+          name: {{ .Values.storage.persistent.pvc.name }}
+          {{- if .Values.storage.persistent.pvc.labels }}
+          labels:
+            {{ toYaml .Values.storage.persistent.pvc.labels | nindent 12 }}
+          {{- end }}
+          {{- if .Values.storage.persistent.pvc.annotations }}
+          annotations:
+            {{ toYaml .Values.storage.persistent.pvc.annotations | nindent 12 }}
+          {{- end }}
         spec:
           {{- if .Values.storage.capacity }}
           resources:
             requests:
               storage: {{ .Values.storage.capacity }}
           {{- end }}
-          {{- if .Values.storage.persistent.storageClassName }}
           storageClassName: {{ .Values.storage.persistent.storageClassName }}
-          {{- end }}
-  {{- else if and (eq .Values.storage.type "ephemeral") .Values.storage.capacity }}
-  dataStorage:
+    {{- else if (eq .Values.storage.type "ephemeral") }}
     ephemeral:
+      {{- if (and .Values.storage.ephemeral.hostPath (not .Values.storage.ephemeral.emptyDir)) }}
+      hostPath:
+        {{ toYaml .Values.storage.ephemeral.hostPath | nindent 8 }}
+      {{- end }}
+      {{- else }}
       emptyDir:
+        {{- if .Values.storage.ephemeral.emptyDir }}
+        {{ toYaml .Values.storage.ephemeral.emptyDir | nindent 8 }}
+        {{- end }}
         sizeLimit: {{ .Values.storage.capacity }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.storage.backupRestoreOptions }}
+    backupRestoreOptions:
+      {{ toYaml .Values.storage.backupRestoreOptions | nindent 6 }}
+    {{- end }}
+
+  {{- if .Values.solrTLS }}
+  solrTLS:
+    {{- toYaml .Values.solrTLS | nindent 4 -}}
   {{- end }}
+
+  {{ include "solr.custom-kube-options" . | indent 2 }}
+
   zookeeperRef:
     connectionInfo:
       internalConnectionString: "{{ trim (include "solr.zkAddress" .) }}"

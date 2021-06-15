@@ -49,13 +49,6 @@ Provides the name of the solrcloud object (the fullname without '-solrcloud' app
 {{- end }}
 
 {{/*
-Provides the name of the solrcloud metrics exporter object
-*/}}
-{{- define "solr.metrics.fullname" -}}
-{{ include "solr.fullname-no-suffix" . }}-solr-metrics
-{{- end }}
-
-{{/*
 Create chart name and version as used by the chart label.
 */}}
 {{- define "solr.chart" -}}
@@ -77,37 +70,4 @@ Selector labels
 {{- define "solr.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "solr.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-{{- end }}
-
-{{/*
-Common Metrics labels
-*/}}
-{{- define "solr.metrics.labels" -}}
-helm.sh/chart: {{ include "solr.chart" . }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
-
-{{/*
-Abstract out the sdr.appname for the metrics
-*/}}
-{{- define "solr.metrics.sdr-appname" -}}
-{{- default (printf "%s-metrics" (include "solr.sdr-appname" .)) .Values.metrics.sdrAppname }}
-{{- end }}
-
-{{/*
-Create the name of the service account to use
-*/}}
-{{- define "solr.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create }}
-{{- default (include "solr.fullname" .) .Values.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.serviceAccount.name }}
-{{- end }}
-{{- end }}
-
-{{/*
-Abstract out the Zookeeper Chroot
-*/}}
-{{- define "solr.zkChroot" -}}
-/{{ printf "%s%s" (trimSuffix "/" .Values.zk.chroot) (ternary (printf "/%s/%s" .Release.Namespace (include "solr.fullname-no-suffix" .)) "" .Values.zk.uniqueChroot) | trimPrefix "/" }}
 {{- end }}
