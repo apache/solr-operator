@@ -18,13 +18,12 @@ name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
 
 version: 0.4.0-prerelease
-appVersion: 8.8.2
+appVersion: 8.9.0
 kubeVersion: ">= 1.16.0-0"
 home: https://solr.apache.org
 sources:
   - https://github.com/apache/solr
   - https://github.com/apache/solr-operator
-
 keywords:
   - solr
   - apache
@@ -36,3 +35,30 @@ maintainers:
   - name: Houston Putman
     email: houston@apache.org
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
+annotations:
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "true"
+  # Add change log for a single release here.
+  # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#supported-annotations
+  artifacthub.io/changes: |
+    - kind: added
+      description: Official Solr Helm chart created. Works with the Solr Operator.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/112
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/276
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
+  artifacthub.io/links: |
+    - name: "Solr Source"
+      url: https://github.com/apache/solr
+    - name: "Helm Chart Source"
+      url: https://github.com/apache/solr-operator
+  artifacthub.io/images: |
+    - name: solr
+      image: apache/solr:8.9
+  artifacthub.io/signKey: |
+    fingerprint: <fingerprint>
+    url: https://dist.apache.org/repos/dist/release/solr/KEYS
