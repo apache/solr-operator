@@ -117,18 +117,41 @@ storage:
     # directory: ""
 
 zk:
-  # This will create a VERY unstable 1-node zk cluster to test with. Do not use for production systems
-  # Remove this option once helm has the ability to use expressions in dependency conditions: !zk.address instead of zk.create
-  create: true
-  # Use this if you have an existing Zookeeper ensemble you want to use for the SolrCloud
-  address: ""
-  # Fill in this field if the ACI Coordination team has given you a namespace.
+  # A ZooKeeper Node to host all the information for this SolrCloud under
   chroot: ""
   # If true, this will add the "/<namespace>/<name>" to the end of the provided chroot, if any is provided.
   # This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself.
   uniqueChroot: true
-  # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace
+
+  # Use an existing ZooKeeper cluster
+  # Address available within the Kubernetes Cluster
+  address: ""
+  # Address available both within and outside the Kubernetes Cluster
+  externalAddress: ""
+
+  # If no "address" is provided, this defines the ZookeeperCluster created for this SolrCloud
+  provided:
+    replicas: 3
+    image: {}
+      # repository: "pravega/zookeeper"
+      # tag: ""
+      # pullPolicy: IfNotPresent
+      # imagePullSecret: ""
+    zookeeperPodPolicy: {}
+      # affinity: {}
+      # tolerations: []
+      # nodeSelector: {}
+      # env: []
+      # resources: {}
+
+  # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
+    # secret: zk-acls
+    # usernameKey: username
+    # passwordKey: password
+
+  # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
+  readOnlyAcl: {}
     # secret: zk-acls
     # usernameKey: username
     # passwordKey: password

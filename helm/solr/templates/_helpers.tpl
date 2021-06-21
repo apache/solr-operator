@@ -71,3 +71,10 @@ Selector labels
 app.kubernetes.io/name: {{ include "solr.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
+
+{{/*
+ZK ChRoot
+*/}}
+{{ define "solr.zk.chroot" }}
+/{{ printf "%s%s" (trimSuffix "/" .Values.zk.chroot) (ternary (printf "/%s/%s" .Release.Namespace (include "solr.fullname" .)) "" .Values.zk.uniqueChroot) | trimPrefix "/" }}
+{{ end }}

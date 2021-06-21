@@ -130,12 +130,41 @@ spec:
   {{ include "solr.custom-kube-options" . | indent 2 }}
 
   zookeeperRef:
+    {{- if (or .Values.zk.address .Values.zk.externalAddress) }}
     connectionInfo:
-      internalConnectionString: "{{ trim (include "solr.zkAddress" .) }}"
-      chroot: "{{ trim (include "solr.zkChroot" .) }}"
+      internalConnectionString: {{ .Values.zk.address | default .Values.zk.externalAddress | quote }}
+      {{- if .Values.zk.externalAddress }}
+      externalAddress: {{ .Values.zk.externalAddress | quote }}
+      {{- end }}
+      chroot: {{ trim (include "solr.zk.chroot" .) | quote }}
       {{- if .Values.zk.acl }}
       acl:
-        secret: {{ .Values.zk.acl.secret }}
-        usernameKey: {{ .Values.zk.acl.usernameKey }}
-        passwordKey: {{ .Values.zk.acl.passwordKey }}
+        {{- toYaml .Values.zk.acl | nindent 8 }}
       {{- end }}
+      {{- if .Values.zk.readOnlyAcl }}
+      readOnlyAcl:
+        {{- toYaml .Values.zk.readOnlyAcl | nindent 8 }}
+      {{- end }}
+    {{- else }}
+    provided:
+      chroot: {{ trim (include "solr.zk.chroot" .) | quote }}
+      {{- if .Values.zk.provided.replicas }}
+      replicas: {{ .Values.zk.provided.replicas }}
+      {{- end }}
+      {{- if .Values.zk.provided.image }}
+      image:
+        {{ toYaml .Values.zk.provided.image | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.zookeeperPodPolicy }}
+      zookeeperPodPolicy:
+        {{ toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.acl }}
+      acl:
+        {{- toYaml .Values.zk.acl | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.readOnlyAcl }}
+      readOnlyAcl:
+        {{- toYaml .Values.zk.readOnlyAcl | nindent 8 }}
+      {{- end }}
+    {{- end }}
