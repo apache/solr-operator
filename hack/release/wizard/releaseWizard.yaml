@@ -728,6 +728,11 @@ groups:
         logfile: propagate_version.log
         tee: true
       - !Command
+        cmd: ./hack/release/artifacts/set_signing_key.sh -f "{{ gpg_fingerprint | default('<gpg_fingerprint>', True) }}"
+        comment: Set the signing key throughout the repo.
+        logfile: set_signing_key.log
+        tee: true
+      - !Command
         cmd: git commit -am "Solr Operator {{ release_version }} Release"
         comment: "We are only committing with the new version, we will not push to the release branch until after the vote has succeeded."
         logfile: commit.log
