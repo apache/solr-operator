@@ -179,7 +179,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | serviceAccount.create | boolean | `true` | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
 | serviceAccount.name | string | `""` | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | |
 | resources.limits | map[string]string |  | Provide Resource limits for the Solr Operator container |
-| resources.limits | map[string]string |  | Provide Resource requests for the Solr Operator container |
+| resources.requests | map[string]string |  | Provide Resource requests for the Solr Operator container |
 | labels | map[string]string |  | Custom labels to add to the Solr Operator pod |
 | annotations | map[string]string |  | Custom annotations to add to the Solr Operator pod |
 | nodeSelector | map[string]string |  | Add a node selector for the Solr Operator pod, to specify where it can be scheduled |

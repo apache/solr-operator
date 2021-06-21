@@ -31,13 +31,13 @@ image:
   tag: "8.8.2"
   # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
   pullPolicy: ""
-  imagePullSecret: null
+  imagePullSecret: ""
 
 busyBoxImage: {}
   # repository: "busybox"
   # tag: "1.28.0-glibc"
   # pullPolicy: ""
-  # imagePullSecret: null
+  # imagePullSecret: ""
 
 solrOptions:
   memory: ""
