@@ -108,7 +108,6 @@ spec:
       {{- if (and .Values.storage.ephemeral.hostPath (not .Values.storage.ephemeral.emptyDir)) }}
       hostPath:
         {{ toYaml .Values.storage.ephemeral.hostPath | nindent 8 }}
-      {{- end }}
       {{- else }}
       emptyDir:
         {{- if .Values.storage.ephemeral.emptyDir }}
