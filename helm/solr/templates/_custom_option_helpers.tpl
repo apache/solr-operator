@@ -56,9 +56,9 @@ nodeSelector:
 podSecurityContext:
   {{- toYaml .Values.podOptions.podSecurityContext }}
 {{- end }}
-{{- if .Values.podOptions.imagePullSecrets }}
+{{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
 imagePullSecrets:
-  {{- toYaml .Values.podOptions.imagePullSecrets }}
+  {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
 {{- end }}
 {{- if .Values.podOptions.volumes }}
 volumes:

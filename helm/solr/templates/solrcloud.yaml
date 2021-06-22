@@ -102,7 +102,7 @@ spec:
             requests:
               storage: {{ .Values.storage.capacity }}
           {{- end }}
-          storageClassName: {{ .Values.storage.persistent.storageClassName }}
+          storageClassName: {{ .Values.storage.persistent.pvc.storageClassName }}
     {{- else if (eq .Values.storage.type "ephemeral") }}
     ephemeral:
       {{- if (and .Values.storage.ephemeral.hostPath (not .Values.storage.ephemeral.emptyDir)) }}
@@ -153,6 +153,10 @@ spec:
       {{- if .Values.zk.provided.image }}
       image:
         {{ toYaml .Values.zk.provided.image | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.persistence }}
+      persistence:
+        {{ toYaml .Values.zk.provided.persistence | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.provided.zookeeperPodPolicy }}
       zookeeperPodPolicy:

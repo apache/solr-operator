@@ -90,12 +90,12 @@ The command removes all the Kubernetes components associated with the chart and 
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicaCount | int | `3` | The number of Solr pods to run in the Solr Cloud. |
-| image.repository | string | `apache/solr` | The repository of the Solr image |
-| image.tag | string | `8.9` | The tag/version of Solr to run |
+| image.repository | string | `"apache/solr"` | The repository of the Solr image |
+| image.tag | string | `"8.9"` | The tag/version of Solr to run |
 | image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string |  | PullSecret for the Solr image |
-| busyBoxImage.repository | string | `apache/solr` | The repository of the BusyBox image |
-| busyBoxImage.tag | string | `8.9` | The tag/version of BusyBox to run |
+| busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
+| busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
 | busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
 | busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
 | solrOptions.memory | string | `"-Xms1g -Xmx2g"` | PullSecret for the BusyBox image |
@@ -105,13 +105,111 @@ The command removes all the Kubernetes components associated with the chart and 
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
-| solrTLS.pkcs12Secret.name | string |  |  |
+| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
+| updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
+| updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
+
+### Storage Options
+
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| storage.type | string | `"ephemeral"` | Whether your Solr data storage should be `ephemeral` or `persistent`. The `storage.<ephemeral,persistent>.*` options are used only if their storage type is selected here. |
+| storage.capacity | string | `"20Gi"` | Capacity for your data storage, ephemeral or persistent |
+| storage.ephemeral.emptyDir | object | | Specify options for and ephemeral emptyDir volume to store Solr data. |
+| storage.ephemeral.hostPath | object | | Specify options for and ephemeral hostPath volume to store Solr data. Is not used when `emptyDir` is specified. |
+| storage.persistent.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when Solr is deleted or scaled down. Either `Retain` or `Delete`. |
+| storage.persistent.pvc.name | string | | Override the default Solr data PVC base-name |
+| storage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
+| storage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
+| storage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
+| storage.backupRestoreOptions.volume | object | | A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
+| storage.backupRestoreOptions.directory | string | | Override the default backup-restore volume location in the Solr container |
+
+### Addressability Options
+
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+
+If providing external addressability, then `method` and `domainName` must be provided.
+External addressability is disabled by default.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| addressability.podPort | int | `8983` | The port that Solr should listen on within the pod. |
+| addressability.commonServicePort | int | `` | The port that Solr's load-balancing common service should listen on. |
+| addressability.kubeDomain | string | | The cluster domain the Kubernetes is addressed under. Overrides the `global.clusterDomain` option. |
+| addressability.external.method | string | | The method by which Solr should be made addressable outside of the Kubernetes cluster. Either `Ingress` or `ExternalDNS` |
+| addressability.external.domainName | string | | The base domain name that Solr nodes should be addressed under. |
+| addressability.external.additionalDomainNames | []string | | Additional base domain names that Solr nodes should be addressed under. These are not used to advertise Solr locations, just the `domainName` is. |
+| addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
+| addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
+| addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with TLS. |
+
+
+### ZK Options
+
+Specify what ZooKeeper cluster your SolrCloud should connect to.
+If you specify `zk.address` or `zk.externalAddress`, then no ZooKeeper cluster will be created for you.
+If neither of those options are specified, then a new ZooKeeper cluster will be created by the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator), with the settings provided under `zk.provided.*`.
+
+Currently the Zookeeper Operator does not support ACLs, so do not use the provided ZK cluster in conjunction with them.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| zk.chroot | string | | A ZooKeeper Node to host all the information for this SolrCloud under |
+| zk.uniqueChroot | boolean | `false` | If true, this will add the `/<namespace>/<name>` to the end of the provided chroot, if any is provided. This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself. |
+| zk.address | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within the Kubernetes cluster. |
+| zk.externalAddress | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within and outside the Kubernetes cluster. |
+| zk.provided.replicas | int | `3` | The number of replicas to run for your ZooKeeper cluster. |
+| zk.provided.replicas | int | `3` | The number of replicas to run for your ZooKeeper cluster. |
+| zk.provided.image.repository | string | `"pravega/zookeeper"` | The repository of the Solr image |
+| zk.provided.image.tag | string | | The tag/version of Zookeeper to run. Generally leave this blank, so that the Zookeeper Operator can manage it. |
+| zk.provided.image.pullPolicy | string | `"IfNotPresent"` | PullPolicy for the ZooKeeper image |
+| zk.provided.image.imagePullSecret | string |  | PullSecret for the ZooKeeper image |
+| zk.provided.persistence.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when ZooKeeper is deleted or scaled down. Either `Retain` or `Delete`. |
+| zk.provided.persistence.spec | object | | A PVC Spec for the ZooKeeper PVC(s) |
+| zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
+| zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
+| zk.provided.zookeeperPodPolicy.resources.requests | map[string]string |  | Provide Resource requests for the ZooKeeper containers |
+| zk.provided.zookeeperPodPolicy.nodeSelector | map[string]string |  | Add a node selector for the ZooKeeper pod, to specify where it can be scheduled |
+| zk.provided.zookeeperPodPolicy.affinity | object |  | Add Kubernetes affinity information for the ZooKeeper pod |
+| zk.provided.zookeeperPodPolicy.tolerations | []object |  | Specify a list of Kubernetes tolerations for the ZooKeeper pod |
+| zk.provided.zookeeperPodPolicy.envVars | []object |  | List of additional environment variables for the ZooKeeper container |
+| zk.acl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK admin ACL information |
+| zk.acl.usernameKey | string |  | Key in the Admin ACL Secret that stores the ACL username |
+| zk.acl.passwordKey | string |  | Key in the Admin ACL Secret that stores the ACL password |
+| zk.readOnlyAcl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK read-only ACL information |
+| zk.readOnlyAcl.usernameKey | string |  | Key in the read-only ACL Secret that stores the ACL username |
+| zk.readOnlyAcl.passwordKey | string |  | Key in the read-only ACL Secret that stores the ACL password |
+
+### TLS Options
+
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+
+Solr TLS is disabled by default. Provide any of the following to enable it.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| solrTLS.clientAuth | string | `"None"` | Whether clientAuth is Needed, Wanted or None in Solr |
+| solrTLS.verifyClientHostname | boolean | `false` | Whether Solr should verify client hostnames |
+| solrTLS.checkPeerName | boolean | `false` | Whether Solr should check peer names |
+| solrTLS.restartOnTLSSecretUpdate | boolean | `false` | Whether Solr pods should auto-restart when the TLS Secrets are updated |
+| solrTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the Solr TLS pkcs12 file |
+| solrTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the Solr TLS pkcs12 file |
+| solrTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS keystore |
+| solrTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS keystore |
+| solrTLS.trustStoreSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore |
+| solrTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore |
+| solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore password |
+| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
+| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
 
 ### Global Options
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| global.imagePullSecrets | object[] |  | The list of imagePullSecrets to include in pods |
+| global.imagePullSecrets | []object |  | The list of imagePullSecrets to include in pods |
 | global.clusterDomain | string |  | The cluster domain the Kubernetes is addressed under. |
 
 ### Custom Kubernetes Options
@@ -138,7 +236,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | podOptions.volumes | []object |  | List of additional volumes to attach to the Solr pod, and optionally how to mount them to the Solr container |
 | statefulSetOptions.annotations | map[string]string |  | Custom annotations to add to the Solr statefulSet |
 | statefulSetOptions.labels | map[string]string |  | Custom labels to add to the Solr statefulSet |
-| statefulSetOptions.podManagementPolicy | string | "Parallel" | Policy for how Solr pods should be managed in the statefulSet, "OrderedReady" or "Parallel". |
+| statefulSetOptions.podManagementPolicy | string | `"Parallel"` | Policy for how Solr pods should be managed in the statefulSet, ["OrderedReady" or "Parallel"](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies) |
 | commonServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr common service |
 | commonServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr common service |
 | headlessServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr headless service |

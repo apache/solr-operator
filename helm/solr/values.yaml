@@ -103,13 +103,12 @@ storage:
 
   # Options for persistent storage. Only used if type = "persistent"
   persistent:
-    storageClassName: ""
     reclaimPolicy: "Retain"
     pvc:
       name: ""
       labels: {}
       annotations: {}
-      storageClass: ""
+      storageClassName: ""
 
   # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
   backupRestoreOptions: {}
@@ -121,7 +120,7 @@ zk:
   chroot: ""
   # If true, this will add the "/<namespace>/<name>" to the end of the provided chroot, if any is provided.
   # This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself.
-  uniqueChroot: true
+  uniqueChroot: false
 
   # Use an existing ZooKeeper cluster
   # Address available within the Kubernetes Cluster
@@ -137,6 +136,9 @@ zk:
       # tag: ""
       # pullPolicy: IfNotPresent
       # imagePullSecret: ""
+    persistence: {}
+      # reclaimPolicy: {}
+      # spec: {}
     zookeeperPodPolicy: {}
       # affinity: {}
       # tolerations: []
