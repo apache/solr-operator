@@ -56,6 +56,10 @@ annotations:
       url: https://github.com/apache/solr
     - name: "Helm Chart Source"
       url: https://github.com/apache/solr-operator
+    - name: "Solr Documentation"
+      url: https://solr.apache.org/guide/
+    - name: "Solr on Kube Tutorials"
+      url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
       image: apache/solr:8.9

@@ -6,7 +6,14 @@ Apache Solr is the popular, blazing-fast, open source enterprise search platform
 Solr is highly reliable, scalable and fault tolerant, providing distributed indexing, replication and load-balanced querying, automated failover and recovery, centralized configuration and more.
 Solr powers the search and navigation features of many of the world's largest internet sites.
 
-Documentation around using the Solr Operator can be found at it's [official site](https://solr.apache.org).
+Documentation around using Apache Solr can be found on it's [official site](https://solr.apache.org).
+
+## Tutorials
+
+Check out the following tutorials on getting started with Solr.
+
+- [Solr on Kubernetes Tutorials](https://solr.apache.org/operator/resources.html#tutorials)
+- [Using Solr Tutorials](https://solr.apache.org/resources.html#tutorials)
 
 ## Dependencies
 
@@ -16,6 +23,9 @@ You can install the Solr Operator via it's [Helm chart](https://artifacthub.io/p
 If you are using a provided Zookeeper instance for your Solr Cloud, then you must also install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 However, it is [installed by default as a dependency](https://artifacthub.io/packages/helm/apache-solr/solr-operator#installing-the-zookeeper-operator) when using the Solr Operator Helm chart.
 
+Please make sure that the same version of the Solr Operator chart and Solr chart are installed.
+The Solr version can be any supported version of Solr you wish to run, but the _chart version_ must match the chart version of the Solr Operator that you have installed.
+
 ## Using the Helm Chart
 
 ### Installing the Chart
@@ -23,63 +33,36 @@ However, it is [installed by default as a dependency](https://artifacthub.io/pac
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
-helm install solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
+helm install example apache-solr/solr --version 0.4.0-prerelease --set image.tag=8.8.0
 ```
 
-The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
+The command deploys the a SolrCloud object on the Kubernetes cluster with the default configuration.
+The [Solr Operator](https://solr.apache.org/operator) is then in charge of creating the necessary Kubernetes resources to run that Solr Cloud.
 The [configuration](#chart-values) section lists the parameters that can be configured during installation.
 
-_Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
+_Note that the Helm chart version does not contain a `v` prefix, which the Solr Operator release versions do._
 
-### Upgrading the Solr Operator
+### Upgrading Solr
 
-If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
-
-```bash
-kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
-helm upgrade solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
-```
-
-#### The ZookeeperCluster CRD
-
-If you use the provided Zookeeper Cluster in the SolrCloud Spec, it is important to make sure you have the correct `ZookeeperCluster` CRD installed as well.
-
-The Zookeeper Operator Helm chart includes its CRDs when installing, however the way the CRDs are managed can be considered risky.
-If we let the Zookeeper Operator Helm chart manage the Zookeeper CRDs, then users could see outages when [uninstalling the chart](#uninstalling-the-chart).
-Therefore, by default, we tell the Zookeeper Operator to not install the Zookeeper CRDs.
-You can override this, assuming the risks, by setting `zookeeper-operator.crd.create: true`.
-
-For manual installation of the ZookeeperCluster CRD, you can find the file in the [zookeeper-operator repo](https://github.com/pravega/zookeeper-operator/blob/master/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml), for the correct release,
-or use the convenience download locations provided below.
-The Solr CRD releases have bundled the ZookeeperCluster CRD required in each version.
+If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-# Install all Solr CRDs as well as the dependency CRDS (ZookeeperCluster) for the given version of the Solr Operator
-kubectl create -f "https://solr.apache.org/operator/downloads/crds/<solr operator version>/all-with-dependencies.yaml"
-
-# Install *just* the ZookeeperCluster CRD used in the given version of the Solr Operator
-kubectl create -f "https://solr.apache.org/operator/downloads/crds/<solr operator version>/zookeeperclusters.yaml"
+helm upgrade example apache-solr/solr --version 0.4.0-prerelease --reuse-values --set image.tag=8.9.0
 ```
 
-Examples:
-- `https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml`  
-  Includes all Solr CRDs and dependency CRDs, including `ZookeeperCluster`, in the `v0.3.0` Solr Operator release
-- `https://solr.apache.org/operator/downloads/crds/v0.2.8/zookeeperclusters.yaml`  
-  Just the ZookeeperCluster CRD required in the `v0.2.8` Solr Operator release
+The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
+Be sure to select the [update strategy](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
+However, the `Managed` strategy is highly recommended.
 
 ### Uninstalling the Chart
 
-To uninstall/delete the Solr Operator, run:
+To uninstall/delete the Solr Cloud, run:
 
 ```bash
-helm uninstall solr-operator
+helm uninstall example
 ```
 
-The command removes all the Kubernetes components associated with the chart and deletes the release, except for the Solr CRDs.
-
-**NOTE: If you are using the Zookeeper Operator helm chart as a dependency and have set `zookeeper-operator.crds.install: true`, this will also delete the ZookeeperCluster CRD, thus deleting all Zookeeper instances in the Kubernetes Cluster.**
-
+The command removes the SolrCloud resource, and then Kubernetes will garbage collect the resources owned by that SolrCloud, including the StatefulSet, Services, ConfigMap, etc.
 
 ## Chart Values
 
@@ -161,7 +144,6 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.uniqueChroot | boolean | `false` | If true, this will add the `/<namespace>/<name>` to the end of the provided chroot, if any is provided. This will let you deploy multiple Solr Clouds without having to manage the specific chroots yourself. |
 | zk.address | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within the Kubernetes cluster. |
 | zk.externalAddress | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within and outside the Kubernetes cluster. |
-| zk.provided.replicas | int | `3` | The number of replicas to run for your ZooKeeper cluster. |
 | zk.provided.replicas | int | `3` | The number of replicas to run for your ZooKeeper cluster. |
 | zk.provided.image.repository | string | `"pravega/zookeeper"` | The repository of the Solr image |
 | zk.provided.image.tag | string | | The tag/version of Zookeeper to run. Generally leave this blank, so that the Zookeeper Operator can manage it. |

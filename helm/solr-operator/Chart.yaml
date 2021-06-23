@@ -45,6 +45,9 @@ annotations:
   artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
+  artifacthub.io/links: |
+    - name: "Tutorials"
+      url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
