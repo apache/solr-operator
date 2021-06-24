@@ -637,6 +637,8 @@ groups:
   - !Todo
     id: helm_change_log
     title: Add changelog to the helm chart
+    links:
+      - https://www.apache.org/foundation/voting.html
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       confirm_each_command: false
@@ -657,7 +659,14 @@ groups:
           comment: |
             Add changelog at annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
             This will replace the "Change 1" and "Change 2" lines.
-            You can only input the changelog as a single-layer bulleted list.
+            The Changelog format is described here: https://artifacthub.io/docs/topics/annotations/helm/#example
+          tee: true
+        - !Command
+          cmd: "{{ editor }} helm/solr/Chart.yaml"
+          comment: |
+            Add changelog at annotations.'artifacthub.io/changes', in helm/solr/Chart.yaml.
+            This will replace the "Change 1" and "Change 2" lines.
+            The Changelog format is described here: https://artifacthub.io/docs/topics/annotations/helm/#example
           tee: true
         - !Command
           cmd: git commit -am "Solr Operator {{ release_version }} Changelog"
@@ -851,16 +860,17 @@ groups:
         apache/solr-operator:{{ release_version }}-rc{{ rc_number }}
 
       The RC Helm repo can be added with:
-        helm repo add solr-operator-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
+        helm repo add apache-solr-rc https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/helm-charts
 
-      You can install the RC Solr Operator and Solr CRDs with:
+      You can install the RC Solr Operator and Solr CRDs and an example Solr Cloud with:
         curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
         # This will export your public keys into a format that helm can understand.
         # Skip verification by removing "--verify" in the helm command below.
         if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "{{ gpg_key | default("<gpg_key_id>", True) }}"); then gpg --export >~/.gnupg/pubring.gpg; fi
         kubectl create -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml || \
           kubectl replace -f https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}/crds/all-with-dependencies.yaml
-        helm install --verify solr-operator solr-operator-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
+        helm install --verify solr-operator apache-solr-rc/solr-operator --set image.tag={{ release_version }}-rc{{ rc_number }}
+        helm install --verify example apache-solr-rc/solr
 
       You can run the full smoke tester directly with this command: (First checkout the {{ release_branch }} branch of the solr-operator)
 
@@ -1142,10 +1152,13 @@ groups:
       - publish_docker_image
       - publish_helm_charts
     description: |
-      Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} Helm Chart.
+      Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} version of the Solr Operator and Solr Helm Charts.
       Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
+
+      The ChangeLog is very finicky, so make sure that it renders correctly.
     links:
       - https://artifacthub.io/packages/helm/apache-solr/solr-operator
+      - https://artifacthub.io/packages/helm/apache-solr/solr
 - !TodoGroup
   id: website
   title: Update the website

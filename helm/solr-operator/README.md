@@ -9,7 +9,7 @@ Documentation around using the Solr Operator can be found at it's [official site
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html).
+Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
 There may be breaking changes between the version you are running and the version you want to upgrade to.
 
 ## Using the Helm Chart

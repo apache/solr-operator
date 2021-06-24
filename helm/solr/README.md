@@ -26,6 +26,11 @@ However, it is [installed by default as a dependency](https://artifacthub.io/pac
 Please make sure that the same version of the Solr Operator chart and Solr chart are installed.
 The Solr version can be any supported version of Solr you wish to run, but the _chart version_ must match the chart version of the Solr Operator that you have installed.
 
+## Upgrade Notes
+
+Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
+There may be breaking changes between the version you are using and the version you want to upgrade to.
+
 ## Using the Helm Chart
 
 ### Installing the Chart

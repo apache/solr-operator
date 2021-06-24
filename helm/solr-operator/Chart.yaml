@@ -52,7 +52,7 @@ annotations:
     fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
-  # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#supported-annotations
+  # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
       description: Addition 1
