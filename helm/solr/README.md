@@ -77,7 +77,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 |-----|------|---------|-------------|
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
-| replicaCount | int | `3` | The number of Solr pods to run in the Solr Cloud. |
+| replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"apache/solr"` | The repository of the Solr image |
 | image.tag | string | `"8.9"` | The tag/version of Solr to run |
 | image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
@@ -86,7 +86,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
 | busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
 | busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
-| solrOptions.memory | string | `"-Xms1g -Xmx2g"` | PullSecret for the BusyBox image |
+| solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | PullSecret for the BusyBox image |
 | solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line |
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
@@ -97,27 +97,27 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
 
-### Storage Options
+### Data Storage Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
+See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| storage.type | string | `"ephemeral"` | Whether your Solr data storage should be `ephemeral` or `persistent`. The `storage.<ephemeral,persistent>.*` options are used only if their storage type is selected here. |
-| storage.capacity | string | `"20Gi"` | Capacity for your data storage, ephemeral or persistent |
-| storage.ephemeral.emptyDir | object | | Specify options for and ephemeral emptyDir volume to store Solr data. |
-| storage.ephemeral.hostPath | object | | Specify options for and ephemeral hostPath volume to store Solr data. Is not used when `emptyDir` is specified. |
-| storage.persistent.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when Solr is deleted or scaled down. Either `Retain` or `Delete`. |
-| storage.persistent.pvc.name | string | | Override the default Solr data PVC base-name |
-| storage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
-| storage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
-| storage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| storage.backupRestoreOptions.volume | object | | A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| storage.backupRestoreOptions.directory | string | | Override the default backup-restore volume location in the Solr container |
+| dataStorage.type | string | `"ephemeral"` | Whether your Solr data storage should be `ephemeral` or `persistent`. The `storage.<ephemeral,persistent>.*` options are used only if their storage type is selected here. |
+| dataStorage.capacity | string | `"20Gi"` | Capacity for your data storage, ephemeral or persistent |
+| dataStorage.ephemeral.emptyDir | object | | Specify options for and ephemeral emptyDir volume to store Solr data. |
+| dataStorage.ephemeral.hostPath | object | | Specify options for and ephemeral hostPath volume to store Solr data. Is not used when `emptyDir` is specified. |
+| dataStorage.persistent.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when Solr is deleted or scaled down. Either `Retain` or `Delete`. |
+| dataStorage.persistent.pvc.name | string | | Override the default Solr data PVC base-name |
+| dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
+| dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
+| dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
+| dataStorage.backupRestoreOptions.volume | object | | A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
+| dataStorage.backupRestoreOptions.directory | string | | Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
 
 If providing external addressability, then `method` and `domainName` must be provided.
 External addressability is disabled by default.

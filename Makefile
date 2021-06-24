@@ -195,7 +195,7 @@ helm-dependency-build:
 
 # Deploy the current version of the Solr Operator via its helm chart
 helm-deploy-operator: helm-dependency-build docker-build
-	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(REPOSITORY)
+	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(IMG) --set image.pullPolicy=Never
 
 
 ###
@@ -205,10 +205,10 @@ helm-deploy-operator: helm-dependency-build docker-build
 # Build the docker image for the operator
 docker-build:
 	docker build --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
-	docker tag solr-operator ${IMG}:${TAG}
-	docker tag solr-operator ${IMG}:latest
+	docker tag solr-operator $(IMG):$(TAG)
+	docker tag solr-operator $(IMG):latest
 
 # Push the docker image for the operator
 docker-push:
-	docker push ${IMG}:${TAG}
-	docker push ${IMG}:latest
+	docker push $(IMG):$(TAG)
+	docker push $(IMG):latest

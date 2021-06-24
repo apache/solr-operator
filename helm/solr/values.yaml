@@ -20,7 +20,8 @@
 nameOverride: ""
 fullnameOverride: ""
 
-replicaCount: 3
+# If you want to use autoScaling, do not set this field
+replicas: null
 
 global:
   imagePullSecrets: []
@@ -40,7 +41,7 @@ busyBoxImage: {}
   # imagePullSecret: ""
 
 solrOptions:
-  memory: ""
+  javaMemory: ""
   javaOpts: ""
   logLevel: ""
   gcTune: ""
@@ -74,8 +75,8 @@ addressability:
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
 updateStrategy:
   method: "Managed"
-  # Options for the managed updateMethod
-  managedUpdate: {}
+  # Options for the managed update method
+  managed: {}
     # The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart.
     # More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.
     # Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet.
@@ -88,7 +89,7 @@ updateStrategy:
 
 # More information can be found at:
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
-storage:
+dataStorage:
   # Either persistent or ephemeral
   type: "ephemeral"
 

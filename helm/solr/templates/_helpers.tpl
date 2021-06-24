@@ -45,7 +45,7 @@ If release name contains chart name it will be used as a full name.
 Provides the name of the solrcloud object (the fullname without '-solrcloud' appended)
 */}}
 {{- define "solr.fullname-no-suffix" -}}
-{{ include "solr.fullname" . | trimSuffix "-solrcloud" }}
+{{ include "solr.fullname" . | trimSuffix "-solrcloud" | trimSuffix "-solr" }}
 {{- end }}
 
 {{/*

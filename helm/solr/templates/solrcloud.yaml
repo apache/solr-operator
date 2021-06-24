@@ -20,10 +20,12 @@ metadata:
   labels:
     {{ include "solr.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.replicaCount }}
+  {{- if (quote .Values.replicas) }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
   solrImage:
     repository: {{ .Values.image.repository }}
-    tag: {{ .Values.image.tag }}
+    tag: {{ .Values.image.tag | quote }}
     {{- if .Values.image.pullPolicy }}
     pullPolicy: {{ .Values.image.pullPolicy }}
     {{- end }}
@@ -61,19 +63,19 @@ spec:
     {{- toYaml .Values.solrOptions.security | nindent 4 -}}
   {{- end }}
 
-  {{- if (or .Values.solrAddressability .Values.global.clusterDomain) }}
+  {{- if (or .Values.addressability .Values.global.clusterDomain) }}
   solrAddressability:
-    {{- if .Values.solrAddressability.podPort }}
-    podPort: {{ .Values.solrAddressability.podPort }}
+    {{- if .Values.addressability.podPort }}
+    podPort: {{ .Values.addressability.podPort }}
     {{- end }}
-    {{- if .Values.solrAddressability.commonServicePort }}
-    commonServicePort: {{ .Values.solrAddressability.commonServicePort }}
+    {{- if .Values.addressability.commonServicePort }}
+    commonServicePort: {{ .Values.addressability.commonServicePort }}
     {{- end }}
-    {{- if .Values.solrAddressability.external }}
+    {{- if .Values.addressability.external }}
     external:
-      {{- toYaml .Values.solrAddressability.external | nindent 6 -}}
+      {{- toYaml .Values.addressability.external | nindent 6 -}}
     {{- end }}
-    kubeDomain: {{ .Values.solrAddressability.kubeDomain | default .Values.global.clusterDomain | quote }}
+    kubeDomain: {{ .Values.addressability.kubeDomain | default .Values.global.clusterDomain | quote }}
   {{- end }}
 
   {{- if .Values.updateStrategy }}
@@ -82,43 +84,43 @@ spec:
   {{- end }}
 
   dataStorage:
-    {{- if eq .Values.storage.type "persistent" }}
+    {{- if eq .Values.dataStorage.type "persistent" }}
     persistent:
-      reclaimPolicy: {{ .Values.storage.persistent.reclaimPolicy }}
+      reclaimPolicy: {{ .Values.dataStorage.persistent.reclaimPolicy }}
       pvcTemplate:
         metadata:
-          name: {{ .Values.storage.persistent.pvc.name }}
-          {{- if .Values.storage.persistent.pvc.labels }}
+          name: {{ .Values.dataStorage.persistent.pvc.name }}
+          {{- if .Values.dataStorage.persistent.pvc.labels }}
           labels:
-            {{ toYaml .Values.storage.persistent.pvc.labels | nindent 12 }}
+            {{ toYaml .Values.dataStorage.persistent.pvc.labels | nindent 12 }}
           {{- end }}
-          {{- if .Values.storage.persistent.pvc.annotations }}
+          {{- if .Values.dataStorage.persistent.pvc.annotations }}
           annotations:
-            {{ toYaml .Values.storage.persistent.pvc.annotations | nindent 12 }}
+            {{ toYaml .Values.dataStorage.persistent.pvc.annotations | nindent 12 }}
           {{- end }}
         spec:
-          {{- if .Values.storage.capacity }}
+          {{- if .Values.dataStorage.capacity }}
           resources:
             requests:
-              storage: {{ .Values.storage.capacity }}
+              storage: {{ .Values.dataStorage.capacity }}
           {{- end }}
-          storageClassName: {{ .Values.storage.persistent.pvc.storageClassName }}
-    {{- else if (eq .Values.storage.type "ephemeral") }}
+          storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName }}
+    {{- else }}
     ephemeral:
-      {{- if (and .Values.storage.ephemeral.hostPath (not .Values.storage.ephemeral.emptyDir)) }}
+      {{- if (and .Values.dataStorage.ephemeral.hostPath (not .Values.dataStorage.ephemeral.emptyDir)) }}
       hostPath:
-        {{ toYaml .Values.storage.ephemeral.hostPath | nindent 8 }}
+        {{ toYaml .Values.dataStorage.ephemeral.hostPath | nindent 8 }}
       {{- else }}
       emptyDir:
-        {{- if .Values.storage.ephemeral.emptyDir }}
-        {{ toYaml .Values.storage.ephemeral.emptyDir | nindent 8 }}
+        {{- if .Values.dataStorage.ephemeral.emptyDir }}
+        {{ toYaml .Values.dataStorage.ephemeral.emptyDir | nindent 8 }}
         {{- end }}
-        sizeLimit: {{ .Values.storage.capacity }}
+        sizeLimit: {{ .Values.dataStorage.capacity }}
       {{- end }}
     {{- end }}
-    {{- if .Values.storage.backupRestoreOptions }}
+    {{- if .Values.dataStorage.backupRestoreOptions }}
     backupRestoreOptions:
-      {{ toYaml .Values.storage.backupRestoreOptions | nindent 6 }}
+      {{ toYaml .Values.dataStorage.backupRestoreOptions | nindent 6 }}
     {{- end }}
 
   {{- if .Values.solrTLS }}
