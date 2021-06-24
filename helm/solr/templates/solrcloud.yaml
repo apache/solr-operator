@@ -46,7 +46,7 @@ spec:
   {{- end }}
 
   {{- if .Values.solrOptions.javaMemory }}
-  solrJavaMem: {{ .Values.solrOptions.javaMemory }}
+  solrJavaMem: {{ .Values.solrOptions.javaMemory | quote }}
   {{- end }}
   {{- if .Values.solrOptions.logLevel }}
   solrLogLevel: {{ .Values.solrOptions.logLevel }}
@@ -89,7 +89,7 @@ spec:
       reclaimPolicy: {{ .Values.dataStorage.persistent.reclaimPolicy }}
       pvcTemplate:
         metadata:
-          name: {{ .Values.dataStorage.persistent.pvc.name }}
+          name: {{ .Values.dataStorage.persistent.pvc.name | quote }}
           {{- if .Values.dataStorage.persistent.pvc.labels }}
           labels:
             {{ toYaml .Values.dataStorage.persistent.pvc.labels | nindent 12 }}
@@ -102,9 +102,9 @@ spec:
           {{- if .Values.dataStorage.capacity }}
           resources:
             requests:
-              storage: {{ .Values.dataStorage.capacity }}
+              storage: {{ .Values.dataStorage.capacity | quote }}
           {{- end }}
-          storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName }}
+          storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName | quote }}
     {{- else }}
     ephemeral:
       {{- if (and .Values.dataStorage.ephemeral.hostPath (not .Values.dataStorage.ephemeral.emptyDir)) }}
@@ -115,7 +115,7 @@ spec:
         {{- if .Values.dataStorage.ephemeral.emptyDir }}
         {{ toYaml .Values.dataStorage.ephemeral.emptyDir | nindent 8 }}
         {{- end }}
-        sizeLimit: {{ .Values.dataStorage.capacity }}
+        sizeLimit: {{ .Values.dataStorage.capacity | quote }}
       {{- end }}
     {{- end }}
     {{- if .Values.dataStorage.backupRestoreOptions }}
