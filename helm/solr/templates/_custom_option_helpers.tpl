@@ -21,220 +21,220 @@
 The values within Pod Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.pod.filler" -}}
-{{- if .Values.podOptions.labels }}
+{{- if .Values.podOptions.labels -}}
 labels:
-  {{ toYaml .Values.podOptions.labels }}
-{{- end }}
-{{- if .Values.podOptions.annotations }}
+  {{- toYaml .Values.podOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.podOptions.annotations }}
-{{- end }}
-{{- if .Values.podOptions.resources }}
+  {{- toYaml .Values.podOptions.annotations | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.resources -}}
 resources:
-  {{- toYaml .Values.podOptions.resources }}
-{{- end }}
-{{- if .Values.podOptions.priorityClassName }}
+  {{- toYaml .Values.podOptions.resources | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
-{{- end }}
-{{- if .Values.podOptions.envVars }}
+{{ end }}
+{{- if .Values.podOptions.envVars -}}
 envVars:
-  {{- toYaml .Values.podOptions.envVars }}
-{{- end }}
-{{- if .Values.podOptions.affinity }}
+  {{- toYaml .Values.podOptions.envVars | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.affinity -}}
 affinity:
-  {{- toYaml .Values.podOptions.affinity }}
-{{- end }}
-{{- if .Values.podOptions.affinity }}
+  {{- toYaml .Values.podOptions.affinity | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.tolerations -}}
 tolerations:
-  {{- toYaml .Values.podOptions.tolerations }}
-{{- end }}
-{{- if .Values.podOptions.nodeSelector }}
+  {{- toYaml .Values.podOptions.tolerations | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.nodeSelector -}}
 nodeSelector:
-  {{- toYaml .Values.podOptions.nodeSelector }}
-{{- end }}
-{{- if .Values.podOptions.podSecurityContext }}
+  {{- toYaml .Values.podOptions.nodeSelector | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.podSecurityContext -}}
 podSecurityContext:
-  {{- toYaml .Values.podOptions.podSecurityContext }}
-{{- end }}
-{{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
+  {{- toYaml .Values.podOptions.podSecurityContext | nindent 2 }}
+{{ end }}
+{{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:
-  {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
-{{- end }}
-{{- if .Values.podOptions.volumes }}
+  {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.volumes -}}
 volumes:
-  {{- toYaml .Values.podOptions.volumes }}
-{{- end }}
-{{- if .Values.podOptions.terminationGracePeriodSeconds }}
+  {{- toYaml .Values.podOptions.volumes | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.terminationGracePeriodSeconds -}}
 terminationGracePeriodSeconds: {{ .Values.podOptions.terminationGracePeriodSeconds }}
-{{- end }}
-{{- if .Values.podOptions.livenessProbe }}
+{{ end }}
+{{- if .Values.podOptions.livenessProbe -}}
 livenessProbe:
-  {{- toYaml .Values.podOptions.livenessProbe }}
-{{- end }}
-{{- if .Values.podOptions.readinessProbe }}
+  {{- toYaml .Values.podOptions.livenessProbe | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.readinessProbe -}}
 readinessProbe:
-  {{- toYaml .Values.podOptions.readinessProbe }}
-{{- end }}
-{{- if .Values.podOptions.startupProbe }}
+  {{- toYaml .Values.podOptions.readinessProbe | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.startupProbe -}}
 startupProbe:
-  {{- toYaml .Values.podOptions.startupProbe }}
-{{- end }}
-{{- if .Values.podOptions.sidecarContainers }}
+  {{- toYaml .Values.podOptions.startupProbe | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.sidecarContainers -}}
 sidecarContainers:
-  {{- toYaml .Values.podOptions.sidecarContainers }}
-{{- end }}
-{{- if .Values.podOptions.initContainers }}
+  {{- toYaml .Values.podOptions.sidecarContainers | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.initContainers -}}
 initContainers:
-  {{- toYaml .Values.podOptions.initContainers }}
-{{- end }}
-{{- end }}
+  {{- toYaml .Values.podOptions.initContainers | nindent 2 }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within StatefulSet Options for a SolrCloud
 */}}
-{{- define "solr.custom-kube-options.stateful-set.filler" -}}
-{{- if .Values.statefulSetOptions.labels }}
+{{- define "solr.custom-kube-options.stateful-set.filler" }}
+{{- if .Values.statefulSetOptions.labels -}}
 labels:
-  {{ toYaml .Values.statefulSetOptions.labels }}
-{{- end }}
-{{- if .Values.statefulSetOptions.annotations }}
+  {{- toYaml .Values.statefulSetOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.statefulSetOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.statefulSetOptions.annotations }}
-{{- end }}
-{{- if .Values.statefulSetOptions.podManagementPolicy }}
+  {{- toYaml .Values.statefulSetOptions.annotations | nindent 2 }}
+{{ end }}
+{{- if .Values.statefulSetOptions.podManagementPolicy -}}
 podManagementPolicy: {{ .Values.statefulSetOptions.podManagementPolicy }}
-{{- end }}
-{{- end }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within Ingress Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.ingress.filler" -}}
-{{- if .Values.ingressOptions.labels }}
+{{- if .Values.ingressOptions.labels -}}
 labels:
-  {{ toYaml .Values.ingressOptions.labels }}
-{{- end }}
-{{- if .Values.ingressOptions.annotations }}
+  {{- toYaml .Values.ingressOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.ingressOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.ingressOptions.annotations }}
-{{- end }}
-{{- end }}
+  {{- toYaml .Values.ingressOptions.annotations | nindent 2 }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within ConfigMap Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.config-map.filler" -}}
-{{- if .Values.configMapOptions.labels }}
+{{- if .Values.configMapOptions.labels -}}
 labels:
-  {{ toYaml .Values.configMapOptions.labels }}
-{{- end }}
-{{- if .Values.configMapOptions.annotations }}
+  {{- toYaml .Values.configMapOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.configMapOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.configMapOptions.annotations }}
-{{- end }}
-{{- if .Values.configMapOptions.providedConfigMap }}
+  {{- toYaml .Values.configMapOptions.annotations | nindent 2 }}
+{{ end }}
+{{- if .Values.configMapOptions.providedConfigMap -}}
 providedConfigMap: {{ .Values.configMapOptions.providedConfigMap }}
-{{- end }}
-{{- end }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within CommonService Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.common-service.filler" -}}
-{{- if .Values.commonServiceOptions.labels }}
+{{- if .Values.commonServiceOptions.labels -}}
 labels:
-  {{ toYaml .Values.commonServiceOptions.labels }}
-{{- end }}
-{{- if .Values.commonServiceOptions.annotations }}
+  {{- toYaml .Values.commonServiceOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.commonServiceOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.commonServiceOptions.annotations }}
-{{- end }}
-{{- end }}
+  {{- toYaml .Values.commonServiceOptions.annotations | nindent 2 }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within HeadlessService Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.headless-service.filler" -}}
-{{- if .Values.headlessServiceOptions.labels }}
+{{- if .Values.headlessServiceOptions.labels -}}
 labels:
-  {{ toYaml .Values.headlessServiceOptions.labels }}
-{{- end }}
-{{- if .Values.headlessServiceOptions.annotations }}
+  {{- toYaml .Values.headlessServiceOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.headlessServiceOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.headlessServiceOptions.annotations }}
-{{- end }}
-{{- end }}
+  {{- toYaml .Values.headlessServiceOptions.annotations | nindent 2 }}
+{{ end }}
+{{- end -}}
 
 {{/*
 The values within NodeService Options for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.node-service.filler" -}}
-{{- if .Values.nodeServiceOptions.labels }}
+{{- if .Values.nodeServiceOptions.labels -}}
 labels:
-  {{ toYaml .Values.nodeServiceOptions.labels }}
-{{- end }}
-{{- if .Values.nodeServiceOptions.annotations }}
+  {{- toYaml .Values.nodeServiceOptions.labels | nindent 2 }}
+{{ end }}
+{{- if .Values.nodeServiceOptions.annotations -}}
 annotations:
-  {{ toYaml .Values.nodeServiceOptions.annotations }}
-{{- end }}
-{{- end }}
+  {{- toYaml .Values.nodeServiceOptions.annotations | nindent 2 }}
+{{ end }}
+{{- end -}}
 
 {{/*
 Provides all customKubeOptions values for a SolrCloud
 */}}
 {{- define "solr.custom-kube-options.filler" -}}
-{{- with (include "solr.custom-kube-options.pod.filler" .) }}
-{{- if . }}
+{{- with (include "solr.custom-kube-options.pod.filler" .) -}}
+{{- if . -}}
 podOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.stateful-set.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.stateful-set.filler" .) -}}
+{{- if . -}}
 statefulSetOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.common-service.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.common-service.filler" .) -}}
+{{- if . -}}
 commonServiceOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.headless-service.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.headless-service.filler" .) -}}
+{{- if . -}}
 headlessServiceOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.node-service.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.node-service.filler" .) -}}
+{{- if . -}}
 nodeServiceOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.config-map.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.config-map.filler" .) -}}
+{{- if . -}}
 configMapOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- with (include "solr.custom-kube-options.ingress.filler" .) }}
-{{- if . }}
+{{ end }}
+{{ end }}
+{{- with (include "solr.custom-kube-options.ingress.filler" .) -}}
+{{- if . -}}
 ingressOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- end }}
+{{ end }}
+{{ end }}
+{{- end -}}
 
 {{/*
 Provides the nodeServiceOptions for the SolrCloud, if any are given
 */}}
 {{- define "solr.custom-kube-options" -}}
-{{- with (include "solr.custom-kube-options.filler" .) }}
-{{- if . }}
+{{- with (include "solr.custom-kube-options.filler" .) -}}
+{{- if . -}}
 customSolrKubeOptions:
   {{- . | nindent 2 -}}
-{{- end }}
-{{- end }}
-{{- end }}
+{{ end }}
+{{ end }}
+{{- end -}}

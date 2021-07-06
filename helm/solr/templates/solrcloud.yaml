@@ -18,25 +18,35 @@ kind: SolrCloud
 metadata:
   name: {{ include "solr.fullname-no-suffix" . }}
   labels:
-    {{ include "solr.labels" . | nindent 4 }}
+    {{- include "solr.labels" . | nindent 4 }}
 spec:
   {{- if (quote .Values.replicas) }}
   replicas: {{ .Values.replicas }}
   {{- end }}
+  {{- if .Values.image }}
   solrImage:
+    {{- if .Values.image.repository }}
     repository: {{ .Values.image.repository }}
+    {{- end }}
+    {{- if .Values.image.tag }}
     tag: {{ .Values.image.tag | quote }}
+    {{- end }}
     {{- if .Values.image.pullPolicy }}
     pullPolicy: {{ .Values.image.pullPolicy }}
     {{- end }}
     {{- if .Values.image.imagePullSecret }}
     imagePullSecret: {{ .Values.image.imagePullSecret }}
     {{- end }}
+  {{- end }}
 
   {{- if .Values.busyBoxImage }}
   busyBoxImage:
+    {{- if .Values.busyBoxImage.repository }}
     repository: {{ .Values.busyBoxImage.repository }}
-    tag: {{ .Values.busyBoxImage.tag }}
+    {{- end }}
+    {{- if .Values.busyBoxImage.tag }}
+    tag: {{ .Values.busyBoxImage.tag | quote }}
+    {{- end }}
     {{- if .Values.busyBoxImage.pullPolicy }}
     pullPolicy: {{ .Values.busyBoxImage.pullPolicy }}
     {{- end }}
@@ -52,15 +62,15 @@ spec:
   solrLogLevel: {{ .Values.solrOptions.logLevel }}
   {{- end }}
   {{- if .Values.solrOptions.gcTune }}
-  solrGCTune: {{ .Values.solrOptions.gcTune }}
+  solrGCTune: {{ .Values.solrOptions.gcTune | quote }}
   {{- end }}
   {{- if .Values.solrOptions.javaOpts }}
-  solrOpts: {{ .Values.solrOptions.javaOpts }}
+  solrOpts: {{ .Values.solrOptions.javaOpts | quote }}
   {{- end }}
 
   {{- if .Values.solrOptions.security }}
   solrSecurity:
-    {{- toYaml .Values.solrOptions.security | nindent 4 -}}
+    {{- toYaml .Values.solrOptions.security | nindent 4 }}
   {{- end }}
 
   {{- if (or .Values.addressability .Values.global.clusterDomain) }}
@@ -73,16 +83,17 @@ spec:
     {{- end }}
     {{- if .Values.addressability.external }}
     external:
-      {{- toYaml .Values.addressability.external | nindent 6 -}}
+      {{- toYaml .Values.addressability.external | nindent 6 }}
     {{- end }}
     kubeDomain: {{ .Values.addressability.kubeDomain | default .Values.global.clusterDomain | quote }}
   {{- end }}
 
   {{- if .Values.updateStrategy }}
   updateStrategy:
-    {{ toYaml .Values.updateStrategy | nindent 4 }}
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
   {{- end }}
 
+  {{- if .Values.dataStorage }}
   dataStorage:
     {{- if eq .Values.dataStorage.type "persistent" }}
     persistent:
@@ -92,11 +103,11 @@ spec:
           name: {{ .Values.dataStorage.persistent.pvc.name | quote }}
           {{- if .Values.dataStorage.persistent.pvc.labels }}
           labels:
-            {{ toYaml .Values.dataStorage.persistent.pvc.labels | nindent 12 }}
+            {{- toYaml .Values.dataStorage.persistent.pvc.labels | nindent 12 }}
           {{- end }}
           {{- if .Values.dataStorage.persistent.pvc.annotations }}
           annotations:
-            {{ toYaml .Values.dataStorage.persistent.pvc.annotations | nindent 12 }}
+            {{- toYaml .Values.dataStorage.persistent.pvc.annotations | nindent 12 }}
           {{- end }}
         spec:
           {{- if .Values.dataStorage.capacity }}
@@ -109,27 +120,31 @@ spec:
     ephemeral:
       {{- if (and .Values.dataStorage.ephemeral.hostPath (not .Values.dataStorage.ephemeral.emptyDir)) }}
       hostPath:
-        {{ toYaml .Values.dataStorage.ephemeral.hostPath | nindent 8 }}
-      {{- else }}
+        {{- toYaml .Values.dataStorage.ephemeral.hostPath | nindent 8 }}
+      {{- else if (or .Values.dataStorage.ephemeral.emptyDir .Values.dataStorage.capacity) }}
       emptyDir:
         {{- if .Values.dataStorage.ephemeral.emptyDir }}
-        {{ toYaml .Values.dataStorage.ephemeral.emptyDir | nindent 8 }}
+        {{- toYaml .Values.dataStorage.ephemeral.emptyDir | nindent 8 }}
         {{- end }}
+        {{- if .Values.dataStorage.capacity }}
         sizeLimit: {{ .Values.dataStorage.capacity | quote }}
+        {{- end }}
       {{- end }}
     {{- end }}
     {{- if .Values.dataStorage.backupRestoreOptions }}
     backupRestoreOptions:
-      {{ toYaml .Values.dataStorage.backupRestoreOptions | nindent 6 }}
+      {{- toYaml .Values.dataStorage.backupRestoreOptions | nindent 6 }}
     {{- end }}
+  {{- end }}
 
   {{- if .Values.solrTLS }}
   solrTLS:
-    {{- toYaml .Values.solrTLS | nindent 4 -}}
+    {{- toYaml .Values.solrTLS | nindent 4 }}
   {{- end }}
 
-  {{ include "solr.custom-kube-options" . | indent 2 }}
+  {{- include "solr.custom-kube-options" . | nindent 2 -}}
 
+  {{- if .Values.zk -}}
   zookeeperRef:
     {{- if (or .Values.zk.address .Values.zk.externalAddress) }}
     connectionInfo:
@@ -154,15 +169,15 @@ spec:
       {{- end }}
       {{- if .Values.zk.provided.image }}
       image:
-        {{ toYaml .Values.zk.provided.image | nindent 8 }}
+        {{- toYaml .Values.zk.provided.image | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.provided.persistence }}
       persistence:
-        {{ toYaml .Values.zk.provided.persistence | nindent 8 }}
+        {{- toYaml .Values.zk.provided.persistence | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.provided.zookeeperPodPolicy }}
       zookeeperPodPolicy:
-        {{ toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
+        {{- toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.acl }}
       acl:
@@ -173,3 +188,4 @@ spec:
         {{- toYaml .Values.zk.readOnlyAcl | nindent 8 }}
       {{- end }}
     {{- end }}
+  {{- end -}}
