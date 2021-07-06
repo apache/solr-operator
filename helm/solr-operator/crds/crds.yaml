@@ -5795,6 +5795,9 @@ spec:
                     - StatefulSet
                     - Manual
                     type: string
+                  restartSchedule:
+                    description: Perform a scheduled restart on the given schedule, in CRON format.
+                    type: string
                 type: object
               zookeeperRef:
                 description: The information for the Zookeeper this SolrCloud should connect to Can be a zookeeper that is running, or one that is created by the solr operator

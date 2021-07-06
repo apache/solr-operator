@@ -22,7 +22,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
-	"github.com/gorhill/cronexpr"
+	cron "github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"net/url"
@@ -39,6 +39,7 @@ const (
 
 func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[string]string) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
 	now := time.Now()
+	lastScheduledTime := now
 	if restartSchedule == "" {
 		return
 	}
@@ -55,6 +56,7 @@ func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[stri
 			if parsedScheduledTime.Before(now) {
 				// If the already-scheduled time is passed, then schedule a new one.
 				scheduleNextRestart = true
+				lastScheduledTime = parsedScheduledTime
 			} else {
 				// If the already-scheduled time is in the future, re-reconcile at that time
 				reconcileWaitDurationTmp := parsedScheduledTime.Sub(now)
@@ -66,10 +68,10 @@ func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[stri
 	}
 
 	if scheduleNextRestart {
-		if parsedSchedule, parseErr := cronexpr.Parse(restartSchedule); parseErr != nil {
+		if parsedSchedule, parseErr := cron.ParseStandard(restartSchedule); parseErr != nil {
 			err = parseErr
 		} else {
-			nextRestart = parsedSchedule.Next(now).Format(time.RFC3339)
+			nextRestart = parsedSchedule.Next(lastScheduledTime).Format(time.RFC3339)
 		}
 	}
 	return
