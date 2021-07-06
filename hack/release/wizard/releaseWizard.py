@@ -98,6 +98,7 @@ def expand_jinja(text, vars=None):
         'release_version_refguide': state.get_refguide_release() ,
         'state': state,
         'gpg_key': state.get_gpg_key(),
+        'gpg_fingerprint': state.get_gpg_fingerprint(),
         'epoch': unix_time_millis(datetime.utcnow()),
         'get_next_version': state.get_next_version(),
         'get_next_major_version': state.get_next_major_version(),
@@ -306,6 +307,13 @@ class ReleaseState:
         gpg_task = self.get_todo_by_id('gpg')
         if gpg_task.is_done():
             return gpg_task.get_state()['gpg_key']
+        else:
+            return None
+
+    def get_gpg_fingerprint(self):
+        gpg_task = self.get_todo_by_id('gpg')
+        if gpg_task.is_done():
+            return gpg_task.get_state()['gpg_fingerprint']
         else:
             return None
 
@@ -1111,19 +1119,23 @@ def configure_pgp(gpg_todo):
     if keyid_linenum:
         keyid_line = lines[keyid_linenum]
         assert keyid_line.startswith('LDAP PGP key: ')
-        gpg_id = keyid_line[14:].replace(" ", "")[-8:]
+        gpg_fingerprint = keyid_line[14:].replace(" ", "")
+        gpg_id = gpg_fingerprint[-8:]
+
         print("Found gpg key id %s on file at Apache (https://home.apache.org/keys/group/solr.asc)" % gpg_id)
     else:
         print(textwrap.dedent("""\
             Could not find your GPG key from Apache servers.
             Please make sure you have registered your key ID in
             id.apache.org, see links for more info."""))
-        gpg_id = str(input("Enter your key ID manually, 8 last characters (ENTER=skip): "))
-        if gpg_id.strip() == '':
+        gpg_fingerprint = str(input("Enter your full key fingerprint manually (ENTER=skip): "))
+
+        if gpg_fingerprint.strip() == '':
             return False
-        elif len(gpg_id) != 8:
-            print("gpg id must be the last 8 characters of your key id")
-        gpg_id = gpg_id.upper()
+        elif len(gpg_fingerprint) != 40:
+            print("gpg fingerprint must be the full 40 characters of your key")
+        gpg_fingerprint = gpg_fingerprint.upper()
+        gpg_id = gpg_fingerprint[-8:]
     try:
         res = run("gpg --list-secret-keys %s" % gpg_id)
         print("Found key %s on your private gpg keychain" % gpg_id)
@@ -1204,6 +1216,7 @@ def configure_pgp(gpg_todo):
             return False
 
     gpg_state['apache_id'] = id
+    gpg_state['gpg_fingerprint'] = gpg_fingerprint
     gpg_state['gpg_key'] = gpg_id
     return True
 

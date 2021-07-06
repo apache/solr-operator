@@ -85,7 +85,8 @@ if [[ -n "${APACHE_ID:-}" ]]; then
   printf "\n\nPackaging and signing helm chart. Please provide the passphrase for your GPG key when prompted below.\nThe prompt may be subtle, but look at the cursor.\n"
 fi
 
-helm package -u helm/* --app-version "${VERSION}" --version "${VERSION#v}" -d "${HELM_RELEASE_DIR}" "${SIGNING_INFO[@]}"
+helm package -u helm/solr-operator --app-version "${VERSION}" --version "${VERSION#v}" -d "${HELM_RELEASE_DIR}" "${SIGNING_INFO[@]}"
+helm package -u helm/solr --version "${VERSION#v}" -d "${HELM_RELEASE_DIR}" "${SIGNING_INFO[@]}"
 
 if [[ "${CREATED_SECURE_RING}" = true ]]; then
   # Remove the temporary secret key ring

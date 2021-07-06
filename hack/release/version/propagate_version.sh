@@ -65,6 +65,8 @@ IS_PRE_RELEASE="false"
 if [[ "${VERSION_SUFFIX}" =~ .*prerelease ]]; then
   IS_PRE_RELEASE="true"
 fi
+
+# Update Solr Operator Helm Chart version
 {
   cat helm/solr-operator/Chart.yaml | \
   awk '$0 ~ /^v/ && $1 == "version:"{$1 = $1; $2 = "'"${VERSION#v}"'"} 1' | \
@@ -73,14 +75,27 @@ fi
   sed -E "s|image: apache/solr-operator:(.*)|image: apache/solr-operator:${VERSION}|g"
 } > helm/solr-operator/Chart.yaml.tmp && mv helm/solr-operator/Chart.yaml.tmp helm/solr-operator/Chart.yaml
 
+# Update Solr Helm Chart version
+{
+  cat helm/solr/Chart.yaml | \
+  awk '$0 ~ /^v/ && $1 == "version:"{$1 = $1; $2 = "'"${VERSION#v}"'"} 1' | \
+  awk '$1 == "artifacthub.io/prerelease:"{$1 = "  "$1; $2 = "\"'"${IS_PRE_RELEASE}"'\""} 1'
+} > helm/solr/Chart.yaml.tmp && mv helm/solr/Chart.yaml.tmp helm/solr/Chart.yaml
 
-# Update Helm README.md
+
+# Update Solr Operator Helm README.md
 {
   cat helm/solr-operator/README.md | \
   sed -E 's/^\| image.tag \| string \| `".*"` \|/\| image.tag \| string \| `"'${VERSION}'"` \|/g' | \
   sed -E "s|^(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|^(helm.+--version )[^ <]+|\1${VERSION#v}|g"
 } > helm/solr-operator/README.md.tmp && mv helm/solr-operator/README.md.tmp helm/solr-operator/README.md
+
+# Update Solr Helm README.md
+{
+  cat helm/solr/README.md | \
+  sed -E "s|^(helm.+--version )[^ <]+|\1${VERSION#v}|g"
+} > helm/solr/README.md.tmp && mv helm/solr/README.md.tmp helm/solr/README.md
 
 
 # Update Docs (Remove this when docs are generated with versioning info)

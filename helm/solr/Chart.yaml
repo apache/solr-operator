@@ -1,0 +1,68 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: v2
+name: solr
+description: A SolrCloud cluser running on Kubernetes via the Solr Operator
+
+version: 0.4.0-prerelease
+appVersion: 8.9.0
+kubeVersion: ">= 1.16.0-0"
+home: https://solr.apache.org
+sources:
+  - https://github.com/apache/solr
+  - https://github.com/apache/solr-operator
+keywords:
+  - solr
+  - apache
+  - search
+  - lucene
+maintainers:
+  - name: Solr Dev Community
+    email: dev@solr.apache.org
+  - name: Houston Putman
+    email: houston@apache.org
+icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
+annotations:
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "true"
+  # Add change log for a single release here.
+  # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
+  artifacthub.io/changes: |
+    - kind: added
+      description: Official Solr Helm chart created. Works with the Solr Operator.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/112
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/276
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
+  artifacthub.io/links: |
+    - name: "Solr Source"
+      url: https://github.com/apache/solr
+    - name: "Helm Chart Source"
+      url: https://github.com/apache/solr-operator
+    - name: "Solr Documentation"
+      url: https://solr.apache.org/guide/
+    - name: "Solr on Kube Tutorials"
+      url: https://solr.apache.org/operator/resources#tutorials
+  artifacthub.io/images: |
+    - name: solr
+      image: apache/solr:8.9
+  artifacthub.io/signKey: |
+    fingerprint: <fingerprint>
+    url: https://dist.apache.org/repos/dist/release/solr/KEYS

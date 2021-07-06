@@ -23,19 +23,22 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/version/remove_version_specific_info.sh [-h]
+Usage: ./hack/release/artifacts/set_signing_key.sh -f GPG_FINGERPRINT [-h]
 
-Remove information in the project specific to a previous version.
+Set the GPG Signing Key fingerprint where it needs to be set before a release.
 Requires:
  * yq
 
     -h  Display this help and exit
+    -f  Full GPG Key fingerprint to use when signing artifacts
 EOF
 }
 
 OPTIND=1
-while getopts h opt; do
+while getopts hf: opt; do
     case $opt in
+        f)  GPG_FINGERPRINT=$OPTARG
+            ;;
         h)
             show_help
             exit 0
@@ -47,32 +50,17 @@ while getopts h opt; do
     esac
 done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
+if [[ -z "${GPG_FINGERPRINT:-}" ]]; then
+  echo "Specify an GPG Signing key fingerprint -f, or through the GPG_FINGERPRINT env var" >&2 && exit 1
+fi
 
-echo "Removing information specific to the previous release"
+echo "Setting the GPG Signing key fingerprint throughout the repo."
 
-CHANGE_LIST_REMOVAL='.annotations."artifacthub.io/changes" |= "- kind: added
-  description: Addition 1
-  links:
-    - name: Github Issue
-      url: https://github.com/issue-url
-- kind: changed
-  description: Change 2
-  links:
-    - name: Github PR
-      url: https://github.com/pr-url
-"'
-
-SIGNING_KEY_REMOVAL=".annotations.\"artifacthub.io/signKey\" |= \"fingerprint: <fingerprint>
+SIGNING_KEY_SET=".annotations.\"artifacthub.io/signKey\" |= \"fingerprint: ${GPG_FINGERPRINT}
 url: https://dist.apache.org/repos/dist/release/solr/KEYS
 \""
 
-SECURITY_FIX_REMOVAL='.annotations."artifacthub.io/containsSecurityUpdates" = "false"'
+# Set Signing key for ArtifactHub in Chart.yaml
+yq -i eval "${SIGNING_KEY_SET}" helm/solr-operator/Chart.yaml
 
-# Reset ArtifactHub info in Chart.yaml
-yq -i eval "${CHANGE_LIST_REMOVAL}" helm/solr-operator/Chart.yaml
-yq -i eval "${SIGNING_KEY_REMOVAL}" helm/solr-operator/Chart.yaml
-yq -i eval "${SECURITY_FIX_REMOVAL}" helm/solr-operator/Chart.yaml
-
-yq -i eval "${CHANGE_LIST_REMOVAL}" helm/solr/Chart.yaml
-yq -i eval "${SIGNING_KEY_REMOVAL}" helm/solr/Chart.yaml
-yq -i eval "${SECURITY_FIX_REMOVAL}" helm/solr/Chart.yaml
+yq -i eval "${SIGNING_KEY_SET}" helm/solr/Chart.yaml

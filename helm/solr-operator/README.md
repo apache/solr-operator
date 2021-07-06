@@ -9,7 +9,7 @@ Documentation around using the Solr Operator can be found at it's [official site
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html).
+Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
 There may be breaking changes between the version you are running and the version you want to upgrade to.
 
 ## Using the Helm Chart
@@ -179,7 +179,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | serviceAccount.create | boolean | `true` | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
 | serviceAccount.name | string | `""` | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | |
 | resources.limits | map[string]string |  | Provide Resource limits for the Solr Operator container |
-| resources.limits | map[string]string |  | Provide Resource requests for the Solr Operator container |
+| resources.requests | map[string]string |  | Provide Resource requests for the Solr Operator container |
 | labels | map[string]string |  | Custom labels to add to the Solr Operator pod |
 | annotations | map[string]string |  | Custom annotations to add to the Solr Operator pod |
 | nodeSelector | map[string]string |  | Add a node selector for the Solr Operator pod, to specify where it can be scheduled |

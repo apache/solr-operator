@@ -57,7 +57,7 @@ tag:
 clean:
 	rm -rf ./bin
 	rm -rf ./release-artifacts
-	rm -rf ./helm/solr-operator/charts ./helm/solr-operator/Chart.lock
+	rm -rf ./helm/*/charts ./helm/*/Chart.lock
 	rm -rf ./cover.out
 	rm -rf ./generated-check
 
@@ -158,7 +158,7 @@ check-generated:
 	diff --recursive api generated-check/api
 
 check-helm:
-	helm lint helm/solr-operator
+	helm lint helm/*
 
 check-mod:
 	rm -rf generated-check
@@ -188,13 +188,14 @@ test:
 # Helm
 ###
 
-# Build the docker image for the operator
+# Build the dependencies for all Helm charts
 helm-dependency-build:
 	helm dependency build helm/solr-operator
+	helm dependency build helm/solr
 
-# Push the docker image for the operator
+# Deploy the current version of the Solr Operator via its helm chart
 helm-deploy-operator: helm-dependency-build docker-build
-	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(REPOSITORY)
+	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(IMG) --set image.pullPolicy=Never
 
 
 ###
@@ -204,10 +205,10 @@ helm-deploy-operator: helm-dependency-build docker-build
 # Build the docker image for the operator
 docker-build:
 	docker build --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
-	docker tag solr-operator ${IMG}:${TAG}
-	docker tag solr-operator ${IMG}:latest
+	docker tag solr-operator $(IMG):$(TAG)
+	docker tag solr-operator $(IMG):latest
 
 # Push the docker image for the operator
 docker-push:
-	docker push ${IMG}:${TAG}
-	docker push ${IMG}:latest
+	docker push $(IMG):$(TAG)
+	docker push $(IMG):latest

@@ -1,0 +1,193 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: solr.apache.org/v1beta1
+kind: SolrCloud
+metadata:
+  name: {{ include "solr.fullname-no-suffix" . }}
+  labels:
+    {{- include "solr.labels" . | nindent 4 }}
+spec:
+  {{- if (quote .Values.replicas) }}
+  replicas: {{ .Values.replicas }}
+  {{- end }}
+  {{- if .Values.image }}
+  solrImage:
+    {{- if .Values.image.repository }}
+    repository: {{ .Values.image.repository }}
+    {{- end }}
+    {{- if .Values.image.tag }}
+    tag: {{ .Values.image.tag | quote }}
+    {{- end }}
+    {{- if .Values.image.pullPolicy }}
+    pullPolicy: {{ .Values.image.pullPolicy }}
+    {{- end }}
+    {{- if .Values.image.imagePullSecret }}
+    imagePullSecret: {{ .Values.image.imagePullSecret }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.busyBoxImage }}
+  busyBoxImage:
+    {{- if .Values.busyBoxImage.repository }}
+    repository: {{ .Values.busyBoxImage.repository }}
+    {{- end }}
+    {{- if .Values.busyBoxImage.tag }}
+    tag: {{ .Values.busyBoxImage.tag | quote }}
+    {{- end }}
+    {{- if .Values.busyBoxImage.pullPolicy }}
+    pullPolicy: {{ .Values.busyBoxImage.pullPolicy }}
+    {{- end }}
+    {{- if .Values.busyBoxImage.imagePullSecret }}
+    imagePullSecret: {{ .Values.busyBoxImage.imagePullSecret }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.solrOptions.javaMemory }}
+  solrJavaMem: {{ .Values.solrOptions.javaMemory | quote }}
+  {{- end }}
+  {{- if .Values.solrOptions.logLevel }}
+  solrLogLevel: {{ .Values.solrOptions.logLevel }}
+  {{- end }}
+  {{- if .Values.solrOptions.gcTune }}
+  solrGCTune: {{ .Values.solrOptions.gcTune | quote }}
+  {{- end }}
+  {{- if .Values.solrOptions.javaOpts }}
+  solrOpts: {{ .Values.solrOptions.javaOpts | quote }}
+  {{- end }}
+
+  {{- if .Values.solrOptions.security }}
+  solrSecurity:
+    {{- toYaml .Values.solrOptions.security | nindent 4 }}
+  {{- end }}
+
+  {{- if (or .Values.addressability .Values.global.clusterDomain) }}
+  solrAddressability:
+    {{- if .Values.addressability.podPort }}
+    podPort: {{ .Values.addressability.podPort }}
+    {{- end }}
+    {{- if .Values.addressability.commonServicePort }}
+    commonServicePort: {{ .Values.addressability.commonServicePort }}
+    {{- end }}
+    {{- if .Values.addressability.external }}
+    external:
+      {{- toYaml .Values.addressability.external | nindent 6 }}
+    {{- end }}
+    {{- if .Values.addressability.kubeDomain | default .Values.global.clusterDomain }}
+    kubeDomain: {{ .Values.addressability.kubeDomain | default .Values.global.clusterDomain | quote }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.updateStrategy }}
+  updateStrategy:
+    {{- toYaml .Values.updateStrategy | nindent 4 }}
+  {{- end }}
+
+  {{- if .Values.dataStorage }}
+  dataStorage:
+    {{- if eq .Values.dataStorage.type "persistent" }}
+    persistent:
+      reclaimPolicy: {{ .Values.dataStorage.persistent.reclaimPolicy }}
+      pvcTemplate:
+        metadata:
+          name: {{ .Values.dataStorage.persistent.pvc.name | quote }}
+          {{- if .Values.dataStorage.persistent.pvc.labels }}
+          labels:
+            {{- toYaml .Values.dataStorage.persistent.pvc.labels | nindent 12 }}
+          {{- end }}
+          {{- if .Values.dataStorage.persistent.pvc.annotations }}
+          annotations:
+            {{- toYaml .Values.dataStorage.persistent.pvc.annotations | nindent 12 }}
+          {{- end }}
+        spec:
+          {{- if .Values.dataStorage.capacity }}
+          resources:
+            requests:
+              storage: {{ .Values.dataStorage.capacity | quote }}
+          {{- end }}
+          storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName | quote }}
+    {{- else }}
+    ephemeral:
+      {{- if (and .Values.dataStorage.ephemeral.hostPath (not .Values.dataStorage.ephemeral.emptyDir)) }}
+      hostPath:
+        {{- toYaml .Values.dataStorage.ephemeral.hostPath | nindent 8 }}
+      {{- else if (or .Values.dataStorage.ephemeral.emptyDir .Values.dataStorage.capacity) }}
+      emptyDir:
+        {{- if .Values.dataStorage.ephemeral.emptyDir }}
+        {{- toYaml .Values.dataStorage.ephemeral.emptyDir | nindent 8 }}
+        {{- end }}
+        {{- if .Values.dataStorage.capacity }}
+        sizeLimit: {{ .Values.dataStorage.capacity | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.dataStorage.backupRestoreOptions }}
+    backupRestoreOptions:
+      {{- toYaml .Values.dataStorage.backupRestoreOptions | nindent 6 }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.solrTLS }}
+  solrTLS:
+    {{- toYaml .Values.solrTLS | nindent 4 }}
+  {{- end }}
+
+  {{- include "solr.custom-kube-options" . | nindent 2 -}}
+
+  {{- if .Values.zk -}}
+  zookeeperRef:
+    {{- if (or .Values.zk.address .Values.zk.externalAddress) }}
+    connectionInfo:
+      internalConnectionString: {{ .Values.zk.address | default .Values.zk.externalAddress | quote }}
+      {{- if .Values.zk.externalAddress }}
+      externalAddress: {{ .Values.zk.externalAddress | quote }}
+      {{- end }}
+      chroot: {{ trim (include "solr.zk.chroot" .) | quote }}
+      {{- if .Values.zk.acl }}
+      acl:
+        {{- toYaml .Values.zk.acl | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.readOnlyAcl }}
+      readOnlyAcl:
+        {{- toYaml .Values.zk.readOnlyAcl | nindent 8 }}
+      {{- end }}
+    {{- else }}
+    provided:
+      chroot: {{ trim (include "solr.zk.chroot" .) | quote }}
+      {{- if .Values.zk.provided.replicas }}
+      replicas: {{ .Values.zk.provided.replicas }}
+      {{- end }}
+      {{- if .Values.zk.provided.image }}
+      image:
+        {{- toYaml .Values.zk.provided.image | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.persistence }}
+      persistence:
+        {{- toYaml .Values.zk.provided.persistence | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.zookeeperPodPolicy }}
+      zookeeperPodPolicy:
+        {{- toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.acl }}
+      acl:
+        {{- toYaml .Values.zk.acl | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.readOnlyAcl }}
+      readOnlyAcl:
+        {{- toYaml .Values.zk.readOnlyAcl | nindent 8 }}
+      {{- end }}
+    {{- end }}
+  {{- end -}}

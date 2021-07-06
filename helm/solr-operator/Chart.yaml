@@ -43,10 +43,27 @@ annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Seamless Upgrades
   artifacthub.io/prerelease: "true"
-  # Add change log for a single release here, only single-layered bulleted list allowed.
+  artifacthub.io/recommendations: |
+    - url: https://artifacthub.io/packages/helm/apache-solr/solr
+  artifacthub.io/links: |
+    - name: "Tutorials"
+      url: https://solr.apache.org/operator/resources#tutorials
+  artifacthub.io/signKey: |
+    fingerprint: <fingerprint>
+    url: https://dist.apache.org/repos/dist/release/solr/KEYS
+  # Add change log for a single release here.
+  # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - Change 1
-    - Change 2
+    - kind: added
+      description: Addition 1
+      links:
+        - name: Github Issue
+          url: https://github.com/issue-url
+    - kind: changed
+      description: Change 2
+      links:
+        - name: Github PR
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease
