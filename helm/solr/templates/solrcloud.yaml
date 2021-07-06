@@ -85,7 +85,9 @@ spec:
     external:
       {{- toYaml .Values.addressability.external | nindent 6 }}
     {{- end }}
+    {{- if .Values.addressability.kubeDomain | default .Values.global.clusterDomain }}
     kubeDomain: {{ .Values.addressability.kubeDomain | default .Values.global.clusterDomain | quote }}
+    {{- end }}
   {{- end }}
 
   {{- if .Values.updateStrategy }}
