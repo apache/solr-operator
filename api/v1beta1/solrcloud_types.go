@@ -475,6 +475,10 @@ type SolrUpdateStrategy struct {
 	// Options for Solr Operator Managed rolling updates.
 	// +optional
 	ManagedUpdateOptions ManagedUpdateOptions `json:"managed,omitempty"`
+
+	// Perform a scheduled restart on the given schedule, in CRON format.
+	// +optional
+	RestartSchedule string `json:"restartSchedule,omitempty"`
 }
 
 // SolrUpdateMethod is a string enumeration type that enumerates

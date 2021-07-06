@@ -414,6 +414,21 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
 		foundStatefulSet := &appsv1.StatefulSet{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
+
+		// Set the annotation for a scheduled restart, if necessary.
+		if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Annotations); err != nil {
+			logger.Error(err, "Cannot parse restartSchedule cron: %s", instance.Spec.UpdateStrategy.RestartSchedule)
+		} else {
+			if nextRestartAnnotation != "" {
+				statefulSet.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
+				// TODO: Create event for the CRD.
+			} else if reconcileWaitDuration != nil {
+				// Set the requeueAfter if it has not been set, or is greater than the time we need to wait to restart again
+				updateRequeueAfter(&requeueOrNot, *reconcileWaitDuration)
+			}
+		}
+
+		// Update or Create the StatefulSet
 		if err != nil && errors.IsNotFound(err) {
 			statefulSetLogger.Info("Creating StatefulSet")
 			if err = controllerutil.SetControllerReference(instance, statefulSet, r.scheme); err == nil {
@@ -458,7 +473,8 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	// Otherwise it will delete all PVCs possibly
 	if len(pvcLabelSelector) > 0 {
 		if err := r.reconcileStorageFinalizer(instance, pvcLabelSelector, logger); err != nil {
-			return reconcile.Result{RequeueAfter: time.Second * 10}, nil
+			logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
+			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
 	}
 
@@ -502,9 +518,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// TODO: Create event for the CRD.
 		}
 		if err != nil || retryLater {
-			if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > time.Second*15 {
-				requeueOrNot.RequeueAfter = time.Second * 15
-			}
+			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
 	}
 
@@ -1020,4 +1034,11 @@ func (r *SolrCloudReconciler) verifyTLSSecretConfig(secretName string, secretNam
 	}
 
 	return foundTLSSecret, nil
+}
+
+// Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
+func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
+	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {
+		requeueOrNot.RequeueAfter = newWait
+	}
 }

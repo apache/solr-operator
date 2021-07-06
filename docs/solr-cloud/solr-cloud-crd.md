@@ -58,7 +58,8 @@ Under `SolrCloud.Spec.updateStrategy`:
   - **`maxPodsUnavailable`** - (Defaults to `"25%"`) The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart.
   More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.  
   - **`maxShardReplicasUnavailable`** - (Defaults to `1`) The number of replicas for each shard allowed to be unavailable during the restart.
-  
+- **`restartSchedule`** - A [CRON](https://en.wikipedia.org/wiki/Cron) schedule for automatically restarting the Solr Cloud.
+
 **Note:** Both `maxPodsUnavailable` and `maxShardReplicasUnavailable` are intOrString fields. So either an int or string can be provided for the field.
 - **int** - The parameter is treated as an absolute value, unless the value is <= 0 which is interpreted as unlimited.
 - **string** - Only percentage string values (`"0%"` - `"100%"`) are accepted, all other values will be ignored.

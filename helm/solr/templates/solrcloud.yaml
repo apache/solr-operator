@@ -92,7 +92,16 @@ spec:
 
   {{- if .Values.updateStrategy }}
   updateStrategy:
-    {{- toYaml .Values.updateStrategy | nindent 4 }}
+    {{- if .Values.updateStrategy.method }}
+    method: {{ .Values.updateStrategy.method }}
+    {{- end }}
+    {{- if .Values.updateStrategy.managed }}
+    managed:
+      {{- toYaml .Values.updateStrategy.managed | nindent 6 }}
+    {{- end }}
+    {{- if .Values.updateStrategy.restartSchedule }}
+    restartSchedule: {{ .Values.updateStrategy.restartSchedule | quote }}
+    {{- end }}
   {{- end }}
 
   {{- if .Values.dataStorage }}
