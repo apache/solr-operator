@@ -745,22 +745,22 @@ type SolrNodeStatus struct {
 	SpecUpToDate bool `json:"specUpToDate"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced
+//+kubebuilder:object:root=true
+//+kubebuilder:resource:scope=Namespaced
+//+kubebuilder:resource:shortName=solr
+//+kubebuilder:categories=all
+//+kubebuilder:subresource:status
+//+kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas,selectorpath=.status.podSelector
+//+kubebuilder:storageversion
+//+kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Solr Version of the cloud"
+//+kubebuilder:printcolumn:name="TargetVersion",type="string",JSONPath=".status.targetVersion",description="Target Solr Version of the cloud"
+//+kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
+//+kubebuilder:printcolumn:name="Nodes",type="integer",JSONPath=".status.replicas",description="Number of solr nodes running"
+//+kubebuilder:printcolumn:name="ReadyNodes",type="integer",JSONPath=".status.readyReplicas",description="Number of solr nodes connected to the cloud"
+//+kubebuilder:printcolumn:name="UpToDateNodes",type="integer",JSONPath=".status.upToDateNodes",description="Number of solr nodes running the latest SolrCloud pod spec"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SolrCloud is the Schema for the solrclouds API
-// +kubebuilder:resource:shortName=solr
-// +kubebuilder:categories=all
-// +kubebuilder:subresource:status
-// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.readyReplicas,selectorpath=.status.podSelector
-// +kubebuilder:storageversion
-// +kubebuilder:printcolumn:name="Version",type="string",JSONPath=".status.version",description="Solr Version of the cloud"
-// +kubebuilder:printcolumn:name="TargetVersion",type="string",JSONPath=".status.targetVersion",description="Target Solr Version of the cloud"
-// +kubebuilder:printcolumn:name="DesiredNodes",type="integer",JSONPath=".spec.replicas",description="Number of solr nodes configured to run in the cloud"
-// +kubebuilder:printcolumn:name="Nodes",type="integer",JSONPath=".status.replicas",description="Number of solr nodes running"
-// +kubebuilder:printcolumn:name="ReadyNodes",type="integer",JSONPath=".status.readyReplicas",description="Number of solr nodes connected to the cloud"
-// +kubebuilder:printcolumn:name="UpToDateNodes",type="integer",JSONPath=".status.upToDateNodes",description="Number of solr nodes running the latest SolrCloud pod spec"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrCloud struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -1029,7 +1029,7 @@ func (sc *SolrCloud) SharedLabelsWith(labels map[string]string) map[string]strin
 	return newLabels
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // SolrCloudList contains a list of SolrCloud
 type SolrCloudList struct {

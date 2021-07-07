@@ -174,16 +174,16 @@ type SolrPrometheusExporterStatus struct {
 	Ready bool `json:"ready"`
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced
+//+kubebuilder:object:root=true
+//+kubebuilder:resource:scope=Namespaced
+//+kubebuilder:resource:shortName=solrmetrics
+//+kubebuilder:subresource:status
+//+kubebuilder:storageversion
+//+kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Whether the prometheus exporter is ready"
+//+kubebuilder:printcolumn:name="Scrape Interval",type="integer",JSONPath=".spec.scrapeInterval",description="Scrape interval for metrics (in ms)"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SolrPrometheusExporter is the Schema for the solrprometheusexporters API
-// +kubebuilder:resource:shortName=solrmetrics
-// +kubebuilder:subresource:status
-// +kubebuilder:storageversion
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Whether the prometheus exporter is ready"
-// +kubebuilder:printcolumn:name="Scrape Interval",type="integer",JSONPath=".spec.scrapeInterval",description="Scrape interval for metrics (in ms)"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrPrometheusExporter struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -237,7 +237,7 @@ func (sc *SolrPrometheusExporter) MetricsIngressUrl(ingressBaseUrl string) strin
 	return fmt.Sprintf("%s.%s", sc.MetricsIngressPrefix(), ingressBaseUrl)
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // SolrPrometheusExporterList contains a list of SolrPrometheusExporter
 type SolrPrometheusExporterList struct {

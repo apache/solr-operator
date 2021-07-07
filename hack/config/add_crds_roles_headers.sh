@@ -21,9 +21,9 @@ set -o pipefail
 # error on unset variables
 set -u
 
-echo "Copying CRDs and Role to helm repo"
+echo "Add headers to CRDs and Role files"
 
-files=(config/crd/bases/* config/rbac/role.yaml)
+files=("${CONFIG_DIRECTORY:-config}"/crd/bases/* "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml)
 
 # Copy and package CRDs
 for file in "${files[@]}"; do
