@@ -281,17 +281,17 @@ func (sb *SolrBackup) PersistenceJobName() string {
 	return fmt.Sprintf("%s-solr-backup-persistence", sb.GetName())
 }
 
-// +kubebuilder:object:root=true
-// +kubebuilder:resource:scope=Namespaced
+//+kubebuilder:object:root=true
+//+kubebuilder:resource:scope=Namespaced
+//+kubebuilder:storageversion
+//+kubebuilder:categories=all
+//+kubebuilder:subresource:status
+//+kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
+//+kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
+//+kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"
+//+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SolrBackup is the Schema for the solrbackups API
-// +kubebuilder:categories=all
-// +kubebuilder:subresource:status
-// +kubebuilder:storageversion
-// +kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
-// +kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
-// +kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"
-// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 type SolrBackup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -305,7 +305,7 @@ func (sb *SolrBackup) WithDefaults() bool {
 	return sb.Spec.withDefaults(sb.Name)
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // SolrBackupList contains a list of SolrBackup
 type SolrBackupList struct {

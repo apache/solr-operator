@@ -98,14 +98,13 @@ deploy: manifests install
 
 # Generate code
 generate:
-	controller-gen object:headerFile=./hack/headers/header.go.txt paths="./..."
+	controller-gen object:headerFile=./hack/headers/header.go.txt paths=$(or $(TMP_API_DIRECTORY),"./...")
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests:
-	rm -r config/crd/bases
-	controller-gen $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
-	./hack/config/copy_crds_roles_helm.sh
-	./hack/config/add_crds_roles_headers.sh
+	controller-gen $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:rbac:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/rbac output:crd:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/crd/bases
+	CONFIG_DIRECTORY=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config) HELM_DIRECTORY=$(or $(TMP_HELM_OUTPUT_DIRECTORY),helm) ./hack/config/copy_crds_roles_helm.sh
+	CONFIG_DIRECTORY=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config) ./hack/config/add_crds_roles_headers.sh
 
 # Run go fmt against code
 fmt:
@@ -139,11 +138,9 @@ check-licenses:
 check-manifests:
 	rm -rf generated-check
 	mkdir -p generated-check
-	mv config generated-check/existing-config; cp -r generated-check/existing-config config
-	mv helm generated-check/existing-helm; cp -r generated-check/existing-helm helm
-	make manifests
-	mv config generated-check/config; mv generated-check/existing-config config
-	mv helm generated-check/helm; mv generated-check/existing-helm helm
+	cp -r helm generated-check/helm
+	cp -r config generated-check/config
+	TMP_CONFIG_OUTPUT_DIRECTORY=generated-check/config TMP_HELM_OUTPUT_DIRECTORY=generated-check/helm make manifests
 	@echo "Check to make sure the manifests are up to date"
 	diff --recursive config generated-check/config
 	diff --recursive helm generated-check/helm
@@ -151,9 +148,8 @@ check-manifests:
 check-generated:
 	rm -rf generated-check
 	mkdir -p generated-check
-	cp -r api generated-check/existing-api
-	make generate
-	mv api generated-check/api; mv generated-check/existing-api api
+	cp -r api generated-check/api
+	TMP_API_DIRECTORY="./generated-check/api/..." make generate
 	@echo "Check to make sure the generated code is up to date"
 	diff --recursive api generated-check/api
 
