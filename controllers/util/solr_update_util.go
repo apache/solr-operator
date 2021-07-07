@@ -37,16 +37,16 @@ const (
 	SolrScheduledRestartAnnotation = "solr.apache.org/nextScheduledRestart"
 )
 
-func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[string]string) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
-	return scheduleNextRestartWithTime(restartSchedule, statefulSetAnnotations, time.Now())
+func ScheduleNextRestart(restartSchedule string, podTemplateAnnotations map[string]string) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
+	return scheduleNextRestartWithTime(restartSchedule, podTemplateAnnotations, time.Now())
 }
 
-func scheduleNextRestartWithTime(restartSchedule string, statefulSetAnnotations map[string]string, currentTime time.Time) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
+func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations map[string]string, currentTime time.Time) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
 	lastScheduledTime := currentTime.UTC()
 	if restartSchedule == "" {
 		return
 	}
-	scheduledTime, hasScheduled := statefulSetAnnotations[SolrScheduledRestartAnnotation]
+	scheduledTime, hasScheduled := podTemplateAnnotations[SolrScheduledRestartAnnotation]
 
 	scheduleNextRestart := false
 
