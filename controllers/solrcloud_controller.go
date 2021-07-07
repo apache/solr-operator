@@ -419,11 +419,13 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); err != nil {
 			logger.Error(err, "Cannot parse restartSchedule cron: %s", instance.Spec.UpdateStrategy.RestartSchedule)
 		} else {
-			if nextRestartAnnotation == "" {
-				statefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = foundStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]
-			} else {
+			if nextRestartAnnotation != "" {
+				// Set the new restart time annotation
 				statefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
 				// TODO: Create event for the CRD.
+			} else if existingRestartAnnotation, exists := foundStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
+				// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
+				statefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
 			}
 			if reconcileWaitDuration != nil {
 				// Set the requeueAfter if it has not been set, or is greater than the time we need to wait to restart again
