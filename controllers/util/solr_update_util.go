@@ -34,12 +34,15 @@ const (
 	DefaultMaxPodsUnavailable          = "25%"
 	DefaultMaxShardReplicasUnavailable = 1
 
-	SolrScheduledRestartAnnotation = "solr.apache.org/lastScheduledRestart"
+	SolrScheduledRestartAnnotation = "solr.apache.org/nextScheduledRestart"
 )
 
 func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[string]string) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
-	now := time.Now()
-	lastScheduledTime := now
+	return scheduleNextRestartWithTime(restartSchedule, statefulSetAnnotations, time.Now())
+}
+
+func scheduleNextRestartWithTime(restartSchedule string, statefulSetAnnotations map[string]string, currentTime time.Time) (nextRestart string, reconcileWaitDuration *time.Duration, err error) {
+	lastScheduledTime := currentTime.UTC()
 	if restartSchedule == "" {
 		return
 	}
@@ -53,13 +56,14 @@ func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[stri
 			// If the scheduled time cannot be parsed, then go ahead and create a new time.
 			scheduleNextRestart = true
 		} else {
-			if parsedScheduledTime.Before(now) {
+			parsedScheduledTime = parsedScheduledTime.UTC()
+			if parsedScheduledTime.Before(currentTime) {
 				// If the already-scheduled time is passed, then schedule a new one.
 				scheduleNextRestart = true
 				lastScheduledTime = parsedScheduledTime
 			} else {
 				// If the already-scheduled time is in the future, re-reconcile at that time
-				reconcileWaitDurationTmp := parsedScheduledTime.Sub(now)
+				reconcileWaitDurationTmp := parsedScheduledTime.Sub(currentTime)
 				reconcileWaitDuration = &reconcileWaitDurationTmp
 			}
 		}
@@ -71,7 +75,10 @@ func ScheduleNextRestart(restartSchedule string, statefulSetAnnotations map[stri
 		if parsedSchedule, parseErr := cron.ParseStandard(restartSchedule); parseErr != nil {
 			err = parseErr
 		} else {
+			nextRestartTime := parsedSchedule.Next(lastScheduledTime)
 			nextRestart = parsedSchedule.Next(lastScheduledTime).Format(time.RFC3339)
+			reconcileWaitDurationTmp := nextRestartTime.Sub(currentTime)
+			reconcileWaitDuration = &reconcileWaitDurationTmp
 		}
 	}
 	return
