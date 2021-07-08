@@ -41,7 +41,7 @@ To install the Solr Operator for the first time in your cluster, you can use the
 helm install example apache-solr/solr --version 0.4.0-prerelease --set image.tag=8.8.0
 ```
 
-The command deploys the a SolrCloud object on the Kubernetes cluster with the default configuration.
+The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
 The [Solr Operator](https://solr.apache.org/operator) is then in charge of creating the necessary Kubernetes resources to run that Solr Cloud.
 The [configuration](#chart-values) section lists the parameters that can be configured during installation.
 
@@ -96,6 +96,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
+| updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 
 ### Data Storage Options
 

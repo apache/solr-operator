@@ -192,7 +192,8 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 				},
 			},
 			UpdateStrategy: solr.SolrUpdateStrategy{
-				Method: solr.StatefulSetUpdate,
+				Method:          solr.StatefulSetUpdate,
+				RestartSchedule: "@every 30m",
 			},
 			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
@@ -285,6 +286,10 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "statefulSet labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels), statefulSet.Labels)
 	testMapsEqual(t, "statefulSet annotations", util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations), statefulSet.Annotations)
 	testMapsEqual(t, "pod labels", util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testPodLabels), statefulSet.Spec.Template.ObjectMeta.Labels)
+	if assert.True(t, metav1.HasAnnotation(statefulSet.Spec.Template.ObjectMeta, util.SolrScheduledRestartAnnotation), "Pod Template does not have scheduled restart annotation when it should") {
+		// Remove the annotation when we know that it exists, we don't know the exact value so we can't check it below.
+		delete(statefulSet.Spec.Template.Annotations, util.SolrScheduledRestartAnnotation)
+	}
 	testMapsEqual(t, "pod annotations", util.MergeLabelsOrAnnotations(map[string]string{"solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations), statefulSet.Spec.Template.Annotations)
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, statefulSet.Spec.Template.Spec.NodeSelector)
 	testPodProbe(t, testProbeLivenessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe)

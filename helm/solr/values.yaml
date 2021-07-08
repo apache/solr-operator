@@ -86,6 +86,9 @@ updateStrategy:
     # Either a static number, or a percentage representing the percentage of the number of replicas for a shard.
     # Defaults to 1
     # maxShardReplicasUnavailable: 1
+  # Cron schedule for automatically restarting the Solr Cloud
+  # For available CRON syntaxes, check here: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
+  restartSchedule: ""
 
 # More information can be found at:
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage

@@ -5795,6 +5795,9 @@ spec:
                     - StatefulSet
                     - Manual
                     type: string
+                  restartSchedule:
+                    description: "Perform a scheduled restart on the given schedule, in CRON format. \n Multiple CRON syntaxes are supported   - Standard CRON (e.g. \"CRON_TZ=Asia/Seoul 0 6 * * ?\")   - Predefined Schedules (e.g. \"@yearly\", \"@weekly\", etc.)   - Intervals (e.g. \"@every 10h30m\") \n For more information please check this reference: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format"
+                    type: string
                 type: object
               zookeeperRef:
                 description: The information for the Zookeeper this SolrCloud should connect to Can be a zookeeper that is running, or one that is created by the solr operator

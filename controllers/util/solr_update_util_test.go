@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"testing"
+	"time"
 )
 
 func TestPickPodsToUpgrade(t *testing.T) {
@@ -943,4 +944,55 @@ func getPodNames(pods []corev1.Pod) []string {
 		names[i] = pod.Name
 	}
 	return names
+}
+
+func TestScheduleNextRestart(t *testing.T) {
+	var schedule, nextRestart string
+	var lastRestart time.Time
+	var reconcileWaitDuration *time.Duration
+	var err error
+	now := time.Date(2020, 8, 10, 20, 10, 22, 0, time.Local)
+	utcNow := now.UTC()
+
+	// Test that no restart should happen
+	nextRestart, reconcileWaitDuration, err = scheduleNextRestartWithTime(schedule, map[string]string{}, now)
+	assert.Empty(t, nextRestart, "There should be no restart when the schedule is blank")
+	assert.Nil(t, reconcileWaitDuration, "There should be no reconcile wait when the schedule is blank")
+	assert.Empty(t, err, "There should be no error when the schedule is blank")
+
+	// Test a bad schedule string
+	schedule = "adasfdsdas"
+	nextRestart, reconcileWaitDuration, err = scheduleNextRestartWithTime(schedule, map[string]string{}, now)
+	assert.Empty(t, nextRestart, "There should be no restart when the schedule is blank")
+	assert.Nil(t, reconcileWaitDuration, "There should be no reconcile wait when the schedule is blank")
+	assert.Error(t, err, "There should be a parsing error for a bad schedule")
+
+	// Test first restart
+	schedule = "@every 10m"
+	nextRestart, reconcileWaitDuration, err = scheduleNextRestartWithTime(schedule, map[string]string{}, now)
+	assert.EqualValuesf(t, utcNow.Add(time.Minute*10).Format(time.RFC3339), nextRestart, "The restart is incorrect for schedule: %s", schedule)
+	if assert.NotNil(t, reconcileWaitDuration, "There should be a reconcile wait when there is a non-empty schedule") {
+		assert.EqualValues(t, time.Minute*10, *reconcileWaitDuration, "The reconcile wait is incorrect for the first scheduled restart")
+	}
+	assert.Emptyf(t, err, "There should be no error when the schedule is: %s", schedule)
+
+	// Test new restart scheduled
+	schedule = "@every 10m"
+	lastRestart = utcNow.Add(time.Minute * -1)
+	nextRestart, reconcileWaitDuration, err = scheduleNextRestartWithTime(schedule, map[string]string{SolrScheduledRestartAnnotation: lastRestart.Format(time.RFC3339)}, now)
+	assert.EqualValuesf(t, utcNow.Add(time.Minute*9).Format(time.RFC3339), nextRestart, "The new next restart time is incorrect for previous nextRestart at \"%s\" and schedule: %s", lastRestart.Format(time.RFC3339), schedule)
+	if assert.NotNil(t, reconcileWaitDuration, "There should be a reconcile wait when there is a non-empty schedule") {
+		assert.EqualValuesf(t, time.Minute*9, *reconcileWaitDuration, "The reconcile wait is incorrect for a next restart at \"%s\" and a current time of \"%s\"", nextRestart, now)
+	}
+	assert.Emptyf(t, err, "There should be no error when the schedule is: %s", schedule)
+
+	// Test new restart scheduled
+	schedule = "@every 10m"
+	lastRestart = utcNow.Add(time.Minute * 6)
+	nextRestart, reconcileWaitDuration, err = scheduleNextRestartWithTime(schedule, map[string]string{SolrScheduledRestartAnnotation: lastRestart.Format(time.RFC3339)}, now)
+	assert.Emptyf(t, nextRestart, "There should be no new restart time when the nextRestart is in the future: \"%s\"", lastRestart)
+	if assert.NotNil(t, reconcileWaitDuration, "There should be a reconcile wait when there is a non-empty schedule") {
+		assert.EqualValuesf(t, time.Minute*6, *reconcileWaitDuration, "The reconcile wait is incorrect for a next restart at \"%s\" and a current time of \"%s\"", nextRestart, now)
+	}
+	assert.Emptyf(t, err, "There should be no error when the schedule is: %s", schedule)
 }
