@@ -87,6 +87,7 @@ updateStrategy:
     # Defaults to 1
     # maxShardReplicasUnavailable: 1
   # Cron schedule for automatically restarting the Solr Cloud
+  # For available CRON syntaxes, check here: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
   restartSchedule: ""
 
 # More information can be found at:

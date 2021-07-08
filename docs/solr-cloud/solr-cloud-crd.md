@@ -59,6 +59,7 @@ Under `SolrCloud.Spec.updateStrategy`:
   More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.  
   - **`maxShardReplicasUnavailable`** - (Defaults to `1`) The number of replicas for each shard allowed to be unavailable during the restart.
 - **`restartSchedule`** - A [CRON](https://en.wikipedia.org/wiki/Cron) schedule for automatically restarting the Solr Cloud.
+  [Multiple CRON syntaxes](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) are supported, such as intervals (e.g. `@every 10h`) or predefined schedules (e.g. `@yearly`, `@weekly`, etc.).
 
 **Note:** Both `maxPodsUnavailable` and `maxShardReplicasUnavailable` are intOrString fields. So either an int or string can be provided for the field.
 - **int** - The parameter is treated as an absolute value, unless the value is <= 0 which is interpreted as unlimited.
