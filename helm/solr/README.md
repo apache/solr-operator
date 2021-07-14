@@ -155,8 +155,10 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.image.tag | string | | The tag/version of Zookeeper to run. Generally leave this blank, so that the Zookeeper Operator can manage it. |
 | zk.provided.image.pullPolicy | string | `"IfNotPresent"` | PullPolicy for the ZooKeeper image |
 | zk.provided.image.imagePullSecret | string |  | PullSecret for the ZooKeeper image |
+| zk.provided.storageType | string |  | Explicitly set the Zookeeper storage type, not necessary if providing a "persistence" or "ephemeral" option below, or if you want to use same option that you use for Solr. |
 | zk.provided.persistence.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when ZooKeeper is deleted or scaled down. Either `Retain` or `Delete`. |
 | zk.provided.persistence.spec | object | | A PVC Spec for the ZooKeeper PVC(s) |
+| zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
 | zk.provided.zookeeperPodPolicy.resources.requests | map[string]string |  | Provide Resource requests for the ZooKeeper containers |

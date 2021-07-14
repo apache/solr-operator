@@ -140,15 +140,21 @@ zk:
       # tag: ""
       # pullPolicy: IfNotPresent
       # imagePullSecret: ""
-    persistence: {}
-      # reclaimPolicy: "Retain"
-      # spec: {}
     zookeeperPodPolicy: {}
       # affinity: {}
       # tolerations: []
       # nodeSelector: {}
       # env: []
       # resources: {}
+
+    # Storage defaults to the type of storage you use for Solr, which is ephemeral by default.
+    # Explicitly set the storage type, only necessary when wishing to use an empty persistence or ephemeral object.
+    storageType: ""
+    persistence: {}
+      # reclaimPolicy: "Retain"
+      # spec: {}
+    ephemeral: {}
+      # emptydirvolumesource: {}
 
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
