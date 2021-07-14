@@ -209,7 +209,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	// The Zookeeper Operator defaults the serviceAccountName to "default", therefore only update if either of the following
 	//   - The new serviceAccountName is not empty
 	//   - The old serviceAccountName is not "default", so we know we want to switch to the default value.
-	if !DeepEqualWithNils(to.Spec.Pod.ServiceAccountName, from.Spec.Pod.ServiceAccountName) && (from.Spec.Pod.ServiceAccountName != "" || to.Spec.Pod.ServiceAccountName != "default"){
+	if !DeepEqualWithNils(to.Spec.Pod.ServiceAccountName, from.Spec.Pod.ServiceAccountName) && (from.Spec.Pod.ServiceAccountName != "" || to.Spec.Pod.ServiceAccountName != "default") {
 		logger.Info("Update required because field changed", "field", "Spec.Pod.ServiceAccountName", "from", to.Spec.Pod.ServiceAccountName, "to", from.Spec.Pod.ServiceAccountName)
 		requireUpdate = true
 		to.Spec.Pod.ServiceAccountName = from.Spec.Pod.ServiceAccountName

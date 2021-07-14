@@ -262,12 +262,12 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 			},
 			CustomKubeOptions: solr.CustomExporterKubeOptions{
 				PodOptions: &solr.PodOptions{
-					EnvVariables: extraVars,
-					Annotations:  testPodAnnotations,
-					Labels:       testPodLabels,
-					Volumes:      extraVolumes,
-					Tolerations:  testTolerationsPromExporter,
-					NodeSelector: testNodeSelectors,
+					EnvVariables:       extraVars,
+					Annotations:        testPodAnnotations,
+					Labels:             testPodLabels,
+					Volumes:            extraVolumes,
+					Tolerations:        testTolerationsPromExporter,
+					NodeSelector:       testNodeSelectors,
 					ServiceAccountName: testServiceAccountName,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{

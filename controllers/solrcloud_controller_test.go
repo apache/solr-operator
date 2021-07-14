@@ -208,7 +208,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					PriorityClassName:             testPriorityClass,
 					ImagePullSecrets:              testAdditionalImagePullSecrets,
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
-					ServiceAccountName: 		   testServiceAccountName,
+					ServiceAccountName:            testServiceAccountName,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
