@@ -89,17 +89,3 @@ Create the name of the service account to use for Solr
 {{- define "solr.serviceAccountName.solr" -}}
 {{ .Values.podOptions.serviceAccountName | default (include "solr.serviceAccountName.global" .) }}
 {{- end -}}
-
-{{/*
-Create the name of the service account to use for Solr
-*/}}
-{{- define "solr.serviceAccountName.zk" -}}
-{{ .Values.zk.provided.zookeeperPodPolicy | default (include "solr.serviceAccountName.global" .) }}
-{{- end -}}
-
-{{/*
-ZK ChRoot
-*/}}
-{{ define "solr.zk.chroot" }}
-/{{ printf "%s%s" (trimSuffix "/" .Values.zk.chroot) (ternary (printf "/%s/%s" .Release.Namespace (include "solr.fullname" .)) "" .Values.zk.uniqueChroot) | trimPrefix "/" }}
-{{ end }}
