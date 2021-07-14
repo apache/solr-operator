@@ -33,6 +33,9 @@ annotations:
 resources:
   {{- toYaml .Values.podOptions.resources | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.serviceAccountName -}}
+serviceAccountName: {{ .Values.podOptions.serviceAccountName }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}

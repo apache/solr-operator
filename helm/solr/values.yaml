@@ -192,6 +192,7 @@ podOptions:
   sidecarContainers: []
   initContainers: []
 
+  serviceAccountName: ""
   priorityClassName: ""
   envVars: []
   affinity: {}
