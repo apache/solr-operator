@@ -688,6 +688,10 @@ type ZookeeperPodPolicy struct {
 	// This field cannot be updated once the cluster is created.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Optional Service Account to run the zookeeper pods under.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud
