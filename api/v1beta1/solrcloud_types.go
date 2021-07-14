@@ -600,8 +600,14 @@ type ZookeeperSpec struct {
 
 	// Persistence is the configuration for zookeeper persistent layer.
 	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
 	// +optional
 	Persistence *zk.Persistence `json:"persistence,omitempty"`
+
+	// Ephemeral is the configuration which helps create ephemeral storage
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
+	// +optional
+	Ephemeral *zk.Ephemeral `json:"ephemeral,omitempty"`
 
 	// Pod resources for zookeeper pod
 	// +optional

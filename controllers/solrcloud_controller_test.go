@@ -49,6 +49,7 @@ var (
 	cloudHsKey           = types.NamespacedName{Name: "foo-clo-solrcloud-headless", Namespace: "default"}
 	cloudIKey            = types.NamespacedName{Name: "foo-clo-solrcloud-common", Namespace: "default"}
 	cloudCMKey           = types.NamespacedName{Name: "foo-clo-solrcloud-configmap", Namespace: "default"}
+	cloudZkKey           = types.NamespacedName{Name: "foo-clo-solrcloud-zookeeper", Namespace: "default"}
 )
 
 func TestCloudReconcile(t *testing.T) {
@@ -315,89 +316,6 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	expectedHeadlessServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "headless"})
 	testMapsEqual(t, "common service labels", util.MergeLabelsOrAnnotations(expectedHeadlessServiceLabels, testHeadlessServiceLabels), headlessService.Labels)
 	testMapsEqual(t, "common service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
-}
-
-func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					ChRoot: "a-ch/root",
-				},
-			},
-			UpdateStrategy: solr.SolrUpdateStrategy{
-				Method: solr.ManualUpdate,
-			},
-		},
-	}
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	// Blocked until https://github.com/pravega/zookeeper-operator/pull/99 is merged
-	//g.Expect(zookeepercluster.AddZookeeperReconciler(mgr)).NotTo(gomega.HaveOccurred())
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the zkCluster will have been created
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Check that the ZkConnectionInformation is correct
-	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
-	assert.Equal(t, expectedZkConnStr, instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
-	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
-	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
-
-	// Check that the statefulSet has been created, using the given chRoot
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-	expectedZKHost := expectedZkConnStr + "/a-ch/root"
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":   expectedZKHost,
-		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + cloudHsKey.Namespace,
-		"ZK_SERVER": expectedZkConnStr,
-		"ZK_CHROOT": "/a-ch/root",
-		"SOLR_PORT": "8983",
-		"GC_TUNE":   "",
-	}
-	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
-	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
-
-	// Check the update strategy
-	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
 }
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {

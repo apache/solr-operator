@@ -48,9 +48,8 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 				Tag:        zkSpec.Image.Tag,
 				PullPolicy: zkSpec.Image.PullPolicy,
 			},
-			Labels:      labels,
-			Replicas:    *zkSpec.Replicas,
-			Persistence: zkSpec.Persistence,
+			Labels:   labels,
+			Replicas: *zkSpec.Replicas,
 			Ports: []corev1.ContainerPort{
 				{
 					Name:          "client",
@@ -66,6 +65,15 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 				},
 			},
 		},
+	}
+
+	// Add storage information for the ZK Cluster
+	if zkSpec.Persistence != nil {
+		zkCluster.Spec.Persistence = zkSpec.Persistence
+		zkCluster.Spec.StorageType = "persistence"
+	} else {
+		zkCluster.Spec.Ephemeral = zkSpec.Ephemeral
+		zkCluster.Spec.StorageType = "ephemeral"
 	}
 
 	// Append Pod Policies if provided by user
