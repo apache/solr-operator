@@ -60,7 +60,7 @@ serviceAccount:
   # The name of the ServiceAccount to use.
   # Required if create is false.
   # If not set and create is true, a name is generated using the fullname template
-  name:
+  name: ""
 
 # Various Pod Options to customize the runtime of the operator
 resources: {}

@@ -73,6 +73,31 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
+Create the name of the service account to use globally
+*/}}
+{{- define "solr.serviceAccountName.global" -}}
+{{- if .Values.serviceAccount.create -}}
+{{ .Values.serviceAccount.name | default (include "solr.fullname" .) }}
+{{- else -}}
+{{ .Values.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create the name of the service account to use for Solr
+*/}}
+{{- define "solr.serviceAccountName.solr" -}}
+{{ .Values.podOptions.serviceAccountName | default (include "solr.serviceAccountName.global" .) }}
+{{- end -}}
+
+{{/*
+Create the name of the service account to use for Solr
+*/}}
+{{- define "solr.serviceAccountName.zk" -}}
+{{ .Values.zk.provided.zookeeperPodPolicy | default (include "solr.serviceAccountName.global" .) }}
+{{- end -}}
+
+{{/*
 ZK ChRoot
 */}}
 {{ define "solr.zk.chroot" }}

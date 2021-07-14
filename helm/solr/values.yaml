@@ -27,6 +27,15 @@ global:
   imagePullSecrets: []
   clusterDomain: ""
 
+# Use a serviceAccount for all pods created under this chart (Solr and ZK)
+serviceAccount:
+  # Specifies whether a ServiceAccount should be created
+  create: false
+  # The name of the ServiceAccount to use.
+  # Required if create is false.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
 image:
   repository: "solr"
   tag: "8.8.2"
@@ -149,6 +158,8 @@ zk:
       # nodeSelector: {}
       # env: []
       # resources: {}
+      # # Set ZK service account individually instead of the global "serviceAccount.name"
+      # serviceAccountName: ""
 
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
@@ -192,7 +203,6 @@ podOptions:
   sidecarContainers: []
   initContainers: []
 
-  serviceAccountName: ""
   priorityClassName: ""
   envVars: []
   affinity: {}
@@ -200,6 +210,9 @@ podOptions:
   nodeSelector: {}
   podSecurityContext: {}
   terminationGracePeriodSeconds: null
+
+  # Set Solr service account individually instead of the global "serviceAccount.name"
+  serviceAccountName: ""
 
   # Probes for the Solr pods
   livenessProbe: {}
