@@ -69,11 +69,25 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 
 	// Add storage information for the ZK Cluster
 	if zkSpec.Persistence != nil {
-		zkCluster.Spec.Persistence = zkSpec.Persistence
+		// If persistence is provided, then chose it.
 		zkCluster.Spec.StorageType = "persistence"
-	} else {
-		zkCluster.Spec.Ephemeral = zkSpec.Ephemeral
+	} else if zkSpec.Ephemeral != nil {
+		// If ephemeral is provided, then chose it.
 		zkCluster.Spec.StorageType = "ephemeral"
+	} else {
+		// If neither option is provided, default to the option used for solr (which defaults to ephemeral)
+		if solrCloud.Spec.StorageOptions.PersistentStorage != nil {
+			zkCluster.Spec.StorageType = "persistence"
+		} else {
+			zkCluster.Spec.StorageType = "ephemeral"
+		}
+	}
+
+	// Set the persistence/ephemeral options if necessary
+	if zkSpec.Persistence != nil && zkCluster.Spec.StorageType == "persistence" {
+		zkCluster.Spec.Persistence = zkSpec.Persistence
+	} else if zkSpec.Ephemeral != nil && zkCluster.Spec.StorageType == "ephemeral" {
+		zkCluster.Spec.Ephemeral = zkSpec.Ephemeral
 	}
 
 	// Append Pod Policies if provided by user

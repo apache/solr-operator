@@ -570,7 +570,7 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 		changed = ref.ConnectionInfo.withDefaults() || changed
 	}
 	if ref.ProvidedZookeeper != nil {
-		changed = ref.ProvidedZookeeper.withDefaults() || changed
+		changed = ref.ProvidedZookeeper.WithDefaults() || changed
 	}
 	return changed
 }
@@ -628,7 +628,7 @@ type ZookeeperSpec struct {
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 }
 
-func (z *ZookeeperSpec) withDefaults() (changed bool) {
+func (z *ZookeeperSpec) WithDefaults() (changed bool) {
 	if z.Replicas == nil {
 		changed = true
 		r := DefaultZkReplicas

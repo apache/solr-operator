@@ -148,6 +148,27 @@ each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
 
+#### Zookeeper Storage Options
+_Since v0.4.0_
+
+The Zookeeper Operator allows for both ephemeral and persistent storage, and the Solr Operator supports both as of `v0.4.0`.
+
+```yaml
+spec:
+  zookeeperRef:
+    provided:
+      ephemeral:
+        emptydirvolumesource: {}
+      persistence:
+        reclaimPolicy: "Retain" # Either Retain or Delete
+        spec: {} # PVC Spec for the Zookeeper volumes
+```
+
+By default, if you do not provide either `ephemeral` or `persistence`, the Solr Operator will default to the type of storage you are using for your Solr pods.
+
+However, if you provide either object above, even if the object is empty, that storage type will be used for the created Zookeeper pods.
+If both `ephemeral` and `persistence` is provided, then `persistence` is preferred.
+
 #### ACLs for Provided Ensembles
 _Since v0.3.0_
 
