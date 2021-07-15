@@ -53,6 +53,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ## Upgrade Warnings and Notes
 
+### v0.4.0
+- The deprecated Solr Operator Helm chart option `useZkOperator` has been removed, use `zookeeper-operator.use` instead.  
+  **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
+
 ### v0.3.0
 - All deprecated CRD fields and Solr Operator options from `v0.2.*` have been removed.
 
