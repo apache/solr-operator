@@ -46,8 +46,7 @@ spec:
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
-        # DEPRECATION: v0.4.0 - Remove (eq "true" .Values.useZkOperator)
-        {{- if or (index .Values "zookeeper-operator" "install") (or (index .Values "zookeeper-operator" "use") (eq .Values.useZkOperator "true")) }}
+        {{- if or (index .Values "zookeeper-operator" "install") (index .Values "zookeeper-operator" "use") }}
         - -zk-operator=true
         {{- else }}
         - -zk-operator=false
