@@ -428,6 +428,15 @@ type ExternalAddressability struct {
 	// Defaults to 80 if HideNodes=false and method=Ingress, otherwise this is optional.
 	// +optional
 	NodePortOverride int `json:"nodePortOverride,omitempty"`
+
+	// CommonEndpointTLSSecret defines a TLS Secret to use for TLS termination on the common-endpoint ingress.
+	//
+	// This is option is only available when HideCommon=false, otherwise there is no external common endpoint to enable TLS for.
+	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
+	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`.
+	//
+	// +optional
+	CommonEndpointTLSSecret string `json:"commonEndpointTLSSecret,omitempty"`
 }
 
 // ExternalAddressability is a string enumeration type that enumerates
