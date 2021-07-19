@@ -48,6 +48,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/112
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/276
+    - kind: changed
+      description: Default Solr Version upgraded to 8.9, does not affect existing clouds
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/285
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/287
     - kind: added
       description: Ability to create serviceAccount for SolrCloud deployment through Helm chart.
       links:

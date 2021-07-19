@@ -61,6 +61,22 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/281
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/279
+    - kind: removed
+      description: "Removed deprecated Solr Operator Helm chart option `useZkOperator`, use `zookeeper-operator.use` instead"
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/286
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/288
+        - name: Deprecating Github PR
+          url: https://github.com/apache/solr-operator/pull/231
+    - kind: changed
+      description: Default Solr Version upgraded to 8.9, does not affect existing clouds
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/285
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/287
     - kind: added
       description: Customize serviceAccountName for SolrCloud and SolrPrometheusExporter
       links:
