@@ -29,7 +29,7 @@ global:
 
 image:
   repository: "solr"
-  tag: "8.8.2"
+  tag: ""
   # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
   pullPolicy: ""
   imagePullSecret: ""
