@@ -356,7 +356,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	if sc.Spec.SolrTLS != nil {
 		assert.NotNil(t, zkSetupInitContainer, "Didn't find the zk-setup InitContainer in the sts!")
 		if zkSetupInitContainer != nil {
-			assert.Equal(t, "library/solr:7.7.0", zkSetupInitContainer.Image)
+			assert.Equal(t, stateful.Spec.Template.Spec.Containers[0].Image, zkSetupInitContainer.Image, "The zk-setup init container should use the same image as the Solr container")
 			assert.Equal(t, 3, len(zkSetupInitContainer.Command), "Wrong command length for zk-setup init container")
 			assert.Contains(t, zkSetupInitContainer.Command[2], expCmd, "ZK Setup command does not set urlScheme")
 			expNumVars := 3

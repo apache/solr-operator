@@ -1620,6 +1620,9 @@ spec:
                             description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                             type: object
                         type: object
+                      serviceAccountName:
+                        description: Optional Service Account to run the pod under.
+                        type: string
                       sidecarContainers:
                         description: Sidecar containers to run in the pod. These are in addition to the Solr Container
                         items:
@@ -5344,6 +5347,9 @@ spec:
                                 description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                                 type: object
                             type: object
+                          serviceAccountName:
+                            description: Optional Service Account to run the zookeeper pods under.
+                            type: string
                           tolerations:
                             description: Tolerations to be added on pods.
                             items:

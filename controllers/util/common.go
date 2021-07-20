@@ -431,6 +431,12 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		to.Spec.TerminationGracePeriodSeconds = from.Spec.TerminationGracePeriodSeconds
 	}
 
+	if !DeepEqualWithNils(to.Spec.ServiceAccountName, from.Spec.ServiceAccountName) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.ServiceAccountName", "from", to.Spec.ServiceAccountName, "to", from.Spec.ServiceAccountName)
+		to.Spec.ServiceAccountName = from.Spec.ServiceAccountName
+	}
+
 	return requireUpdate
 }
 

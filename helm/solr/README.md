@@ -97,6 +97,8 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
+| serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
+| serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
 
 ### Data Storage Options
 
@@ -159,6 +161,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.persistence.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when ZooKeeper is deleted or scaled down. Either `Retain` or `Delete`. |
 | zk.provided.persistence.spec | object | | A PVC Spec for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
+| zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
 | zk.provided.zookeeperPodPolicy.resources.requests | map[string]string |  | Provide Resource requests for the ZooKeeper containers |
@@ -213,7 +216,8 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
-| podOptions.priorityClassName | string | | Give a priorityClassName for the Solr pod |
+| podOptions.serviceAccountName | string |  | Optional serviceAccount to run the Solr pods under |
+| podOptions.priorityClassName | string | | Optional priorityClassName for the Solr pod |
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |

@@ -115,6 +115,10 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
 	}
 
+	if zkSpec.ZookeeperPod.ServiceAccountName != "" {
+		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
+	}
+
 	return zkCluster
 }
 
@@ -223,6 +227,15 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		requireUpdate = true
 	}
 	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
+
+	// The Zookeeper Operator defaults the serviceAccountName to "default", therefore only update if either of the following
+	//   - The new serviceAccountName is not empty
+	//   - The old serviceAccountName is not "default", so we know we want to switch to the default value.
+	if !DeepEqualWithNils(to.Spec.Pod.ServiceAccountName, from.Spec.Pod.ServiceAccountName) && (from.Spec.Pod.ServiceAccountName != "" || to.Spec.Pod.ServiceAccountName != "default") {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.ServiceAccountName", "from", to.Spec.Pod.ServiceAccountName, "to", from.Spec.Pod.ServiceAccountName)
+		requireUpdate = true
+		to.Spec.Pod.ServiceAccountName = from.Spec.Pod.ServiceAccountName
+	}
 
 	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
 		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)

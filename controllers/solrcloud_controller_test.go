@@ -209,6 +209,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					PriorityClassName:             testPriorityClass,
 					ImagePullSecrets:              testAdditionalImagePullSecrets,
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
+					ServiceAccountName:            testServiceAccountName,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
@@ -300,6 +301,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
 	assert.EqualValues(t, &testTerminationGracePeriodSeconds, statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
+	assert.EqualValues(t, testServiceAccountName, statefulSet.Spec.Template.Spec.ServiceAccountName, "Incorrect serviceAccountName")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
@@ -317,6 +319,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "common service labels", util.MergeLabelsOrAnnotations(expectedHeadlessServiceLabels, testHeadlessServiceLabels), headlessService.Labels)
 	testMapsEqual(t, "common service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
 }
+
 
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 	UseZkCRD(true)

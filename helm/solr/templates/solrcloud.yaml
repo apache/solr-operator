@@ -189,9 +189,9 @@ spec:
       ephemeral:
         {{- toYaml .Values.zk.provided.ephemeral | nindent 8 }}
       {{- end }}
-      {{- if .Values.zk.provided.zookeeperPodPolicy }}
+      {{- if (include "solr.zk.zookeeperPodPolicy" .) }}
       zookeeperPodPolicy:
-        {{- toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
+        {{- include "solr.zk.zookeeperPodPolicy" . | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.acl }}
       acl:

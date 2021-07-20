@@ -35,7 +35,7 @@ const (
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
-	DefaultSolrVersion  = "7.7.0"
+	DefaultSolrVersion  = "8.9"
 	DefaultSolrStorage  = "5Gi"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
@@ -694,6 +694,10 @@ type ZookeeperPodPolicy struct {
 	// This field cannot be updated once the cluster is created.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Optional Service Account to run the zookeeper pods under.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud
