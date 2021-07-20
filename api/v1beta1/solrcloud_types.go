@@ -570,7 +570,7 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 		changed = ref.ConnectionInfo.withDefaults() || changed
 	}
 	if ref.ProvidedZookeeper != nil {
-		changed = ref.ProvidedZookeeper.withDefaults() || changed
+		changed = ref.ProvidedZookeeper.WithDefaults() || changed
 	}
 	return changed
 }
@@ -600,8 +600,14 @@ type ZookeeperSpec struct {
 
 	// Persistence is the configuration for zookeeper persistent layer.
 	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
 	// +optional
 	Persistence *zk.Persistence `json:"persistence,omitempty"`
+
+	// Ephemeral is the configuration which helps create ephemeral storage
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
+	// +optional
+	Ephemeral *zk.Ephemeral `json:"ephemeral,omitempty"`
 
 	// Pod resources for zookeeper pod
 	// +optional
@@ -622,7 +628,7 @@ type ZookeeperSpec struct {
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 }
 
-func (z *ZookeeperSpec) withDefaults() (changed bool) {
+func (z *ZookeeperSpec) WithDefaults() (changed bool) {
 	if z.Replicas == nil {
 		changed = true
 		r := DefaultZkReplicas

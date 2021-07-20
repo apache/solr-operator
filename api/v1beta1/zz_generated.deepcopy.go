@@ -1352,6 +1352,11 @@ func (in *ZookeeperSpec) DeepCopyInto(out *ZookeeperSpec) {
 		*out = new(zookeeperv1beta1.Persistence)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Ephemeral != nil {
+		in, out := &in.Ephemeral, &out.Ephemeral
+		*out = new(zookeeperv1beta1.Ephemeral)
+		(*in).DeepCopyInto(*out)
+	}
 	in.ZookeeperPod.DeepCopyInto(&out.ZookeeperPod)
 	if in.AllACL != nil {
 		in, out := &in.AllACL, &out.AllACL

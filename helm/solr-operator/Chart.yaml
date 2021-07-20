@@ -84,6 +84,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/264
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/283
+    - kind: added
+      description: Introduced ephemeral option for Zookeeper storage
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/259
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/284
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease
