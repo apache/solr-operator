@@ -77,6 +77,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/285
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/287
+    - kind: added
+      description: Customize serviceAccountName for SolrCloud and SolrPrometheusExporter
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/264
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/283
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease

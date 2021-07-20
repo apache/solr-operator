@@ -208,6 +208,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					PriorityClassName:             testPriorityClass,
 					ImagePullSecrets:              testAdditionalImagePullSecrets,
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
+					ServiceAccountName:            testServiceAccountName,
 				},
 				StatefulSetOptions: &solr.StatefulSetOptions{
 					Annotations:         testSSAnnotations,
@@ -299,6 +300,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
 	assert.EqualValues(t, &testTerminationGracePeriodSeconds, statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
+	assert.EqualValues(t, testServiceAccountName, statefulSet.Spec.Template.Spec.ServiceAccountName, "Incorrect serviceAccountName")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.RollingUpdateStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
@@ -394,6 +396,7 @@ func TestCloudWithProvidedZookeeperReconcile(t *testing.T) {
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
 	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
+	assert.Empty(t, statefulSet.Spec.Template.Spec.ServiceAccountName, "No custom serviceAccountName specified, so the field should be empty.")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")

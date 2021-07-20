@@ -262,12 +262,13 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 			},
 			CustomKubeOptions: solr.CustomExporterKubeOptions{
 				PodOptions: &solr.PodOptions{
-					EnvVariables: extraVars,
-					Annotations:  testPodAnnotations,
-					Labels:       testPodLabels,
-					Volumes:      extraVolumes,
-					Tolerations:  testTolerationsPromExporter,
-					NodeSelector: testNodeSelectors,
+					EnvVariables:       extraVars,
+					Annotations:        testPodAnnotations,
+					Labels:             testPodLabels,
+					Volumes:            extraVolumes,
+					Tolerations:        testTolerationsPromExporter,
+					NodeSelector:       testNodeSelectors,
+					ServiceAccountName: testServiceAccountName,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{
 					Annotations: testDeploymentAnnotations,
@@ -403,6 +404,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[1].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[1].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
+	assert.Equal(t, testServiceAccountName, deployment.Spec.Template.Spec.ServiceAccountName, "Incorrect serviceAccountName.")
 
 	expectedServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "metrics"})
 	expectedServiceAnnotations := map[string]string{"prometheus.io/path": "/metrics", "prometheus.io/port": "80", "prometheus.io/scheme": "http", "prometheus.io/scrape": "true"}
@@ -570,6 +572,7 @@ func TestMetricsReconcileWithSolrZkAcls(t *testing.T) {
 	assert.Equal(t, zkAclEnvVars, foundEnv[0:5], "ZK ACL Env Vars are not correct")
 	assert.Equal(t, extraVars, foundEnv[5:len(foundEnv)-1], "Extra Env Vars are not the same as the ones provided in podOptions")
 	testMetricsPodEnvVariables(t, expectedEnvVars, foundEnv[len(foundEnv)-1:])
+	assert.Empty(t, deployment.Spec.Template.Spec.ServiceAccountName, "No custom serviceAccountName specified, so the field should be empty.")
 
 	expectedServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "metrics"})
 	expectedServiceAnnotations := map[string]string{"prometheus.io/path": "/metrics", "prometheus.io/port": "80", "prometheus.io/scheme": "http", "prometheus.io/scrape": "true"}
