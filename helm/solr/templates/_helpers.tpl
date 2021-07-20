@@ -73,8 +73,19 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-ZK ChRoot
+Create the name of the service account to use globally
 */}}
-{{ define "solr.zk.chroot" }}
-/{{ printf "%s%s" (trimSuffix "/" .Values.zk.chroot) (ternary (printf "/%s/%s" .Release.Namespace (include "solr.fullname" .)) "" .Values.zk.uniqueChroot) | trimPrefix "/" }}
-{{ end }}
+{{- define "solr.serviceAccountName.global" -}}
+{{- if .Values.serviceAccount.create -}}
+{{ .Values.serviceAccount.name | default (include "solr.fullname" .) }}
+{{- else -}}
+{{ .Values.serviceAccount.name }}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Create the name of the service account to use for Solr
+*/}}
+{{- define "solr.serviceAccountName.solr" -}}
+{{ .Values.podOptions.serviceAccountName | default (include "solr.serviceAccountName.global" .) }}
+{{- end -}}

@@ -129,6 +129,10 @@ type PodOptions struct {
 	// +kubebuilder:validation:Minimum=10
 	// +optional
 	TerminationGracePeriodSeconds *int64 `json:"terminationGracePeriodSeconds,omitempty"`
+
+	// Optional Service Account to run the pod under.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

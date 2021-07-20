@@ -21,6 +21,7 @@ import (
 	b64 "encoding/base64"
 	"fmt"
 	"github.com/apache/solr-operator/controllers/util"
+	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"strings"
@@ -488,6 +489,9 @@ func cleanupTest(g *gomega.GomegaWithT, namespace string) {
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrPrometheusExporter{},
 
+		// Dependency CRDs
+		&zkv1beta1.ZookeeperCluster{},
+
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
@@ -677,6 +681,8 @@ var (
 	}
 	one                = int64(1)
 	two                = int64(2)
+	four               = int32(4)
+	five               = int32(5)
 	podSecurityContext = corev1.PodSecurityContext{
 		RunAsUser:  &one,
 		RunAsGroup: &two,
@@ -745,4 +751,5 @@ var (
 			ImagePullPolicy:          "Always",
 		},
 	}
+	testServiceAccountName = "test-service-account"
 )

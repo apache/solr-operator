@@ -48,9 +48,8 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 				Tag:        zkSpec.Image.Tag,
 				PullPolicy: zkSpec.Image.PullPolicy,
 			},
-			Labels:      labels,
-			Replicas:    *zkSpec.Replicas,
-			Persistence: zkSpec.Persistence,
+			Labels:   labels,
+			Replicas: *zkSpec.Replicas,
 			Ports: []corev1.ContainerPort{
 				{
 					Name:          "client",
@@ -66,6 +65,29 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 				},
 			},
 		},
+	}
+
+	// Add storage information for the ZK Cluster
+	if zkSpec.Persistence != nil {
+		// If persistence is provided, then chose it.
+		zkCluster.Spec.StorageType = "persistence"
+	} else if zkSpec.Ephemeral != nil {
+		// If ephemeral is provided, then chose it.
+		zkCluster.Spec.StorageType = "ephemeral"
+	} else {
+		// If neither option is provided, default to the option used for solr (which defaults to ephemeral)
+		if solrCloud.Spec.StorageOptions.PersistentStorage != nil {
+			zkCluster.Spec.StorageType = "persistence"
+		} else {
+			zkCluster.Spec.StorageType = "ephemeral"
+		}
+	}
+
+	// Set the persistence/ephemeral options if necessary
+	if zkSpec.Persistence != nil && zkCluster.Spec.StorageType == "persistence" {
+		zkCluster.Spec.Persistence = zkSpec.Persistence
+	} else if zkSpec.Ephemeral != nil && zkCluster.Spec.StorageType == "ephemeral" {
+		zkCluster.Spec.Ephemeral = zkSpec.Ephemeral
 	}
 
 	// Append Pod Policies if provided by user
@@ -91,6 +113,10 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 
 	if solrCloud.Spec.SolrAddressability.KubeDomain != "" {
 		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
+	}
+
+	if zkSpec.ZookeeperPod.ServiceAccountName != "" {
+		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
 	}
 
 	return zkCluster
@@ -201,6 +227,15 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		requireUpdate = true
 	}
 	to.Spec.Pod.Affinity = from.Spec.Pod.Affinity
+
+	// The Zookeeper Operator defaults the serviceAccountName to "default", therefore only update if either of the following
+	//   - The new serviceAccountName is not empty
+	//   - The old serviceAccountName is not "default", so we know we want to switch to the default value.
+	if !DeepEqualWithNils(to.Spec.Pod.ServiceAccountName, from.Spec.Pod.ServiceAccountName) && (from.Spec.Pod.ServiceAccountName != "" || to.Spec.Pod.ServiceAccountName != "default") {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.ServiceAccountName", "from", to.Spec.Pod.ServiceAccountName, "to", from.Spec.Pod.ServiceAccountName)
+		requireUpdate = true
+		to.Spec.Pod.ServiceAccountName = from.Spec.Pod.ServiceAccountName
+	}
 
 	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
 		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)

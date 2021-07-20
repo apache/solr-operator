@@ -33,6 +33,9 @@ annotations:
 resources:
   {{- toYaml .Values.podOptions.resources | nindent 2 }}
 {{ end }}
+{{- if (include "solr.serviceAccountName.solr" .) -}}
+serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}

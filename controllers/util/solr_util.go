@@ -567,6 +567,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	stateful.Spec.Template.Spec.ImagePullSecrets = imagePullSecrets
 
 	if nil != customPodOptions {
+		if customPodOptions.ServiceAccountName != "" {
+			stateful.Spec.Template.Spec.ServiceAccountName = customPodOptions.ServiceAccountName
+		}
+
 		if customPodOptions.Affinity != nil {
 			stateful.Spec.Template.Spec.Affinity = customPodOptions.Affinity
 		}

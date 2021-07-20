@@ -27,9 +27,18 @@ global:
   imagePullSecrets: []
   clusterDomain: ""
 
+# Use a serviceAccount for all pods created under this chart (Solr and ZK)
+serviceAccount:
+  # Specifies whether a ServiceAccount should be created
+  create: false
+  # The name of the ServiceAccount to use.
+  # Required if create is false.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
 image:
   repository: "solr"
-  tag: "8.8.2"
+  tag: ""
   # Default pullPolicy is empty, which is Always for "latest" tags and IfNotPresent for all others.
   pullPolicy: ""
   imagePullSecret: ""
@@ -140,15 +149,23 @@ zk:
       # tag: ""
       # pullPolicy: IfNotPresent
       # imagePullSecret: ""
-    persistence: {}
-      # reclaimPolicy: "Retain"
-      # spec: {}
     zookeeperPodPolicy: {}
       # affinity: {}
       # tolerations: []
       # nodeSelector: {}
       # env: []
       # resources: {}
+      # # Set ZK service account individually instead of the global "serviceAccount.name"
+      # serviceAccountName: ""
+
+    # Storage defaults to the type of storage you use for Solr, which is ephemeral by default.
+    # Explicitly set the storage type, only necessary when wishing to use an empty persistence or ephemeral object.
+    storageType: ""
+    persistence: {}
+      # reclaimPolicy: "Retain"
+      # spec: {}
+    ephemeral: {}
+      # emptydirvolumesource: {}
 
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
@@ -199,6 +216,9 @@ podOptions:
   nodeSelector: {}
   podSecurityContext: {}
   terminationGracePeriodSeconds: null
+
+  # Set Solr service account individually instead of the global "serviceAccount.name"
+  serviceAccountName: ""
 
   # Probes for the Solr pods
   livenessProbe: {}

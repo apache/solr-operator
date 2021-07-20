@@ -35,7 +35,7 @@ const (
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
-	DefaultSolrVersion  = "7.7.0"
+	DefaultSolrVersion  = "8.9"
 	DefaultSolrStorage  = "5Gi"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
@@ -574,7 +574,7 @@ func (ref *ZookeeperRef) withDefaults() (changed bool) {
 		changed = ref.ConnectionInfo.withDefaults() || changed
 	}
 	if ref.ProvidedZookeeper != nil {
-		changed = ref.ProvidedZookeeper.withDefaults() || changed
+		changed = ref.ProvidedZookeeper.WithDefaults() || changed
 	}
 	return changed
 }
@@ -604,8 +604,14 @@ type ZookeeperSpec struct {
 
 	// Persistence is the configuration for zookeeper persistent layer.
 	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
 	// +optional
 	Persistence *zk.Persistence `json:"persistence,omitempty"`
+
+	// Ephemeral is the configuration which helps create ephemeral storage
+	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
+	// +optional
+	Ephemeral *zk.Ephemeral `json:"ephemeral,omitempty"`
 
 	// Pod resources for zookeeper pod
 	// +optional
@@ -626,7 +632,7 @@ type ZookeeperSpec struct {
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 }
 
-func (z *ZookeeperSpec) withDefaults() (changed bool) {
+func (z *ZookeeperSpec) WithDefaults() (changed bool) {
 	if z.Replicas == nil {
 		changed = true
 		r := DefaultZkReplicas
@@ -692,6 +698,10 @@ type ZookeeperPodPolicy struct {
 	// This field cannot be updated once the cluster is created.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+
+	// Optional Service Account to run the zookeeper pods under.
+	// +optional
+	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud

@@ -182,13 +182,16 @@ spec:
       image:
         {{- toYaml .Values.zk.provided.image | nindent 8 }}
       {{- end }}
-      {{- if .Values.zk.provided.persistence }}
+      {{- if (or .Values.zk.provided.persistence (lower .Values.zk.provided.storageType | hasPrefix "persist")) }}
       persistence:
         {{- toYaml .Values.zk.provided.persistence | nindent 8 }}
+      {{- else if (or .Values.zk.provided.ephemeral (lower .Values.zk.provided.storageType | eq "ephemeral")) }}
+      ephemeral:
+        {{- toYaml .Values.zk.provided.ephemeral | nindent 8 }}
       {{- end }}
-      {{- if .Values.zk.provided.zookeeperPodPolicy }}
+      {{- if (include "solr.zk.zookeeperPodPolicy" .) }}
       zookeeperPodPolicy:
-        {{- toYaml .Values.zk.provided.zookeeperPodPolicy | nindent 8 }}
+        {{- include "solr.zk.zookeeperPodPolicy" . | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.acl }}
       acl:

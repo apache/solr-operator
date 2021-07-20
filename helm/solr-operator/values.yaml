@@ -43,9 +43,6 @@ zookeeper-operator:
   crd:
     create: false
 
-# DEPRECATED: Please use "zookeeper-operator.use" instead.
-useZkOperator: "false"
-
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
 watchNamespaces: ""
@@ -60,7 +57,7 @@ serviceAccount:
   # The name of the ServiceAccount to use.
   # Required if create is false.
   # If not set and create is true, a name is generated using the fullname template
-  name:
+  name: ""
 
 # Various Pod Options to customize the runtime of the operator
 resources: {}
