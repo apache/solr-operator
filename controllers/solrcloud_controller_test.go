@@ -320,7 +320,6 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testMapsEqual(t, "common service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
 }
 
-
 func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 	UseZkCRD(true)
 	g := gomega.NewGomegaWithT(t)
@@ -394,6 +393,7 @@ func TestCloudWithExternalZookeeperChroot(t *testing.T) {
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
 	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
+	assert.Empty(t, statefulSet.Spec.Template.Spec.ServiceAccountName, "No custom serviceAccountName specified, so the field should be empty.")
 }
 
 func TestDefaults(t *testing.T) {

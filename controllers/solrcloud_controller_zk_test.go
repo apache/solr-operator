@@ -72,11 +72,12 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 						},
 					},
 					ZookeeperPod: solr.ZookeeperPodPolicy{
-						Affinity:     affinity,
-						NodeSelector: testNodeSelectors,
-						Tolerations:  testTolerations,
-						Env:          extraVars,
-						Resources:    resources,
+						Affinity:           affinity,
+						NodeSelector:       testNodeSelectors,
+						Tolerations:        testTolerations,
+						Env:                extraVars,
+						Resources:          resources,
+						ServiceAccountName: testServiceAccountName,
 					},
 					ChRoot: "a-ch/root",
 				},
@@ -147,6 +148,7 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
 	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
+	assert.Empty(t, statefulSet.Spec.Template.Spec.ServiceAccountName, "No custom serviceAccountName specified, so the field should be empty.")
 
 	// Check the update strategy
 	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
@@ -167,6 +169,7 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, testNodeSelectors, zkCluster.Spec.Pod.NodeSelector, "Incorrect zkCluster nodeSelectors")
 	assert.EqualValues(t, resources, zkCluster.Spec.Pod.Resources, "Incorrect zkCluster resources")
 	assert.EqualValues(t, extraVars, zkCluster.Spec.Pod.Env, "Incorrect zkCluster env vars")
+	assert.EqualValues(t, testServiceAccountName, zkCluster.Spec.Pod.ServiceAccountName, "Incorrect zkCluster serviceAccountName")
 }
 
 func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
