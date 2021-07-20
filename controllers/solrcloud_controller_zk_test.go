@@ -47,6 +47,7 @@ func expectZookeeperCluster(g *gomega.GomegaWithT, requests chan reconcile.Reque
 
 	// Delete the ZK and expect Reconcile to be called for ZK deletion
 	g.Expect(testClient.Delete(context.TODO(), zk)).NotTo(gomega.HaveOccurred())
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 	g.Eventually(func() error { return testClient.Get(context.TODO(), zookeeperClusterKey, zk) }, timeout).
 		Should(gomega.Succeed())
 
