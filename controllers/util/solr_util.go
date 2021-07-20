@@ -870,8 +870,9 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 
 	extOpts := solrCloud.Spec.SolrAddressability.External
 
-	// Create advertised domain name and possible additional domain names
-	rules := CreateSolrIngressRules(solrCloud, nodeNames, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
+	// Create advertised domain name and possible additional domain names'
+	allDomains := append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...)
+	rules, hasCommon := CreateSolrIngressRules(solrCloud, nodeNames, allDomains)
 
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil {
@@ -883,6 +884,17 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
+	} else if hasCommon && extOpts.CommonEndpointTLSSecret != "" {
+		// Only add Common Endpoint TLS if the Solr Cloud is not using TLS and if the common endpoint is exposed externally
+		commonIngressHosts := make([]string, len(allDomains))
+		for i, domain := range allDomains {
+			commonIngressHosts[i] = solrCloud.ExternalCommonUrl(domain, false)
+		}
+
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{
+			SecretName: extOpts.CommonEndpointTLSSecret,
+			Hosts: commonIngressHosts,
+		})
 	}
 
 	ingress = &netv1.Ingress{
@@ -904,9 +916,9 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 // solrCloud: SolrCloud instance
 // nodeNames: the names for each of the solr pods
 // domainName: string Domain for the ingress rule to use
-func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) []netv1.IngressRule {
-	var ingressRules []netv1.IngressRule
+func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) (ingressRules []netv1.IngressRule, hasCommon bool) {
 	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
+		hasCommon = true
 		for _, domainName := range domainNames {
 			ingressRules = append(ingressRules, CreateCommonIngressRule(solrCloud, domainName))
 		}
@@ -918,7 +930,7 @@ func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domai
 			}
 		}
 	}
-	return ingressRules
+	return
 }
 
 // CreateCommonIngressRule returns a new Ingress Rule generated for a SolrCloud under the given domainName

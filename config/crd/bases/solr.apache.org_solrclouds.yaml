@@ -4490,6 +4490,9 @@ spec:
                         items:
                           type: string
                         type: array
+                      commonEndpointTLSSecret:
+                        description: "CommonEndpointTLSSecret defines a TLS Secret to use for TLS termination on the common-endpoint ingress. \n This is option is only available when HideCommon=false, otherwise there is no external common endpoint to enable TLS for. This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination. This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`."
+                        type: string
                       domainName:
                         description: "Override the domainName provided as startup parameters to the operator, used by ingresses and externalDNS. The common and/or node services will be addressable by unique names under the given domain. e.g. given.domain.name.com -> default-example-solrcloud.given.domain.name.com \n For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true. If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above."
                         type: string

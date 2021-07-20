@@ -207,7 +207,7 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 	wg.Wait()
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
-	expectIngressTLSConfig(t, g, tlsSecretName)
+	expectPassthroughIngressTLSConfig(t, g, tlsSecretName)
 
 	defer testClient.Delete(ctx, mockTLSSecret)
 }
@@ -333,6 +333,30 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 		expectBootstrapSecret := instance.Spec.SolrSecurity.BasicAuthSecret == ""
 		expectStatefulSetBasicAuthConfig(t, g, instance, expectBootstrapSecret)
 	}
+}
+
+func TestTLSCommonIngressTermination(t *testing.T) {
+	// now, update the config to enable TLS
+	tlsSecretName := "tls-cert-secret-from-user"
+
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
+	instance.Spec.SolrAddressability.External.CommonEndpointTLSSecret = tlsSecretName
+
+	changed := instance.WithDefaults()
+	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
+
+	g := gomega.NewGomegaWithT(t)
+	helper := NewTLSTestHelper(g)
+	defer func() {
+		helper.StopTest()
+	}()
+
+	ctx := context.TODO()
+	helper.ReconcileSolrCloud(ctx, instance, 0)
+	defer testClient.Delete(ctx, instance)
+
+	expectTerminateIngressTLSConfig(t, g, tlsSecretName)
 }
 
 // ensures the TLS settings are applied correctly to the STS
@@ -471,12 +495,20 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 	return stateful
 }
 
-func expectIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
+func expectPassthroughIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
 	ingress := &netv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
-	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1)
-	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName)
-	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"])
+	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1, "Wrong number of TLS Secrets for ingress")
+	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
+	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+}
+
+func expectTerminateIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
+	ingress := &netv1.Ingress{}
+	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
+	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1, "Wrong number of TLS Secrets for ingress")
+	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
+	assert.NotContains(t, ingress.ObjectMeta.Annotations, "nginx.ingress.kubernetes.io/backend-protocol", "Ingress Backend Protocol annotation should not exist for TLS termination")
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
