@@ -57,7 +57,7 @@ RUN CGO_ENABLED=0 GIT_SHA="${GIT_SHA}" make fetch-licenses-full build
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 # Debug is needed, so that the license files are viewable.
 # If there is another way to view these files, we can remove "debug-".
-FROM gcr.io/distroless/base:debug-nonroot
+FROM gcr.io/distroless/static:debug-nonroot
 
 WORKDIR /
 COPY --from=builder workspace/bin/solr-operator .
