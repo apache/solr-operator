@@ -872,7 +872,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 
 	// Create advertised domain name and possible additional domain names'
 	allDomains := append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...)
-	rules, hasCommon := CreateSolrIngressRules(solrCloud, nodeNames, allDomains)
+	rules, allHosts := CreateSolrIngressRules(solrCloud, nodeNames, allDomains)
 
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil {
@@ -884,16 +884,10 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} else if hasCommon && extOpts.CommonEndpointTLSSecret != "" {
-		// Only add Common Endpoint TLS if the Solr Cloud is not using TLS and if the common endpoint is exposed externally
-		commonIngressHosts := make([]string, len(allDomains))
-		for i, domain := range allDomains {
-			commonIngressHosts[i] = solrCloud.ExternalCommonUrl(domain, false)
-		}
-
+	} else if extOpts.IngressTLSTerminationSecret != "" {
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{
-			SecretName: extOpts.CommonEndpointTLSSecret,
-			Hosts:      commonIngressHosts,
+			SecretName: extOpts.IngressTLSTerminationSecret,
+			Hosts:      allHosts,
 		})
 	}
 
@@ -916,17 +910,20 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 // solrCloud: SolrCloud instance
 // nodeNames: the names for each of the solr pods
 // domainName: string Domain for the ingress rule to use
-func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) (ingressRules []netv1.IngressRule, hasCommon bool) {
+func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) (ingressRules []netv1.IngressRule, allHosts []string) {
 	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
-		hasCommon = true
 		for _, domainName := range domainNames {
-			ingressRules = append(ingressRules, CreateCommonIngressRule(solrCloud, domainName))
+			rule := CreateCommonIngressRule(solrCloud, domainName)
+			ingressRules = append(ingressRules, rule)
+			allHosts = append(allHosts, rule.Host)
 		}
 	}
 	if !solrCloud.Spec.SolrAddressability.External.HideNodes {
 		for _, nodeName := range nodeNames {
 			for _, domainName := range domainNames {
-				ingressRules = append(ingressRules, CreateNodeIngressRule(solrCloud, nodeName, domainName))
+				rule := CreateNodeIngressRule(solrCloud, nodeName, domainName)
+				ingressRules = append(ingressRules, rule)
+				allHosts = append(allHosts, rule.Host)
 			}
 		}
 	}
@@ -1542,7 +1539,7 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, enableBasicAuth, solrCloud.UrlScheme(), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
+		javaToolOptions, enableBasicAuth, solrCloud.UrlScheme(false), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	return probeCommand, vol, volMount

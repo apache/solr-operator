@@ -62,13 +62,6 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/264
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/283
-    - kind: added
-      description: Ability to terminate TLS at ingress for common SolrCloud endpoint.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/268
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/293
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

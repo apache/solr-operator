@@ -341,7 +341,7 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 
 	instance := buildTestSolrCloud()
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic}
-	instance.Spec.SolrAddressability.External.CommonEndpointTLSSecret = tlsSecretName
+	instance.Spec.SolrAddressability.External.IngressTLSTerminationSecret = tlsSecretName
 
 	changed := instance.WithDefaults()
 	assert.True(t, changed, "WithDefaults should have changed the test SolrCloud instance")
@@ -353,10 +353,21 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 	}()
 
 	ctx := context.TODO()
-	helper.ReconcileSolrCloud(ctx, instance, 0)
-	defer testClient.Delete(ctx, instance)
+	helper.ReconcileSolrCloud(ctx, instance, 1)
 
 	expectTerminateIngressTLSConfig(t, g, tlsSecretName)
+
+	// Check that the Addresses in the status are correct
+	g.Eventually(func() error { return testClient.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance) }, timeout).Should(gomega.Succeed())
+	assert.Equal(t, "http://"+instance.Name+"-solrcloud-common."+instance.Namespace, instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	if assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.") {
+		assert.EqualValues(t, "https://"+instance.Namespace+"-"+instance.Name+"-solrcloud."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	}
+	assert.Equal(t, "http://"+instance.Name+"-solrcloud-common."+instance.Namespace, instance.Status.InternalCommonAddress, "Wrong internal common address in status")
+	if assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.") {
+		assert.EqualValues(t, "https://"+instance.Namespace+"-"+instance.Name+"-solrcloud."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	}
+	defer testClient.Delete(ctx, instance)
 }
 
 // ensures the TLS settings are applied correctly to the STS
@@ -506,11 +517,12 @@ func expectPassthroughIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expe
 func expectTerminateIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
 	ingress := &netv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
-	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1, "Wrong number of TLS Secrets for ingress")
+	assert.Equal(t, 1, len(ingress.Spec.TLS), "Wrong number of TLS Secrets for ingress")
 	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
 	assert.NotContains(t, ingress.ObjectMeta.Annotations, "nginx.ingress.kubernetes.io/backend-protocol", "Ingress Backend Protocol annotation should not exist for TLS termination")
-	assert.Equal(t, 1, len(ingress.Spec.TLS[0].Hosts), "Wrong number of hosts for Ingress TLS termination")
+	assert.Equal(t, 2, len(ingress.Spec.TLS[0].Hosts), "Wrong number of hosts for Ingress TLS termination")
 	assert.Equal(t, "default-foo-tls-solrcloud."+testDomain, ingress.Spec.TLS[0].Hosts[0], "Wrong common-host name for Ingress TLS termination")
+	assert.Equal(t, "default-foo-tls-solrcloud-0."+testDomain, ingress.Spec.TLS[0].Hosts[1], "Wrong common-host name for Ingress TLS termination")
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
@@ -615,7 +627,6 @@ func buildTestSolrCloud() *solr.SolrCloud {
 					Method:             solr.Ingress,
 					UseExternalAddress: true,
 					DomainName:         testDomain,
-					HideNodes:          true,
 				},
 			},
 		},

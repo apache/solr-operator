@@ -648,7 +648,7 @@ The `--cacert` option supplies the CA's certificate needed to trust the server c
 _Since v0.4.0_
 
 A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
-The operator supports this paradigm for the common Solr endpoint.
+The operator supports this paradigm, to ensure all external traffic is encrypted.
 
 ```yaml
 kind: SolrCloud
@@ -658,19 +658,19 @@ spec:
   ... other SolrCloud CRD settings ...
 
   solrAddressability:
-    commonServicePort: 443
     external:
       domainName: k8s.solr.cloud
       method: Ingress
       hideNodes: true
-      commonEndpointTLSSecret: my-selfsigned-cert-tls
+      useExternalAddress: false
+      ingressTLSTerminationSecret: my-selfsigned-cert-tls
 ```
 
 The only additional settings required here are:
-- Making sure that you are hiding your Solr nodes externally `hideNodes: true`.  
-_This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
-- Adding a TLS secret through `commonEndpointTLSSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
-- Setting the commonServicePort to `443`, so that it is using the default port for `https`.
+- Making sure that you are not using the external TLS address for Solr to communicate internally via `useExternalAddress: false`.
+  This will be ignored, even if it is set to `true`.
+- Adding a TLS secret through `ingressTLSTerminationSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+  _This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
 
 To generate a TLS secret, follow the [instructions above](#use-cert-manager-to-issue-the-certificate) and use the templated Hostname: `<namespace>-<name>.<domain>`
 
