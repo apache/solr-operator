@@ -91,6 +91,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/259
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/284
+    - kind: security
+      description: Changed Solr Operator base Docker image to reduce vulnerabilities.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/294
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/295
     - kind: added
       description: Ability to terminate TLS at Ingress for SolrCloud.
       links:
