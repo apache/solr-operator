@@ -358,7 +358,9 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 	expectTerminateIngressTLSConfig(t, g, tlsSecretName)
 
 	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance) }, timeout).Should(gomega.Succeed())
+	g.Eventually(func() error {
+		return testClient.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
+	}, timeout).Should(gomega.Succeed())
 	assert.Equal(t, "http://"+instance.Name+"-solrcloud-common."+instance.Namespace, instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	if assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.") {
 		assert.EqualValues(t, "https://"+instance.Namespace+"-"+instance.Name+"-solrcloud."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
