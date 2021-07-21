@@ -509,6 +509,8 @@ func expectTerminateIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expect
 	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1, "Wrong number of TLS Secrets for ingress")
 	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
 	assert.NotContains(t, ingress.ObjectMeta.Annotations, "nginx.ingress.kubernetes.io/backend-protocol", "Ingress Backend Protocol annotation should not exist for TLS termination")
+	assert.Equal(t, 1, len(ingress.Spec.TLS[0].Hosts), "Wrong number of hosts for Ingress TLS termination")
+	assert.Equal(t, "default-foo-tls-solrcloud."+testDomain, ingress.Spec.TLS[0].Hosts[0], "Wrong common-host name for Ingress TLS termination")
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods

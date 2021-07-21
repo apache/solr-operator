@@ -307,7 +307,7 @@ data:
 ## Enable TLS Between Solr Pods
 _Since v0.3.0_
 
-A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
+A common approach to securing traffic to your Solr cluster is to perform [**TLS termination** at the Ingress](#enable-ingress-tls-termination-for-common-endpoint) and leave all traffic between Solr pods un-encrypted.
 However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
 The Solr operator provides **optional** configuration settings to enable TLS for encrypting traffic between Solr pods.
 
@@ -643,6 +643,36 @@ curl "https://localhost:8983/solr/admin/info/system" -v \
   --cacert root-ca/root-ca.pem
 ```
 The `--cacert` option supplies the CA's certificate needed to trust the server certificate provided by the Solr pods during TLS handshake.
+
+## Enable Ingress TLS Termination for Common Endpoint
+_Since v0.4.0_
+
+A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
+The operator supports this paradigm for the common Solr endpoint.
+
+```yaml
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    commonServicePort: 443
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      commonEndpointTLSSecret: my-selfsigned-cert-tls
+```
+
+The only additional settings required here are:
+- Making sure that you are hiding your Solr nodes externally `hideNodes: true`.  
+_This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
+- Adding a TLS secret through `commonEndpointTLSSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+- Setting the commonServicePort to `443`, so that it is using the default port for `https`.
+
+To generate a TLS secret, follow the [instructions above](#use-cert-manager-to-issue-the-certificate) and use the templated Hostname: `<namespace>-<name>.<domain>`
 
 ## Authentication and Authorization
 _Since v0.3.0_

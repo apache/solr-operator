@@ -893,7 +893,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{
 			SecretName: extOpts.CommonEndpointTLSSecret,
-			Hosts: commonIngressHosts,
+			Hosts:      commonIngressHosts,
 		})
 	}
 
