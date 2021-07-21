@@ -459,7 +459,7 @@ const (
 
 func (opts *ExternalAddressability) withDefaults() (changed bool) {
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
-	if opts.UseExternalAddress && opts.HideNodes {
+	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTerminationSecret != "") {
 		changed = true
 		opts.UseExternalAddress = false
 	}
