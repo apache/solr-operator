@@ -52,7 +52,6 @@ type TLSClientOptions struct {
 	TLSOptions               *solr.SolrTLSOptions
 	NeedsPkcs12InitContainer bool
 	TLSCertMd5               string
-	BusyBoxImage             *solr.ContainerImage
 }
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
@@ -202,10 +201,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			writeWrapperScript := fmt.Sprintf("cat << EOF > %s\n#!/bin/bash\nksp=\\$(cat %s)\ntsp=\\$(cat %s)\nJAVA_OPTS=\"\\${JAVA_OPTS} -Djavax.net.ssl.keyStorePassword=\\${ksp} -Djavax.net.ssl.trustStorePassword=\\${tsp}\"\n%s \\$@\nEOF\nchmod +x %s",
 				wrapperScript, tls.TLSOptions.MountedTLSKeystorePasswordPath(), tls.TLSOptions.MountedTLSTruststorePasswordPath(), entrypoint, wrapperScript)
 
+			c := solrPrometheusExporter.BusyBoxImage()
 			createTLSWrapperScriptInitContainer = &corev1.Container{
 				Name:            "create-tls-wrapper-script",
-				Image:           tls.BusyBoxImage.ToImageName(),
-				ImagePullPolicy: tls.BusyBoxImage.PullPolicy,
+				Image:           c.ToImageName(),
+				ImagePullPolicy: c.PullPolicy,
 				Command:         []string{"sh", "-c", writeWrapperScript},
 				VolumeMounts:    []corev1.VolumeMount{{Name: volName, MountPath: mountPath}},
 			}

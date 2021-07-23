@@ -56,6 +56,11 @@ type SolrPrometheusExporterSpec struct {
 	// The xml config for the metrics
 	// +optional
 	Config string `json:"metricsConfig,omitempty"`
+
+	// An initContainer is needed to create a wrapper script around the exporter entrypoint when TLS is enabled
+	// with the `spec.solrReference.solrTLS.mountedTLSDir` option
+	// +optional
+	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 }
 
 func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bool) {
@@ -235,6 +240,16 @@ func (sc *SolrPrometheusExporter) MetricsIngressPrefix() string {
 
 func (sc *SolrPrometheusExporter) MetricsIngressUrl(ingressBaseUrl string) string {
 	return fmt.Sprintf("%s.%s", sc.MetricsIngressPrefix(), ingressBaseUrl)
+}
+
+func (sc *SolrPrometheusExporter) BusyBoxImage() *ContainerImage {
+	c := sc.Spec.BusyBoxImage
+	if c == nil {
+		c = &ContainerImage{}
+		c.Repository = DefaultBusyBoxImageRepo
+		c.PullPolicy = DefaultBusyBoxImageVersion
+	}
+	return c
 }
 
 //+kubebuilder:object:root=true

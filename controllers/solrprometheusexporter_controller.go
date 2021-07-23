@@ -219,8 +219,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	} else if prometheusExporter.Spec.SolrReference.SolrTLS != nil && prometheusExporter.Spec.SolrReference.SolrTLS.MountedTLSDir != nil {
 		tlsClientOptions = &util.TLSClientOptions{}
 		tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
-		// TODO: How to get this from the SolrCloud reference?
-		tlsClientOptions.BusyBoxImage = &solrv1beta1.ContainerImage{Repository: solrv1beta1.DefaultBusyBoxImageRepo, Tag: solrv1beta1.DefaultBusyBoxImageVersion}
 	}
 
 	basicAuthMd5 := ""
