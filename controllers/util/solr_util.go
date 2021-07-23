@@ -101,7 +101,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	defaultMode := int32(420)
 
 	probeScheme := corev1.URISchemeHTTP
-	if solrCloud.UrlScheme() == "https" {
+	if solrCloud.Spec.SolrTLS != nil {
 		probeScheme = corev1.URISchemeHTTPS
 	}
 
@@ -995,6 +995,15 @@ func generateTLSInitdbScriptInitContainer(solrCloud *solr.SolrCloud) corev1.Cont
 	shCmd := fmt.Sprintf("echo -e \"#!/bin/bash\\nexport SOLR_SSL_KEY_STORE_PASSWORD=\\`cat %s\\`\\nexport SOLR_SSL_TRUST_STORE_PASSWORD=\\`cat %s\\`\" > /docker-entrypoint-initdb.d/export-tls-vars.sh",
 		solrCloud.Spec.SolrTLS.MountedTLSKeystorePasswordPath(), solrCloud.Spec.SolrTLS.MountedTLSTruststorePasswordPath())
 
+	/*
+	   Init container creates a script like:
+
+	      #!/bin/bash
+	      export SOLR_SSL_KEY_STORE_PASSWORD=`cat $MOUNTED_TLS_DIR/keystore-password`
+	      export SOLR_SSL_TRUST_STORE_PASSWORD=`cat $MOUNTED_TLS_DIR/keystore-password`
+
+	*/
+
 	return corev1.Container{
 		Name:            "export-tls-password",
 		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
@@ -1434,13 +1443,12 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           %s,
           { "name": "k8s-status", "role":"k8s", "collection": null, "path":"/admin/collections" },
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
-          { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
+          { "name": "all", "role":["admin","users"] },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": "admin"},
-          { "name": "security-edit", "role": "admin"},
-          { "name": "all", "role":["admin"] }
+          { "name": "security-edit", "role": "admin"}
         ]
       }
     }`, blockUnknown, credentialsJson, username, probeAuthz)

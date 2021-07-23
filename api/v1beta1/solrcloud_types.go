@@ -1143,7 +1143,7 @@ type SolrTLSOptions struct {
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 
 	// Used to specify a path where the keystore, truststore, and password files are mounted by an external agent or CSI driver.
-	// This option is typically used with a `restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
 	// +optional
 	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
 }
@@ -1213,7 +1213,8 @@ type SolrSecurityOptions struct {
 
 	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
 	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
-	// endpoints with credentials sourced from an env var instead of HTTP directly.
+	// endpoints with credentials sourced from an env var instead of HTTP directly. This property is effectively ignored
+	// and the operator will always configure a secure probe if `spec.solrTLS.clientAuth` is either `Want` or `Need`.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 }
