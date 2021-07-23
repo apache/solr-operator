@@ -111,6 +111,7 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	// Delete the Ingress and expect Reconcile to be called for Ingress deletion
 	g.Expect(testClient.Delete(context.TODO(), ingress)).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.Succeed())
 
