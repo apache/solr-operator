@@ -396,35 +396,14 @@ func expectStatefulSetMountedTLSDirConfig(t *testing.T, g *gomega.GomegaWithT, s
 	// should have a mount for the initdb on main container
 	expectInitdbVolumeMount(t, podTemplate)
 
-	expectInitdbInitContainerForTLS(t, podTemplate)
-
-	return stateful
-}
-
-func expectInitdbInitContainerForTLS(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
-	// initContainer to create initdb script to set keystore password
+	// verify initContainer to create initdb script to export the keystore & truststore passwords before launching the main container
 	name := "export-tls-password"
-	var expInitContainer *corev1.Container = nil
-	for _, cnt := range podTemplate.Spec.InitContainers {
-		if cnt.Name == name {
-			expInitContainer = &cnt
-			break
-		}
-	}
-	assert.NotNil(t, expInitContainer, "Didn't find the "+name+" InitContainer in the sts!")
+	expInitContainer := expectInitContainer(t, podTemplate, name, "initdb", util.InitdbPath)
 	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+name+" init container")
 	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_KEY_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_TRUST_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 
-	var initdbMount *corev1.VolumeMount = nil
-	for _, m := range expInitContainer.VolumeMounts {
-		if m.Name == "initdb" {
-			initdbMount = &m
-			break
-		}
-	}
-	assert.NotNil(t, initdbMount, "No initdb volumeMount for "+name+" InitContainer")
-	assert.Equal(t, util.InitdbPath, initdbMount.MountPath, "Wrong mount path for initdb in "+name+" InitContainer")
+	return stateful
 }
 
 func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.PodTemplateSpec) {

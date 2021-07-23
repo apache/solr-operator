@@ -264,6 +264,30 @@ func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) 
 	assert.Equal(t, util.InitdbPath, initdbMount.MountPath)
 }
 
+func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expName string, expVolMountName string, expVolMountPath string) *corev1.Container {
+	var expInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == expName {
+			expInitContainer = &cnt
+			break
+		}
+	}
+	assert.NotNil(t, expInitContainer, "Didn't find the "+expName+" InitContainer!")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+expName+" init container")
+
+	var volMount *corev1.VolumeMount = nil
+	for _, m := range expInitContainer.VolumeMounts {
+		if m.Name == expVolMountName {
+			volMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, volMount, "No "+expVolMountName+" volumeMount for "+expName+" InitContainer")
+	assert.Equal(t, expVolMountPath, volMount.MountPath, "Wrong mount path "+volMount.MountPath+" for "+expName+" InitContainer")
+
+	return expInitContainer
+}
+
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
 func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool) *corev1.Container {
 	assert.NotNil(t, podTemplate.Spec.Volumes)

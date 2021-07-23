@@ -911,6 +911,13 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 		Spec:       solr.SolrPrometheusExporterSpec{},
 	}
 
+	// override the defaults here so we make sure the resulting initContainer uses them
+	instance.Spec.BusyBoxImage = &solr.ContainerImage{
+		Repository: "myBBImage",
+		Tag:        "test",
+		PullPolicy: "",
+	}
+
 	mountedDir := &solr.MountedTLSDirectory{}
 	mountedDir.Path = "/mounted-tls-dir"
 	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
@@ -974,32 +981,17 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStorePassword"))
 	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStorePassword"))
 
-	expectInitContainerForMountedTLSDir(t, &podTemplate)
+	expInitContainer := expectInitContainerForMountedTLSDir(t, &podTemplate)
+	assert.Equal(t, "myBBImage:test", expInitContainer.Image)
 }
 
-func expectInitContainerForMountedTLSDir(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+func expectInitContainerForMountedTLSDir(t *testing.T, podTemplate *corev1.PodTemplateSpec) *corev1.Container {
 	// verify initContainer to create a wrapper script around the solr-exporter script
 	name := "create-tls-wrapper-script"
-	var expInitContainer *corev1.Container = nil
-	for _, cnt := range podTemplate.Spec.InitContainers {
-		if cnt.Name == name {
-			expInitContainer = &cnt
-			break
-		}
-	}
-	assert.NotNil(t, expInitContainer, "Didn't find the "+name+" InitContainer in the sts!")
+	expInitContainer := expectInitContainer(t, podTemplate, name, "tls-wrapper-script", "/usr/local/solr-exporter-tls")
 	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+name+" init container")
 	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.keyStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.trustStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 	assert.Contains(t, expInitContainer.Command[2], "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
-
-	var volMount *corev1.VolumeMount = nil
-	for _, m := range expInitContainer.VolumeMounts {
-		if m.Name == "tls-wrapper-script" {
-			volMount = &m
-			break
-		}
-	}
-	assert.NotNil(t, volMount, "No tls-wrapper-script volumeMount for "+name+" InitContainer")
-	assert.Equal(t, "/usr/local/solr-exporter-tls", volMount.MountPath, "Wrong mount path for "+name+" InitContainer")
+	return expInitContainer
 }
