@@ -121,6 +121,13 @@ func TestBasicAuthBootstrapWithTLS(t *testing.T) {
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
 }
 
+func TestMountedTLSDir(t *testing.T) {
+	instance := buildTestSolrCloud()
+	instance.Spec.SolrTLS = createMountedTLSDirOptions()
+	verifyMountedTLSDirConfig(t, instance.Spec.SolrTLS)
+	verifyReconcileMountedTLSDir(t, instance)
+}
+
 // For TLS, all we really need is a secret holding the keystore password and a secret holding the pkcs12 keystore,
 // which can come from anywhere really, so this method tests handling of user-supplied secrets
 func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
@@ -233,6 +240,44 @@ func TestTLSSecretUpdate(t *testing.T) {
 	verifyReconcileUserSuppliedTLS(t, instance, false, true)
 }
 
+func verifyReconcileMountedTLSDir(t *testing.T, instance *solr.SolrCloud) {
+	g := gomega.NewGomegaWithT(t)
+	ctx := context.TODO()
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrCloudReconciler := &SolrCloudReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+	}
+	newRec, requests := SetupTestReconcile(solrCloudReconciler)
+
+	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, instance.Namespace)
+
+	// now try to reconcile
+	err = testClient.Create(ctx, instance)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(ctx, instance)
+
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+
+	expectStatefulSetMountedTLSDirConfig(t, g, instance)
+}
+
 func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool) {
 	g := gomega.NewGomegaWithT(t)
 	ctx := context.TODO()
@@ -335,6 +380,71 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 	}
 }
 
+func expectStatefulSetMountedTLSDirConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud) *appsv1.StatefulSet {
+	ctx := context.TODO()
+	stateful := &appsv1.StatefulSet{}
+	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
+	podTemplate := &stateful.Spec.Template
+	expectMountedTLSDirConfigOnPodTemplate(t, podTemplate)
+
+	// Check HTTPS cluster prop setup container
+	assert.NotNil(t, podTemplate.Spec.InitContainers)
+	expectZkSetupInitContainerForTLS(t, sc, stateful)
+
+	// should have a mount for the initdb on main container
+	expectInitdbVolumeMount(t, podTemplate)
+
+	expectInitdbInitContainerForTLS(t, podTemplate)
+
+	return stateful
+}
+
+func expectInitdbInitContainerForTLS(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+	// initContainer to create initdb script to set keystore password
+	name := "export-tls-password"
+	var expInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == name {
+			expInitContainer = &cnt
+			break
+		}
+	}
+	assert.NotNil(t, expInitContainer, "Didn't find the "+name+" InitContainer in the sts!")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+name+" init container")
+	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_KEY_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_TRUST_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+
+	var initdbMount *corev1.VolumeMount = nil
+	for _, m := range expInitContainer.VolumeMounts {
+		if m.Name == "initdb" {
+			initdbMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, initdbMount, "No initdb volumeMount for export-tls-password InitContainer")
+	assert.Equal(t, "/docker-entrypoint-initdb.d", initdbMount.MountPath, "Wrong mount path for initdb in export-tls-password InitContainer")
+}
+
+func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
+	assert.NotNil(t, mainContainer.Env, "No Env vars for main solrcloud-node container in the sts!")
+	expectMountedTLSDirEnvVars(t, mainContainer.Env)
+
+	// verify the probes use a command with SSL opts
+	tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE " +
+		"-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
+		"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-tls-dir/keystore-password)"
+	assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
+	assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when mTLS is enabled")
+	assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
+	assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
+	assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when mTLS is enabled")
+	assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
+}
+
 // ensures the TLS settings are applied correctly to the STS
 func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.SolrCloud, needsPkcs12InitContainer bool) *appsv1.StatefulSet {
 	ctx := context.TODO()
@@ -345,7 +455,14 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 
 	// Check HTTPS cluster prop setup container
 	assert.NotNil(t, podTemplate.Spec.InitContainers)
+	expectZkSetupInitContainerForTLS(t, sc, stateful)
+
+	return stateful
+}
+
+func expectZkSetupInitContainerForTLS(t *testing.T, sc *solr.SolrCloud, sts *appsv1.StatefulSet) {
 	var zkSetupInitContainer *corev1.Container = nil
+	podTemplate := &sts.Spec.Template
 	for _, cnt := range podTemplate.Spec.InitContainers {
 		if cnt.Name == "setup-zk" {
 			zkSetupInitContainer = &cnt
@@ -356,7 +473,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	if sc.Spec.SolrTLS != nil {
 		assert.NotNil(t, zkSetupInitContainer, "Didn't find the zk-setup InitContainer in the sts!")
 		if zkSetupInitContainer != nil {
-			assert.Equal(t, stateful.Spec.Template.Spec.Containers[0].Image, zkSetupInitContainer.Image, "The zk-setup init container should use the same image as the Solr container")
+			assert.Equal(t, sts.Spec.Template.Spec.Containers[0].Image, zkSetupInitContainer.Image, "The zk-setup init container should use the same image as the Solr container")
 			assert.Equal(t, 3, len(zkSetupInitContainer.Command), "Wrong command length for zk-setup init container")
 			assert.Contains(t, zkSetupInitContainer.Command[2], expCmd, "ZK Setup command does not set urlScheme")
 			expNumVars := 3
@@ -368,7 +485,6 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	} else {
 		assert.Nil(t, zkSetupInitContainer, "Shouldn't find the zk-setup InitContainer in the sts, when not using https!")
 	}
-	return stateful
 }
 
 func verifyReconcileWithSecurity(t *testing.T, instance *solr.SolrCloud, deleteBootstrapSecret bool) {

@@ -185,6 +185,13 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 	return deploy
 }
 
+func verifyMountedTLSDirConfig(t *testing.T, tls *solr.SolrTLSOptions) {
+	assert.NotNil(t, tls)
+	assert.NotNil(t, tls.MountedTLSDir)
+	assert.Nil(t, tls.PKCS12Secret)
+	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(tls, false))
+}
+
 func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
 	assert.NotNil(t, tls)
 	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
@@ -215,6 +222,12 @@ func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLS
 	}
 }
 
+func createMountedTLSDirOptions() *solr.SolrTLSOptions {
+	mountedDir := &solr.MountedTLSDirectory{}
+	mountedDir.Path = "/mounted-tls-dir"
+	return &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+}
+
 func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string, keystorePasswordKey string) (corev1.Secret, error) {
 	secretData := map[string][]byte{}
 	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
@@ -236,6 +249,32 @@ func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretNam
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
 	secretData := map[string][]byte{corev1.BasicAuthUsernameKey: []byte(key), corev1.BasicAuthPasswordKey: []byte("secret password")}
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
+}
+
+func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+	assert.NotNil(t, podTemplate.Spec.Volumes)
+	var initdbVol *corev1.Volume = nil
+	for _, vol := range podTemplate.Spec.Volumes {
+		if vol.Name == "initdb" {
+			initdbVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, initdbVol, fmt.Sprintf("initdb volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+	assert.NotNil(t, initdbVol.VolumeSource.EmptyDir, "initdb volume should be an emptyDir")
+
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	var initdbMount *corev1.VolumeMount = nil
+	for _, m := range mainContainer.VolumeMounts {
+		if m.Name == "initdb" {
+			initdbMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, initdbMount)
+	assert.Equal(t, "/docker-entrypoint-initdb.d", initdbMount.MountPath)
 }
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
@@ -320,6 +359,47 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar) {
+	assert.NotNil(t, envVars)
+	envVars = filterVarsByName(envVars, func(n string) bool {
+		return strings.HasPrefix(n, "SOLR_SSL_")
+	})
+	assert.True(t, len(envVars) == 7)
+
+	expectedKeystorePath := "/mounted-tls-dir/keystore.p12"
+	expectedTruststorePath := "/mounted-tls-dir/truststore.p12"
+
+	for _, envVar := range envVars {
+		if envVar.Name == "SOLR_SSL_ENABLED" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_KEY_STORE" {
+			assert.Equal(t, expectedKeystorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+			assert.Equal(t, expectedTruststorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_WANT_CLIENT_AUTH" {
+			assert.Equal(t, "false", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_NEED_CLIENT_AUTH" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_CHECK_PEER_NAME" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+	}
 }
 
 // ensure the TLS related env vars are set for the Solr pod
