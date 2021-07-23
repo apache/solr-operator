@@ -55,10 +55,6 @@ const (
 	ZookeeperTechnologyLabel = "zookeeper"
 
 	DefaultBasicAuthUsername = "k8s-oper"
-
-	DefaultPkcs12KeystoreFile   = "keystore.p12"
-	DefaultPkcs12TruststoreFile = "truststore.p12"
-	DefaultKeystorePasswordFile = "keystore-password"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -1100,13 +1096,6 @@ type MountedTLSDirectory struct {
 	TruststorePasswordFile string `json:"truststorePasswordFile,omitempty"`
 }
 
-func (dir *MountedTLSDirectory) mountedTLSPath(fileName string, defaultName string) string {
-	if fileName == "" {
-		fileName = defaultName
-	}
-	return fmt.Sprintf("%s/%s", dir.Path, fileName)
-}
-
 type SolrTLSOptions struct {
 	// TLS Secret containing a pkcs12 keystore; required unless mountedTLSDir is used
 	// +optional
@@ -1146,42 +1135,6 @@ type SolrTLSOptions struct {
 	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
 	// +optional
 	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
-}
-
-func (tls *SolrTLSOptions) MountedTLSKeystorePath() string {
-	path := ""
-	if tls.MountedTLSDir != nil {
-		path = tls.MountedTLSDir.mountedTLSPath(tls.MountedTLSDir.KeystoreFile, DefaultPkcs12KeystoreFile)
-	}
-	return path
-}
-
-func (tls *SolrTLSOptions) MountedTLSKeystorePasswordPath() string {
-	path := ""
-	if tls.MountedTLSDir != nil {
-		path = tls.MountedTLSDir.mountedTLSPath(tls.MountedTLSDir.KeystorePasswordFile, DefaultKeystorePasswordFile)
-	}
-	return path
-}
-
-func (tls *SolrTLSOptions) MountedTLSTruststorePath() string {
-	path := ""
-	if tls.MountedTLSDir != nil {
-		path = tls.MountedTLSDir.mountedTLSPath(tls.MountedTLSDir.TruststoreFile, DefaultPkcs12TruststoreFile)
-	}
-	return path
-}
-
-func (tls *SolrTLSOptions) MountedTLSTruststorePasswordPath() string {
-	path := ""
-	if tls.MountedTLSDir != nil {
-		if tls.MountedTLSDir.TruststorePasswordFile != "" {
-			path = tls.MountedTLSDir.mountedTLSPath(tls.MountedTLSDir.TruststorePasswordFile, "")
-		} else {
-			path = tls.MountedTLSKeystorePasswordPath()
-		}
-	}
-	return path
 }
 
 // +kubebuilder:validation:Enum=Basic

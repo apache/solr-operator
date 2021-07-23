@@ -199,7 +199,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 			*/
 			writeWrapperScript := fmt.Sprintf("cat << EOF > %s\n#!/bin/bash\nksp=\\$(cat %s)\ntsp=\\$(cat %s)\nJAVA_OPTS=\"\\${JAVA_OPTS} -Djavax.net.ssl.keyStorePassword=\\${ksp} -Djavax.net.ssl.trustStorePassword=\\${tsp}\"\n%s \\$@\nEOF\nchmod +x %s",
-				wrapperScript, tls.TLSOptions.MountedTLSKeystorePasswordPath(), tls.TLSOptions.MountedTLSTruststorePasswordPath(), entrypoint, wrapperScript)
+				wrapperScript, MountedTLSKeystorePasswordPath(tls.TLSOptions), MountedTLSTruststorePasswordPath(tls.TLSOptions), entrypoint, wrapperScript)
 
 			c := solrPrometheusExporter.BusyBoxImage()
 			createTLSWrapperScriptInitContainer = &corev1.Container{

@@ -209,7 +209,7 @@ func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLS
 		},
 		PKCS12Secret: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
-			Key:                  solr.DefaultPkcs12KeystoreFile,
+			Key:                  util.DefaultPkcs12KeystoreFile,
 		},
 		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
 	}
@@ -359,8 +359,8 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 
 	if tls.ClientAuth == solr.Need {
 		// verify the probes use a command with SSL opts
-		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
-			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE" +
+			" -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
 		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
 		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
 		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
