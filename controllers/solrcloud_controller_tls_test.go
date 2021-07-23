@@ -123,8 +123,10 @@ func TestBasicAuthBootstrapWithTLS(t *testing.T) {
 
 func TestMountedTLSDir(t *testing.T) {
 	instance := buildTestSolrCloud()
-	instance.Spec.SolrTLS = createMountedTLSDirOptions()
-	verifyMountedTLSDirConfig(t, instance.Spec.SolrTLS)
+	mountedDir := &solr.MountedTLSDirectory{}
+	mountedDir.Path = "/mounted-tls-dir"
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(instance.Spec.SolrTLS, false))
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
@@ -421,8 +423,8 @@ func expectInitdbInitContainerForTLS(t *testing.T, podTemplate *corev1.PodTempla
 			break
 		}
 	}
-	assert.NotNil(t, initdbMount, "No initdb volumeMount for export-tls-password InitContainer")
-	assert.Equal(t, "/docker-entrypoint-initdb.d", initdbMount.MountPath, "Wrong mount path for initdb in export-tls-password InitContainer")
+	assert.NotNil(t, initdbMount, "No initdb volumeMount for "+name+" InitContainer")
+	assert.Equal(t, util.InitdbPath, initdbMount.MountPath, "Wrong mount path for initdb in "+name+" InitContainer")
 }
 
 func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.PodTemplateSpec) {

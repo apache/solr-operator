@@ -900,3 +900,106 @@ func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecr
 
 	}
 }
+
+func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
+
+	// ctx := context.TODO()
+
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrPrometheusExporter{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedMetricsRequest.Name, Namespace: expectedMetricsRequest.Namespace},
+		Spec:       solr.SolrPrometheusExporterSpec{},
+	}
+
+	mountedDir := &solr.MountedTLSDirectory{}
+	mountedDir.Path = "/mounted-tls-dir"
+	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrPrometheusExporterReconciler := &SolrPrometheusExporterReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrPrometheusExporter"),
+	}
+	newRec, requests := SetupTestReconcile(solrPrometheusExporterReconciler)
+	g.Expect(solrPrometheusExporterReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, expectedMetricsRequest.Namespace)
+
+	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
+
+	podTemplate := deployment.Spec.Template
+
+	// verify the mountedTLSDir config on the deployment
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	assert.NotNil(t, mainContainer, "Didn't find the main exporter container in the deployment!")
+	assert.NotNil(t, mainContainer.Env, "No Env vars for main exporter container in the deployment!")
+	// make sure JAVA_OPTS is set correctly with the TLS related sys props
+	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
+		return strings.HasPrefix(n, "JAVA_OPTS")
+	})
+	assert.Equal(t, 1, len(envVars))
+	javaOpts := envVars[0].Value
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStore=$(SOLR_SSL_KEY_STORE)"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStore=$(SOLR_SSL_TRUST_STORE)"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStoreType=PKCS12"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStoreType=PKCS12"))
+	assert.True(t, strings.Contains(javaOpts, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
+	assert.True(t, strings.Contains(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS"))
+	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStorePassword"))
+	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStorePassword"))
+
+	expectInitContainerForMountedTLSDir(t, &podTemplate)
+}
+
+func expectInitContainerForMountedTLSDir(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+	// verify initContainer to create a wrapper script around the solr-exporter script
+	name := "create-tls-wrapper-script"
+	var expInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == name {
+			expInitContainer = &cnt
+			break
+		}
+	}
+	assert.NotNil(t, expInitContainer, "Didn't find the "+name+" InitContainer in the sts!")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+name+" init container")
+	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.keyStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.trustStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	assert.Contains(t, expInitContainer.Command[2], "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+
+	var volMount *corev1.VolumeMount = nil
+	for _, m := range expInitContainer.VolumeMounts {
+		if m.Name == "tls-wrapper-script" {
+			volMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, volMount, "No tls-wrapper-script volumeMount for "+name+" InitContainer")
+	assert.Equal(t, "/usr/local/solr-exporter-tls", volMount.MountPath, "Wrong mount path for "+name+" InitContainer")
+}

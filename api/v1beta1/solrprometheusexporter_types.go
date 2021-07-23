@@ -247,7 +247,8 @@ func (sc *SolrPrometheusExporter) BusyBoxImage() *ContainerImage {
 	if c == nil {
 		c = &ContainerImage{}
 		c.Repository = DefaultBusyBoxImageRepo
-		c.PullPolicy = DefaultBusyBoxImageVersion
+		c.Tag = DefaultBusyBoxImageVersion
+		c.PullPolicy = DefaultPullPolicy
 	}
 	return c
 }

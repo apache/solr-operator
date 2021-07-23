@@ -185,13 +185,6 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 	return deploy
 }
 
-func verifyMountedTLSDirConfig(t *testing.T, tls *solr.SolrTLSOptions) {
-	assert.NotNil(t, tls)
-	assert.NotNil(t, tls.MountedTLSDir)
-	assert.Nil(t, tls.PKCS12Secret)
-	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(tls, false))
-}
-
 func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
 	assert.NotNil(t, tls)
 	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
@@ -220,12 +213,6 @@ func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLS
 		},
 		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
 	}
-}
-
-func createMountedTLSDirOptions() *solr.SolrTLSOptions {
-	mountedDir := &solr.MountedTLSDirectory{}
-	mountedDir.Path = "/mounted-tls-dir"
-	return &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 }
 
 func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string, keystorePasswordKey string) (corev1.Secret, error) {
@@ -274,7 +261,7 @@ func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) 
 		}
 	}
 	assert.NotNil(t, initdbMount)
-	assert.Equal(t, "/docker-entrypoint-initdb.d", initdbMount.MountPath)
+	assert.Equal(t, util.InitdbPath, initdbMount.MountPath)
 }
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
