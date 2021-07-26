@@ -1341,12 +1341,13 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           %s,
           { "name": "k8s-status", "role":"k8s", "collection": null, "path":"/admin/collections" },
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
+          { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "all", "role":["admin","users"] },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": "admin"},
-          { "name": "security-edit", "role": "admin"}
+          { "name": "security-edit", "role": "admin"},
+          { "name": "all", "role":["admin"] }
         ]
       }
     }`, blockUnknown, credentialsJson, username, probeAuthz)
