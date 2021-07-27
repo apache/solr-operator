@@ -792,15 +792,17 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "collection": null,
         "path": "/admin/metrics"
       },
+      { 
+         "name": "k8s-zk", 
+         "role":"k8s", 
+         "collection": null, 
+         "path":"/admin/zookeeper/status" 
+      },
       {
         "name": "k8s-ping",
         "role": "k8s",
         "collection": "*",
         "path": "/admin/ping"
-      },
-      {
-        "name": "all",
-        "role": [ "admin", "users" ]
       },
       {
         "name": "read",
@@ -812,11 +814,15 @@ Take a moment to review these authorization rules so that you're aware of the ro
       },
       {
         "name": "security-read",
-        "role": "admin"
+        "role": [ "admin" ]
       },
       {
         "name": "security-edit",
-        "role": "admin"
+        "role": [ "admin" ]
+      },
+      {
+        "name": "all",
+        "role": [ "admin" ]
       }
     ]
   }
@@ -863,6 +869,10 @@ The exporter also hits the `/admin/ping` endpoint for every collection, which re
       },
 ```
 The `"collection":"*"` setting indicates this path applies to all collections, which maps to endpoint `/collections/<COLL>/admin/ping` at runtime.
+
+The initial authorization config grants the `read` permission to the `users` role, which allows `users` to send query requests but cannot add / update / delete documents.
+For instance, the `solr` user is mapped to the `users` role, so the `solr` user can send query requests only. 
+In general, please verify the initial authorization rules for each role before sharing user credentials.
 
 ### Option 2: User-provided Basic Auth Secret
 

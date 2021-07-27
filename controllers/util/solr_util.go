@@ -1345,8 +1345,8 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
-          { "name": "security-read", "role": "admin"},
-          { "name": "security-edit", "role": "admin"},
+          { "name": "security-read", "role": ["admin"] },
+          { "name": "security-edit", "role": ["admin"] },
           { "name": "all", "role":["admin"] }
         ]
       }

@@ -105,6 +105,20 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/282
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/297
+    - kind: security
+      description: Remove users role from the all permission in the initial security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/274
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/299
+    - kind: fixed
+      description: Grant access to the /admin/zookeeper/status path to the k8s role in the initial security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/289
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/299
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease
