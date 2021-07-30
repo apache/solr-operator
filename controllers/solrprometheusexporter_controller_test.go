@@ -987,7 +987,7 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 
 	podTemplate := deployment.Spec.Template
 
-	// verify the mountedTLSDir config on the deployment
+	// verify the mountedServerTLSDir config on the deployment
 	assert.NotNil(t, podTemplate.Spec.Containers)
 	assert.True(t, len(podTemplate.Spec.Containers) > 0)
 	mainContainer := podTemplate.Spec.Containers[0]

@@ -857,7 +857,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} // else if using mountedTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
 
 	ingress = &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{

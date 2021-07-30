@@ -58,7 +58,7 @@ type SolrPrometheusExporterSpec struct {
 	Config string `json:"metricsConfig,omitempty"`
 
 	// An initContainer is needed to create a wrapper script around the exporter entrypoint when TLS is enabled
-	// with the `spec.solrReference.solrTLS.mountedTLSDir` option
+	// with the `spec.solrReference.solrTLS.mountedServerTLSDir` option
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 }

@@ -1097,11 +1097,11 @@ type MountedTLSDirectory struct {
 }
 
 type SolrTLSOptions struct {
-	// TLS Secret containing a pkcs12 keystore; required unless mountedTLSDir is used
+	// TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
 	// +optional
 	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
 
-	// Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+	// Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
 	// +optional
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
@@ -1166,8 +1166,7 @@ type SolrSecurityOptions struct {
 
 	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
 	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
-	// endpoints with credentials sourced from an env var instead of HTTP directly. This property is effectively ignored
-	// and the operator will always configure a secure probe if `spec.solrTLS.clientAuth` is either `Want` or `Need`.
+	// endpoints with credentials sourced from an env var instead of HTTP directly.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 }

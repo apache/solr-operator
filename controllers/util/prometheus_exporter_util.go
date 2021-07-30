@@ -507,7 +507,7 @@ func tlsJavaOpts(tlsOptions *solr.SolrTLSOptions) []string {
 		// the password is available from env vars set from a secret
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStorePassword=$(SOLR_SSL_KEY_STORE_PASSWORD)")
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.trustStorePassword=$(SOLR_SSL_TRUST_STORE_PASSWORD)")
-	} // else if mountedTLSDir != nil, the password is in a file and needs to be passed differently
+	} // else if mountedServerTLSDir != nil, the password is in a file and needs to be passed differently
 
 	if tlsOptions.VerifyClientHostname {
 		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
