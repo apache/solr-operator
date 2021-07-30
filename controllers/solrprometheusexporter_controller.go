@@ -216,7 +216,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 				}
 			}
 		}
-	} else if prometheusExporter.Spec.SolrReference.SolrTLS != nil && prometheusExporter.Spec.SolrReference.SolrTLS.MountedTLSDir != nil {
+	} else if prometheusExporter.Spec.SolrReference.SolrTLS != nil && prometheusExporter.Spec.SolrReference.SolrTLS.MountedServerTLSDir != nil {
 		tlsClientOptions = &util.TLSClientOptions{}
 		tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
 	}

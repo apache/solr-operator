@@ -1131,10 +1131,10 @@ type SolrTLSOptions struct {
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 
-	// Used to specify a path where the keystore, truststore, and password files are mounted by an external agent or CSI driver.
+	// Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver.
 	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
 	// +optional
-	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
+	MountedServerTLSDir *MountedTLSDirectory `json:"mountedServerTLSDir,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Basic

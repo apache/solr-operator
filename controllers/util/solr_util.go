@@ -155,7 +155,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 
-	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedTLSDir == nil {
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir == nil {
 		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 		volumeMounts = append(volumeMounts, tlsVolumeMounts(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 	}
@@ -247,7 +247,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Auto-TLS uses an initContainer to create a script in the initdb, so mount that if it has not already been mounted
-	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir != nil {
 		var initdbMount *corev1.VolumeMount
 		for _, mount := range volumeMounts {
 			if mount.MountPath == InitdbPath {
@@ -645,7 +645,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
-	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir != nil {
 		containers = append(containers, generateTLSInitdbScriptInitContainer(solrCloud))
 	}
 
@@ -1041,7 +1041,7 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 	var passwordValueFrom *corev1.EnvVarSource
 	var truststoreFile string
 	var truststorePassFrom *corev1.EnvVarSource
-	if opts.MountedTLSDir != nil {
+	if opts.MountedServerTLSDir != nil {
 		// TLS files are mounted by some external agent
 		keystoreFile = mountedTLSKeystorePath(opts)
 		truststoreFile = mountedTLSTruststorePath(opts)
@@ -1501,7 +1501,7 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	enableBasicAuth := ""
 	var volMount *corev1.VolumeMount
 	var vol *corev1.Volume
-	if solrCloud.Spec.SolrSecurity != nil {
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
 		secretName := solrCloud.BasicAuthSecretName()
 		defaultMode := int32(420)
 		vol = &corev1.Volume{
@@ -1522,66 +1522,70 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	}
 
 	// Is TLS enabled? If so we need some additional SSL related props
-	tlsProps := secureProbeTLSJavaOpts(solrCloud.Spec.SolrTLS)
-	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsProps)
+	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud.Spec.SolrTLS)
+	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
 
 	// construct the probe command to invoke the SolrCLI "api" action
 	//
 	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java -Dsolr.ssl.checkPeerName=false %s "+
+	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s -Dsolr.ssl.checkPeerName=false %s "+
 		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, enableBasicAuth, solrCloud.UrlScheme(), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
+		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	return probeCommand, vol, volMount
 }
 
-func secureProbeTLSJavaOpts(tls *solr.SolrTLSOptions) string {
-	tlsProps := ""
+func secureProbeTLSJavaToolOpts(tls *solr.SolrTLSOptions) (string, string) {
+	tlsJavaToolOpts := ""
+	tlsJavaSysProps := ""
 	if tls != nil {
-		tlsProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
-		if tls.MountedTLSDir != nil {
-			tlsProps += " -Djavax.net.ssl.keyStorePassword=$(cat " + MountedTLSKeystorePasswordPath(tls) + ")"
-			tlsProps += " -Djavax.net.ssl.trustStorePassword=$(cat " + MountedTLSTruststorePasswordPath(tls) + ")"
+		tlsJavaSysProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
+
+		// If the keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
+		if tls.MountedServerTLSDir != nil {
+			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=$(cat " + MountedTLSKeystorePasswordPath(tls) + ")"
+			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=$(cat " + MountedTLSTruststorePasswordPath(tls) + ")"
 		} else {
-			tlsProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD"
+			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
 		}
 	}
-	return tlsProps
+	return tlsJavaToolOpts, tlsJavaSysProps
 }
 
 func mountedTLSKeystorePath(tls *solr.SolrTLSOptions) string {
 	path := ""
-	if tls.MountedTLSDir != nil {
-		path = mountedTLSPath(tls.MountedTLSDir, tls.MountedTLSDir.KeystoreFile, DefaultPkcs12KeystoreFile)
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.KeystoreFile, DefaultPkcs12KeystoreFile)
 	}
 	return path
 }
 
 func MountedTLSKeystorePasswordPath(tls *solr.SolrTLSOptions) string {
 	path := ""
-	if tls.MountedTLSDir != nil {
-		path = mountedTLSPath(tls.MountedTLSDir, tls.MountedTLSDir.KeystorePasswordFile, DefaultKeystorePasswordFile)
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.KeystorePasswordFile, DefaultKeystorePasswordFile)
 	}
 	return path
 }
 
 func mountedTLSTruststorePath(tls *solr.SolrTLSOptions) string {
 	path := ""
-	if tls.MountedTLSDir != nil {
-		path = mountedTLSPath(tls.MountedTLSDir, tls.MountedTLSDir.TruststoreFile, DefaultPkcs12TruststoreFile)
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.TruststoreFile, DefaultPkcs12TruststoreFile)
 	}
 	return path
 }
 
 func MountedTLSTruststorePasswordPath(tls *solr.SolrTLSOptions) string {
 	path := ""
-	if tls.MountedTLSDir != nil {
-		if tls.MountedTLSDir.TruststorePasswordFile != "" {
-			path = mountedTLSPath(tls.MountedTLSDir, tls.MountedTLSDir.TruststorePasswordFile, "")
+	if tls.MountedServerTLSDir != nil {
+		if tls.MountedServerTLSDir.TruststorePasswordFile != "" {
+			path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.TruststorePasswordFile, "")
 		} else {
 			path = MountedTLSKeystorePasswordPath(tls)
 		}

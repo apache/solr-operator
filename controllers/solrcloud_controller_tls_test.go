@@ -125,7 +125,7 @@ func TestMountedTLSDir(t *testing.T) {
 	instance := buildTestSolrCloud()
 	mountedDir := &solr.MountedTLSDirectory{}
 	mountedDir.Path = "/mounted-tls-dir"
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(instance.Spec.SolrTLS, false))
 	verifyReconcileMountedTLSDir(t, instance)
 }
@@ -415,15 +415,17 @@ func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.Po
 	expectMountedTLSDirEnvVars(t, mainContainer.Env)
 
 	// verify the probes use a command with SSL opts
-	tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE " +
-		"-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
+	tlsJavaToolOpts := "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
 		"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-tls-dir/keystore-password)"
+	tlsJavaSysProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
 	assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
 	assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when mTLS is enabled")
-	assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
+	assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsJavaToolOpts), "liveness probe should invoke java with SSL opts")
+	assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsJavaSysProps), "liveness probe should invoke java with SSL opts")
 	assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
 	assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when mTLS is enabled")
-	assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
+	assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsJavaToolOpts), "readiness probe should invoke java with SSL opts")
+	assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsJavaSysProps), "readiness probe should invoke java with SSL opts")
 }
 
 // ensures the TLS settings are applied correctly to the STS

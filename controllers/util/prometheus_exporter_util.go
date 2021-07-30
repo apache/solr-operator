@@ -177,7 +177,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if tls.TLSOptions.PKCS12Secret != nil {
 			volumeMounts = append(volumeMounts, tlsVolumeMounts(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
 			solrVolumes = append(solrVolumes, tlsVolumes(tls.TLSOptions, tls.NeedsPkcs12InitContainer)...)
-		} else if tls.TLSOptions.MountedTLSDir != nil {
+		} else if tls.TLSOptions.MountedServerTLSDir != nil {
 			volName := "tls-wrapper-script"
 			mountPath := "/usr/local/solr-exporter-tls"
 			wrapperScript := mountPath + "/launch-exporter-with-tls.sh"

@@ -947,7 +947,7 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 
 	mountedDir := &solr.MountedTLSDirectory{}
 	mountedDir.Path = "/mounted-tls-dir"
-	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.

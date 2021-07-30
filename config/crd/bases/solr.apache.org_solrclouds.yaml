@@ -4590,8 +4590,8 @@ spec:
                     required:
                     - key
                     type: object
-                  mountedTLSDir:
-                    description: Used to specify a path where the keystore, truststore, and password files are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                  mountedServerTLSDir:
+                    description: Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                     properties:
                       keystoreFile:
                         description: Override the name of the keystore file; defaults to keystore.p12

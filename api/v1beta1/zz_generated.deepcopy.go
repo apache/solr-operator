@@ -1124,8 +1124,8 @@ func (in *SolrTLSOptions) DeepCopyInto(out *SolrTLSOptions) {
 		*out = new(v1.SecretKeySelector)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.MountedTLSDir != nil {
-		in, out := &in.MountedTLSDir, &out.MountedTLSDir
+	if in.MountedServerTLSDir != nil {
+		in, out := &in.MountedServerTLSDir, &out.MountedServerTLSDir
 		*out = new(MountedTLSDirectory)
 		**out = **in
 	}
