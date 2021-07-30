@@ -89,6 +89,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		probeScheme = corev1.URISchemeHTTPS
 	}
 
+	defaultProbeTimeout := int32(1)
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: probeScheme,
@@ -395,6 +396,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
+		defaultProbeTimeout = 5
 	}
 
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
@@ -445,7 +447,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			LivenessProbe: &corev1.Probe{
 				InitialDelaySeconds: 20,
-				TimeoutSeconds:      1,
+				TimeoutSeconds:      defaultProbeTimeout,
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
 				PeriodSeconds:       10,
@@ -453,7 +455,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			ReadinessProbe: &corev1.Probe{
 				InitialDelaySeconds: 15,
-				TimeoutSeconds:      1,
+				TimeoutSeconds:      defaultProbeTimeout,
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
 				PeriodSeconds:       5,

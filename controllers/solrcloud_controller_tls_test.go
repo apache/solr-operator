@@ -616,12 +616,17 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
 			"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system"
-		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
-		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
-		assert.Equal(t, expProbeCmd, mainContainer.LivenessProbe.Exec.Command[2], "liveness probe should invoke java with auth opts")
-		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
-		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
-		assert.Equal(t, expProbeCmd, mainContainer.ReadinessProbe.Exec.Command[2], "readiness probe should invoke java with auth opts")
+		if assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined") {
+			if assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled") {
+				assert.Equal(t, expProbeCmd, mainContainer.LivenessProbe.Exec.Command[2], "liveness probe should invoke java with auth opts")
+			}
+			assert.EqualValues(t, 5, mainContainer.LivenessProbe.TimeoutSeconds, "liveness probe default timeout should be increased when using basicAuth")
+		}
+		if assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined") {
+			if assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled") {
+				assert.Equal(t, expProbeCmd, mainContainer.ReadinessProbe.Exec.Command[2], "readiness probe should invoke java with auth opts")
+			}
+		}
 	}
 
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
