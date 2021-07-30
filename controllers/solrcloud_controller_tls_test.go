@@ -130,6 +130,16 @@ func TestMountedTLSDir(t *testing.T) {
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
+func TestMountedTLSDirWithBasicAuth(t *testing.T) {
+	instance := buildTestSolrCloud()
+	mountedDir := &solr.MountedTLSDirectory{}
+	mountedDir.Path = "/mounted-tls-dir"
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic} // with basic-auth too
+	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(instance.Spec.SolrTLS, false))
+	verifyReconcileMountedTLSDir(t, instance)
+}
+
 // For TLS, all we really need is a secret holding the keystore password and a secret holding the pkcs12 keystore,
 // which can come from anywhere really, so this method tests handling of user-supplied secrets
 func TestUserSuppliedTLSSecretWithPkcs12Keystore(t *testing.T) {
