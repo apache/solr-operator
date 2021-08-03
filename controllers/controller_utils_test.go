@@ -110,6 +110,7 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	// Delete the Ingress and expect Reconcile to be called for Ingress deletion
 	g.Expect(testClient.Delete(context.TODO(), ingress)).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.Succeed())
 
@@ -207,7 +208,7 @@ func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLS
 		},
 		PKCS12Secret: &corev1.SecretKeySelector{
 			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
-			Key:                  util.Pkcs12KeystoreFile,
+			Key:                  util.DefaultPkcs12KeystoreFile,
 		},
 		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
 	}
@@ -234,6 +235,56 @@ func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretNam
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
 	secretData := map[string][]byte{corev1.BasicAuthUsernameKey: []byte(key), corev1.BasicAuthPasswordKey: []byte("secret password")}
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
+}
+
+func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+	assert.NotNil(t, podTemplate.Spec.Volumes)
+	var initdbVol *corev1.Volume = nil
+	for _, vol := range podTemplate.Spec.Volumes {
+		if vol.Name == "initdb" {
+			initdbVol = &vol
+			break
+		}
+	}
+	assert.NotNil(t, initdbVol, fmt.Sprintf("initdb volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+	assert.NotNil(t, initdbVol.VolumeSource.EmptyDir, "initdb volume should be an emptyDir")
+
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	var initdbMount *corev1.VolumeMount = nil
+	for _, m := range mainContainer.VolumeMounts {
+		if m.Name == "initdb" {
+			initdbMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, initdbMount)
+	assert.Equal(t, util.InitdbPath, initdbMount.MountPath)
+}
+
+func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expName string, expVolMountName string, expVolMountPath string) *corev1.Container {
+	var expInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == expName {
+			expInitContainer = &cnt
+			break
+		}
+	}
+	assert.NotNil(t, expInitContainer, "Didn't find the "+expName+" InitContainer!")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+expName+" init container")
+
+	var volMount *corev1.VolumeMount = nil
+	for _, m := range expInitContainer.VolumeMounts {
+		if m.Name == expVolMountName {
+			volMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, volMount, "No "+expVolMountName+" volumeMount for "+expName+" InitContainer")
+	assert.Equal(t, expVolMountPath, volMount.MountPath, "Wrong mount path "+volMount.MountPath+" for "+expName+" InitContainer")
+
+	return expInitContainer
 }
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
@@ -307,8 +358,8 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 
 	if tls.ClientAuth == solr.Need {
 		// verify the probes use a command with SSL opts
-		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
-			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE" +
+			" -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
 		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
 		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
 		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
@@ -318,6 +369,47 @@ func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTem
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar) {
+	assert.NotNil(t, envVars)
+	envVars = filterVarsByName(envVars, func(n string) bool {
+		return strings.HasPrefix(n, "SOLR_SSL_")
+	})
+	assert.True(t, len(envVars) == 7)
+
+	expectedKeystorePath := "/mounted-tls-dir/keystore.p12"
+	expectedTruststorePath := "/mounted-tls-dir/truststore.p12"
+
+	for _, envVar := range envVars {
+		if envVar.Name == "SOLR_SSL_ENABLED" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_KEY_STORE" {
+			assert.Equal(t, expectedKeystorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
+			assert.Equal(t, expectedTruststorePath, envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_WANT_CLIENT_AUTH" {
+			assert.Equal(t, "false", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_NEED_CLIENT_AUTH" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+
+		if envVar.Name == "SOLR_SSL_CHECK_PEER_NAME" {
+			assert.Equal(t, "true", envVar.Value)
+		}
+	}
 }
 
 // ensure the TLS related env vars are set for the Solr pod

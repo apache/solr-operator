@@ -313,8 +313,9 @@ The Solr operator provides **optional** configuration settings to enable TLS for
 
 Enabling TLS for Solr is a straight-forward process once you have a [**PKCS12 keystore**]((https://en.wikipedia.org/wiki/PKCS_12)) containing an [X.509](https://en.wikipedia.org/wiki/X.509) certificate and private key; as of Java 8, PKCS12 is the default keystore format supported by the JVM.
 
-There are two basic use cases supported by the Solr operator. First, you can use cert-manager to issue a certificate and store the resulting PKCS12 keystore in a Kubernetes TLS secret. 
+There are three basic use cases supported by the Solr operator. First, you can use cert-manager to issue a certificate and store the resulting PKCS12 keystore in a Kubernetes TLS secret. 
 Alternatively, you can create the TLS secret manually from a certificate obtained by some other means. In both cases, you simply point your SolrCloud CRD to the resulting TLS secret and corresponding keystore password secret.
+Lastly, as of **v0.4.0**, you can supply the path to a directory containing TLS files that are mounted by some external agent or CSI driver.  
 
 ### Use cert-manager to issue the certificate
 
@@ -518,6 +519,18 @@ spec:
       key: truststore.p12
 ``` 
 _Tip: if your truststore is not in PKCS12 format, use `openssl` to convert it._ 
+
+### Mounted TLS Directory
+_Since v0.4.0_
+
+The options discussed to this point require that all Solr pods share the same certificate and truststore. An emerging pattern in the Kubernetes ecosystem is to issue a unique certificate for each pod.
+Typically this operation is performed by an external agent, such as a cert-manager extension, that uses mutating webhooks to mount a unique certificate and supporting files on each pod dynamically.
+How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedServerTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
+Given the `spec.solrTLS.mountedServerTLSDir.path`, the Solr operator will enable TLS on Solr using the keystore and truststore files in this directory.
+
+When using the mounted TLS directory option, you need to ensure each Solr pod gets restarted before the certificate expires. Solr does not support hot reloading of the keystore or truststore.
+Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
+Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
 ### Ingress
 
