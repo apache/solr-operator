@@ -1087,12 +1087,36 @@ const (
 	Need ClientAuthType = "Need"
 )
 
-type SolrTLSOptions struct {
-	// TLS Secret containing a pkcs12 keystore
-	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+type MountedTLSDirectory struct {
+	// The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
+	Path string `json:"path"`
 
-	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
-	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
+	// Override the name of the keystore file; defaults to keystore.p12
+	// +optional
+	KeystoreFile string `json:"keystoreFile,omitempty"`
+
+	// Override the name of the keystore password file; defaults to keystore-password
+	// +optional
+	KeystorePasswordFile string `json:"keystorePasswordFile,omitempty"`
+
+	// Override the name of the truststore file; defaults truststore.p12
+	// To use the same file as the keystore, override this variable with the name of your keystore file
+	// +optional
+	TruststoreFile string `json:"truststoreFile,omitempty"`
+
+	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+	// +optional
+	TruststorePasswordFile string `json:"truststorePasswordFile,omitempty"`
+}
+
+type SolrTLSOptions struct {
+	// TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
+	// +optional
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
+
+	// Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+	// +optional
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
 	// TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore
 	// The specified key is used as the truststore file name when mounted into Solr pods
@@ -1119,6 +1143,11 @@ type SolrTLSOptions struct {
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
+
+	// Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver.
+	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+	// +optional
+	MountedServerTLSDir *MountedTLSDirectory `json:"mountedServerTLSDir,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Basic

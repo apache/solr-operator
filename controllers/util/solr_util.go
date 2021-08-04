@@ -63,30 +63,14 @@ const (
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
-	DefaultLivenessProbeInitialDelaySeconds = 20
-	DefaultLivenessProbeTimeoutSeconds      = 1
-	DefaultLivenessProbeSuccessThreshold    = 1
-	DefaultLivenessProbeFailureThreshold    = 3
-	DefaultLivenessProbePeriodSeconds       = 10
-
-	DefaultReadinessProbeInitialDelaySeconds = 15
-	DefaultReadinessProbeTimeoutSeconds      = 1
-	DefaultReadinessProbeSuccessThreshold    = 1
-	DefaultReadinessProbeFailureThreshold    = 3
-	DefaultReadinessProbePeriodSeconds       = 5
-
-	DefaultStartupProbeInitialDelaySeconds = 20
-	DefaultStartupProbeTimeoutSeconds      = 30
-	DefaultStartupProbeSuccessThreshold    = 1
-	DefaultStartupProbeFailureThreshold    = 15
-	DefaultStartupProbePeriodSeconds       = 10
-
 	DefaultKeyStorePath         = "/var/solr/tls"
-	Pkcs12KeystoreFile          = "keystore.p12"
 	DefaultWritableKeyStorePath = "/var/solr/tls/pkcs12"
 	TLSCertKey                  = "tls.crt"
-	TLSKeyKey                   = "tls.key"
 	DefaultTrustStorePath       = "/var/solr/tls-truststore"
+	InitdbPath                  = "/docker-entrypoint-initdb.d"
+	DefaultPkcs12KeystoreFile   = "keystore.p12"
+	DefaultPkcs12TruststoreFile = "truststore.p12"
+	DefaultKeystorePasswordFile = "keystore-password"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -105,6 +89,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		probeScheme = corev1.URISchemeHTTPS
 	}
 
+	defaultProbeTimeout := int32(1)
 	defaultHandler := corev1.Handler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: probeScheme,
@@ -170,7 +155,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrDataVolumeName := "data"
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 
-	if solrCloud.Spec.SolrTLS != nil {
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir == nil {
 		solrVolumes = append(solrVolumes, tlsVolumes(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 		volumeMounts = append(volumeMounts, tlsVolumeMounts(solrCloud.Spec.SolrTLS, createPkcs12InitContainer)...)
 	}
@@ -258,6 +243,21 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Name:         volume.Name,
 				VolumeSource: volume.Source,
 			})
+		}
+	}
+
+	// Auto-TLS uses an initContainer to create a script in the initdb, so mount that if it has not already been mounted
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir != nil {
+		var initdbMount *corev1.VolumeMount
+		for _, mount := range volumeMounts {
+			if mount.MountPath == InitdbPath {
+				initdbMount = &mount
+				break
+			}
+		}
+		if initdbMount == nil {
+			solrVolumes = append(solrVolumes, corev1.Volume{Name: "initdb", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "initdb", MountPath: InitdbPath})
 		}
 	}
 
@@ -396,6 +396,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
 		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
+		defaultProbeTimeout = 5
 	}
 
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
@@ -445,19 +446,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				},
 			},
 			LivenessProbe: &corev1.Probe{
-				InitialDelaySeconds: DefaultLivenessProbeInitialDelaySeconds,
-				TimeoutSeconds:      DefaultLivenessProbeTimeoutSeconds,
-				SuccessThreshold:    DefaultLivenessProbeSuccessThreshold,
-				FailureThreshold:    DefaultLivenessProbeFailureThreshold,
-				PeriodSeconds:       DefaultLivenessProbePeriodSeconds,
+				InitialDelaySeconds: 20,
+				TimeoutSeconds:      defaultProbeTimeout,
+				SuccessThreshold:    1,
+				FailureThreshold:    3,
+				PeriodSeconds:       10,
 				Handler:             defaultHandler,
 			},
 			ReadinessProbe: &corev1.Probe{
-				InitialDelaySeconds: DefaultReadinessProbeInitialDelaySeconds,
-				TimeoutSeconds:      DefaultReadinessProbeTimeoutSeconds,
-				SuccessThreshold:    DefaultReadinessProbeSuccessThreshold,
-				FailureThreshold:    DefaultReadinessProbeFailureThreshold,
-				PeriodSeconds:       DefaultReadinessProbePeriodSeconds,
+				InitialDelaySeconds: 15,
+				TimeoutSeconds:      defaultProbeTimeout,
+				SuccessThreshold:    1,
+				FailureThreshold:    3,
+				PeriodSeconds:       5,
 				Handler:             defaultHandler,
 			},
 			VolumeMounts: volumeMounts,
@@ -552,6 +553,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	stateful.Spec.Template.Spec.ImagePullSecrets = imagePullSecrets
 
 	if nil != customPodOptions {
+		solrContainer := &stateful.Spec.Template.Spec.Containers[0]
+
 		if customPodOptions.ServiceAccountName != "" {
 			stateful.Spec.Template.Spec.ServiceAccountName = customPodOptions.ServiceAccountName
 		}
@@ -561,7 +564,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 
 		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
-			stateful.Spec.Template.Spec.Containers[0].Resources = customPodOptions.Resources
+			solrContainer.Resources = customPodOptions.Resources
 		}
 
 		if customPodOptions.PodSecurityContext != nil {
@@ -576,16 +579,21 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			stateful.Spec.Template.Spec.NodeSelector = customPodOptions.NodeSelector
 		}
 
+		if customPodOptions.StartupProbe != nil {
+			// Default Solr container does not contain a startupProbe, so copy the livenessProbe
+			baseProbe := solrContainer.LivenessProbe.DeepCopy()
+			// Two options are different by default from the livenessProbe
+			baseProbe.TimeoutSeconds = 30
+			baseProbe.FailureThreshold = 15
+			solrContainer.StartupProbe = customizeProbe(baseProbe, *customPodOptions.StartupProbe)
+		}
+
 		if customPodOptions.LivenessProbe != nil {
-			stateful.Spec.Template.Spec.Containers[0].LivenessProbe = fillProbe(*customPodOptions.LivenessProbe, DefaultLivenessProbeInitialDelaySeconds, DefaultLivenessProbeTimeoutSeconds, DefaultLivenessProbeSuccessThreshold, DefaultLivenessProbeFailureThreshold, DefaultLivenessProbePeriodSeconds, &defaultHandler)
+			solrContainer.LivenessProbe = customizeProbe(solrContainer.LivenessProbe, *customPodOptions.LivenessProbe)
 		}
 
 		if customPodOptions.ReadinessProbe != nil {
-			stateful.Spec.Template.Spec.Containers[0].ReadinessProbe = fillProbe(*customPodOptions.ReadinessProbe, DefaultReadinessProbeInitialDelaySeconds, DefaultReadinessProbeTimeoutSeconds, DefaultReadinessProbeSuccessThreshold, DefaultReadinessProbeFailureThreshold, DefaultReadinessProbePeriodSeconds, &defaultHandler)
-		}
-
-		if customPodOptions.StartupProbe != nil {
-			stateful.Spec.Template.Spec.Containers[0].StartupProbe = fillProbe(*customPodOptions.StartupProbe, DefaultStartupProbeInitialDelaySeconds, DefaultStartupProbeTimeoutSeconds, DefaultStartupProbeSuccessThreshold, DefaultStartupProbeFailureThreshold, DefaultStartupProbePeriodSeconds, &defaultHandler)
+			solrContainer.ReadinessProbe = customizeProbe(solrContainer.ReadinessProbe, *customPodOptions.ReadinessProbe)
 		}
 
 		if customPodOptions.PriorityClassName != "" {
@@ -637,6 +645,10 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedServerTLSDir != nil {
+		containers = append(containers, generateTLSInitdbScriptInitContainer(solrCloud))
+	}
+
 	return containers
 }
 
@@ -684,44 +696,6 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	}
 
 	return configMap
-}
-
-// fillProbe builds the probe logic used for pod liveness, readiness, startup checks
-func fillProbe(customProbe corev1.Probe, defaultInitialDelaySeconds int32, defaultTimeoutSeconds int32, defaultSuccessThreshold int32, defaultFailureThreshold int32, defaultPeriodSeconds int32, defaultHandler *corev1.Handler) *corev1.Probe {
-	probe := &corev1.Probe{
-		InitialDelaySeconds: defaultInitialDelaySeconds,
-		TimeoutSeconds:      defaultTimeoutSeconds,
-		SuccessThreshold:    defaultSuccessThreshold,
-		FailureThreshold:    defaultFailureThreshold,
-		PeriodSeconds:       defaultPeriodSeconds,
-		Handler:             *defaultHandler,
-	}
-
-	if customProbe.InitialDelaySeconds != 0 {
-		probe.InitialDelaySeconds = customProbe.InitialDelaySeconds
-	}
-
-	if customProbe.TimeoutSeconds != 0 {
-		probe.TimeoutSeconds = customProbe.TimeoutSeconds
-	}
-
-	if customProbe.SuccessThreshold != 0 {
-		probe.SuccessThreshold = customProbe.SuccessThreshold
-	}
-
-	if customProbe.FailureThreshold != 0 {
-		probe.FailureThreshold = customProbe.FailureThreshold
-	}
-
-	if customProbe.PeriodSeconds != 0 {
-		probe.PeriodSeconds = customProbe.PeriodSeconds
-	}
-
-	if customProbe.Handler.Exec != nil || customProbe.Handler.HTTPGet != nil || customProbe.Handler.TCPSocket != nil {
-		probe.Handler = customProbe.Handler
-	}
-
-	return probe
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
@@ -875,7 +849,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 	rules, allHosts := CreateSolrIngressRules(solrCloud, nodeNames, allDomains)
 
 	var ingressTLS []netv1.IngressTLS
-	if solrCloud.Spec.SolrTLS != nil {
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
 		if annotations == nil {
 			annotations = make(map[string]string, 1)
 		}
@@ -889,7 +863,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			SecretName: extOpts.IngressTLSTerminationSecret,
 			Hosts:      allHosts,
 		})
-	}
+	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
 
 	ingress = &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -979,6 +953,30 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 	return ingressRule
 }
 
+func generateTLSInitdbScriptInitContainer(solrCloud *solr.SolrCloud) corev1.Container {
+	// run an initContainer that creates a script in the initdb that exports the
+	// keystore secret from a file to the env before Solr is started
+	shCmd := fmt.Sprintf("echo -e \"#!/bin/bash\\nexport SOLR_SSL_KEY_STORE_PASSWORD=\\`cat %s\\`\\nexport SOLR_SSL_TRUST_STORE_PASSWORD=\\`cat %s\\`\" > /docker-entrypoint-initdb.d/export-tls-vars.sh",
+		MountedTLSKeystorePasswordPath(solrCloud.Spec.SolrTLS), MountedTLSTruststorePasswordPath(solrCloud.Spec.SolrTLS))
+
+	/*
+	   Init container creates a script like:
+
+	      #!/bin/bash
+	      export SOLR_SSL_KEY_STORE_PASSWORD=`cat $MOUNTED_TLS_DIR/keystore-password`
+	      export SOLR_SSL_TRUST_STORE_PASSWORD=`cat $MOUNTED_TLS_DIR/keystore-password`
+
+	*/
+
+	return corev1.Container{
+		Name:            "export-tls-password",
+		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
+		ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
+		Command:         []string{"sh", "-c", shCmd},
+		VolumeMounts:    []corev1.VolumeMount{{Name: "initdb", MountPath: InitdbPath}},
+	}
+}
+
 // TODO: Have this replace the postStart hook for creating the chroot
 func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, reconcileConfigInfo map[string]string) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
@@ -1048,33 +1046,43 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 		wantClientAuth = "true"
 	}
 
-	// the keystore path depends on whether we're just loading it from the secret or whether
-	// our initContainer has to generate it from the TLS secret using openssl
-	// this complexity is due to the secret mount directory not being writable
-	var keystorePath string
-	if createPkcs12InitContainer {
-		keystorePath = DefaultWritableKeyStorePath
+	var keystoreFile string
+	var passwordValueFrom *corev1.EnvVarSource
+	var truststoreFile string
+	var truststorePassFrom *corev1.EnvVarSource
+	if opts.MountedServerTLSDir != nil {
+		// TLS files are mounted by some external agent
+		keystoreFile = mountedTLSKeystorePath(opts)
+		truststoreFile = mountedTLSTruststorePath(opts)
 	} else {
-		keystorePath = DefaultKeyStorePath
-	}
-
-	keystoreFile := keystorePath + "/" + Pkcs12KeystoreFile
-	passwordValueFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
-
-	// If using a truststore that is different from the keystore
-	truststoreFile := keystoreFile
-	truststorePassFrom := passwordValueFrom
-	if opts.TrustStoreSecret != nil {
-		if opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
-			// trust store is in a different secret, so will be mounted in a different dir
-			truststoreFile = DefaultTrustStorePath
+		// the keystore path depends on whether we're just loading it from the secret or whether
+		// our initContainer has to generate it from the TLS secret using openssl
+		// this complexity is due to the secret mount directory not being writable
+		var keystorePath string
+		if createPkcs12InitContainer {
+			keystorePath = DefaultWritableKeyStorePath
 		} else {
-			// trust store is a different key in the same secret as the keystore
-			truststoreFile = DefaultKeyStorePath
+			keystorePath = DefaultKeyStorePath
 		}
-		truststoreFile += "/" + opts.TrustStoreSecret.Key
-		if opts.TrustStorePasswordSecret != nil {
-			truststorePassFrom = &corev1.EnvVarSource{SecretKeyRef: opts.TrustStorePasswordSecret}
+
+		keystoreFile = keystorePath + "/" + DefaultPkcs12KeystoreFile
+		passwordValueFrom = &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
+
+		// If using a truststore that is different from the keystore
+		truststoreFile = keystoreFile
+		truststorePassFrom = passwordValueFrom
+		if opts.TrustStoreSecret != nil {
+			if opts.TrustStoreSecret.Name != opts.PKCS12Secret.Name {
+				// trust store is in a different secret, so will be mounted in a different dir
+				truststoreFile = DefaultTrustStorePath
+			} else {
+				// trust store is a different key in the same secret as the keystore
+				truststoreFile = DefaultKeyStorePath
+			}
+			truststoreFile += "/" + opts.TrustStoreSecret.Key
+			if opts.TrustStorePasswordSecret != nil {
+				truststorePassFrom = &corev1.EnvVarSource{SecretKeyRef: opts.TrustStorePasswordSecret}
+			}
 		}
 	}
 
@@ -1088,16 +1096,8 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 			Value: keystoreFile,
 		},
 		{
-			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
-			ValueFrom: passwordValueFrom,
-		},
-		{
 			Name:  "SOLR_SSL_TRUST_STORE",
 			Value: truststoreFile,
-		},
-		{
-			Name:      "SOLR_SSL_TRUST_STORE_PASSWORD",
-			ValueFrom: truststorePassFrom,
 		},
 		{
 			Name:  "SOLR_SSL_WANT_CLIENT_AUTH",
@@ -1115,6 +1115,14 @@ func TLSEnvVars(opts *solr.SolrTLSOptions, createPkcs12InitContainer bool) []cor
 			Name:  "SOLR_SSL_CHECK_PEER_NAME",
 			Value: strconv.FormatBool(opts.CheckPeerName),
 		},
+	}
+
+	if passwordValueFrom != nil {
+		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_KEY_STORE_PASSWORD", ValueFrom: passwordValueFrom})
+	}
+
+	if truststorePassFrom != nil {
+		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE_PASSWORD", ValueFrom: truststorePassFrom})
 	}
 
 	return envVars
@@ -1206,7 +1214,7 @@ func generatePkcs12InitContainer(opts *solr.SolrTLSOptions, imageName string, im
 
 	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " -in " + DefaultKeyStorePath +
 		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
-		"/pkcs12/" + Pkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		"/pkcs12/" + DefaultPkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 	return corev1.Container{
 		Name:                     "gen-pkcs12-keystore",
 		Image:                    imageName,
@@ -1399,12 +1407,13 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           %s,
           { "name": "k8s-status", "role":"k8s", "collection": null, "path":"/admin/collections" },
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
+          { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "all", "role":["admin","users"] },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
-          { "name": "security-read", "role": "admin"},
-          { "name": "security-edit", "role": "admin"}
+          { "name": "security-read", "role": ["admin"] },
+          { "name": "security-edit", "role": ["admin"] },
+          { "name": "all", "role":["admin"] }
         ]
       }
     }`, blockUnknown, credentialsJson, username, probeAuthz)
@@ -1502,7 +1511,7 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	enableBasicAuth := ""
 	var volMount *corev1.VolumeMount
 	var vol *corev1.Volume
-	if solrCloud.Spec.SolrSecurity != nil {
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
 		secretName := solrCloud.BasicAuthSecretName()
 		defaultMode := int32(420)
 		vol = &corev1.Volume{
@@ -1523,24 +1532,80 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	}
 
 	// Is TLS enabled? If so we need some additional SSL related props
-	tlsProps := ""
-	if solrCloud.Spec.SolrTLS != nil {
-		tlsProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
-			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
-	}
-
-	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsProps)
+	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud.Spec.SolrTLS)
+	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
 
 	// construct the probe command to invoke the SolrCLI "api" action
 	//
 	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java -Dsolr.ssl.checkPeerName=false %s "+
+	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s -Dsolr.ssl.checkPeerName=false %s "+
 		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, enableBasicAuth, solrCloud.UrlScheme(false), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
+		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(false), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	return probeCommand, vol, volMount
+}
+
+func secureProbeTLSJavaToolOpts(tls *solr.SolrTLSOptions) (string, string) {
+	tlsJavaToolOpts := ""
+	tlsJavaSysProps := ""
+	if tls != nil {
+		tlsJavaSysProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
+
+		// If the keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
+		if tls.MountedServerTLSDir != nil {
+			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=$(cat " + MountedTLSKeystorePasswordPath(tls) + ")"
+			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=$(cat " + MountedTLSTruststorePasswordPath(tls) + ")"
+		} else {
+			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD"
+			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		}
+	}
+	return tlsJavaToolOpts, tlsJavaSysProps
+}
+
+func mountedTLSKeystorePath(tls *solr.SolrTLSOptions) string {
+	path := ""
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.KeystoreFile, DefaultPkcs12KeystoreFile)
+	}
+	return path
+}
+
+func MountedTLSKeystorePasswordPath(tls *solr.SolrTLSOptions) string {
+	path := ""
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.KeystorePasswordFile, DefaultKeystorePasswordFile)
+	}
+	return path
+}
+
+func mountedTLSTruststorePath(tls *solr.SolrTLSOptions) string {
+	path := ""
+	if tls.MountedServerTLSDir != nil {
+		path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.TruststoreFile, DefaultPkcs12TruststoreFile)
+	}
+	return path
+}
+
+func MountedTLSTruststorePasswordPath(tls *solr.SolrTLSOptions) string {
+	path := ""
+	if tls.MountedServerTLSDir != nil {
+		if tls.MountedServerTLSDir.TruststorePasswordFile != "" {
+			path = mountedTLSPath(tls.MountedServerTLSDir, tls.MountedServerTLSDir.TruststorePasswordFile, "")
+		} else {
+			path = MountedTLSKeystorePasswordPath(tls)
+		}
+	}
+	return path
+}
+
+func mountedTLSPath(dir *solr.MountedTLSDirectory, fileName string, defaultName string) string {
+	if fileName == "" {
+		fileName = defaultName
+	}
+	return fmt.Sprintf("%s/%s", dir.Path, fileName)
 }

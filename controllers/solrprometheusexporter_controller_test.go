@@ -29,6 +29,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -65,6 +66,8 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 					InitContainers:                extraContainers1,
 					ImagePullSecrets:              testAdditionalImagePullSecrets,
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
+					LivenessProbe:                 testProbeLivenessNonDefaults,
+					ReadinessProbe:                testProbeReadinessNonDefaults,
 				},
 			},
 			ExporterEntrypoint: "/test/entry-point",
@@ -132,6 +135,11 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), deployment.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")
 	assert.EqualValues(t, &testTerminationGracePeriodSeconds, deployment.Spec.Template.Spec.TerminationGracePeriodSeconds, "Incorrect terminationGracePeriodSeconds")
 
+	testPodProbe(t, testProbeLivenessNonDefaults, deployment.Spec.Template.Spec.Containers[0].LivenessProbe, "liveness")
+	testPodProbe(t, testProbeReadinessNonDefaults, deployment.Spec.Template.Spec.Containers[0].ReadinessProbe, "readiness")
+	assert.Nilf(t, deployment.Spec.Template.Spec.Containers[0].StartupProbe, "%s probe should be nil since it was not specified", "startup")
+
+	// Check the Service
 	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, deployment.Spec.Template.Labels)
 	assert.Equal(t, "true", service.Annotations["prometheus.io/scrape"], "Metrics Service Prometheus scraping is not enabled.")
 	assert.EqualValues(t, "solr-metrics", service.Spec.Ports[0].Name, "Wrong port name on common Service")
@@ -151,6 +159,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 					Tolerations:       testTolerationsPromExporter,
 					NodeSelector:      testNodeSelectors,
 					PriorityClassName: testPriorityClass,
+					StartupProbe:      testProbeStartup,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{
 					Annotations: testDeploymentAnnotations,
@@ -228,6 +237,24 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	assert.Equal(t, extraVolumes[0].Name, deployment.Spec.Template.Spec.Volumes[1].Name, "Additional Volume from podOptions not loaded into pod properly.")
 	assert.Equal(t, extraVolumes[0].Source, deployment.Spec.Template.Spec.Volumes[1].VolumeSource, "Additional Volume from podOptions not loaded into pod properly.")
 
+	testPodProbe(t, &corev1.Probe{
+		Handler: corev1.Handler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Scheme: corev1.URISchemeHTTP,
+				Path:   "/metrics",
+				Port:   intstr.FromInt(util.SolrMetricsPort),
+			},
+		},
+		InitialDelaySeconds: 20,
+		TimeoutSeconds:      1,
+		PeriodSeconds:       10,
+		SuccessThreshold:    1,
+		FailureThreshold:    3,
+	}, deployment.Spec.Template.Spec.Containers[0].LivenessProbe, "liveness")
+	testPodProbe(t, testProbeStartup, deployment.Spec.Template.Spec.Containers[0].StartupProbe, "startup")
+	assert.Nilf(t, deployment.Spec.Template.Spec.Containers[0].ReadinessProbe, "%s probe should be nil since it was not specified", "readiness")
+
+	// Check the Service
 	expectedServiceLabels := util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), map[string]string{"service-type": "metrics"})
 	expectedServiceAnnotations := map[string]string{"prometheus.io/path": "/metrics", "prometheus.io/port": "80", "prometheus.io/scheme": "http", "prometheus.io/scrape": "true"}
 	service := expectService(t, g, requests, expectedMetricsRequest, metricsSKey, expectedDeploymentLabels)
@@ -899,4 +926,99 @@ func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecr
 		}
 
 	}
+}
+
+func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
+
+	// ctx := context.TODO()
+
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrPrometheusExporter{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedMetricsRequest.Name, Namespace: expectedMetricsRequest.Namespace},
+		Spec:       solr.SolrPrometheusExporterSpec{},
+	}
+
+	// override the defaults here so we make sure the resulting initContainer uses them
+	instance.Spec.BusyBoxImage = &solr.ContainerImage{
+		Repository: "myBBImage",
+		Tag:        "test",
+		PullPolicy: "",
+	}
+
+	mountedDir := &solr.MountedTLSDirectory{}
+	mountedDir.Path = "/mounted-tls-dir"
+	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrPrometheusExporterReconciler := &SolrPrometheusExporterReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrPrometheusExporter"),
+	}
+	newRec, requests := SetupTestReconcile(solrPrometheusExporterReconciler)
+	g.Expect(solrPrometheusExporterReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, expectedMetricsRequest.Namespace)
+
+	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
+	err = testClient.Create(context.TODO(), instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
+
+	podTemplate := deployment.Spec.Template
+
+	// verify the mountedServerTLSDir config on the deployment
+	assert.NotNil(t, podTemplate.Spec.Containers)
+	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	mainContainer := podTemplate.Spec.Containers[0]
+	assert.NotNil(t, mainContainer, "Didn't find the main exporter container in the deployment!")
+	assert.NotNil(t, mainContainer.Env, "No Env vars for main exporter container in the deployment!")
+	// make sure JAVA_OPTS is set correctly with the TLS related sys props
+	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
+		return strings.HasPrefix(n, "JAVA_OPTS")
+	})
+	assert.Equal(t, 1, len(envVars))
+	javaOpts := envVars[0].Value
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStore=$(SOLR_SSL_KEY_STORE)"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStore=$(SOLR_SSL_TRUST_STORE)"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStoreType=PKCS12"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStoreType=PKCS12"))
+	assert.True(t, strings.Contains(javaOpts, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
+	assert.True(t, strings.Contains(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS"))
+	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStorePassword"))
+	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStorePassword"))
+
+	expInitContainer := expectInitContainerForMountedTLSDir(t, &podTemplate)
+	assert.Equal(t, "myBBImage:test", expInitContainer.Image)
+}
+
+func expectInitContainerForMountedTLSDir(t *testing.T, podTemplate *corev1.PodTemplateSpec) *corev1.Container {
+	// verify initContainer to create a wrapper script around the solr-exporter script
+	name := "create-tls-wrapper-script"
+	expInitContainer := expectInitContainer(t, podTemplate, name, "tls-wrapper-script", "/usr/local/solr-exporter-tls")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+name+" init container")
+	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.keyStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	assert.Contains(t, expInitContainer.Command[2], "-Djavax.net.ssl.trustStorePassword", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	assert.Contains(t, expInitContainer.Command[2], "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	return expInitContainer
 }

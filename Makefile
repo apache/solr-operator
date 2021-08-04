@@ -156,6 +156,8 @@ check-generated:
 
 check-helm:
 	helm lint helm/*
+	# Check that the ArtifactHub Metadata is correct
+	docker run --rm --name artifact-hub-check -v "${PWD}/helm:/etc/helm" artifacthub/ah ah lint -k helm -p /etc/helm
 
 check-mod:
 	rm -rf generated-check

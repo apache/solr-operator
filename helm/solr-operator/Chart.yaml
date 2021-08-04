@@ -99,6 +99,34 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/295
     - kind: added
+      description: Ability to customize probes for PrometheusExporter
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/282
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/297
+    - kind: security
+      description: Remove users role from the all permission in the initial security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/274
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/299
+    - kind: fixed
+      description: Grant access to the /admin/zookeeper/status path to the k8s role in the initial security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/289
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/299
+    - kind: security
+      description: Add a mountedServerTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/291
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/292
+    - kind: added
       description: Ability to terminate TLS at Ingress for SolrCloud.
       links:
         - name: Github Issue
