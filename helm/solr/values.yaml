@@ -76,9 +76,11 @@ addressability:
     # method: "Ingress"
     # domainName: "example.com"
     # additionalDomainNames: []
+    # useExternalAddress: false
     # hideNodes: false
     # hideCommon: false
     # nodePortOverride: null
+    # ingressTLSTerminationSecret: ""
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
@@ -199,6 +201,12 @@ solrTLS: {}
   # verifyClientHostname: false
   # checkPeerName: false
   # restartOnTLSSecretUpdate: false
+  # mountedServerTLSDir:
+  #   path: /path/to/mounted/tls
+  #   keystoreFile: ""
+  #   keystorePasswordFile: ""
+  #   truststoreFile: ""
+  #   truststorePasswordFile: ""
 
 # Customize the Solr Pod for your needs
 podOptions:

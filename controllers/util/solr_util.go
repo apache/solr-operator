@@ -844,11 +844,26 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 
 	extOpts := solrCloud.Spec.SolrAddressability.External
 
-	// Create advertised domain name and possible additional domain names
-	rules := CreateSolrIngressRules(solrCloud, nodeNames, append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...))
+	// Create advertised domain name and possible additional domain names'
+	allDomains := append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...)
+	rules, allHosts := CreateSolrIngressRules(solrCloud, nodeNames, allDomains)
 
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
+	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+
+	if extOpts.IngressTLSTerminationSecret != "" {
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{
+			SecretName: extOpts.IngressTLSTerminationSecret,
+			Hosts:      allHosts,
+		})
+	}
+	solrNodesRequireTLS := solrCloud.Spec.SolrTLS != nil
+	ingressFrontedByTLS := len(ingressTLS) > 0
+
+	// TLS Passthrough annotations
+	if solrNodesRequireTLS {
 		if annotations == nil {
 			annotations = make(map[string]string, 1)
 		}
@@ -856,8 +871,23 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 		if !ok {
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
-		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+	} else {
+		if annotations == nil {
+			annotations = make(map[string]string, 1)
+		}
+		_, ok := annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+		if !ok {
+			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTP"
+		}
+	}
+
+	// TLS Accept annotations
+	if ingressFrontedByTLS {
+		_, ok := annotations["nginx.ingress.kubernetes.io/ssl-redirect"]
+		if !ok {
+			annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
+		}
+	}
 
 	ingress = &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
@@ -878,21 +908,24 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 // solrCloud: SolrCloud instance
 // nodeNames: the names for each of the solr pods
 // domainName: string Domain for the ingress rule to use
-func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) []netv1.IngressRule {
-	var ingressRules []netv1.IngressRule
+func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domainNames []string) (ingressRules []netv1.IngressRule, allHosts []string) {
 	if !solrCloud.Spec.SolrAddressability.External.HideCommon {
 		for _, domainName := range domainNames {
-			ingressRules = append(ingressRules, CreateCommonIngressRule(solrCloud, domainName))
+			rule := CreateCommonIngressRule(solrCloud, domainName)
+			ingressRules = append(ingressRules, rule)
+			allHosts = append(allHosts, rule.Host)
 		}
 	}
 	if !solrCloud.Spec.SolrAddressability.External.HideNodes {
 		for _, nodeName := range nodeNames {
 			for _, domainName := range domainNames {
-				ingressRules = append(ingressRules, CreateNodeIngressRule(solrCloud, nodeName, domainName))
+				rule := CreateNodeIngressRule(solrCloud, nodeName, domainName)
+				ingressRules = append(ingressRules, rule)
+				allHosts = append(allHosts, rule.Host)
 			}
 		}
 	}
-	return ingressRules
+	return
 }
 
 // CreateCommonIngressRule returns a new Ingress Rule generated for a SolrCloud under the given domainName
@@ -1534,7 +1567,7 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
+		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(false), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	return probeCommand, vol, volMount

@@ -307,7 +307,7 @@ data:
 ## Enable TLS Between Solr Pods
 _Since v0.3.0_
 
-A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
+A common approach to securing traffic to your Solr cluster is to perform [**TLS termination** at the Ingress](#enable-ingress-tls-termination) and leave all traffic between Solr pods un-encrypted.
 However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
 The Solr operator provides **optional** configuration settings to enable TLS for encrypting traffic between Solr pods.
 
@@ -322,7 +322,7 @@ Lastly, as of **v0.4.0**, you can supply the path to a directory containing TLS 
 [cert-manager](https://cert-manager.io/docs/) is a popular Kubernetes controller for managing TLS certificates, including renewing certificates prior to expiration. 
 One of the primary benefits of cert-manager is it supports pluggable certificate `Issuer` implementations, including a self-signed Issuer for local development and an [ACME compliant](https://tools.ietf.org/html/rfc8555) Issuer for working with services like [Let’s Encrypt](https://letsencrypt.org/).
 
-If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to [I already have a TLS Certificate](#-Already-Have-a-TLS-Certificate) later in this section.
+If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to [I already have a TLS Certificate](#i-already-have-a-tls-certificate) later in this section.
 If you do not have a TLS certificate, then we recommend installing **cert-manager** as it makes working with TLS in Kubernetes much easier.
 
 #### Install cert-manager
@@ -341,7 +341,7 @@ issuers.cert-manager.io
 orders.acme.cert-manager.io
 ```
 
-If not intalled, use Helm to install it into the `cert-manager` namespace:
+If not installed, use Helm to install it into the `cert-manager` namespace:
 ```bash
 if ! helm repo list | grep -q "https://charts.jetstack.io"; then
   helm repo add jetstack https://charts.jetstack.io
@@ -532,7 +532,8 @@ When using the mounted TLS directory option, you need to ensure each Solr pod ge
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
 Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
-### Ingress
+
+### Ingress with TLS protected Solr
 
 The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
 ```yaml
@@ -547,6 +548,10 @@ spec:
   tls:
   - secretName: my-selfsigned-cert-tls
 ```
+
+If using the mounted TLS Directory option with an Ingress, you will need to inject the ingress with TLS information as well.
+The [Ingress TLS Termination section below](#enable-ingress-tls-termination) shows how this can be done when using cert-manager.
+
 
 ### Certificate Renewal and Rolling Restarts
 
@@ -640,7 +645,7 @@ which you can request TLS certificates from LetsEncrypt assuming you own the `k8
 Mutual TLS (mTLS) provides an additional layer of security by ensuring the client applications sending requests to Solr are trusted.
 To enable mTLS, simply set `spec.solrTLS.clientAuth` to either `Want` or `Need`. When mTLS is enabled, the Solr operator needs to
 supply a client certificate that is trusted by Solr; the operator makes API calls to Solr to get cluster status. 
-To configure the client certificate for the operator, see [Running the Operator > mTLS](../running-the-operator.md#Client-Auth-for-mTLS-enabled-Solr-clusters)
+To configure the client certificate for the operator, see [Running the Operator > mTLS](../running-the-operator.md#client-auth-for-mtls-enabled-solr-clusters)
 
 When mTLS is enabled, the liveness and readiness probes are configured to execute a local command on each Solr pod instead of the default HTTP Get request.
 Using a command is required so that we can use the correct TLS certificate when making an HTTPs call to the probe endpoints.
@@ -656,6 +661,62 @@ curl "https://localhost:8983/solr/admin/info/system" -v \
   --cacert root-ca/root-ca.pem
 ```
 The `--cacert` option supplies the CA's certificate needed to trust the server certificate provided by the Solr pods during TLS handshake.
+
+## Enable Ingress TLS Termination
+_Since v0.4.0_
+
+A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and either leave all traffic between Solr pods un-encrypted or use private CAs for inter-pod communication.
+The operator supports this paradigm, to ensure all external traffic is encrypted.
+
+```yaml
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: my-selfsigned-cert-tls
+```
+
+The only additional settings required here are:
+- Making sure that you are not using the external TLS address for Solr to communicate internally via `useExternalAddress: false`.
+  This will be ignored, even if it is set to `true`.
+- Adding a TLS secret through `ingressTLSTerminationSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+  _This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
+
+To generate a TLS secret, follow the [instructions above](#use-cert-manager-to-issue-the-certificate) and use the templated Hostname: `<namespace>-<name>-solrcloud.<domain>`
+
+If you configure your SolrCloud correctly, cert-manager can auto-inject the TLS secrets for you as well:
+
+```yaml
+kind: SolrCloud
+metadata:
+  name: search
+  namespace: explore
+spec:
+  ... other SolrCloud CRD settings ...
+  customSolrKubeOptions:
+    ingressOptions:
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        cert-manager.io/issuer: "<issuer-name>"
+        cert-manager.io/common-name: explore-search-solrcloud.apple.com
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: myingress-cert
+```
+
+For more information on the Ingress TLS Termination options for cert-manager, [refer to the documentation](https://cert-manager.io/docs/usage/ingress/).
 
 ## Authentication and Authorization
 _Since v0.3.0_
