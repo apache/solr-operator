@@ -1052,7 +1052,6 @@ spec:
                 description: A reference to the SolrCloud to create a backup for
                 type: string
             required:
-            - persistence
             - solrCloud
             type: object
           status:

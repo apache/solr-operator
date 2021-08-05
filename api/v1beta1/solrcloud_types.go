@@ -331,12 +331,26 @@ type SolrBackupRestoreOptions struct {
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	Volume corev1.VolumeSource `json:"volume"`
+	Volume *corev1.VolumeSource `json:"volume,omitempty"`
+
+	// Configuration used to store backups in Google Cloud Storage ("GCS").
+	Gcs *GcsStorage `json:"gcsStorage,omitempty"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
 	// +optional
 	Directory string `json:"directory,omitempty"`
+}
+
+type GcsStorage struct {
+	// The name of the GCS bucket that all backup data will be stored in
+	Bucket string `json:"bucket"`
+
+	// The name of a Kubernetes secret holding a Google cloud service account key
+	GcsCredentialSecret string `json:"gcsCredentialSecret"`
+	// JEGERLOW TODO Should 'baseLocation' be optional?
+	// A chroot within the bucket to store data in.  If specified this should already exist
+	BaseLocation string `json:"baseLocation"`
 }
 
 type SolrAddressabilityOptions struct {

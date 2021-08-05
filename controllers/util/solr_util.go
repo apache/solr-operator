@@ -39,6 +39,8 @@ import (
 const (
 	SolrClientPortName  = "solr-client"
 	BackupRestoreVolume = "backup-restore"
+	BackupRestoreCredentialVolume = "backup-restore-credential"
+	BackupRestoreCredentialSecretKey = "service-account-key.json"
 
 	SolrNodeContainer = "solrcloud-node"
 
@@ -215,16 +217,37 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 	// Add backup volumes
 	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name:         BackupRestoreVolume,
-			VolumeSource: solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume,
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: BaseBackupRestorePath,
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+		// Backups can be configured to write to either a local drive, or to GCS.  Each requires a volume
+		if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name:         BackupRestoreVolume,
+				VolumeSource: *solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume,
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      BackupRestoreVolume,
+				MountPath: BaseBackupRestorePath,
+				SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+				ReadOnly:  false,
+			})
+		} else if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
+			fals := false
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name: BackupRestoreCredentialVolume,
+				VolumeSource: corev1.VolumeSource {
+					Secret: &corev1.SecretVolumeSource {
+						SecretName: solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs.GcsCredentialSecret,
+						Items: []corev1.KeyToPath{{Key: BackupRestoreCredentialSecretKey, Path: BackupRestoreCredentialSecretKey}},
+						Optional: &fals,
+					},
+				},
+				// the local baackup stuff has this handled by the user, but for the credential I need to derive it from the secret.
+			})
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      BackupRestoreCredentialVolume,
+				MountPath: BackupRestoreCredentialDirPath,
+				ReadOnly:  true,
+			})
+		}
 	}
 
 	if nil != customPodOptions {
@@ -602,14 +625,16 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	// Add prep for backup-restore volume
 	// This entails setting the correct permissions for the directory
 	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: "/backup-restore",
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+		if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+			volumeMounts = append(volumeMounts, corev1.VolumeMount{
+				Name:      BackupRestoreVolume,
+				MountPath: "/backup-restore",
+				SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
+				ReadOnly:  false,
+			})
 
-		setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+			setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+		}
 	}
 
 	volumePrepInitContainer := corev1.Container{
@@ -641,15 +666,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        solrCloud.ConfigMapName(),
-			Namespace:   solrCloud.GetNamespace(),
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Data: map[string]string{
-			"solr.xml": `<?xml version="1.0" encoding="UTF-8" ?>
+	solrXml := `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   <solrcloud>
     <str name="host">${host:}</str>
@@ -668,7 +685,30 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
 </solr>
-`,
+`
+	// Inject GCS backup configuration into solr.xml if needed
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil && solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
+		gcsXmlConfig :=`
+<str name="sharedLib">/opt/solr/dist,/opt/solr/contrib/gcs-repository/lib</str>
+<backup>
+  <repository name="gcs_backup" class="org.apache.solr.gcs.GCSBackupRepository" default="true">
+    <str name="gcsBucket">` + solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs.Bucket + `</str>
+    <str name="gcsCredentialPath">` + BackupRestoreCredentialFilePath + `</str>
+  </repository>
+</backup>
+`
+		solrXml = strings.Replace(solrXml, "</solr>", gcsXmlConfig + "</solr>", 1)
+	}
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        solrCloud.ConfigMapName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: map[string]string{
+			"solr.xml": solrXml,
 		},
 	}
 

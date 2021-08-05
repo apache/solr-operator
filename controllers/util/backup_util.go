@@ -33,10 +33,12 @@ import (
 )
 
 const (
-	BaseBackupRestorePath = "/var/solr/data/backup-restore"
-	TarredFile            = "/var/solr/data/backup-restore/backup.tgz"
-	CleanupCommand        = " && rm -rf " + BaseBackupRestorePath + "/*"
-	BackupTarCommand      = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
+	BackupRestoreCredentialDirPath  = "/backup-restore-credential"
+	BackupRestoreCredentialFilePath = BackupRestoreCredentialDirPath + "/service-account-key.json"
+	BaseBackupRestorePath           = "/var/solr/data/backup-restore"
+	TarredFile                      = "/var/solr/data/backup-restore/backup.tgz"
+	CleanupCommand                  = " && rm -rf " + BaseBackupRestorePath + "/*"
+	BackupTarCommand                = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
 
 	AWSSecretDir = "/var/aws"
 
@@ -58,8 +60,15 @@ func RestoreSubPathForCloud(directoryOverride string, cloud string, restoreName 
 	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/restores/" + restoreName
 }
 
-func BackupPath(backupName string) string {
+func LocalBackupPath(backupName string) string {
 	return BaseBackupRestorePath + "/backups/" + backupName
+}
+
+func GcsBackupPath(override *string) string {
+	if override != nil {
+		return *override
+	}
+	return "/"
 }
 
 func RestorePath(backupName string) string {
@@ -96,7 +105,7 @@ func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *so
 	var backupVolume corev1.VolumeSource
 	var solrCloudBackupDirectoryOverride string
 	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		backupVolume = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
+		backupVolume = *solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
 		solrCloudBackupDirectoryOverride = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory
 	}
 	return GenerateBackupPersistenceJob(backup, backupVolume, BackupSubPathForCloud(solrCloudBackupDirectoryOverride, solrCloud.Name, backup.Name))
@@ -322,8 +331,12 @@ func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 	queryParams.Add("action", "BACKUP")
 	queryParams.Add("collection", collection)
 	queryParams.Add("name", collection)
-	queryParams.Add("location", BackupPath(backupName))
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backupName))
+	if cloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+		queryParams.Add("location", LocalBackupPath(backupName))
+	} else {
+		queryParams.Add("location", GcsBackupPath(&cloud.Spec.StorageOptions.BackupRestoreOptions.Gcs.BaseLocation))
+	}
 
 	resp := &solr_api.SolrAsyncResponse{}
 
@@ -387,14 +400,18 @@ func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupNa
 }
 
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backup string, config *rest.Config) (err error) {
-	backupPath := BackupPath(backup)
-	// Create an empty directory for the backup
-	return RunExecForPod(
-		solrCloud.GetAllSolrNodeNames()[0],
-		solrCloud.Namespace,
-		[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
-		*config,
-	)
+	// Directory creation only required/possible for local backups using a mounted volume
+	if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+		backupPath := LocalBackupPath(backup)
+		// Create an empty directory for the backup
+		return RunExecForPod(
+			solrCloud.GetAllSolrNodeNames()[0],
+			solrCloud.Namespace,
+			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
+			*config,
+		)
+	}
+	return nil
 }
 
 func RunExecForPod(podName string, namespace string, command []string, config rest.Config) (err error) {

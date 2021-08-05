@@ -3426,6 +3426,23 @@ spec:
                       directory:
                         description: Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default.
                         type: string
+                      gcsStorage:
+                        description: Configuration used to store backups in Google Cloud Storage ("GCS").
+                        properties:
+                          baseLocation:
+                            description: JEGERLOW TODO Should 'baseLocation' be optional? A chroot within the bucket to store data in.  If specified this should already exist
+                            type: string
+                          bucket:
+                            description: The name of the GCS bucket that all backup data will be stored in
+                            type: string
+                          gcsCredentialSecret:
+                            description: The name of a Kubernetes secret holding a Google cloud service account key
+                            type: string
+                        required:
+                        - baseLocation
+                        - bucket
+                        - gcsCredentialSecret
+                        type: object
                       volume:
                         description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
                         properties:
@@ -4321,8 +4338,6 @@ spec:
                             - volumePath
                             type: object
                         type: object
-                    required:
-                    - volume
                     type: object
                   ephemeral:
                     description: "EphemeralStorage is the specification for how the ephemeral Solr data storage should be configured. \n This option cannot be used with the \"persistent\" option. Ephemeral storage is used by default if neither \"persistent\" or \"ephemeral\" is provided."

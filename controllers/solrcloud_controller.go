@@ -631,11 +631,22 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 			newStatus.ReadyReplicas += 1
 		}
 
+		// JEGERLOW TODO Reduce duplication here
 		// Get Volumes for backup/restore
 		if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-			for _, volume := range p.Spec.Volumes {
-				if volume.Name == util.BackupRestoreVolume {
-					backupRestoreReadyPods += 1
+			// Check that the backup-data storage volume is present
+			if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+				for _, volume := range p.Spec.Volumes {
+					if volume.Name == util.BackupRestoreVolume {
+						backupRestoreReadyPods += 1
+					}
+				}
+			} else if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
+				// Check that the GCS credential volume is present
+				for _, volume := range p.Spec.Volumes {
+					if volume.Name == util.BackupRestoreCredentialVolume {
+						backupRestoreReadyPods += 1
+					}
 				}
 			}
 		}
@@ -676,7 +687,6 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-
 	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
 		newStatus.BackupRestoreReady = true
 	}

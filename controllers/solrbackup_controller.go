@@ -104,9 +104,20 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		if allCollectionsComplete && !backup.Status.Finished {
 			// We will count on the Job updates to be notifified
 			requeueOrNot = reconcile.Result{}
-			err = persistSolrCloudBackups(r, backup, solrCloud)
-			if err != nil {
-				r.Log.Error(err, "Error while persisting SolrCloud backup")
+			if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
+				err = persistSolrCloudBackups(r, backup, solrCloud)
+				if err != nil {
+					r.Log.Error(err, "Error while persisting SolrCloud backup")
+				}
+			} else { // No volume, so no persistence.  Mark all as successful
+				tru := true
+				now := metav1.Now()
+				backup.Status.PersistenceStatus.Successful = &tru
+				backup.Status.PersistenceStatus.InProgress = false
+				backup.Status.PersistenceStatus.Finished = true
+				backup.Status.PersistenceStatus.FinishTime = &now
+				backup.Status.Finished = true
+				backup.Status.Successful = backup.Status.PersistenceStatus.Successful
 			}
 		}
 	}

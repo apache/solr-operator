@@ -43,7 +43,7 @@ type SolrBackupSpec struct {
 	Collections []string `json:"collections,omitempty"`
 
 	// Persistence is the specification on how to persist the backup data.
-	Persistence PersistenceSource `json:"persistence"`
+	Persistence PersistenceSource `json:"persistence,omitempty"`
 }
 
 func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
