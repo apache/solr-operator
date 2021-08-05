@@ -226,7 +226,7 @@ func TestEnableTLSOnExistingCluster(t *testing.T) {
 	wg.Wait()
 
 	expectStatefulSetTLSConfig(t, g, instance, false)
-	expectPassthroughIngressTLSConfig(t, g, tlsSecretName)
+	expectPassthroughIngressTLSConfig(t, g, tlsSecretName, instance.Spec.SolrTLS)
 
 	defer testClient.Delete(ctx, mockTLSSecret)
 }
@@ -412,7 +412,7 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 	ctx := context.TODO()
 	helper.ReconcileSolrCloud(ctx, instance, 1)
 
-	expectTerminateIngressTLSConfig(t, g, tlsSecretName)
+	expectTerminateIngressTLSConfig(t, g, tlsSecretName, false)
 
 	// Check that the Addresses in the status are correct
 	g.Eventually(func() error {
@@ -617,23 +617,38 @@ func expectStatefulSetBasicAuthConfig(t *testing.T, g *gomega.GomegaWithT, sc *s
 	return stateful
 }
 
-func expectPassthroughIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
+func expectPassthroughIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string, solrTLS *solr.SolrTLSOptions) {
 	ingress := &netv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
 	assert.True(t, ingress.Spec.TLS != nil && len(ingress.Spec.TLS) == 1, "Wrong number of TLS Secrets for ingress")
 	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
-	assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+	if solrTLS != nil {
+		assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+	} else {
+		assert.Equal(t, "HTTP", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+	}
+	if len(ingress.Spec.TLS) > 0 {
+		assert.Equal(t, "true", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/ssl-redirect"], "Ingress SSL Redirect annotation incorrect")
+	} else {
+		assert.Equal(t, "", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/ssl-redirect"], "Ingress SSL Redirect annotation incorrect")
+	}
 }
 
-func expectTerminateIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string) {
+func expectTerminateIngressTLSConfig(t *testing.T, g *gomega.GomegaWithT, expectedTLSSecretName string, isBackendTls bool) {
 	ingress := &netv1.Ingress{}
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedIngressWithTLS, ingress) }, timeout).Should(gomega.Succeed())
 	assert.Equal(t, 1, len(ingress.Spec.TLS), "Wrong number of TLS Secrets for ingress")
 	assert.Equal(t, expectedTLSSecretName, ingress.Spec.TLS[0].SecretName, "Wrong secretName for ingress TLS")
-	assert.NotContains(t, ingress.ObjectMeta.Annotations, "nginx.ingress.kubernetes.io/backend-protocol", "Ingress Backend Protocol annotation should not exist for TLS termination")
 	assert.Equal(t, 2, len(ingress.Spec.TLS[0].Hosts), "Wrong number of hosts for Ingress TLS termination")
 	assert.Equal(t, "default-foo-tls-solrcloud."+testDomain, ingress.Spec.TLS[0].Hosts[0], "Wrong common-host name for Ingress TLS termination")
 	assert.Equal(t, "default-foo-tls-solrcloud-0."+testDomain, ingress.Spec.TLS[0].Hosts[1], "Wrong common-host name for Ingress TLS termination")
+
+	if isBackendTls {
+		assert.Equal(t, "HTTPS", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+	} else {
+		assert.Equal(t, "HTTP", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/backend-protocol"], "Ingress Backend Protocol annotation incorrect")
+	}
+	assert.Equal(t, "true", ingress.ObjectMeta.Annotations["nginx.ingress.kubernetes.io/ssl-redirect"], "Ingress SSL Redirect annotation incorrect")
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods

@@ -850,6 +850,20 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
+	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+
+	if extOpts.IngressTLSTerminationSecret != "" {
+		ingressTLS = append(ingressTLS, netv1.IngressTLS{
+			SecretName: extOpts.IngressTLSTerminationSecret,
+			Hosts:      allHosts,
+		})
+	}
+	solrNodesRequireTLS := solrCloud.Spec.SolrTLS != nil
+	ingressFrontedByTLS := len(ingressTLS) > 0
+
+	// TLS Passthrough annotations
+	if solrNodesRequireTLS {
 		if annotations == nil {
 			annotations = make(map[string]string, 1)
 		}
@@ -857,13 +871,23 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 		if !ok {
 			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTPS"
 		}
-		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} else if extOpts.IngressTLSTerminationSecret != "" {
-		ingressTLS = append(ingressTLS, netv1.IngressTLS{
-			SecretName: extOpts.IngressTLSTerminationSecret,
-			Hosts:      allHosts,
-		})
-	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+	} else {
+		if annotations == nil {
+			annotations = make(map[string]string, 1)
+		}
+		_, ok := annotations["nginx.ingress.kubernetes.io/backend-protocol"]
+		if !ok {
+			annotations["nginx.ingress.kubernetes.io/backend-protocol"] = "HTTP"
+		}
+	}
+
+	// TLS Accept annotations
+	if ingressFrontedByTLS {
+		_, ok := annotations["nginx.ingress.kubernetes.io/ssl-redirect"]
+		if !ok {
+			annotations["nginx.ingress.kubernetes.io/ssl-redirect"] = "true"
+		}
+	}
 
 	ingress = &netv1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
