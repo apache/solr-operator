@@ -160,7 +160,7 @@ func TestIngressCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -288,7 +288,7 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, 0, []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -422,7 +422,7 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, false, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -549,7 +549,7 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -684,7 +684,7 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), append([]string{testDomain}, testAdditionalDomains...), 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -808,7 +808,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 80, 100)
 
 	// Check that the Addresses in the status are correct
@@ -860,4 +860,8 @@ func testIngressRules(t *testing.T, ingress *extv1.Ingress, withCommon bool, wit
 			assert.EqualValues(t, port, path.Backend.ServicePort.IntVal, "Wrong port name for ingress rule: "+ruleName)
 		}
 	}
+}
+
+func ingressLabelsWithDefaults(labels map[string]string) map[string]string {
+	return util.MergeLabelsOrAnnotations(labels, map[string]string{"nginx.ingress.kubernetes.io/backend-protocol":"HTTP"})
 }
