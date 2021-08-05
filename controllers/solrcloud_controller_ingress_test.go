@@ -863,5 +863,5 @@ func testIngressRules(t *testing.T, ingress *extv1.Ingress, withCommon bool, wit
 }
 
 func ingressLabelsWithDefaults(labels map[string]string) map[string]string {
-	return util.MergeLabelsOrAnnotations(labels, map[string]string{"nginx.ingress.kubernetes.io/backend-protocol":"HTTP"})
+	return util.MergeLabelsOrAnnotations(labels, map[string]string{"nginx.ingress.kubernetes.io/backend-protocol": "HTTP"})
 }
