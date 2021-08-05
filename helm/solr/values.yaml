@@ -76,6 +76,7 @@ addressability:
     # method: "Ingress"
     # domainName: "example.com"
     # additionalDomainNames: []
+    # useExternalAddress: false
     # hideNodes: false
     # hideCommon: false
     # nodePortOverride: null
@@ -200,6 +201,12 @@ solrTLS: {}
   # verifyClientHostname: false
   # checkPeerName: false
   # restartOnTLSSecretUpdate: false
+  # mountedServerTLSDir:
+  #   path: /path/to/mounted/tls
+  #   keystoreFile: ""
+  #   keystorePasswordFile: ""
+  #   truststoreFile: ""
+  #   truststorePasswordFile: ""
 
 # Customize the Solr Pod for your needs
 podOptions:
