@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	"reflect"
 	"time"
@@ -173,6 +174,19 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 	// This should only occur before the backup processes have been started
 	if backup.Status.SolrVersion == "" {
+
+		if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
+			gcsSupported, err := util.SupportsGcsBackups(solrCloud.Status.Version)
+			if err != nil {
+				r.Log.Info("Cannot validate whether or not Solr version supports GCS backups; proceeding optimistically",
+					"solr-version", solrCloud.Status.Version, "err", err)
+			} else {
+				if ! gcsSupported {
+					err = fmt.Errorf("GCS backup requested, but Solr version %s doesn't support GCS backups", solrCloud.Status.Version)
+					return solrCloud, collectionBackupsFinished, actionTaken, err
+				}
+			}
+		}
 		// Prep the backup directory in the persistentVolume
 		err := util.EnsureDirectoryForBackup(solrCloud, backup.Name, r.config)
 		if err != nil {
@@ -188,6 +202,8 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
 		backup.Status.SolrVersion = solrCloud.Status.Version
+
+
 	}
 
 	// Go through each collection specified and reconcile the backup.

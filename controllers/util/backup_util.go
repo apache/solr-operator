@@ -22,6 +22,7 @@ import (
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
+	"github.com/hashicorp/go-version"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -456,4 +457,14 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 	}
 
 	return nil
+}
+
+// TODO Is the Mozilla license on hashicorp's go-version lib we're using here acceptable by Apache?  Is there a better option?
+func SupportsGcsBackups(versionStr string) (bool, error) {
+	minGcsVersion, _ := version.NewVersion("8.9.0")
+	actualVersion, err := version.NewVersion(versionStr)
+	if err != nil {
+		return false, fmt.Errorf("unable to parse Solr version: %s", versionStr)
+	}
+	return actualVersion.Equal(minGcsVersion) || actualVersion.GreaterThan(minGcsVersion), nil
 }

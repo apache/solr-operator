@@ -8,6 +8,7 @@ require (
 	github.com/go-logr/logr v0.2.1
 	github.com/go-logr/zapr v0.2.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
+	github.com/hashicorp/go-version v1.1.0
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/onsi/gomega v1.10.1
 	github.com/pravega/zookeeper-operator v0.2.9
