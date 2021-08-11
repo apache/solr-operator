@@ -152,49 +152,88 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.Image.PullPolicy = from.Spec.Image.PullPolicy
 
-	if from.Spec.Persistence != nil {
-		if to.Spec.Persistence == nil {
-			logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", to.Spec.Persistence, "to", from.Spec.Persistence)
+	if !DeepEqualWithNils(to.Spec.StorageType, from.Spec.StorageType) {
+		logger.Info("Update required because field changed", "field", "Spec.StorageType", "from", to.Spec.StorageType, "to", from.Spec.StorageType)
+		requireUpdate = true
+		to.Spec.StorageType = from.Spec.StorageType
+	}
+	if to.Spec.StorageType == "persistence" {
+		if to.Spec.Ephemeral != nil {
+			logger.Info("Update required because field changed", "field", "Spec.Ephemeral", "from", to.Spec.Ephemeral, "to", nil)
 			requireUpdate = true
-			to.Spec.Persistence = from.Spec.Persistence
-		} else {
-			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
-				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests)
+			to.Spec.Ephemeral = nil
+		}
+		if from.Spec.Persistence != nil {
+			if to.Spec.Persistence == nil {
+				logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", nil, "to", from.Spec.Persistence)
 				requireUpdate = true
-				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
-			}
+				to.Spec.Persistence = from.Spec.Persistence
+			} else {
+				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests)
+					requireUpdate = true
+					to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
+				}
 
-			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits) {
-				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits)
-				requireUpdate = true
-				to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits
-			}
+				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits)
+					requireUpdate = true
+					to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits
+				}
 
-			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
-				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.AccessModes", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes)
-				requireUpdate = true
-				to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes = from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes
-			}
+				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.AccessModes", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes)
+					requireUpdate = true
+					to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes = from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes
+				}
 
-			if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
-				logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName)
-				requireUpdate = true
-				to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName = from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName
-			}
+				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName)
+					requireUpdate = true
+					to.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName = from.Spec.Persistence.PersistentVolumeClaimSpec.StorageClassName
+				}
 
-			if !DeepEqualWithNils(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
-				logger.Info("Update required because field changed", "field", "Spec.Persistence.VolumeReclaimPolicy", "from", to.Spec.Persistence.VolumeReclaimPolicy, "to", from.Spec.Persistence.VolumeReclaimPolicy)
-				requireUpdate = true
-				to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
+				if !DeepEqualWithNils(to.Spec.Persistence.VolumeReclaimPolicy, from.Spec.Persistence.VolumeReclaimPolicy) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.VolumeReclaimPolicy", "from", to.Spec.Persistence.VolumeReclaimPolicy, "to", from.Spec.Persistence.VolumeReclaimPolicy)
+					requireUpdate = true
+					to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
+				}
 			}
+		} else if to.Spec.Persistence != nil {
+			logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", to.Spec.Persistence, "to", nil)
+			requireUpdate = true
+			to.Spec.Persistence = nil
+		}
+	} else if to.Spec.StorageType == "ephemeral" {
+		if to.Spec.Persistence != nil {
+			logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", to.Spec.Persistence, "to", nil)
+			requireUpdate = true
+			to.Spec.Persistence = nil
+		}
+		if from.Spec.Ephemeral != nil {
+			if to.Spec.Ephemeral == nil {
+				logger.Info("Update required because field changed", "field", "Spec.Ephemeral", "from", nil, "to", from.Spec.Ephemeral)
+				requireUpdate = true
+				to.Spec.Ephemeral = from.Spec.Ephemeral
+			} else {
+				if !DeepEqualWithNils(to.Spec.Ephemeral.EmptyDirVolumeSource.Medium, from.Spec.Ephemeral.EmptyDirVolumeSource.Medium) {
+					logger.Info("Update required because field changed", "field", "Spec.Ephemeral.EmptyDirVolumeSource.Medium", "from", to.Spec.Ephemeral.EmptyDirVolumeSource.Medium, "to", from.Spec.Ephemeral.EmptyDirVolumeSource.Medium)
+					requireUpdate = true
+					to.Spec.Ephemeral.EmptyDirVolumeSource.Medium = from.Spec.Ephemeral.EmptyDirVolumeSource.Medium
+				}
+
+				if !DeepEqualWithNils(to.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit, from.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit) {
+					logger.Info("Update required because field changed", "field", "Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit", "from", to.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit, "to", from.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit)
+					requireUpdate = true
+					to.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit = from.Spec.Ephemeral.EmptyDirVolumeSource.SizeLimit
+				}
+			}
+		} else if to.Spec.Ephemeral != nil {
+			logger.Info("Update required because field changed", "field", "Spec.Ephemeral", "from", to.Spec.Ephemeral, "to", nil)
+			requireUpdate = true
+			to.Spec.Ephemeral = nil
 		}
 	}
-	/* Uncomment when the following PR is merged in: https://github.com/pravega/zookeeper-operator/pull/64
-	   Otherwise the ZK Operator will create persistence when none is given, and this will infinitely loop.
-	else if to.Spec.Persistence != nil {
-		requireUpdate = true
-		to.Spec.Persistence = nil
-	}*/
 
 	if !DeepEqualWithNils(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
 		logger.Info("Update required because field changed", "field", "Spec.Pod.Resources", "from", to.Spec.Pod.Resources, "to", from.Spec.Pod.Resources)
