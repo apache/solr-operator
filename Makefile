@@ -90,6 +90,7 @@ run: generate fmt manifests
 # Install CRDs into a cluster
 install: manifests
 	kubectl replace -k config/crd || kubectl create -k config/crd
+	kubectl replace -f config/dependencies || kubectl create -f config/dependencies
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests install
