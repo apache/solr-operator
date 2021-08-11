@@ -189,7 +189,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### Configuring the Zookeeper Operator
 
-If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.9/charts/zookeeper-operator#configuration).
+If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.12/charts/zookeeper-operator#configuration).
 You must prefix every Zookeeper Operator configuration with `zookeeper-operator.`, in order for it to be used.
 
 For example:

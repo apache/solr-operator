@@ -36,7 +36,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 dependencies:
   - name: 'zookeeper-operator'
-    version: 0.2.9
+    version: 0.2.12
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
@@ -54,6 +54,15 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: Zookeeper Operator supported version changed to 0.2.12
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/271
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/304
+        - name: Zookeeper Operator Release Notes
+          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.12
     - kind: added
       description: Ability to schedule automatic restarts
       links:
