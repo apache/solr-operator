@@ -191,7 +191,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 					},
 					Persistence: &zkv1beta1.Persistence{
 						VolumeReclaimPolicy: zkv1beta1.VolumeReclaimPolicyRetain,
-						Annotations: testDeploymentAnnotations,
+						Annotations:         testDeploymentAnnotations,
 					},
 				},
 			},
