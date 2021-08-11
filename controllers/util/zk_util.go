@@ -204,11 +204,11 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 					to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
 				}
 
-        if !DeepEqualWithNils(to.Spec.Persistence.Annotations, from.Spec.Persistence.Annotations) {
-          logger.Info("Update required because field changed", "field", "Spec.Persistence.Annotations", "from", to.Spec.Persistence.Annotations, "to", from.Spec.Persistence.Annotations)
-          requireUpdate = true
-          to.Spec.Persistence.Annotations = from.Spec.Persistence.Annotations
-        }
+				if !DeepEqualWithNils(to.Spec.Persistence.Annotations, from.Spec.Persistence.Annotations) {
+					logger.Info("Update required because field changed", "field", "Spec.Persistence.Annotations", "from", to.Spec.Persistence.Annotations, "to", from.Spec.Persistence.Annotations)
+					requireUpdate = true
+					to.Spec.Persistence.Annotations = from.Spec.Persistence.Annotations
+				}
 			}
 		} else if to.Spec.Persistence != nil {
 			logger.Info("Update required because field changed", "field", "Spec.Persistence", "from", to.Spec.Persistence, "to", nil)

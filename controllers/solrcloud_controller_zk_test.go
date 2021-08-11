@@ -191,6 +191,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 					},
 					Persistence: &zkv1beta1.Persistence{
 						VolumeReclaimPolicy: zkv1beta1.VolumeReclaimPolicyRetain,
+						Annotations: testDeploymentAnnotations,
 					},
 				},
 			},
@@ -273,6 +274,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, "persistence", zkCluster.Spec.StorageType, "Incorrect zkCluster storage type")
 	assert.NotNil(t, zkCluster.Spec.Persistence, "ZkCluster.spec.persistence should not be nil")
 	assert.EqualValues(t, zkv1beta1.VolumeReclaimPolicyRetain, zkCluster.Spec.Persistence.VolumeReclaimPolicy, "Incorrect VolumeReclaimPolicy for ZK Cluster persistent storage")
+	assert.EqualValues(t, testDeploymentAnnotations, zkCluster.Spec.Persistence.Annotations, "Incorrect Annotations for ZK Cluster persistent storage")
 
 	// Check ZK Pod Options
 	assert.EqualValues(t, "test-repo", zkCluster.Spec.Image.Repository, "Incorrect zkCluster image repo")
