@@ -45,8 +45,8 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -54,6 +54,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.4.0
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.9` to `v0.2.12`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
+  Make sure to install the correct version of the Zookeeper Operator CRDS, as [shown above](#upgrading-the-zookeeper-operator).
+
 - The deprecated Solr Operator Helm chart option `useZkOperator` has been removed, use `zookeeper-operator.use` instead.  
   **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
   

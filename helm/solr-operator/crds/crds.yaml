@@ -5930,6 +5930,11 @@ spec:
                       persistence:
                         description: Persistence is the configuration for zookeeper persistent layer. PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here. At anypoint only one of Persistence or Ephemeral should be present in the manifest
                         properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations specifies the annotations to attach to pvc the operator creates.
+                            type: object
                           reclaimPolicy:
                             description: VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete, the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted. The default value is Retain.
                             enum:

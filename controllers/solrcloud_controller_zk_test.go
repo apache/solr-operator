@@ -278,6 +278,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, "test-repo", zkCluster.Spec.Image.Repository, "Incorrect zkCluster image repo")
 	assert.EqualValues(t, "test-tag", zkCluster.Spec.Image.Tag, "Incorrect zkCluster image tag")
 	assert.EqualValues(t, corev1.PullNever, zkCluster.Spec.Image.PullPolicy, "Incorrect zkCluster image pull policy")
+	//assert.EqualValues(t, []corev1.LocalObjectReference{{Name: testImagePullSecretName}}, zkCluster.Spec.Pod.ImagePullSecrets, "Incorrect zkCluster image pull policy")
 }
 
 func TestZKACLsCloudReconcile(t *testing.T) {

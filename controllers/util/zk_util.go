@@ -119,6 +119,11 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
 	}
 
+	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.
+	// Also it will default the spec.Probes object which cannot be set to null.
+	// TODO: Might be able to remove when the following is resolved and the dependency is upgraded:
+	// https://github.com/pravega/zookeeper-operator/issues/378
+	zkCluster.WithDefaults()
 	return zkCluster
 }
 
@@ -186,6 +191,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 				logger.Info("Update required because field changed", "field", "Spec.Persistence.VolumeReclaimPolicy", "from", to.Spec.Persistence.VolumeReclaimPolicy, "to", from.Spec.Persistence.VolumeReclaimPolicy)
 				requireUpdate = true
 				to.Spec.Persistence.VolumeReclaimPolicy = from.Spec.Persistence.VolumeReclaimPolicy
+			}
+
+			if !DeepEqualWithNils(to.Spec.Persistence.Annotations, from.Spec.Persistence.Annotations) {
+				logger.Info("Update required because field changed", "field", "Spec.Persistence.Annotations", "from", to.Spec.Persistence.Annotations, "to", from.Spec.Persistence.Annotations)
+				requireUpdate = true
+				to.Spec.Persistence.Annotations = from.Spec.Persistence.Annotations
 			}
 		}
 	}
