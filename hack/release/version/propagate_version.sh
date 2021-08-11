@@ -105,6 +105,11 @@ fi
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
 } > docs/local_tutorial.md.tmp && mv docs/local_tutorial.md.tmp docs/local_tutorial.md
 {
+  cat docs/upgrade-notes.md | \
+  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
+  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
+} > docs/upgrade-notes.md.tmp && mv docs/upgrade-notes.md.tmp docs/upgrade-notes.md
+{
   cat docs/running-the-operator.md | \
   sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"

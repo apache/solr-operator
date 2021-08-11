@@ -125,7 +125,7 @@ fetch-licenses-full:
 
 check: lint test
 
-lint: check-mod vet check-format check-licenses check-manifests check-generated check-helm
+lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm
 
 check-format:
 	./hack/check_format.sh
@@ -135,6 +135,9 @@ check-licenses:
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
 	go-licenses csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
+
+check-zk-op-version:
+	./hack/zk-operator/check-version.sh
 
 check-manifests:
 	rm -rf generated-check

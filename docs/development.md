@@ -24,7 +24,7 @@ It is optional, however, as described in the [Zookeeper Reference](solr-cloud/so
 
 ```bash
 helm repo add pravega https://charts.pravega.io
-helm install zookeeper-operator pravega/zookeeper-operator --version 0.2.9
+helm install zookeeper-operator pravega/zookeeper-operator --version 0.2.12
 ```
 
 Install necessary dependencies for building and deploying the operator.
