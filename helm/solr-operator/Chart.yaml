@@ -55,7 +55,7 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: changed
-      description: Zookeeper Operator supported version changed to 0.2.12
+      description: Zookeeper Operator supported version changed to v0.2.12
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/271
