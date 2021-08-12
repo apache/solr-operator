@@ -293,6 +293,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 	}
 	to.Spec.KubernetesClusterDomain = from.Spec.KubernetesClusterDomain
 
+	if !DeepEqualWithNils(to.Spec.Probes, from.Spec.Probes) {
+		logger.Info("Update required because field changed", "field", "Spec.Probes", "from", to.Spec.Probes, "to", from.Spec.Probes)
+		requireUpdate = true
+		to.Spec.Probes = from.Spec.Probes
+	}
+
 	return requireUpdate
 }
 
