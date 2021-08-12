@@ -286,6 +286,7 @@ func verifyReconcileMountedTLSDir(t *testing.T, instance *solr.SolrCloud) {
 
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
 	expectStatefulSetMountedTLSDirConfig(t, g, instance)
 }
@@ -350,6 +351,7 @@ func verifyReconcileUserSuppliedTLS(t *testing.T, instance *solr.SolrCloud, need
 
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudWithTLSRequest)))
 
 	sts := expectStatefulSetTLSConfig(t, g, instance, needsPkcs12InitContainer)
 
@@ -410,7 +412,7 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 	}()
 
 	ctx := context.TODO()
-	helper.ReconcileSolrCloud(ctx, instance, 1)
+	helper.ReconcileSolrCloud(ctx, instance, 2)
 
 	expectTerminateIngressTLSConfig(t, g, tlsSecretName, false)
 
@@ -418,10 +420,6 @@ func TestTLSCommonIngressTermination(t *testing.T) {
 	g.Eventually(func() error {
 		return testClient.Get(context.TODO(), types.NamespacedName{Name: instance.Name, Namespace: instance.Namespace}, instance)
 	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+instance.Name+"-solrcloud-common."+instance.Namespace, instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	if assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.") {
-		assert.EqualValues(t, "https://"+instance.Namespace+"-"+instance.Name+"-solrcloud."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-	}
 	assert.Equal(t, "http://"+instance.Name+"-solrcloud-common."+instance.Namespace, instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	if assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.") {
 		assert.EqualValues(t, "https://"+instance.Namespace+"-"+instance.Name+"-solrcloud."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
