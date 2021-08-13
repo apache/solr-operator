@@ -588,7 +588,6 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	var otherVersions []string
 	nodeNames := make([]string, len(foundPods.Items))
 	nodeStatusMap := map[string]solr.SolrNodeStatus{}
-	backupRestoreReadyPods := 0
 
 	updateRevision := statefulSetStatus.UpdateRevision
 
@@ -603,6 +602,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
 	}
 	newStatus.PodSelector = selector.String()
+	allPodsBackupReady := true
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
@@ -631,24 +631,10 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 			newStatus.ReadyReplicas += 1
 		}
 
-		// JEGERLOW TODO Reduce duplication here
-		// Get Volumes for backup/restore
-		if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-			// Check that the backup-data storage volume is present
-			if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
-				for _, volume := range p.Spec.Volumes {
-					if volume.Name == util.BackupRestoreVolume {
-						backupRestoreReadyPods += 1
-					}
-				}
-			} else if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
-				// Check that the GCS credential volume is present
-				for _, volume := range p.Spec.Volumes {
-					if volume.Name == util.BackupRestoreCredentialVolume {
-						backupRestoreReadyPods += 1
-					}
-				}
-			}
+
+		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
+		if allPodsBackupReady {
+			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(p, solrCloud.Spec.StorageOptions.BackupRestoreOptions)
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
@@ -687,7 +673,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
+	if allPodsBackupReady && solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil && len(foundPods.Items) > 0 {
 		newStatus.BackupRestoreReady = true
 	}
 
@@ -707,6 +693,41 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	}
 
 	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
+}
+
+func isPodReadyForBackup(pod corev1.Pod, backupOptions *solr.SolrBackupRestoreOptions) bool {
+
+	// If solrcloud doesn't request backup support then everything is 'ready' implicitly
+	if backupOptions == nil {
+		return true
+	}
+
+	// Ensure that the singleton local volume (legacy syntax) is mounted on the pod.
+	if backupOptions.Volume != nil {
+		if ! solr.VolumeExistsWithName(solr.BackupRestoreVolume, pod.Spec.Volumes) {
+			return false
+		}
+	}
+
+	// Ensure that each configured GCS repository has a volume mounted for its credential file
+	if backupOptions.GcsRepositories != nil {
+		for _, gcsRepository := range *backupOptions.GcsRepositories {
+			if ! gcsRepository.IsCredentialVolumePresent(pod.Spec.Volumes) {
+				return false
+			}
+		}
+	}
+
+	// Ensure that each configured 'managed' (i.e. local) repository has a volume mounted for backup storage
+	if backupOptions.ManagedRepositories != nil {
+		for _, managedRepository := range *backupOptions.ManagedRepositories {
+			if ! managedRepository.IsBackupVolumePresent(pod.Spec.Volumes) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, nodeName string) (err error, ip string) {

@@ -38,6 +38,10 @@ type SolrBackupSpec struct {
 	// A reference to the SolrCloud to create a backup for
 	SolrCloud string `json:"solrCloud"`
 
+	// The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the
+	// auto-configured repository for legacy singleton volumes).
+	RepositoryName string `json:"repositoryName,omitempty"`
+
 	// The list of collections to backup. If empty, all collections in the cloud will be backed up.
 	// +optional
 	Collections []string `json:"collections,omitempty"`

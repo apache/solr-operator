@@ -90,6 +90,7 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	solrCloud, allCollectionsComplete, collectionActionTaken, err := reconcileSolrCloudBackup(r, backup)
 	if err != nil {
+		// TODO Should we be failing the backup for some sub-set of errors here?
 		r.Log.Error(err, "Error while taking SolrCloud backup")
 	}
 	if allCollectionsComplete && collectionActionTaken {
@@ -105,20 +106,9 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 		if allCollectionsComplete && !backup.Status.Finished {
 			// We will count on the Job updates to be notifified
 			requeueOrNot = reconcile.Result{}
-			if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume != nil {
-				err = persistSolrCloudBackups(r, backup, solrCloud)
-				if err != nil {
-					r.Log.Error(err, "Error while persisting SolrCloud backup")
-				}
-			} else { // No volume, so no persistence.  Mark all as successful
-				tru := true
-				now := metav1.Now()
-				backup.Status.PersistenceStatus.Successful = &tru
-				backup.Status.PersistenceStatus.InProgress = false
-				backup.Status.PersistenceStatus.Finished = true
-				backup.Status.PersistenceStatus.FinishTime = &now
-				backup.Status.Finished = true
-				backup.Status.Successful = backup.Status.PersistenceStatus.Successful
+			err = persistSolrCloudBackups(r, backup, solrCloud)
+			if err != nil {
+				r.Log.Error(err, "Error while persisting SolrCloud backup")
 			}
 		}
 	}
@@ -171,11 +161,17 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	}
 
 	actionTaken = true
+	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
+	if ! found {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+			backup.Name, backup.Spec.RepositoryName)
+		return solrCloud, collectionBackupsFinished, actionTaken, err
+	}
 
 	// This should only occur before the backup processes have been started
 	if backup.Status.SolrVersion == "" {
-
-		if solrCloud.Spec.StorageOptions.BackupRestoreOptions.Gcs != nil {
+		if _, isGcs := backupRepository.(*solrv1beta1.GcsStorage) ; isGcs {
 			gcsSupported, err := util.SupportsGcsBackups(solrCloud.Status.Version)
 			if err != nil {
 				r.Log.Info("Cannot validate whether or not Solr version supports GCS backups; proceeding optimistically",
@@ -187,8 +183,9 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 				}
 			}
 		}
+
 		// Prep the backup directory in the persistentVolume
-		err := util.EnsureDirectoryForBackup(solrCloud, backup.Name, r.config)
+		err := util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup.Name, r.config)
 		if err != nil {
 			return solrCloud, collectionBackupsFinished, actionTaken, err
 		}
@@ -232,9 +229,15 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
-
+		backupRepository, repositoryFound := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
+		if ! repositoryFound {
+			err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+				"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+				backup.Name, backup.Spec.RepositoryName)
+			return false, err
+		}
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(solrCloud, collection, backup.Name, httpHeaders)
+		started, err := util.StartBackupForCollection(solrCloud, backupRepository, backup, collection, httpHeaders)
 		if err != nil {
 			return true, err
 		}
@@ -280,7 +283,21 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 	}
 	now := metav1.Now()
 
-	persistenceJob := util.GenerateBackupPersistenceJobForCloud(backup, solrCloud)
+	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
+	if ! found {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+			"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+			backup.Name, backup.Spec.RepositoryName)
+		return err
+	}
+
+	managedBackupRepository, ok := backupRepository.(util.ManagedBackupRepository)
+	if ! ok {
+		return nil
+	}
+
+
+	persistenceJob := util.GenerateBackupPersistenceJobForCloud(managedBackupRepository, backup, solrCloud)
 	if err := controllerutil.SetControllerReference(backup, persistenceJob, r.scheme); err != nil {
 		return err
 	}
