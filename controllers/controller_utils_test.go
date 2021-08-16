@@ -190,14 +190,6 @@ func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expecte
 	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
 	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
 	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
-
-	// is there a separate truststore?
-	expectedTrustStorePath := ""
-	if tls.TrustStoreSecret != nil {
-		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
-	}
-
-	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer, expectedTrustStorePath)
 }
 
 func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLSSecretUpdate bool) *solr.SolrTLSOptions {
@@ -376,7 +368,7 @@ func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar) {
 	envVars = filterVarsByName(envVars, func(n string) bool {
 		return strings.HasPrefix(n, "SOLR_SSL_")
 	})
-	assert.True(t, len(envVars) == 7)
+	assert.Equal(t, 7, len(envVars), "expected SOLR_SSL related env vars not found")
 
 	expectedKeystorePath := "/mounted-tls-dir/keystore.p12"
 	expectedTruststorePath := "/mounted-tls-dir/truststore.p12"

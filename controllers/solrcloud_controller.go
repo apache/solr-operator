@@ -215,7 +215,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			// if there's a user-provided config, it must have one of the expected keys
 			if !hasLogXml && !hasSolrXml {
 				// TODO: Create event for the CRD.
-				return requeueOrNot, fmt.Errorf("User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
+				return requeueOrNot, fmt.Errorf("user provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
 					providedConfigMapName)
 			}
 
@@ -223,7 +223,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				// make sure the user-provided solr.xml is valid
 				if !strings.Contains(solrXml, "${hostPort:") {
 					return requeueOrNot,
-						fmt.Errorf("Custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
+						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
 							providedConfigMapName)
 				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
@@ -240,7 +240,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			}
 
 		} else {
-			return requeueOrNot, fmt.Errorf("Provided ConfigMap %s has no data", providedConfigMapName)
+			return requeueOrNot, fmt.Errorf("provided ConfigMap %s has no data", providedConfigMapName)
 		}
 	}
 
@@ -281,7 +281,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		sec := instance.Spec.SolrSecurity
 
 		if sec.AuthenticationType != solr.Basic {
-			return requeueOrNot, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator.",
+			return requeueOrNot, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator",
 				instance.Spec.SolrSecurity.AuthenticationType)
 		}
 
@@ -364,42 +364,12 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		blockReconciliationOfStatefulSet = true
 	}
 
-	tlsCertMd5 := ""
-	needsPkcs12InitContainer := false // flag if the StatefulSet needs an additional initCont to create PKCS12 keystore
 	// don't start reconciling TLS until we have ZK connectivity, avoids TLS code having to check for ZK
-	if !blockReconciliationOfStatefulSet && instance.Spec.SolrTLS != nil && instance.Spec.SolrTLS.PKCS12Secret != nil {
-		foundTLSSecret, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret)
+	var tls *util.TLSConfig = nil
+	if !blockReconciliationOfStatefulSet && instance.Spec.SolrTLS != nil {
+		tls, err = r.reconcileTLSConfig(instance)
 		if err != nil {
 			return requeueOrNot, err
-		} else {
-			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
-				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
-					tlsCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-				} else {
-					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
-						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled!",
-						util.TLSCertKey, foundTLSSecret.Name)
-				}
-			}
-
-			if _, ok := foundTLSSecret.Data[instance.Spec.SolrTLS.PKCS12Secret.Key]; !ok {
-				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
-				needsPkcs12InitContainer = true
-			}
-		}
-
-		if instance.Spec.SolrTLS.TrustStoreSecret != nil {
-			// verify the TrustStore secret is configured correctly
-			passwordSecret := instance.Spec.SolrTLS.TrustStorePasswordSecret
-			if passwordSecret == nil {
-				passwordSecret = instance.Spec.SolrTLS.KeyStorePasswordSecret
-			}
-			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.TrustStoreSecret.Name, instance.Namespace, passwordSecret)
-			if err != nil {
-				return requeueOrNot, err
-			}
 		}
 	}
 
@@ -408,7 +378,7 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, needsPkcs12InitContainer, tlsCertMd5)
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls)
 
 		// Check if the StatefulSet already exists
 		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
@@ -1015,6 +985,57 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 			}),
 		},
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+// Ensure the TLS config is ready, such as verifying the TLS secret exists, to enable TLS on SolrCloud pods
+func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*util.TLSConfig, error) {
+	tls := &util.TLSConfig{}
+	tls.InitContainerImage = instance.Spec.BusyBoxImage
+	tls.Options = instance.Spec.SolrTLS
+
+	// Has the user configured a secret containing the TLS cert files that we need to mount into the Solr pods?
+	if instance.Spec.SolrTLS.PKCS12Secret != nil {
+		// Ensure one or the other have been configured, but not both
+		if instance.Spec.SolrTLS.MountedServerTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedServerTLSDir` but not both")
+		}
+
+		foundTLSSecret, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret)
+		if err != nil {
+			return nil, err
+		} else {
+			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
+				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
+					tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+				} else {
+					return nil, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
+						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
+						util.TLSCertKey, foundTLSSecret.Name)
+				}
+			}
+
+			if _, ok := foundTLSSecret.Data[instance.Spec.SolrTLS.PKCS12Secret.Key]; !ok {
+				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+				tls.NeedsPkcs12InitContainer = true
+			}
+		}
+
+		if instance.Spec.SolrTLS.TrustStoreSecret != nil {
+			// verify the TrustStore secret is configured correctly
+			passwordSecret := instance.Spec.SolrTLS.TrustStorePasswordSecret
+			if passwordSecret == nil {
+				passwordSecret = instance.Spec.SolrTLS.KeyStorePasswordSecret
+			}
+			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.TrustStoreSecret.Name, instance.Namespace, passwordSecret)
+			if err != nil {
+				return nil, err
+			}
+		}
+	} // else per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
+
+	return tls, nil
 }
 
 func (r *SolrCloudReconciler) verifyTLSSecretConfig(secretName string, secretNamespace string, passwordSecret *corev1.SecretKeySelector) (*corev1.Secret, error) {

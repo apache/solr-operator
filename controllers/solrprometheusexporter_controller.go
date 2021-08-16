@@ -176,49 +176,12 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	}
 
 	// Make sure the TLS config is in order
-	var tlsClientOptions *util.TLSClientOptions = nil
-	if prometheusExporter.Spec.SolrReference.SolrTLS != nil && prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret != nil {
-		requeueOrNot := reconcile.Result{}
-		ctx := context.TODO()
-		foundTLSSecret := &corev1.Secret{}
-		lookupErr := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
-		if lookupErr != nil {
-			return requeueOrNot, lookupErr
-		} else {
-			// Make sure the secret containing the keystore password exists as well
-			keyStorePasswordSecret := &corev1.Secret{}
-			err := r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
-			if err != nil {
-				return requeueOrNot, lookupErr
-			}
-			// we found the keystore secret, but does it have the key we expect?
-			if _, ok := keyStorePasswordSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key]; !ok {
-				return requeueOrNot, fmt.Errorf("%s key not found in keystore password secret %s",
-					prometheusExporter.Spec.SolrReference.SolrTLS.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
-			}
-
-			tlsClientOptions = &util.TLSClientOptions{}
-			tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
-
-			if _, ok := foundTLSSecret.Data[prometheusExporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Key]; !ok {
-				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
-				tlsClientOptions.NeedsPkcs12InitContainer = true
-			}
-
-			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-			if prometheusExporter.Spec.SolrReference.SolrTLS.RestartOnTLSSecretUpdate {
-				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
-					tlsClientOptions.TLSCertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-				} else {
-					return requeueOrNot, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
-						util.TLSCertKey, foundTLSSecret.Name)
-				}
-			}
+	var tls *util.TLSConfig = nil
+	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {
+		tls, err = r.reconcileTLSConfig(prometheusExporter)
+		if err != nil {
+			return ctrl.Result{}, err
 		}
-	} else if prometheusExporter.Spec.SolrReference.SolrTLS != nil && prometheusExporter.Spec.SolrReference.SolrTLS.MountedServerTLSDir != nil {
-		tlsClientOptions = &util.TLSClientOptions{}
-		tlsClientOptions.TLSOptions = prometheusExporter.Spec.SolrReference.SolrTLS
 	}
 
 	basicAuthMd5 := ""
@@ -237,7 +200,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tlsClientOptions, basicAuthMd5)
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tls, basicAuthMd5)
 
 	ready := false
 	// Check if the Metrics Deployment already exists
@@ -442,4 +405,55 @@ func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, 
 			}),
 		},
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter *solrv1beta1.SolrPrometheusExporter) (*util.TLSConfig, error) {
+	opts := prometheusExporter.Spec.SolrReference.SolrTLS
+
+	tls := &util.TLSConfig{}
+	tls.InitContainerImage = prometheusExporter.Spec.BusyBoxImage
+	tls.Options = opts
+
+	if opts.PKCS12Secret != nil {
+		// Ensure one or the other have been configured, but not both
+		if opts.MountedServerTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedServerTLSDir` but not both")
+		}
+
+		ctx := context.TODO()
+		foundTLSSecret := &corev1.Secret{}
+		lookupErr := r.Get(ctx, types.NamespacedName{Name: opts.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
+		if lookupErr != nil {
+			return nil, lookupErr
+		} else {
+			// Make sure the secret containing the keystore password exists as well
+			keyStorePasswordSecret := &corev1.Secret{}
+			err := r.Get(ctx, types.NamespacedName{Name: opts.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+			if err != nil {
+				return nil, lookupErr
+			}
+			// we found the keystore secret, but does it have the key we expect?
+			if _, ok := keyStorePasswordSecret.Data[opts.KeyStorePasswordSecret.Key]; !ok {
+				return nil, fmt.Errorf("%s key not found in keystore password secret %s",
+					opts.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
+			}
+
+			if _, ok := foundTLSSecret.Data[opts.PKCS12Secret.Key]; !ok {
+				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+				tls.NeedsPkcs12InitContainer = true
+			}
+
+			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+			if opts.RestartOnTLSSecretUpdate {
+				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
+					tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+				} else {
+					return nil, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
+						util.TLSCertKey, foundTLSSecret.Name)
+				}
+			}
+		}
+	}
+	return tls, nil
 }
