@@ -126,7 +126,6 @@ func TestMountedTLSDir(t *testing.T) {
 	mountedDir := &solr.MountedTLSDirectory{}
 	mountedDir.Path = "/mounted-tls-dir"
 	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
-	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(instance.Spec.SolrTLS, false))
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
@@ -136,7 +135,6 @@ func TestMountedTLSDirWithBasicAuth(t *testing.T) {
 	mountedDir.Path = "/mounted-tls-dir"
 	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic} // with basic-auth too
-	expectMountedTLSDirEnvVars(t, util.TLSEnvVars(instance.Spec.SolrTLS, false))
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
