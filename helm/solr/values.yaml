@@ -169,6 +169,9 @@ zk:
     ephemeral: {}
       # emptydirvolumesource: {}
 
+    # Zookeeper Config Options to set for the provided cluster
+    config: {}
+
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
     # secret: zk-acls

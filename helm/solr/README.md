@@ -163,6 +163,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.persistence.spec | object | | A PVC Spec for the ZooKeeper PVC(s) |
 | zk.provided.persistence.annotations | object | | Annotations to use for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
+| zk.provided.config | object | | Zookeeper Config Options to set for the provided cluster. For all possible options, run: `kubectl explain solrcloud.spec.zookeeperRef.provided.config` |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |

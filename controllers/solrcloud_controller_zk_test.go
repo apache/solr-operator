@@ -80,6 +80,7 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 						Resources:          resources,
 						ServiceAccountName: testServiceAccountName,
 					},
+					Config: zkConf,
 					ChRoot: "a-ch/root",
 				},
 			},
@@ -171,6 +172,15 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, resources, zkCluster.Spec.Pod.Resources, "Incorrect zkCluster resources")
 	assert.EqualValues(t, extraVars, zkCluster.Spec.Pod.Env, "Incorrect zkCluster env vars")
 	assert.EqualValues(t, testServiceAccountName, zkCluster.Spec.Pod.ServiceAccountName, "Incorrect zkCluster serviceAccountName")
+
+	// Check ZK Config Options
+	assert.EqualValues(t, zkConf.InitLimit, zkCluster.Spec.Conf.InitLimit, "Incorrect zkCluster Config InitLimit")
+	assert.EqualValues(t, zkConf.SyncLimit, zkCluster.Spec.Conf.SyncLimit, "Incorrect zkCluster Config SyncLimit")
+	assert.EqualValues(t, zkConf.PreAllocSize, zkCluster.Spec.Conf.PreAllocSize, "Incorrect zkCluster Config PreAllocSize")
+	assert.EqualValues(t, zkConf.CommitLogCount, zkCluster.Spec.Conf.CommitLogCount, "Incorrect zkCluster Config CommitLogCount")
+	assert.EqualValues(t, zkConf.MaxCnxns, zkCluster.Spec.Conf.MaxCnxns, "Incorrect zkCluster Config MaxCnxns")
+	assert.EqualValues(t, zkConf.MinSessionTimeout, zkCluster.Spec.Conf.MinSessionTimeout, "Incorrect zkCluster Config MinSessionTimeout")
+	assert.EqualValues(t, zkConf.QuorumListenOnAllIPs, zkCluster.Spec.Conf.QuorumListenOnAllIPs, "Incorrect zkCluster Config QuorumListenOnAllIPs")
 }
 
 func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
