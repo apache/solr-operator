@@ -181,7 +181,7 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume corev1.VolumeSource) (image solr.ContainerImage, envVars []corev1.EnvVar, command []string, volume *corev1.Volume, volumeMount *corev1.VolumeMount, numRetries *int32) {
 	persistenceSource := solrBackup.Spec.Persistence
 	if persistenceSource.Volume != nil {
-		// Options for persisting to a volume
+		// ServerCertOptions for persisting to a volume
 		image = persistenceSource.Volume.BusyBoxImage
 		envVars = []corev1.EnvVar{
 			{
@@ -212,7 +212,7 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 		numRetries = &r
 	} else if persistenceSource.S3 != nil {
 		s3 := persistenceSource.S3
-		// Options for persisting to S3
+		// ServerCertOptions for persisting to S3
 		image = s3.AWSCliImage
 		envVars = []corev1.EnvVar{
 			{

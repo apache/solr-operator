@@ -108,11 +108,15 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
 
-	// Options to enable TLS between Solr pods
+	// ServerCertOptions to enable TLS between Solr pods
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 
-	// Options to enable Solr security
+	// ServerCertOptions to configure client TLS options for Solr pods
+	// +optional
+	SolrClientTLS *SolrTLSOptions `json:"solrClientTLS,omitempty"`
+
+	// ServerCertOptions to enable Solr security
 	// +optional
 	SolrSecurity *SolrSecurityOptions `json:"solrSecurity,omitempty"`
 }
@@ -217,7 +221,7 @@ type SolrDataStorageOptions struct {
 	// +optional
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
 
-	// Options required for backups & restores to be enabled for this solrCloud.
+	// ServerCertOptions required for backups & restores to be enabled for this solrCloud.
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }
@@ -482,7 +486,7 @@ type SolrUpdateStrategy struct {
 	// +optional
 	Method SolrUpdateMethod `json:"method,omitempty"`
 
-	// Options for Solr Operator Managed rolling updates.
+	// ServerCertOptions for Solr Operator Managed rolling updates.
 	// +optional
 	ManagedUpdateOptions ManagedUpdateOptions `json:"managed,omitempty"`
 
@@ -1091,7 +1095,8 @@ type MountedTLSDirectory struct {
 	// The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
 	Path string `json:"path"`
 
-	// Override the name of the keystore file; defaults to keystore.p12
+	// Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding
+	// env vars and Java system properties will not be configured for the pod template
 	// +optional
 	KeystoreFile string `json:"keystoreFile,omitempty"`
 
@@ -1099,8 +1104,8 @@ type MountedTLSDirectory struct {
 	// +optional
 	KeystorePasswordFile string `json:"keystorePasswordFile,omitempty"`
 
-	// Override the name of the truststore file; defaults truststore.p12
-	// To use the same file as the keystore, override this variable with the name of your keystore file
+	// Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding
+	// env vars and Java system properties will not be configured for the pod template
 	// +optional
 	TruststoreFile string `json:"truststoreFile,omitempty"`
 
@@ -1110,7 +1115,7 @@ type MountedTLSDirectory struct {
 }
 
 type SolrTLSOptions struct {
-	// TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
+	// TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
 	// +optional
 	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
 
@@ -1129,10 +1134,12 @@ type SolrTLSOptions struct {
 
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// Only applies for server certificates, has no effect on client certificates
 	// +kubebuilder:default=None
 	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
 
 	// Verify client's hostname during SSL handshake
+	// Only applies for server configuration
 	// +optional
 	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
 
@@ -1141,13 +1148,15 @@ type SolrTLSOptions struct {
 	CheckPeerName bool `json:"checkPeerName,omitempty"`
 
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option,
+	// you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
 
-	// Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver.
+	// Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver.
 	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
 	// +optional
-	MountedServerTLSDir *MountedTLSDirectory `json:"mountedServerTLSDir,omitempty"`
+	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Basic

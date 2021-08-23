@@ -4548,7 +4548,7 @@ spec:
                 description: Customize how the cloud data is stored. If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
                 properties:
                   backupRestoreOptions:
-                    description: Options required for backups & restores to be enabled for this solrCloud.
+                    description: ServerCertOptions required for backups & restores to be enabled for this solrCloud.
                     properties:
                       directory:
                         description: Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default.
@@ -5652,54 +5652,15 @@ spec:
                     description: PodPort defines the port to have the Solr Pod listen on. Defaults to 8983
                     type: integer
                 type: object
-              solrGCTune:
-                description: Set GC Tuning configuration through GC_TUNE environment variable
-                type: string
-              solrImage:
-                description: ContainerImage defines the fields needed for a Docker repository image. The format here matches the predominant format used in Helm charts.
-                properties:
-                  imagePullSecret:
-                    type: string
-                  pullPolicy:
-                    description: PullPolicy describes a policy for if/when to pull a container image
-                    type: string
-                  repository:
-                    type: string
-                  tag:
-                    type: string
-                type: object
-              solrJavaMem:
-                type: string
-              solrLogLevel:
-                description: Set the Solr Log level, defaults to INFO
-                type: string
-              solrOpts:
-                description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
-                type: string
-              solrSecurity:
-                description: Options to enable Solr security
-                properties:
-                  authenticationType:
-                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the Solr operator but support for other authentication plugins may be added in the future.
-                    enum:
-                    - Basic
-                    type: string
-                  basicAuthSecret:
-                    description: "Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be  locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting). \n If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password for the \"k8s-oper\" user. All API requests from the operator are made as the \"k8s-oper\" user, which is configured with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
-                    type: string
-                  probesRequireAuth:
-                    description: Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults to false. If you set to true, then probes will use a local command on the main container to hit the secured endpoints with credentials sourced from an env var instead of HTTP directly.
-                    type: boolean
-                type: object
-              solrTLS:
-                description: Options to enable TLS between Solr pods
+              solrClientTLS:
+                description: ServerCertOptions to configure client TLS options for Solr pods
                 properties:
                   checkPeerName:
                     description: TLS certificates contain host/ip "peer name" information that is validated by default.
                     type: boolean
                   clientAuth:
                     default: None
-                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
                     enum:
                     - None
                     - Want
@@ -5720,11 +5681,11 @@ spec:
                     required:
                     - key
                     type: object
-                  mountedServerTLSDir:
-                    description: Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                  mountedTLSDir:
+                    description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                     properties:
                       keystoreFile:
-                        description: Override the name of the keystore file; defaults to keystore.p12
+                        description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                         type: string
                       keystorePasswordFile:
                         description: Override the name of the keystore password file; defaults to keystore-password
@@ -5733,7 +5694,7 @@ spec:
                         description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
                         type: string
                       truststoreFile:
-                        description: Override the name of the truststore file; defaults truststore.p12 To use the same file as the keystore, override this variable with the name of your keystore file
+                        description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                         type: string
                       truststorePasswordFile:
                         description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
@@ -5742,7 +5703,7 @@ spec:
                     - path
                     type: object
                   pkcs12Secret:
-                    description: TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -5757,7 +5718,7 @@ spec:
                     - key
                     type: object
                   restartOnTLSSecretUpdate:
-                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                     type: boolean
                   trustStorePasswordSecret:
                     description: Secret containing the trust store password; if not provided the keyStorePassword will be used
@@ -5790,14 +5751,155 @@ spec:
                     - key
                     type: object
                   verifyClientHostname:
-                    description: Verify client's hostname during SSL handshake
+                    description: Verify client's hostname during SSL handshake Only applies for server configuration
+                    type: boolean
+                type: object
+              solrGCTune:
+                description: Set GC Tuning configuration through GC_TUNE environment variable
+                type: string
+              solrImage:
+                description: ContainerImage defines the fields needed for a Docker repository image. The format here matches the predominant format used in Helm charts.
+                properties:
+                  imagePullSecret:
+                    type: string
+                  pullPolicy:
+                    description: PullPolicy describes a policy for if/when to pull a container image
+                    type: string
+                  repository:
+                    type: string
+                  tag:
+                    type: string
+                type: object
+              solrJavaMem:
+                type: string
+              solrLogLevel:
+                description: Set the Solr Log level, defaults to INFO
+                type: string
+              solrOpts:
+                description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
+                type: string
+              solrSecurity:
+                description: ServerCertOptions to enable Solr security
+                properties:
+                  authenticationType:
+                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the Solr operator but support for other authentication plugins may be added in the future.
+                    enum:
+                    - Basic
+                    type: string
+                  basicAuthSecret:
+                    description: "Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be  locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting). \n If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password for the \"k8s-oper\" user. All API requests from the operator are made as the \"k8s-oper\" user, which is configured with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
+                    type: string
+                  probesRequireAuth:
+                    description: Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults to false. If you set to true, then probes will use a local command on the main container to hit the secured endpoints with credentials sourced from an env var instead of HTTP directly.
+                    type: boolean
+                type: object
+              solrTLS:
+                description: ServerCertOptions to enable TLS between Solr pods
+                properties:
+                  checkPeerName:
+                    description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                    type: boolean
+                  clientAuth:
+                    default: None
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
+                    enum:
+                    - None
+                    - Want
+                    - Need
+                    type: string
+                  keyStorePasswordSecret:
+                    description: Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  mountedTLSDir:
+                    description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                    properties:
+                      keystoreFile:
+                        description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      keystorePasswordFile:
+                        description: Override the name of the keystore password file; defaults to keystore-password
+                        type: string
+                      path:
+                        description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
+                        type: string
+                      truststoreFile:
+                        description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      truststorePasswordFile:
+                        description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+                        type: string
+                    required:
+                    - path
+                    type: object
+                  pkcs12Secret:
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  restartOnTLSSecretUpdate:
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
+                    type: boolean
+                  trustStorePasswordSecret:
+                    description: Secret containing the trust store password; if not provided the keyStorePassword will be used
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  trustStoreSecret:
+                    description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  verifyClientHostname:
+                    description: Verify client's hostname during SSL handshake Only applies for server configuration
                     type: boolean
                 type: object
               updateStrategy:
                 description: Define how Solr rolling updates are executed.
                 properties:
                   managed:
-                    description: Options for Solr Operator Managed rolling updates.
+                    description: ServerCertOptions for Solr Operator Managed rolling updates.
                     properties:
                       maxPodsUnavailable:
                         anyOf:
@@ -10110,7 +10212,7 @@ spec:
                         type: boolean
                       clientAuth:
                         default: None
-                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
                         enum:
                         - None
                         - Want
@@ -10131,11 +10233,11 @@ spec:
                         required:
                         - key
                         type: object
-                      mountedServerTLSDir:
-                        description: Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                      mountedTLSDir:
+                        description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                         properties:
                           keystoreFile:
-                            description: Override the name of the keystore file; defaults to keystore.p12
+                            description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                             type: string
                           keystorePasswordFile:
                             description: Override the name of the keystore password file; defaults to keystore-password
@@ -10144,7 +10246,7 @@ spec:
                             description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
                             type: string
                           truststoreFile:
-                            description: Override the name of the truststore file; defaults truststore.p12 To use the same file as the keystore, override this variable with the name of your keystore file
+                            description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                             type: string
                           truststorePasswordFile:
                             description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
@@ -10153,7 +10255,7 @@ spec:
                         - path
                         type: object
                       pkcs12Secret:
-                        description: TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
+                        description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
                         properties:
                           key:
                             description: The key of the secret to select from.  Must be a valid secret key.
@@ -10168,7 +10270,7 @@ spec:
                         - key
                         type: object
                       restartOnTLSSecretUpdate:
-                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                         type: boolean
                       trustStorePasswordSecret:
                         description: Secret containing the trust store password; if not provided the keyStorePassword will be used
@@ -10201,7 +10303,7 @@ spec:
                         - key
                         type: object
                       verifyClientHostname:
-                        description: Verify client's hostname during SSL handshake
+                        description: Verify client's hostname during SSL handshake Only applies for server configuration
                         type: boolean
                     type: object
                   standalone:

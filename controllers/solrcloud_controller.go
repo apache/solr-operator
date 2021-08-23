@@ -991,13 +991,14 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*util.TLSConfig, error) {
 	tls := &util.TLSConfig{}
 	tls.InitContainerImage = instance.Spec.BusyBoxImage
-	tls.Options = instance.Spec.SolrTLS
+	tls.ServerCertOptions = instance.Spec.SolrTLS
+	tls.ClientCertOptions = instance.Spec.SolrClientTLS
 
 	// Has the user configured a secret containing the TLS cert files that we need to mount into the Solr pods?
 	if instance.Spec.SolrTLS.PKCS12Secret != nil {
 		// Ensure one or the other have been configured, but not both
-		if instance.Spec.SolrTLS.MountedServerTLSDir != nil {
-			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedServerTLSDir` but not both")
+		if instance.Spec.SolrTLS.MountedTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedTLSDir` but not both")
 		}
 
 		foundTLSSecret, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret)
@@ -1024,16 +1025,34 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 
 		if instance.Spec.SolrTLS.TrustStoreSecret != nil {
 			// verify the TrustStore secret is configured correctly
-			passwordSecret := instance.Spec.SolrTLS.TrustStorePasswordSecret
-			if passwordSecret == nil {
-				passwordSecret = instance.Spec.SolrTLS.KeyStorePasswordSecret
-			}
-			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.TrustStoreSecret.Name, instance.Namespace, passwordSecret)
+			err = r.verifyTruststoreConfig(instance.Spec.SolrTLS, instance.Namespace)
 			if err != nil {
 				return nil, err
 			}
 		}
-	} // else per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
+
+		// is there a client TLS config too?
+		if instance.Spec.SolrClientTLS != nil && instance.Spec.SolrClientTLS.PKCS12Secret != nil {
+			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrClientTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrClientTLS.KeyStorePasswordSecret)
+			if err != nil {
+				return nil, err
+			}
+
+			if instance.Spec.SolrClientTLS.TrustStoreSecret != nil {
+				// verify the TrustStore secret is configured correctly
+				err = r.verifyTruststoreConfig(instance.Spec.SolrClientTLS, instance.Namespace)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+	} else {
+		// per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
+		// make sure we have a mountedTLSDir for the server cert, not just client
+		if instance.Spec.SolrTLS.MountedTLSDir == nil && instance.Spec.SolrClientTLS != nil && instance.Spec.SolrClientTLS.MountedTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.mountedTLSDir' option can only be used in addition to 'solrTLS.mountedTLSDir'")
+		}
+	}
 
 	return tls, nil
 }
@@ -1060,6 +1079,17 @@ func (r *SolrCloudReconciler) verifyTLSSecretConfig(secretName string, secretNam
 	}
 
 	return foundTLSSecret, nil
+}
+
+func (r *SolrCloudReconciler) verifyTruststoreConfig(opts *solr.SolrTLSOptions, namespace string) error {
+	// verify the TrustStore secret is configured correctly
+	passwordSecret := opts.TrustStorePasswordSecret
+	if passwordSecret == nil {
+		passwordSecret = opts.KeyStorePasswordSecret
+	}
+	_, err := r.verifyTLSSecretConfig(opts.TrustStoreSecret.Name, namespace, passwordSecret)
+
+	return err
 }
 
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at

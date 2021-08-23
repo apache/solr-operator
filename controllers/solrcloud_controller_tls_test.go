@@ -121,20 +121,36 @@ func TestBasicAuthBootstrapWithTLS(t *testing.T) {
 	verifyReconcileUserSuppliedTLS(t, instance, false, false)
 }
 
+func mountedTLSDir(path string) *solr.MountedTLSDirectory {
+	return &solr.MountedTLSDirectory{
+		Path:                 path,
+		KeystoreFile:         util.DefaultPkcs12KeystoreFile,
+		TruststoreFile:       util.DefaultPkcs12TruststoreFile,
+		KeystorePasswordFile: util.DefaultKeystorePasswordFile,
+	}
+}
+
 func TestMountedTLSDir(t *testing.T) {
 	instance := buildTestSolrCloud()
-	mountedDir := &solr.MountedTLSDirectory{}
-	mountedDir.Path = "/mounted-tls-dir"
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	mountedDir := mountedTLSDir("/mounted-tls-dir")
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
 func TestMountedTLSDirWithBasicAuth(t *testing.T) {
 	instance := buildTestSolrCloud()
-	mountedDir := &solr.MountedTLSDirectory{}
-	mountedDir.Path = "/mounted-tls-dir"
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	mountedDir := mountedTLSDir("/mounted-tls-dir")
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 	instance.Spec.SolrSecurity = &solr.SolrSecurityOptions{AuthenticationType: solr.Basic} // with basic-auth too
+	verifyReconcileMountedTLSDir(t, instance)
+}
+
+func TestMountedTLSServerAndClientDirs(t *testing.T) {
+	instance := buildTestSolrCloud()
+	mountedServerTLSDir := mountedTLSDir("/mounted-tls-dir")
+	mountedClientTLSDir := mountedTLSDir("/mounted-client-tls-dir")
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedServerTLSDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	instance.Spec.SolrClientTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedClientTLSDir, CheckPeerName: true}
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
@@ -430,7 +446,7 @@ func expectStatefulSetMountedTLSDirConfig(t *testing.T, g *gomega.GomegaWithT, s
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
 	podTemplate := &stateful.Spec.Template
-	expectMountedTLSDirConfigOnPodTemplate(t, podTemplate)
+	expectMountedTLSDirConfigOnPodTemplate(t, podTemplate, sc)
 
 	// Check HTTPS cluster prop setup container
 	assert.NotNil(t, podTemplate.Spec.InitContainers)
@@ -446,21 +462,38 @@ func expectStatefulSetMountedTLSDirConfig(t *testing.T, g *gomega.GomegaWithT, s
 	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_KEY_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 	assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_TRUST_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
 
+	if sc.Spec.SolrClientTLS != nil && sc.Spec.SolrClientTLS.MountedTLSDir != nil {
+		assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+		assert.Contains(t, expInitContainer.Command[2], "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	} else {
+		assert.NotContains(t, expInitContainer.Command[2], "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+		assert.NotContains(t, expInitContainer.Command[2], "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", "Wrong shell command for "+name+": "+expInitContainer.Command[2])
+	}
+
 	return stateful
 }
 
-func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
+func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.PodTemplateSpec, sc *solr.SolrCloud) {
 	assert.NotNil(t, podTemplate.Spec.Containers)
 	assert.True(t, len(podTemplate.Spec.Containers) > 0)
 	mainContainer := podTemplate.Spec.Containers[0]
 	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
 	assert.NotNil(t, mainContainer.Env, "No Env vars for main solrcloud-node container in the sts!")
-	expectMountedTLSDirEnvVars(t, mainContainer.Env)
+	expectMountedTLSDirEnvVars(t, mainContainer.Env, sc)
 
 	// verify the probes use a command with SSL opts
-	tlsJavaToolOpts := "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
-		"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-tls-dir/keystore-password)"
-	tlsJavaSysProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
+	tlsJavaToolOpts, tlsJavaSysProps := "", ""
+	// if there's a client cert, then the probe should use that, else uses the server cert
+	if sc.Spec.SolrClientTLS != nil && sc.Spec.SolrClientTLS.MountedTLSDir != nil {
+		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-client-tls-dir/keystore-password) " +
+			"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-client-tls-dir/keystore-password)"
+		tlsJavaSysProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE"
+	} else {
+		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
+			"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-tls-dir/keystore-password)"
+		tlsJavaSysProps = "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
+	}
+
 	assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
 	assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when mTLS is enabled")
 	assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsJavaToolOpts), "liveness probe should invoke java with SSL opts")
@@ -477,7 +510,7 @@ func expectStatefulSetTLSConfig(t *testing.T, g *gomega.GomegaWithT, sc *solr.So
 	stateful := &appsv1.StatefulSet{}
 	g.Eventually(func() error { return testClient.Get(ctx, expectedStatefulSetName, stateful) }, timeout).Should(gomega.Succeed())
 	podTemplate := &stateful.Spec.Template
-	expectTLSConfigOnPodTemplate(t, sc.Spec.SolrTLS, podTemplate, needsPkcs12InitContainer)
+	expectTLSConfigOnPodTemplate(t, sc.Spec.SolrTLS, podTemplate, needsPkcs12InitContainer, false)
 
 	// Check HTTPS cluster prop setup container
 	assert.NotNil(t, podTemplate.Spec.InitContainers)
@@ -682,7 +715,7 @@ func expectBasicAuthConfigOnPodTemplate(t *testing.T, instance *solr.SolrCloud, 
 		assert.NotNil(t, basicAuthSecretVolMount)
 		assert.Equal(t, "/etc/secrets/"+secretName, basicAuthSecretVolMount.MountPath)
 
-		expProbeCmd := "JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/username):$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/password)\" java -Dsolr.ssl.checkPeerName=false " +
+		expProbeCmd := "JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/username):$(cat /etc/secrets/foo-tls-solrcloud-basic-auth/password)\" java " +
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +

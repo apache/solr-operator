@@ -276,7 +276,13 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManagerAndReconciler(mgr ctr
 	}
 
 	// Get notified when the TLS secret updates (such as when the cert gets renewed)
-	ctrlBuilder, err = r.indexAndWatchForTLSSecret(mgr, ctrlBuilder)
+	ctrlBuilder, err = r.indexAndWatchForKeystoreSecret(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
+	// Exporter may only have a truststore w/o a keystore
+	ctrlBuilder, err = r.indexAndWatchForTruststoreSecret(mgr, ctrlBuilder)
 	if err != nil {
 		return err
 	}
@@ -340,7 +346,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
-func (r *SolrPrometheusExporterReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForKeystoreSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	tlsSecretField := ".spec.solrReference.solrTLS.pkcs12Secret"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj runtime.Object) []string {
@@ -351,6 +357,24 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForTLSSecret(mgr ctrl.Ma
 		}
 		// ...and if so, return it
 		return []string{exporter.Spec.SolrReference.SolrTLS.PKCS12Secret.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return r.buildSecretWatch(tlsSecretField, ctrlBuilder)
+}
+
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForTruststoreSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	tlsSecretField := ".spec.solrReference.solrTLS.trustStoreSecret"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the referenced truststore secret...
+		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
+		if exporter.Spec.SolrReference.SolrTLS == nil || exporter.Spec.SolrReference.SolrTLS.TrustStoreSecret == nil {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{exporter.Spec.SolrReference.SolrTLS.TrustStoreSecret.Name}
 	}); err != nil {
 		return ctrlBuilder, err
 	}
@@ -407,53 +431,136 @@ func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, 
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
+// Reconcile the various options for configuring TLS for the exporter
+// The exporter is a client to Solr pods, so can either just have a truststore so it trusts Solr certs
+// Or it can have its own client auth cert when Solr mTLS is required
 func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter *solrv1beta1.SolrPrometheusExporter) (*util.TLSConfig, error) {
 	opts := prometheusExporter.Spec.SolrReference.SolrTLS
 
 	tls := &util.TLSConfig{}
-	tls.InitContainerImage = prometheusExporter.Spec.BusyBoxImage
-	tls.Options = opts
+	tls.ClientCertOptions = opts
 
 	if opts.PKCS12Secret != nil {
 		// Ensure one or the other have been configured, but not both
-		if opts.MountedServerTLSDir != nil {
-			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedServerTLSDir` but not both")
+		if opts.MountedTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedTLSDir` but not both")
 		}
 
-		ctx := context.TODO()
-		foundTLSSecret := &corev1.Secret{}
-		lookupErr := r.Get(ctx, types.NamespacedName{Name: opts.PKCS12Secret.Name, Namespace: prometheusExporter.Namespace}, foundTLSSecret)
-		if lookupErr != nil {
-			return nil, lookupErr
-		} else {
-			// Make sure the secret containing the keystore password exists as well
-			keyStorePasswordSecret := &corev1.Secret{}
-			err := r.Get(ctx, types.NamespacedName{Name: opts.KeyStorePasswordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+		// make sure the PKCS12Secret and corresponding keystore password exist and agree with the supplied config
+		err := r.reconcileKeystoreSecret(tls, opts.PKCS12Secret, opts.KeyStorePasswordSecret, prometheusExporter.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		if opts.TrustStoreSecret != nil {
+			// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
+			err := r.reconcileTruststoreSecret(tls, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, false)
 			if err != nil {
-				return nil, lookupErr
-			}
-			// we found the keystore secret, but does it have the key we expect?
-			if _, ok := keyStorePasswordSecret.Data[opts.KeyStorePasswordSecret.Key]; !ok {
-				return nil, fmt.Errorf("%s key not found in keystore password secret %s",
-					opts.KeyStorePasswordSecret.Key, keyStorePasswordSecret.Name)
-			}
-
-			if _, ok := foundTLSSecret.Data[opts.PKCS12Secret.Key]; !ok {
-				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
-				tls.NeedsPkcs12InitContainer = true
-			}
-
-			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-			if opts.RestartOnTLSSecretUpdate {
-				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
-					tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-				} else {
-					return nil, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
-						util.TLSCertKey, foundTLSSecret.Name)
-				}
+				return nil, err
 			}
 		}
+	} else if opts.TrustStoreSecret != nil {
+		// no client cert, but we have truststore for the exporter, configure it ...
+		// Ensure one or the other have been configured, but not both
+		if opts.MountedTLSDir != nil {
+			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.trustStoreSecret` or `solrTLS.mountedTLSDir` but not both")
+		}
+
+		// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
+		err := r.reconcileTruststoreSecret(tls, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, true)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
+		if opts.MountedTLSDir == nil {
+			return nil, fmt.Errorf("invalid TLS config, the 'solrTLS.mountedTLSDir' option is required unless you specify a keystore and/or truststore secret")
+		}
+
+		if opts.MountedTLSDir.KeystoreFile == "" && opts.MountedTLSDir.TruststoreFile == "" {
+			return nil, fmt.Errorf("invalid TLS config, the 'solrTLS.mountedTLSDir' option must specify a keystoreFile and/or truststoreFile")
+		}
+
+		// when using mounted dir option, we need a busy box image for our initContainers
+		bbImage := prometheusExporter.Spec.BusyBoxImage
+		if bbImage == nil {
+			bbImage = &solrv1beta1.ContainerImage{
+				Repository: solrv1beta1.DefaultBusyBoxImageRepo,
+				Tag:        solrv1beta1.DefaultBusyBoxImageVersion,
+				PullPolicy: solrv1beta1.DefaultPullPolicy,
+			}
+		}
+		tls.InitContainerImage = bbImage
 	}
 	return tls, nil
+}
+
+// Make sure the keystore and corresponding password secret exist and have the expected keys
+// Also, set up to watch for updates if desired
+func (r *SolrPrometheusExporterReconciler) reconcileKeystoreSecret(tls *util.TLSConfig, secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string) error {
+	foundTLSSecret, err := r.reconcileTLSSecretAndPassword(secret, passwordSecret, namespace)
+	if err != nil {
+		return err
+	}
+
+	if _, ok := foundTLSSecret.Data[secret.Key]; !ok {
+		// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+		tls.NeedsPkcs12InitContainer = true
+	}
+
+	// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+	// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+	if tls.ClientCertOptions.RestartOnTLSSecretUpdate {
+		if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
+			tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+		} else {
+			return fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
+				util.TLSCertKey, foundTLSSecret.Name)
+		}
+	}
+
+	return nil
+}
+
+func (r *SolrPrometheusExporterReconciler) reconcileTruststoreSecret(tls *util.TLSConfig, secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string, watch bool) error {
+	foundTLSSecret, err := r.reconcileTLSSecretAndPassword(secret, passwordSecret, namespace)
+	if err != nil {
+		return err
+	}
+
+	// make sure truststore.p12 is actually in the supplied secret
+	if _, ok := foundTLSSecret.Data[secret.Key]; !ok {
+		return fmt.Errorf("%s key not found in truststore password secret %s", secret.Key, secret.Name)
+	}
+
+	// If we have a watch on secrets, then get notified when the secret changes (such as after cert renewal)
+	// capture the hash of the truststore and stash in an annotation so that pods get restarted if the cert changes
+	// If watch = false, then we may be watching the keystore instead
+	if watch && tls.ClientCertOptions.RestartOnTLSSecretUpdate {
+		tlsCertBytes := foundTLSSecret.Data[secret.Key]
+		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+	}
+
+	return nil
+}
+
+func (r *SolrPrometheusExporterReconciler) reconcileTLSSecretAndPassword(secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string) (*corev1.Secret, error) {
+	ctx := context.TODO()
+	foundTLSSecret := &corev1.Secret{}
+	lookupErr := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: namespace}, foundTLSSecret)
+	if lookupErr != nil {
+		return nil, lookupErr
+	} else {
+		// Make sure the secret containing the keystore password exists as well
+		keyStorePasswordSecret := &corev1.Secret{}
+		err := r.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+		if err != nil {
+			return nil, lookupErr
+		}
+		// we found the keystore's password secret, but does it have the key we expect?
+		if _, ok := keyStorePasswordSecret.Data[passwordSecret.Key]; !ok {
+			return nil, fmt.Errorf("%s key not found in TLS password secret %s", passwordSecret.Key, passwordSecret.Name)
+		}
+	}
+	return foundTLSSecret, nil
 }

@@ -164,7 +164,7 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 	assert.NotNil(t, zkCluster.Spec.Ephemeral, "ZkCluster.spec.ephemeral should not be nil")
 	assert.EqualValues(t, "Memory", zkCluster.Spec.Ephemeral.EmptyDirVolumeSource.Medium, "Incorrect EmptyDir medium for ZK Cluster ephemeral storage")
 
-	// Check ZK Pod Options
+	// Check ZK Pod ServerCertOptions
 	assert.EqualValues(t, affinity, zkCluster.Spec.Pod.Affinity, "Incorrect zkCluster affinity")
 	assert.EqualValues(t, testTolerations, zkCluster.Spec.Pod.Tolerations, "Incorrect zkCluster tolerations")
 	assert.EqualValues(t, testNodeSelectors, zkCluster.Spec.Pod.NodeSelector, "Incorrect zkCluster nodeSelectors")
@@ -276,7 +276,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, zkv1beta1.VolumeReclaimPolicyRetain, zkCluster.Spec.Persistence.VolumeReclaimPolicy, "Incorrect VolumeReclaimPolicy for ZK Cluster persistent storage")
 	assert.EqualValues(t, testDeploymentAnnotations, zkCluster.Spec.Persistence.Annotations, "Incorrect Annotations for ZK Cluster persistent storage")
 
-	// Check ZK Pod Options
+	// Check ZK Pod ServerCertOptions
 	assert.EqualValues(t, "test-repo", zkCluster.Spec.Image.Repository, "Incorrect zkCluster image repo")
 	assert.EqualValues(t, "test-tag", zkCluster.Spec.Image.Tag, "Incorrect zkCluster image tag")
 	assert.EqualValues(t, corev1.PullNever, zkCluster.Spec.Image.PullPolicy, "Incorrect zkCluster image pull policy")

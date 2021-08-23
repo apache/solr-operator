@@ -120,7 +120,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.Equal(t, 2, len(deployment.Spec.Template.Spec.InitContainers), "PrometheusExporter deployment requires the additional specified init containers.")
 	assert.EqualValues(t, extraContainers1, deployment.Spec.Template.Spec.InitContainers)
 
-	// Pod Options Checks
+	// Pod ServerCertOptions Checks
 	assert.Equal(t, extraVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
 	assert.Equal(t, podSecurityContext, *deployment.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
 	assert.Equal(t, affinity, deployment.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
@@ -229,7 +229,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
 	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
-	// Other Pod Options
+	// Other Pod ServerCertOptions
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
 	assert.EqualValues(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
@@ -424,7 +424,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
 	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
-	// Other Pod Options
+	// Other Pod ServerCertOptions
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
 	assert.Equal(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
@@ -736,6 +736,15 @@ func TestMetricsReconcileWithTLSConfigAndBasicAuthSecretUpdate(t *testing.T) {
 	testReconcileWithTLS(t, "tls-cert-secret-with-auth-update", false, true, true, true)
 }
 
+// It's valid to only configure the exporter with a truststore so it trust Solr pods it's sending metrics requests to
+func TestMetricsReconcileWithTruststoreOnly(t *testing.T) {
+	testReconcileWithTruststoreOnly(t, "tls-truststore-only-with-update", true)
+}
+
+func TestMetricsReconcileWithTruststoreOnlyNoWatch(t *testing.T) {
+	testReconcileWithTruststoreOnly(t, "tls-truststore-only", false)
+}
+
 func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitContainer bool, restartOnTLSSecretUpdate bool, testWithBasicAuthEnabled bool, updateAuthSecret bool) {
 	ctx := context.TODO()
 
@@ -809,7 +818,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
-	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer)
+	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer, true)
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
@@ -899,6 +908,116 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	}
 }
 
+func testReconcileWithTruststoreOnly(t *testing.T, tlsSecretName string, restartOnTLSSecretUpdate bool) {
+	ctx := context.TODO()
+
+	g := gomega.NewGomegaWithT(t)
+	instance := &solr.SolrPrometheusExporter{
+		ObjectMeta: metav1.ObjectMeta{Name: expectedMetricsRequest.Name, Namespace: expectedMetricsRequest.Namespace},
+		Spec:       solr.SolrPrometheusExporterSpec{},
+	}
+
+	keystorePassKey := "keystore-passwords-are-important"
+
+	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{
+		TrustStorePasswordSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  keystorePassKey,
+		},
+		TrustStoreSecret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+			Key:                  util.DefaultPkcs12TruststoreFile,
+		},
+		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
+	}
+
+	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
+	// channel when it is finished.
+	mgr, err := manager.New(testCfg, manager.Options{})
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	testClient = mgr.GetClient()
+
+	solrPrometheusExporterReconciler := &SolrPrometheusExporterReconciler{
+		Client: testClient,
+		Log:    ctrl.Log.WithName("controllers").WithName("SolrPrometheusExporter"),
+	}
+	newRec, requests := SetupTestReconcile(solrPrometheusExporterReconciler)
+	g.Expect(solrPrometheusExporterReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+
+	stopMgr, mgrStopped := StartTestManager(mgr, g)
+
+	defer func() {
+		close(stopMgr)
+		mgrStopped.Wait()
+	}()
+
+	cleanupTest(g, expectedMetricsRequest.Namespace)
+
+	// create the TLS and keystore secrets needed for reconciling TLS options
+	tlsKey := util.DefaultPkcs12TruststoreFile
+	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(ctx, &mockSecret)
+
+	// Create the SolrPrometheusExporter object and expect the Reconcile and Deployment to be created
+	err = testClient.Create(ctx, instance)
+	// The instance object may not be a valid object because it might be missing some required fields.
+	// Please modify the instance object by adding required fields and then remove the following if statement.
+	if apierrors.IsInvalid(err) {
+		t.Logf("failed to create object, got an invalid object error: %v", err)
+		return
+	}
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+	defer testClient.Delete(ctx, instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
+	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, false, true)
+
+	// make sure JAVA_OPTS is set correctly with the TLS related sys props
+	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
+		return strings.HasPrefix(n, "JAVA_OPTS")
+	})
+	assert.Equal(t, 1, len(envVars))
+	assert.True(t, strings.Contains(envVars[0].Value, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
+
+	if !restartOnTLSSecretUpdate && instance.Spec.SolrReference.BasicAuthSecret == "" {
+		// shouldn't be any annotations on the podTemplateSpec if we're not tracking updates to the TLS secret
+		assert.Nil(t, deployment.Spec.Template.ObjectMeta.Annotations)
+		return
+	}
+
+	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
+	expectedAnnotations := map[string]string{
+		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[tlsKey])),
+	}
+	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+
+	foundTLSSecret := &corev1.Secret{}
+	err = testClient.Get(ctx, types.NamespacedName{Name: instance.Spec.SolrReference.SolrTLS.TrustStoreSecret.Name, Namespace: instance.Namespace}, foundTLSSecret)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// change the truststore.p12 which should trigger a rolling restart
+	updatedTlsCertData := "certificate renewed"
+	foundTLSSecret.Data[tlsKey] = []byte(updatedTlsCertData)
+	err = testClient.Update(context.TODO(), foundTLSSecret)
+	g.Expect(err).NotTo(gomega.HaveOccurred())
+
+	// capture all reconcile requests
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
+
+	// Check the annotation on the pod template to make sure a rolling restart will take place
+	time.Sleep(time.Millisecond * 250)
+	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
+	expectedAnnotations = map[string]string{
+		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[tlsKey])),
+	}
+	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
+}
+
 func expectBasicAuthEnvVars(t *testing.T, envVars []corev1.EnvVar, basicAuthSecret *corev1.Secret) {
 	assert.NotNil(t, envVars)
 	envVars = filterVarsByName(envVars, func(n string) bool {
@@ -945,9 +1064,13 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 		PullPolicy: "",
 	}
 
-	mountedDir := &solr.MountedTLSDirectory{}
-	mountedDir.Path = "/mounted-tls-dir"
-	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedServerTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	mountedDir := &solr.MountedTLSDirectory{
+		Path:                 "/mounted-tls-dir",
+		KeystoreFile:         util.DefaultPkcs12KeystoreFile,
+		TruststoreFile:       util.DefaultPkcs12TruststoreFile,
+		KeystorePasswordFile: util.DefaultKeystorePasswordFile,
+	}
+	instance.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.
@@ -999,12 +1122,9 @@ func TestMetricsReconcileWithMountedTLSDirConfig(t *testing.T) {
 	})
 	assert.Equal(t, 1, len(envVars))
 	javaOpts := envVars[0].Value
-	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStore=$(SOLR_SSL_KEY_STORE)"))
-	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStore=$(SOLR_SSL_TRUST_STORE)"))
-	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStoreType=PKCS12"))
+	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStore=$(SOLR_SSL_CLIENT_TRUST_STORE)"))
 	assert.True(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStoreType=PKCS12"))
 	assert.True(t, strings.Contains(javaOpts, "-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)"))
-	assert.True(t, strings.Contains(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS"))
 	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.keyStorePassword"))
 	assert.False(t, strings.Contains(javaOpts, "-Djavax.net.ssl.trustStorePassword"))
 
