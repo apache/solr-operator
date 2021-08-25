@@ -525,8 +525,8 @@ _Since v0.4.0_
 
 The options discussed to this point require that all Solr pods share the same certificate and truststore. An emerging pattern in the Kubernetes ecosystem is to issue a unique certificate for each pod.
 Typically this operation is performed by an external agent, such as a cert-manager extension, that uses mutating webhooks to mount a unique certificate and supporting files on each pod dynamically.
-How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedServerTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
-Given the `spec.solrTLS.mountedServerTLSDir.path`, the Solr operator will enable TLS on Solr using the keystore and truststore files in this directory.
+How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
+Given the `spec.solrTLS.mountedTLSDir.path`, the Solr operator will enable TLS on Solr using the keystore and truststore files in this directory.
 
 When using the mounted TLS directory option, you need to ensure each Solr pod gets restarted before the certificate expires. Solr does not support hot reloading of the keystore or truststore.
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 

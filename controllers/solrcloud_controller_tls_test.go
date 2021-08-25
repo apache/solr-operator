@@ -147,9 +147,9 @@ func TestMountedTLSDirWithBasicAuth(t *testing.T) {
 
 func TestMountedTLSServerAndClientDirs(t *testing.T) {
 	instance := buildTestSolrCloud()
-	mountedServerTLSDir := mountedTLSDir("/mounted-tls-dir")
+	mountedSrvrTLSDir := mountedTLSDir("/mounted-tls-dir")
 	mountedClientTLSDir := mountedTLSDir("/mounted-client-tls-dir")
-	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedServerTLSDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedSrvrTLSDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
 	instance.Spec.SolrClientTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedClientTLSDir, CheckPeerName: true}
 	verifyReconcileMountedTLSDir(t, instance)
 }

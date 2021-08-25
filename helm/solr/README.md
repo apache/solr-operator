@@ -198,11 +198,11 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | solrTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore |
 | solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore password |
 | solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
-| solrTLS.mountedServerTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
-| solrTLS.mountedServerTLSDir.keystoreFile | string | | Override the name of the keystore file; defaults to keystore.p12 |
-| solrTLS.mountedServerTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
-| solrTLS.mountedServerTLSDir.truststoreFile | string | | Override the name of the truststore file; defaults truststore.p12. To use the same file as the keystore, override this variable with the name of your keystore file |
-| solrTLS.mountedServerTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+| solrTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
+| solrTLS.mountedTLSDir.keystoreFile | string | | Override the name of the keystore file; defaults to keystore.p12 |
+| solrTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrTLS.mountedTLSDir.truststoreFile | string | | Override the name of the truststore file; defaults truststore.p12. To use the same file as the keystore, override this variable with the name of your keystore file |
+| solrTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
 
 ### Global Options
 

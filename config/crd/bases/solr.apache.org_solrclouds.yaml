@@ -4540,7 +4540,7 @@ spec:
                     - Need
                     type: string
                   keyStorePasswordSecret:
-                    description: Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+                    description: Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -4576,7 +4576,7 @@ spec:
                     - path
                     type: object
                   pkcs12Secret:
-                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -4591,7 +4591,7 @@ spec:
                     - key
                     type: object
                   restartOnTLSSecretUpdate:
-                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                     type: boolean
                   trustStorePasswordSecret:
                     description: Secret containing the trust store password; if not provided the keyStorePassword will be used
@@ -4681,7 +4681,7 @@ spec:
                     - Need
                     type: string
                   keyStorePasswordSecret:
-                    description: Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+                    description: Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -4717,7 +4717,7 @@ spec:
                     - path
                     type: object
                   pkcs12Secret:
-                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -4732,7 +4732,7 @@ spec:
                     - key
                     type: object
                   restartOnTLSSecretUpdate:
-                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                     type: boolean
                   trustStorePasswordSecret:
                     description: Secret containing the trust store password; if not provided the keyStorePassword will be used

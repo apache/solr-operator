@@ -1115,11 +1115,11 @@ type MountedTLSDirectory struct {
 }
 
 type SolrTLSOptions struct {
-	// TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedServerTLSDir is used
+	// TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
 	// +optional
 	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
 
-	// Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+	// Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
 	// +optional
 	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
@@ -1148,7 +1148,7 @@ type SolrTLSOptions struct {
 	CheckPeerName bool `json:"checkPeerName,omitempty"`
 
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
-	// This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedServerTLSDir` option,
+	// This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option,
 	// you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`

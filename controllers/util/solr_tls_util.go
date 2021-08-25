@@ -237,7 +237,7 @@ func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 		},
 	}
 
-	// keystore / truststore come from either a mountedServerTLSDir or sourced from a secret mounted on the pod
+	// keystore / truststore come from either a mountedTLSDir or sourced from a secret mounted on the pod
 	if opts.MountedTLSDir != nil {
 		// TLS files are mounted by some external agent
 		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_KEY_STORE", Value: mountedTLSKeystorePath(opts.MountedTLSDir)})
@@ -440,7 +440,7 @@ func (tls *TLSConfig) mountInitDbIfNeeded(stateful *appsv1.StatefulSet) {
 }
 
 // Create an initContainer that generates the initdb script that exports the keystore / truststore passwords stored in
-// a directory to the environment; this is only needed when using the mountedServerTLSDir approach
+// a directory to the environment; this is only needed when using the mountedTLSDir approach
 func (tls *TLSConfig) generateTLSInitdbScriptInitContainer() corev1.Container {
 	// Might have a client cert too ...
 	exportClientPasswords := ""

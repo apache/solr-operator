@@ -803,7 +803,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+	} // else if using mountedTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
 
 	if extOpts.IngressTLSTerminationSecret != "" {
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{

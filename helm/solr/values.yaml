@@ -201,7 +201,7 @@ solrTLS: {}
   # verifyClientHostname: false
   # checkPeerName: false
   # restartOnTLSSecretUpdate: false
-  # mountedServerTLSDir:
+  # mountedTLSDir:
   #   path: /path/to/mounted/tls
   #   keystoreFile: ""
   #   keystorePasswordFile: ""

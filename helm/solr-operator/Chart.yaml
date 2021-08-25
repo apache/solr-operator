@@ -129,7 +129,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/299
     - kind: security
-      description: Add a mountedServerTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
+      description: Add a mountedTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/291
