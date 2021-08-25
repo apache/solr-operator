@@ -120,7 +120,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 	assert.Equal(t, 2, len(deployment.Spec.Template.Spec.InitContainers), "PrometheusExporter deployment requires the additional specified init containers.")
 	assert.EqualValues(t, extraContainers1, deployment.Spec.Template.Spec.InitContainers)
 
-	// Pod ServerCertOptions Checks
+	// Pod Options Checks
 	assert.Equal(t, extraVars, deployment.Spec.Template.Spec.Containers[0].Env, "Extra Env Vars are not the same as the ones provided in podOptions")
 	assert.Equal(t, podSecurityContext, *deployment.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
 	assert.Equal(t, affinity, deployment.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
@@ -229,7 +229,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
 	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
-	// Other Pod ServerCertOptions
+	// Other Pod Options
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
 	assert.EqualValues(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")
@@ -424,7 +424,7 @@ func TestMetricsReconcileWithGivenZkAcls(t *testing.T) {
 	testMapsEqual(t, "pod node selectors", testNodeSelectors, deployment.Spec.Template.Spec.NodeSelector)
 	testPodTolerations(t, testTolerationsPromExporter, deployment.Spec.Template.Spec.Tolerations)
 
-	// Other Pod ServerCertOptions
+	// Other Pod Options
 	extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 	assert.Equal(t, len(extraVolumes)+1, len(deployment.Spec.Template.Spec.Containers[0].VolumeMounts), "Container has wrong number of volumeMounts")
 	assert.Equal(t, *extraVolumes[0].DefaultContainerMount, deployment.Spec.Template.Spec.Containers[0].VolumeMounts[1], "Additional Volume from podOptions not mounted into container properly.")

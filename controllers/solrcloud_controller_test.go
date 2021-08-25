@@ -147,7 +147,7 @@ func TestCloudReconcile(t *testing.T) {
 	// TODO: Make this not invalidate foundEnv
 	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-3], foundEnv[len(foundEnv)-1]))
 
-	// Other Pod ServerCertOptions Checks
+	// Other Pod Options Checks
 	assert.Equal(t, podSecurityContext, *statefulSet.Spec.Template.Spec.SecurityContext, "PodSecurityContext is not the same as the one provided in podOptions")
 	assert.Equal(t, affinity, statefulSet.Spec.Template.Spec.Affinity, "Affinity is not the same as the one provided in podOptions")
 	assert.Equal(t, resources.Limits, statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits, "Resources.Limits is not the same as the one provided in podOptions")
@@ -196,7 +196,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 				Method:          solr.StatefulSetUpdate,
 				RestartSchedule: "@every 30m",
 			},
-			SolrGCTune: "gc ServerCertOptions",
+			SolrGCTune: "gc Options",
 			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
 				PodOptions: &solr.PodOptions{
 					Annotations:                   testPodAnnotations,
@@ -278,7 +278,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 		"SOLR_HOST":      "$(POD_HOSTNAME).foo-clo-solrcloud-headless.default",
 		"SOLR_PORT":      "8983",
 		"SOLR_NODE_PORT": "8983",
-		"GC_TUNE":        "gc ServerCertOptions",
+		"GC_TUNE":        "gc Options",
 		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
 		"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 	}

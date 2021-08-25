@@ -108,15 +108,15 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
 
-	// ServerCertOptions to enable TLS between Solr pods
+	// Options to enable the server TLS certificate for Solr pods
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
 
-	// ServerCertOptions to configure client TLS options for Solr pods
+	// Options to configure client TLS certificate for Solr pods
 	// +optional
 	SolrClientTLS *SolrTLSOptions `json:"solrClientTLS,omitempty"`
 
-	// ServerCertOptions to enable Solr security
+	// Options to enable Solr security
 	// +optional
 	SolrSecurity *SolrSecurityOptions `json:"solrSecurity,omitempty"`
 }
@@ -221,7 +221,7 @@ type SolrDataStorageOptions struct {
 	// +optional
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
 
-	// ServerCertOptions required for backups & restores to be enabled for this solrCloud.
+	// Options required for backups & restores to be enabled for this solrCloud.
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }
@@ -486,7 +486,7 @@ type SolrUpdateStrategy struct {
 	// +optional
 	Method SolrUpdateMethod `json:"method,omitempty"`
 
-	// ServerCertOptions for Solr Operator Managed rolling updates.
+	// Options for Solr Operator Managed rolling updates.
 	// +optional
 	ManagedUpdateOptions ManagedUpdateOptions `json:"managed,omitempty"`
 
