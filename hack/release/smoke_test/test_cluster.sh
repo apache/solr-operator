@@ -76,7 +76,8 @@ if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
   LOCATION=${LOCATION%%/}
 
-  HELM_CHART="${LOCATION}/helm-charts/solr-operator-${VERSION#v}.tgz"
+  OP_HELM_CHART="${LOCATION}/helm-charts/solr-operator-${VERSION#v}.tgz"
+  SOLR_HELM_CHART="${LOCATION}/helm-charts/solr-${VERSION#v}.tgz"
 else
   # If LOCATION is a URL, then we want to make sure we have the up-to-date docker image.
   docker pull "${IMAGE}"
@@ -84,7 +85,8 @@ else
   # Add the Test Helm Repo
   helm repo add --force-update "apache-solr-test-${VERSION}" "${LOCATION}/helm-charts"
 
-  HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
+  OP_HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
+  SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
 fi
 
 if ! (which kind); then
@@ -116,36 +118,20 @@ fi
 
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
-helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${HELM_CHART}" --set image.tag="${IMAGE##*:}" --set image.repository="${IMAGE%%:*}" --set image.pullPolicy="Never"
+helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${OP_HELM_CHART}" --set image.tag="${IMAGE##*:}" \
+    --set image.repository="${IMAGE%%:*}" \
+    --set image.pullPolicy="Never"
 
 printf "\nInstall a test Solr Cluster\n"
-cat <<EOF | kubectl apply -f -
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCloud
-metadata:
-  name: example
-spec:
-  replicas: 3
-  solrImage:
-    tag: 8.7.0
-  solrJavaMem: "-Xms1g -Xmx3g"
-  customSolrKubeOptions:
-    podOptions:
-      resources:
-        limits:
-          memory: "1G"
-        requests:
-          cpu: "65m"
-          memory: "156Mi"
-  zookeeperRef:
-    provided:
-      persistence:
-        spec:
-          resources:
-            requests:
-              storage: "5Gi"
-      replicas: 1
-EOF
+helm install --kube-context "${KUBE_CONTEXT}" --verify example "${SOLR_HELM_CHART}" \
+    --set replicas=3 \
+    --set solrImage.tag=8.9.0 \
+    --set solrJavaMem="-Xms1g -Xmx3g" \
+    --set customSolrKubeOptions.podOptions.resources.limits.memory="1G" \
+    --set customSolrKubeOptions.podOptions.resources.requests.cpu="300m" \
+    --set customSolrKubeOptions.podOptions.resources.requests.memory="512Mi" \
+    --set zookeeperRef.provided.persistence.spec.resources.requests.storage="5Gi" \
+    --set zookeeperRef.provided.replicas=1
 
 # Wait for solrcloud to be ready
 printf '\nWait for all 3 Solr nodes to become ready.\n\n'
