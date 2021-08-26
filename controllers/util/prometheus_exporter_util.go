@@ -325,7 +325,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Enrich the deployment definition to allow the exporter to make requests to TLS enabled Solr pods
-	if tls != nil {
+	if tls != nil && tls.ClientConfig != nil {
 		tls.enableTLSOnExporterDeployment(deployment)
 	}
 

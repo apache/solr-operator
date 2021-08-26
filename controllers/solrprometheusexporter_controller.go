@@ -519,6 +519,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileKeystoreSecret(tls *util.TLS
 	if tls.Options.RestartOnTLSSecretUpdate {
 		if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 			tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+			tls.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
 		} else {
 			return fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
 				util.TLSCertKey, foundTLSSecret.Name)
@@ -545,6 +546,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileTruststoreSecret(tls *util.T
 	if watch && tls.Options.RestartOnTLSSecretUpdate {
 		tlsCertBytes := foundTLSSecret.Data[secret.Key]
 		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+		tls.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
 	}
 
 	return nil

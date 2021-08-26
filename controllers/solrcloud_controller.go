@@ -1029,6 +1029,7 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 				if err != nil {
 					return nil, err
 				}
+				tls.ServerConfig.CertMd5Annotation = util.SolrTlsCertMd5Annotation
 			}
 
 			if _, ok := foundTLSSecret.Data[serverCert.PKCS12Secret.Key]; !ok {
@@ -1072,6 +1073,7 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 				if err != nil {
 					return nil, err
 				}
+				tls.ClientConfig.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
 			}
 
 			if tls.ClientConfig.Options.TrustStoreSecret != nil {

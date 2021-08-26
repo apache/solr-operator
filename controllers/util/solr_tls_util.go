@@ -41,7 +41,7 @@ const (
 	DefaultKeystorePasswordFile    = "keystore-password"
 )
 
-// Helper struct for holding server and/or client cert config based on options from the CRD as well as variables resolved during reconciliation
+// Helper struct for holding server and/or client cert config
 // This struct is intended for internal use only and is only exposed outside the package so that the controllers can access
 type TLSCerts struct {
 	// Server cert config
@@ -60,9 +60,11 @@ type TLSConfig struct {
 	// Flag to indicate if we need to convert the provided keystore into the p12 format needed by Java
 	NeedsPkcs12InitContainer bool
 	// The MD5 hash of the cert, used for restarting Solr pods after the cert updates if so desired
-	CertMd5        string
-	KeystorePath   string
-	TruststorePath string
+	CertMd5 string
+	// The annotation varies based on the cert type (client or server)
+	CertMd5Annotation string
+	KeystorePath      string
+	TruststorePath    string
 }
 
 // Enrich the config for a SolrCloud StatefulSet to enable TLS, either loaded from a secret or
@@ -70,29 +72,19 @@ type TLSConfig struct {
 // typically comes from an external agent (such as a cert-manager extension) or CSI driver that injects the
 // pod-specific TLS files using mutating web hooks
 func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSet) {
+	serverCert := tls.ServerConfig
+
 	// Add the SOLR_SSL_* vars to the main container's environment
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
-	mainContainer.Env = append(mainContainer.Env, tls.serverEnvVars()...)
+	mainContainer.Env = append(mainContainer.Env, serverCert.serverEnvVars()...)
 
-	serverCert := tls.ServerConfig
 	if serverCert.Options.PKCS12Secret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
-		var tlsAnnotations map[string]string
-		if serverCert.Options.RestartOnTLSSecretUpdate && serverCert.CertMd5 != "" {
-			tlsAnnotations = make(map[string]string, 1)
-			tlsAnnotations[SolrTlsCertMd5Annotation] = tls.ServerConfig.CertMd5
-		}
-		serverCert.mountTLSSecretOnPodTemplate(&stateful.Spec.Template, tlsAnnotations)
+		serverCert.mountTLSSecretOnPodTemplate(&stateful.Spec.Template)
 
-		// mount the client certificate from a different secret
-		clientCert := tls.ClientConfig
-		if clientCert != nil && clientCert.Options.PKCS12Secret != nil {
-			var tlsClientAnnotations map[string]string
-			if clientCert.Options.RestartOnTLSSecretUpdate && clientCert.CertMd5 != "" {
-				tlsClientAnnotations = make(map[string]string, 1)
-				tlsClientAnnotations[SolrClientTlsCertMd5Annotation] = clientCert.CertMd5
-			}
-			clientCert.mountTLSSecretOnPodTemplate(&stateful.Spec.Template, tlsClientAnnotations)
+		// mount the client certificate from a different secret (at different mount points)
+		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
+			tls.ClientConfig.mountTLSSecretOnPodTemplate(&stateful.Spec.Template)
 		}
 
 	} else if serverCert.Options.MountedTLSDir != nil {
@@ -100,6 +92,18 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 		mountInitDbIfNeeded(stateful)
 		// use an initContainer to create the wrapper script in the initdb
 		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, tls.generateTLSInitdbScriptInitContainer())
+
+		// Was a client cert mounted too?
+		if tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
+			clientDir := tls.ClientConfig.Options.MountedTLSDir
+			// passwords get exported from files in the TLS dir using an initdb wrapper script
+			if clientDir.KeystoreFile != "" {
+				mainContainer.Env = append(mainContainer.Env, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_KEY_STORE", Value: mountedTLSKeystorePath(clientDir)})
+			}
+			if clientDir.TruststoreFile != "" {
+				mainContainer.Env = append(mainContainer.Env, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE", Value: mountedTLSTruststorePath(clientDir)})
+			}
+		}
 	}
 }
 
@@ -115,12 +119,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 
 	if clientCert.Options.PKCS12Secret != nil || clientCert.Options.TrustStoreSecret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
-		var tlsAnnotations map[string]string
-		if clientCert.Options.RestartOnTLSSecretUpdate && clientCert.CertMd5 != "" {
-			tlsAnnotations = make(map[string]string, 1)
-			tlsAnnotations[SolrClientTlsCertMd5Annotation] = clientCert.CertMd5
-		}
-		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template, tlsAnnotations)
+		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template)
 	} else if clientCert.Options.MountedTLSDir != nil {
 		// volumes and mounts for TLS when using the mounted dir option
 		clientCert.mountTLSWrapperScriptAndInitContainer(deployment, tls.InitContainerImage)
@@ -128,8 +127,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 }
 
 // Configures a pod template (either StatefulSet or Deployment) to mount the TLS files from a secret
-func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSpec, tlsAnnotations map[string]string) *corev1.Container {
-	// Add the SOLR_SSL_* vars to the main container's environment
+func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSpec) *corev1.Container {
 	mainContainer := &template.Spec.Containers[0]
 
 	// the TLS files are mounted from a secret, setup the volumes and mounts
@@ -141,20 +139,18 @@ func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSp
 	if tls.NeedsPkcs12InitContainer {
 		vols = append(vols, corev1.Volume{Name: "pkcs12", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
 		mounts = append(mounts, corev1.VolumeMount{Name: "pkcs12", ReadOnly: false, MountPath: DefaultWritableKeyStorePath})
-		pkcs12InitContainer := tls.generatePkcs12InitContainer(tls.Options, mainContainer.Image, mainContainer.ImagePullPolicy, mounts)
+		pkcs12InitContainer := tls.generatePkcs12InitContainer(mainContainer.Image, mainContainer.ImagePullPolicy, mounts)
 		template.Spec.InitContainers = append(template.Spec.InitContainers, pkcs12InitContainer)
 	}
 	template.Spec.Volumes = append(template.Spec.Volumes, vols...)
 	mainContainer.VolumeMounts = append(mainContainer.VolumeMounts, mounts...)
 
 	// track the MD5 of the TLS cert (from secret) to trigger restarts if the cert changes
-	if tlsAnnotations != nil {
+	if tls.Options.RestartOnTLSSecretUpdate && tls.CertMd5 != "" {
 		if template.Annotations == nil {
 			template.Annotations = make(map[string]string, 1)
 		}
-		for key, value := range tlsAnnotations {
-			template.Annotations[key] = value
-		}
+		template.Annotations[tls.CertMd5Annotation] = tls.CertMd5
 	}
 
 	return mainContainer
@@ -204,8 +200,8 @@ func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount)
 }
 
 // Get the SOLR_SSL_* env vars for enabling TLS on Solr pods
-func (tls *TLSCerts) serverEnvVars() []corev1.EnvVar {
-	opts := tls.ServerConfig.Options
+func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
+	opts := tls.Options
 
 	// Determine the correct values for the SOLR_SSL_WANT_CLIENT_AUTH and SOLR_SSL_NEED_CLIENT_AUTH vars
 	wantClientAuth := "false"
@@ -244,22 +240,10 @@ func (tls *TLSCerts) serverEnvVars() []corev1.EnvVar {
 		// TLS files are mounted by some external agent
 		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_KEY_STORE", Value: mountedTLSKeystorePath(opts.MountedTLSDir)})
 		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE", Value: mountedTLSTruststorePath(opts.MountedTLSDir)})
-
-		// Was a client cert mounted too?
-		if tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
-			clientDir := tls.ClientConfig.Options.MountedTLSDir
-			// passwords get exported from files in the TLS dir using an initdb wrapper script
-			if clientDir.KeystoreFile != "" {
-				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_KEY_STORE", Value: mountedTLSKeystorePath(clientDir)})
-			}
-			if clientDir.TruststoreFile != "" {
-				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE", Value: mountedTLSTruststorePath(clientDir)})
-			}
-		}
 	} else {
 		// keystore / truststore + passwords come from a secret
-		envVars = append(envVars, tls.ServerConfig.keystoreEnvVars("SOLR_SSL_KEY_STORE")...)
-		envVars = append(envVars, tls.ServerConfig.truststoreEnvVars("SOLR_SSL_TRUST_STORE")...)
+		envVars = append(envVars, tls.keystoreEnvVars("SOLR_SSL_KEY_STORE")...)
+		envVars = append(envVars, tls.truststoreEnvVars("SOLR_SSL_TRUST_STORE")...)
 		// TODO: wire-up a client cert if needed
 	}
 
@@ -495,13 +479,12 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 	return javaOpts
 }
 
-func (tls *TLSConfig) generatePkcs12InitContainer(opts *solr.SolrTLSOptions, imageName string, imagePullPolicy corev1.PullPolicy, mounts []corev1.VolumeMount) corev1.Container {
+func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPolicy corev1.PullPolicy, mounts []corev1.VolumeMount) corev1.Container {
 	// get the keystore password from the env for generating the keystore using openssl
-	keystorePassFrom := &corev1.EnvVarSource{SecretKeyRef: opts.KeyStorePasswordSecret}
 	envVars := []corev1.EnvVar{
 		{
 			Name:      "SOLR_SSL_KEY_STORE_PASSWORD",
-			ValueFrom: keystorePassFrom,
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: tls.Options.KeyStorePasswordSecret},
 		},
 	}
 
