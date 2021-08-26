@@ -842,7 +842,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 
 	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
 	expectedAnnotations := map[string]string{
-		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[util.TLSCertKey])),
+		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[util.TLSCertKey])),
 	}
 	if testWithBasicAuthEnabled {
 		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
@@ -870,7 +870,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	time.Sleep(time.Millisecond * 250)
 	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 	expectedAnnotations = map[string]string{
-		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
+		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
 	}
 	if testWithBasicAuthEnabled {
 		// if auth enabled, then annotations also include an md5 for the password so exporters get restarted when it changes
@@ -901,8 +901,8 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 
 		creds := string(lookupBasicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(lookupBasicAuthSecret.Data[corev1.BasicAuthPasswordKey])
 		expectedAnnotations = map[string]string{
-			util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
-			util.BasicAuthMd5Annotation:   fmt.Sprintf("%x", md5.Sum([]byte(creds))),
+			util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[util.TLSCertKey])),
+			util.BasicAuthMd5Annotation:         fmt.Sprintf("%x", md5.Sum([]byte(creds))),
 		}
 		testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 	}
@@ -990,7 +990,7 @@ func testReconcileWithTruststoreOnly(t *testing.T, tlsSecretName string, restart
 
 	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
 	expectedAnnotations := map[string]string{
-		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[tlsKey])),
+		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[tlsKey])),
 	}
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 
@@ -1013,7 +1013,7 @@ func testReconcileWithTruststoreOnly(t *testing.T, tlsSecretName string, restart
 	time.Sleep(time.Millisecond * 250)
 	deployment = expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
 	expectedAnnotations = map[string]string{
-		util.SolrTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[tlsKey])),
+		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(foundTLSSecret.Data[tlsKey])),
 	}
 	testMapsEqual(t, "pod annotations", expectedAnnotations, deployment.Spec.Template.ObjectMeta.Annotations)
 }

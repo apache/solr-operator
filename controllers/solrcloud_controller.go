@@ -364,8 +364,15 @@ func (r *SolrCloudReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		blockReconciliationOfStatefulSet = true
 	}
 
+	// Holds TLS config info for a server cert and optionally a client cert as well
+	var tls *util.TLSCerts = nil
+
+	// can't have a solrClientTLS w/o solrTLS!
+	if instance.Spec.SolrTLS == nil && instance.Spec.SolrClientTLS != nil {
+		return requeueOrNot, fmt.Errorf("invalid TLS config, `spec.solrTLS` is not defined; `spec.solrClientTLS` can only be used in addition to `spec.solrTLS`")
+	}
+
 	// don't start reconciling TLS until we have ZK connectivity, avoids TLS code having to check for ZK
-	var tls *util.TLSConfig = nil
 	if !blockReconciliationOfStatefulSet && instance.Spec.SolrTLS != nil {
 		tls, err = r.reconcileTLSConfig(instance)
 		if err != nil {
@@ -988,68 +995,107 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 }
 
 // Ensure the TLS config is ready, such as verifying the TLS secret exists, to enable TLS on SolrCloud pods
-func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*util.TLSConfig, error) {
-	tls := &util.TLSConfig{}
-	tls.InitContainerImage = instance.Spec.BusyBoxImage
-	tls.ServerCertOptions = instance.Spec.SolrTLS
-	tls.ClientCertOptions = instance.Spec.SolrClientTLS
+func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*util.TLSCerts, error) {
+	tls := &util.TLSCerts{
+		ServerConfig: &util.TLSConfig{
+			Options:        instance.Spec.SolrTLS.DeepCopy(),
+			KeystorePath:   util.DefaultKeyStorePath,
+			TruststorePath: util.DefaultTrustStorePath,
+		},
+		InitContainerImage: instance.Spec.BusyBoxImage,
+	}
+	if instance.Spec.SolrClientTLS != nil {
+		tls.ClientConfig = &util.TLSConfig{
+			Options:        instance.Spec.SolrClientTLS.DeepCopy(),
+			KeystorePath:   util.DefaultClientKeyStorePath,
+			TruststorePath: util.DefaultClientTrustStorePath,
+		}
+	}
 
 	// Has the user configured a secret containing the TLS cert files that we need to mount into the Solr pods?
-	if instance.Spec.SolrTLS.PKCS12Secret != nil {
+	serverCert := tls.ServerConfig.Options
+	if serverCert.PKCS12Secret != nil {
 		// Ensure one or the other have been configured, but not both
-		if instance.Spec.SolrTLS.MountedTLSDir != nil {
+		if serverCert.MountedTLSDir != nil {
 			return nil, fmt.Errorf("invalid TLS config, either supply `solrTLS.pkcs12Secret` or `solrTLS.mountedTLSDir` but not both")
 		}
 
-		foundTLSSecret, err := r.verifyTLSSecretConfig(instance.Spec.SolrTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrTLS.KeyStorePasswordSecret)
+		foundTLSSecret, err := r.verifyTLSSecretConfig(serverCert.PKCS12Secret.Name, instance.Namespace, serverCert.KeyStorePasswordSecret)
 		if err != nil {
 			return nil, err
 		} else {
-			// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-			// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-			if instance.Spec.SolrTLS.RestartOnTLSSecretUpdate {
-				if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
-					tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-				} else {
-					return nil, fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
-						" the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
-						util.TLSCertKey, foundTLSSecret.Name)
+			if serverCert.RestartOnTLSSecretUpdate {
+				tls.ServerConfig.CertMd5, err = r.computeCertMd5(foundTLSSecret)
+				if err != nil {
+					return nil, err
 				}
 			}
 
-			if _, ok := foundTLSSecret.Data[instance.Spec.SolrTLS.PKCS12Secret.Key]; !ok {
+			if _, ok := foundTLSSecret.Data[serverCert.PKCS12Secret.Key]; !ok {
 				// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
-				tls.NeedsPkcs12InitContainer = true
+				tls.ServerConfig.NeedsPkcs12InitContainer = true
 			}
 		}
 
-		if instance.Spec.SolrTLS.TrustStoreSecret != nil {
+		if serverCert.TrustStoreSecret != nil {
 			// verify the TrustStore secret is configured correctly
-			err = r.verifyTruststoreConfig(instance.Spec.SolrTLS, instance.Namespace)
+			err = r.verifyTruststoreConfig(serverCert, instance.Namespace)
 			if err != nil {
 				return nil, err
+			}
+		} else {
+			// does the supplied keystore secret also contain the truststore?
+			if _, ok := foundTLSSecret.Data[util.DefaultPkcs12TruststoreFile]; ok {
+				// there's a truststore in the supplied TLS secret
+				serverCert.TrustStoreSecret = &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: foundTLSSecret.Name},
+					Key:                  util.DefaultPkcs12TruststoreFile,
+				}
+				serverCert.TrustStorePasswordSecret = serverCert.KeyStorePasswordSecret
 			}
 		}
 
 		// is there a client TLS config too?
-		if instance.Spec.SolrClientTLS != nil && instance.Spec.SolrClientTLS.PKCS12Secret != nil {
-			_, err := r.verifyTLSSecretConfig(instance.Spec.SolrClientTLS.PKCS12Secret.Name, instance.Namespace, instance.Spec.SolrClientTLS.KeyStorePasswordSecret)
+		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
+			// shouldn't configure a client cert if it's the same as the server cert
+			if tls.ClientConfig.Options.PKCS12Secret == tls.ServerConfig.Options.PKCS12Secret {
+				return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.pkcs12Secret' option should not be the same as the 'solrTLS.pkcs12Secret'")
+			}
+
+			clientSecret, err := r.verifyTLSSecretConfig(tls.ClientConfig.Options.PKCS12Secret.Name, instance.Namespace, tls.ClientConfig.Options.KeyStorePasswordSecret)
 			if err != nil {
 				return nil, err
 			}
 
-			if instance.Spec.SolrClientTLS.TrustStoreSecret != nil {
-				// verify the TrustStore secret is configured correctly
-				err = r.verifyTruststoreConfig(instance.Spec.SolrClientTLS, instance.Namespace)
+			if tls.ClientConfig.Options.RestartOnTLSSecretUpdate {
+				tls.ClientConfig.CertMd5, err = r.computeCertMd5(clientSecret)
 				if err != nil {
 					return nil, err
+				}
+			}
+
+			if tls.ClientConfig.Options.TrustStoreSecret != nil {
+				// verify the TrustStore secret is configured correctly
+				err = r.verifyTruststoreConfig(tls.ClientConfig.Options, instance.Namespace)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				// does the supplied client keystore secret also contain the truststore?
+				if _, ok := clientSecret.Data[util.DefaultPkcs12TruststoreFile]; ok {
+					// there's a truststore in the supplied TLS secret
+					tls.ClientConfig.Options.TrustStoreSecret = &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: clientSecret.Name},
+						Key:                  util.DefaultPkcs12TruststoreFile,
+					}
+					tls.ClientConfig.Options.TrustStorePasswordSecret = tls.ClientConfig.Options.KeyStorePasswordSecret
 				}
 			}
 		}
 	} else {
 		// per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
 		// make sure we have a mountedTLSDir for the server cert, not just client
-		if instance.Spec.SolrTLS.MountedTLSDir == nil && instance.Spec.SolrClientTLS != nil && instance.Spec.SolrClientTLS.MountedTLSDir != nil {
+		if serverCert.MountedTLSDir == nil && tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
 			return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.mountedTLSDir' option can only be used in addition to 'solrTLS.mountedTLSDir'")
 		}
 	}
@@ -1090,6 +1136,18 @@ func (r *SolrCloudReconciler) verifyTruststoreConfig(opts *solr.SolrTLSOptions, 
 	_, err := r.verifyTLSSecretConfig(opts.TrustStoreSecret.Name, namespace, passwordSecret)
 
 	return err
+}
+
+func (r *SolrCloudReconciler) computeCertMd5(tlsSecret *corev1.Secret) (string, error) {
+	// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+	// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+	if tlsCertBytes, ok := tlsSecret.Data[util.TLSCertKey]; ok {
+		return fmt.Sprintf("%x", md5.Sum(tlsCertBytes)), nil
+	} else {
+		return "", fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to"+
+			" the cert without this data but 'restartOnTLSSecretUpdate' is enabled",
+			util.TLSCertKey, tlsSecret.Name)
+	}
 }
 
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at

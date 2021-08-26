@@ -532,6 +532,14 @@ When using the mounted TLS directory option, you need to ensure each Solr pod ge
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
 Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
+### Client TLS
+_Since v0.4.0_
+
+Solr supports using separate client and server TLS certificates. Solr uses the client certificate in mutual TLS (mTLS) scenarios to make requests to other Solr pods.
+Use the `spec.solrClientTLS` configuration options to configure a separate client certificate. 
+As this is an advanced option, the supplied client certificate keystore and truststore must already be in PKCS12 format.
+As with the server certificate loaded from `spec.solrTLS.pkcs12Secret`, 
+you can have the operator restart Solr pods after the client TLS secret updates by setting `spec.solrClientTLS.restartOnTLSSecretUpdate` to `true`. 
 
 ### Ingress with TLS protected Solr
 

@@ -176,7 +176,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	}
 
 	// Make sure the TLS config is in order
-	var tls *util.TLSConfig = nil
+	var tls *util.TLSCerts = nil
 	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {
 		tls, err = r.reconcileTLSConfig(prometheusExporter)
 		if err != nil {
@@ -434,11 +434,27 @@ func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, 
 // Reconcile the various options for configuring TLS for the exporter
 // The exporter is a client to Solr pods, so can either just have a truststore so it trusts Solr certs
 // Or it can have its own client auth cert when Solr mTLS is required
-func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter *solrv1beta1.SolrPrometheusExporter) (*util.TLSConfig, error) {
+func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter *solrv1beta1.SolrPrometheusExporter) (*util.TLSCerts, error) {
 	opts := prometheusExporter.Spec.SolrReference.SolrTLS
 
-	tls := &util.TLSConfig{}
-	tls.ClientCertOptions = opts
+	// when using mounted dir option, we need a busy box image for our initContainers
+	bbImage := prometheusExporter.Spec.BusyBoxImage
+	if bbImage == nil {
+		bbImage = &solrv1beta1.ContainerImage{
+			Repository: solrv1beta1.DefaultBusyBoxImageRepo,
+			Tag:        solrv1beta1.DefaultBusyBoxImageVersion,
+			PullPolicy: solrv1beta1.DefaultPullPolicy,
+		}
+	}
+
+	tls := &util.TLSCerts{
+		ClientConfig: &util.TLSConfig{
+			Options:        opts.DeepCopy(),
+			KeystorePath:   util.DefaultKeyStorePath,
+			TruststorePath: util.DefaultTrustStorePath,
+		},
+		InitContainerImage: bbImage,
+	}
 
 	if opts.PKCS12Secret != nil {
 		// Ensure one or the other have been configured, but not both
@@ -447,14 +463,14 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 		}
 
 		// make sure the PKCS12Secret and corresponding keystore password exist and agree with the supplied config
-		err := r.reconcileKeystoreSecret(tls, opts.PKCS12Secret, opts.KeyStorePasswordSecret, prometheusExporter.Namespace)
+		err := r.reconcileKeystoreSecret(tls.ClientConfig, opts.PKCS12Secret, opts.KeyStorePasswordSecret, prometheusExporter.Namespace)
 		if err != nil {
 			return nil, err
 		}
 
 		if opts.TrustStoreSecret != nil {
 			// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
-			err := r.reconcileTruststoreSecret(tls, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, false)
+			err := r.reconcileTruststoreSecret(tls.ClientConfig, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, false)
 			if err != nil {
 				return nil, err
 			}
@@ -467,7 +483,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 		}
 
 		// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
-		err := r.reconcileTruststoreSecret(tls, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, true)
+		err := r.reconcileTruststoreSecret(tls.ClientConfig, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, true)
 		if err != nil {
 			return nil, err
 		}
@@ -480,18 +496,8 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 		if opts.MountedTLSDir.KeystoreFile == "" && opts.MountedTLSDir.TruststoreFile == "" {
 			return nil, fmt.Errorf("invalid TLS config, the 'solrTLS.mountedTLSDir' option must specify a keystoreFile and/or truststoreFile")
 		}
-
-		// when using mounted dir option, we need a busy box image for our initContainers
-		bbImage := prometheusExporter.Spec.BusyBoxImage
-		if bbImage == nil {
-			bbImage = &solrv1beta1.ContainerImage{
-				Repository: solrv1beta1.DefaultBusyBoxImageRepo,
-				Tag:        solrv1beta1.DefaultBusyBoxImageVersion,
-				PullPolicy: solrv1beta1.DefaultPullPolicy,
-			}
-		}
-		tls.InitContainerImage = bbImage
 	}
+
 	return tls, nil
 }
 
@@ -510,7 +516,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileKeystoreSecret(tls *util.TLS
 
 	// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
 	// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-	if tls.ClientCertOptions.RestartOnTLSSecretUpdate {
+	if tls.Options.RestartOnTLSSecretUpdate {
 		if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
 			tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 		} else {
@@ -536,7 +542,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileTruststoreSecret(tls *util.T
 	// If we have a watch on secrets, then get notified when the secret changes (such as after cert renewal)
 	// capture the hash of the truststore and stash in an annotation so that pods get restarted if the cert changes
 	// If watch = false, then we may be watching the keystore instead
-	if watch && tls.ClientCertOptions.RestartOnTLSSecretUpdate {
+	if watch && tls.Options.RestartOnTLSSecretUpdate {
 		tlsCertBytes := foundTLSSecret.Data[secret.Key]
 		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
 	}
