@@ -14,7 +14,7 @@ The project is currently in beta (`v1beta1`), and while we do not anticipate cha
 
 If you run into issues using the Solr Operator, please:
 - Reference the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) provided below
-- Create a Github Issue in this repo, describing your problem with as much detail as possible
+- Create a GitHub Issue in this repo, describing your problem with as much detail as possible
 - Reach out on our Slack channel!
 
 Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-operator) channel in the official Kubernetes slack workspace.
@@ -66,7 +66,7 @@ Have you had a good experience with the **Solr Operator**? Why not share some lo
 We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
 Before submitting a PR, please be sure to run `make prepare` before committing.
-Otherwise the github checks are likely to fail.
+Otherwise the GitHub checks are likely to fail.
 
 ## License
 

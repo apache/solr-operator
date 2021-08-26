@@ -3376,6 +3376,9 @@ spec:
                 description: Number of threads to use for the prometheus exporter Defaults to 1
                 format: int32
                 type: integer
+              restartSchedule:
+                description: "Perform a scheduled restart on the given schedule, in CRON format. \n Multiple CRON syntaxes are supported   - Standard CRON (e.g. \"CRON_TZ=Asia/Seoul 0 6 * * ?\")   - Predefined Schedules (e.g. \"@yearly\", \"@weekly\", etc.)   - Intervals (e.g. \"@every 10h30m\") \n For more information please check this reference: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format"
+                type: string
               scrapeInterval:
                 description: The interval to scrape Solr at (in seconds) Defaults to 60 seconds
                 format: int32
