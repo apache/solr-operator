@@ -215,10 +215,16 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		logger.Error(err, "Cannot parse restartSchedule cron: %s", prometheusExporter.Spec.RestartSchedule)
 	} else {
 		if nextRestartAnnotation != "" {
+			if deploy.Spec.Template.Annotations == nil {
+				deploy.Spec.Template.Annotations = make(map[string]string, 1)
+			}
 			// Set the new restart time annotation
 			deploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
 			// TODO: Create event for the CRD.
 		} else if existingRestartAnnotation, exists := foundDeploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
+			if deploy.Spec.Template.Annotations == nil {
+				deploy.Spec.Template.Annotations = make(map[string]string, 1)
+			}
 			// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
 			deploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
 		}
