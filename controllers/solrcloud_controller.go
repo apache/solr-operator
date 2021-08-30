@@ -1003,21 +1003,7 @@ func (r *SolrCloudReconciler) findSolrCloudByFieldValueFunc(field string) *handl
 
 // Ensure the TLS config is ready, such as verifying the TLS secret exists, to enable TLS on SolrCloud pods
 func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*util.TLSCerts, error) {
-	tls := &util.TLSCerts{
-		ServerConfig: &util.TLSConfig{
-			Options:        instance.Spec.SolrTLS.DeepCopy(),
-			KeystorePath:   util.DefaultKeyStorePath,
-			TruststorePath: util.DefaultTrustStorePath,
-		},
-		InitContainerImage: instance.Spec.BusyBoxImage,
-	}
-	if instance.Spec.SolrClientTLS != nil {
-		tls.ClientConfig = &util.TLSConfig{
-			Options:        instance.Spec.SolrClientTLS.DeepCopy(),
-			KeystorePath:   util.DefaultClientKeyStorePath,
-			TruststorePath: util.DefaultClientTrustStorePath,
-		}
-	}
+	tls := util.TLSCertsForSolrCloud(instance)
 
 	// Has the user configured a secret containing the TLS cert files that we need to mount into the Solr pods?
 	serverCert := tls.ServerConfig.Options
@@ -1064,7 +1050,12 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 		}
 
 		// is there a client TLS config too?
-		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
+		if tls.ClientConfig != nil {
+			if tls.ClientConfig.Options.PKCS12Secret == nil {
+				// cannot mix options with the client cert, if the server cert comes from a secret, so too must the client, not a mountedTLSDir
+				return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.pkcs12Secret' option is required when using a secret for server cert")
+			}
+
 			clientOpts := tls.ClientConfig.Options
 			// shouldn't configure a client cert if it's the same as the server cert
 			if clientOpts.PKCS12Secret == tls.ServerConfig.Options.PKCS12Secret {
@@ -1082,7 +1073,6 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 					return nil, err
 				}
 				tls.ClientConfig.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
-				r.Log.Info("I HERE: Client CertMd5 %s, CertMd5Annotation %s", tls.ClientConfig.CertMd5, tls.ClientConfig.CertMd5Annotation)
 			}
 
 			if clientOpts.TrustStoreSecret != nil {
@@ -1099,16 +1089,20 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 						LocalObjectReference: corev1.LocalObjectReference{Name: clientSecret.Name},
 						Key:                  util.DefaultPkcs12TruststoreFile,
 					}
-					clientOpts.TrustStorePasswordSecret = clientOpts.KeyStorePasswordSecret
+					if clientOpts.TrustStorePasswordSecret == nil {
+						clientOpts.TrustStorePasswordSecret = clientOpts.KeyStorePasswordSecret
+					}
 				}
 			}
 		}
-	} else {
+	} else if serverCert.MountedTLSDir != nil {
 		// per-pod TLS files get mounted into a dir on the pod dynamically using some external agent / CSI driver type mechanism
-		// make sure we have a mountedTLSDir for the server cert, not just client
-		if serverCert.MountedTLSDir == nil && tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
-			return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.mountedTLSDir' option can only be used in addition to 'solrTLS.mountedTLSDir'")
+		// make sure the client cert, if configured, is also using the mounted dir option as mixing the two approaches is not supported
+		if tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir == nil {
+			return nil, fmt.Errorf("invalid TLS config, client cert must also use 'mountedTLSDir' when using 'solrTLS.mountedTLSDir'")
 		}
+	} else {
+		return nil, fmt.Errorf("invalid TLS config, must supply either 'pkcs12Secret' or 'mountedTLSDir' for the server cert")
 	}
 
 	return tls, nil

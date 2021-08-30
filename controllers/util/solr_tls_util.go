@@ -63,8 +63,50 @@ type TLSConfig struct {
 	CertMd5 string
 	// The annotation varies based on the cert type (client or server)
 	CertMd5Annotation string
-	KeystorePath      string
-	TruststorePath    string
+	// The paths vary based on whether this config is for a client or server cert
+	KeystorePath   string
+	TruststorePath string
+}
+
+// Get a TLSCerts struct for reconciling TLS on a SolrCloud
+func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
+	tls := &TLSCerts{
+		ServerConfig: &TLSConfig{
+			Options:        instance.Spec.SolrTLS.DeepCopy(),
+			KeystorePath:   DefaultKeyStorePath,
+			TruststorePath: DefaultTrustStorePath,
+		},
+		InitContainerImage: instance.Spec.BusyBoxImage,
+	}
+	if instance.Spec.SolrClientTLS != nil {
+		tls.ClientConfig = &TLSConfig{
+			Options:        instance.Spec.SolrClientTLS.DeepCopy(),
+			KeystorePath:   DefaultClientKeyStorePath,
+			TruststorePath: DefaultClientTrustStorePath,
+		}
+	}
+	return tls
+}
+
+// Get a TLSCerts struct for reconciling TLS on an Exporter
+func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCerts {
+	// when using mounted dir option, we need a busy box image for our initContainers
+	bbImage := prometheusExporter.Spec.BusyBoxImage
+	if bbImage == nil {
+		bbImage = &solr.ContainerImage{
+			Repository: solr.DefaultBusyBoxImageRepo,
+			Tag:        solr.DefaultBusyBoxImageVersion,
+			PullPolicy: solr.DefaultPullPolicy,
+		}
+	}
+	return &TLSCerts{
+		ClientConfig: &TLSConfig{
+			Options:        prometheusExporter.Spec.SolrReference.SolrTLS.DeepCopy(),
+			KeystorePath:   DefaultKeyStorePath,
+			TruststorePath: DefaultTrustStorePath,
+		},
+		InitContainerImage: bbImage,
+	}
 }
 
 // Enrich the config for a SolrCloud StatefulSet to enable TLS, either loaded from a secret or
@@ -77,6 +119,10 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 	// Add the SOLR_SSL_* vars to the main container's environment
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
 	mainContainer.Env = append(mainContainer.Env, serverCert.serverEnvVars()...)
+	// Was a client cert mounted too? If so, add the client env vars to the main container as well
+	if tls.ClientConfig != nil {
+		mainContainer.Env = append(mainContainer.Env, tls.ClientConfig.clientEnvVars()...)
+	}
 
 	if serverCert.Options.PKCS12Secret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
@@ -85,21 +131,12 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 		// mount the client certificate from a different secret (at different mount points)
 		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
 			tls.ClientConfig.mountTLSSecretOnPodTemplate(&stateful.Spec.Template, "client-")
-
-			// add the SOLR_SSL_CLIENT_* env vars for the main container as well
-			mainContainer.Env = append(mainContainer.Env, tls.ClientConfig.clientEnvVars()...)
 		}
-
 	} else if serverCert.Options.MountedTLSDir != nil {
 		// the TLS files come from some auto-mounted directory on the main container
 		mountInitDbIfNeeded(stateful)
 		// use an initContainer to create the wrapper script in the initdb
 		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, tls.generateTLSInitdbScriptInitContainer())
-
-		// Was a client cert mounted too?
-		if tls.ClientConfig != nil {
-			mainContainer.Env = append(mainContainer.Env, tls.ClientConfig.clientEnvVars()...)
-		}
 	}
 }
 
@@ -244,7 +281,6 @@ func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 		// keystore / truststore + passwords come from a secret
 		envVars = append(envVars, tls.keystoreEnvVars("SOLR_SSL_KEY_STORE")...)
 		envVars = append(envVars, tls.truststoreEnvVars("SOLR_SSL_TRUST_STORE")...)
-		// TODO: wire-up a client cert if needed
 	}
 
 	return envVars
@@ -517,6 +553,9 @@ func secureProbeTLSJavaToolOpts(solrCloud *solr.SolrCloud) (tlsJavaToolOpts stri
 	return tlsJavaToolOpts, tlsJavaSysProps
 }
 
+// Get the Java system properties needed to connect to a Solr pod over https
+// The values vary depending on whether there is a client cert or just a server cert
+// When using the mountedTLSDir option, the keystore / truststore passwords will come from a file instead of env vars
 func secureProbeTLSJavaSysProps(solrCloud *solr.SolrCloud) string {
 	// probe command sends request to "localhost" so skip hostname checking during TLS handshake
 	tlsJavaSysProps := "-Dsolr.ssl.checkPeerName=false"

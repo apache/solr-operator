@@ -462,26 +462,8 @@ func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, 
 // The exporter is a client to Solr pods, so can either just have a truststore so it trusts Solr certs
 // Or it can have its own client auth cert when Solr mTLS is required
 func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter *solrv1beta1.SolrPrometheusExporter) (*util.TLSCerts, error) {
-	opts := prometheusExporter.Spec.SolrReference.SolrTLS
-
-	// when using mounted dir option, we need a busy box image for our initContainers
-	bbImage := prometheusExporter.Spec.BusyBoxImage
-	if bbImage == nil {
-		bbImage = &solrv1beta1.ContainerImage{
-			Repository: solrv1beta1.DefaultBusyBoxImageRepo,
-			Tag:        solrv1beta1.DefaultBusyBoxImageVersion,
-			PullPolicy: solrv1beta1.DefaultPullPolicy,
-		}
-	}
-
-	tls := &util.TLSCerts{
-		ClientConfig: &util.TLSConfig{
-			Options:        opts.DeepCopy(),
-			KeystorePath:   util.DefaultKeyStorePath,
-			TruststorePath: util.DefaultTrustStorePath,
-		},
-		InitContainerImage: bbImage,
-	}
+	tls := util.TLSCertsForExporter(prometheusExporter)
+	opts := tls.ClientConfig.Options
 
 	if opts.PKCS12Secret != nil {
 		// Ensure one or the other have been configured, but not both
@@ -497,6 +479,9 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 
 		if opts.TrustStoreSecret != nil {
 			// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
+			if opts.TrustStorePasswordSecret == nil {
+				opts.TrustStorePasswordSecret = opts.KeyStorePasswordSecret
+			}
 			err := r.reconcileTruststoreSecret(tls.ClientConfig, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, false)
 			if err != nil {
 				return nil, err
@@ -586,6 +571,10 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSSecretAndPassword(secret 
 	if lookupErr != nil {
 		return nil, lookupErr
 	} else {
+		if passwordSecret == nil {
+			return nil, fmt.Errorf("no keystore password secret configured for %s", secret.Name)
+		}
+
 		// Make sure the secret containing the keystore password exists as well
 		keyStorePasswordSecret := &corev1.Secret{}
 		err := r.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
