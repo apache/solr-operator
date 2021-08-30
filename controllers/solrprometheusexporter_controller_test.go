@@ -757,7 +757,6 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	keystorePassKey := "keystore-passwords-are-important"
 
 	instance.Spec.SolrReference.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, restartOnTLSSecretUpdate)
-	verifyUserSuppliedTLSConfig(t, instance.Spec.SolrReference.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName, needsPkcs12InitContainer)
 
 	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
 	// channel when it is finished.
@@ -786,7 +785,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	if needsPkcs12InitContainer {
 		tlsKey = "tls.key" // to trigger the initContainer creation, don't want keystore.p12 in the secret
 	}
-	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey)
+	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey, "")
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(ctx, &mockSecret)
 
@@ -818,7 +817,7 @@ func testReconcileWithTLS(t *testing.T, tlsSecretName string, needsPkcs12InitCon
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
-	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer, true)
+	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer, true, nil)
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
@@ -955,7 +954,7 @@ func testReconcileWithTruststoreOnly(t *testing.T, tlsSecretName string, restart
 
 	// create the TLS and keystore secrets needed for reconciling TLS options
 	tlsKey := util.DefaultPkcs12TruststoreFile
-	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey)
+	mockSecret, err := createMockTLSSecret(ctx, testClient, tlsSecretName, tlsKey, instance.Namespace, keystorePassKey, "")
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(ctx, &mockSecret)
 
@@ -973,7 +972,7 @@ func testReconcileWithTruststoreOnly(t *testing.T, tlsSecretName string, restart
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedMetricsRequest)))
 
 	deployment := expectDeployment(t, g, requests, expectedMetricsRequest, metricsDKey, "")
-	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, false, true)
+	mainContainer := expectTLSConfigOnPodTemplate(t, instance.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, false, true, nil)
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {

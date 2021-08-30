@@ -899,6 +899,11 @@ func (r *SolrCloudReconciler) SetupWithManagerAndReconciler(mgr ctrl.Manager, re
 		return err
 	}
 
+	ctrlBuilder, err = r.indexAndWatchForClientTLSSecret(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zk.ZookeeperCluster{})
 	}
@@ -925,35 +930,13 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &corev1.ConfigMap{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				foundClouds := &solr.SolrCloudList{}
-				listOps := &client.ListOptions{
-					FieldSelector: fields.OneTermEqualSelector(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", a.Meta.GetName()),
-					Namespace:     a.Meta.GetNamespace(),
-				}
-				err := r.List(context.TODO(), foundClouds, listOps)
-				if err != nil {
-					return []reconcile.Request{}
-				}
-
-				requests := make([]reconcile.Request, len(foundClouds.Items))
-				for i, item := range foundClouds.Items {
-					requests[i] = reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      item.GetName(),
-							Namespace: item.GetNamespace(),
-						},
-					}
-				}
-				return requests
-			}),
-		},
+		r.findSolrCloudByFieldValueFunc(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap"),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
 func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, ".spec.solrTLS.pkcs12Secret", func(rawObj runtime.Object) []string {
+	field := ".spec.solrTLS.pkcs12Secret"
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, field, func(rawObj runtime.Object) []string {
 		// grab the SolrCloud object, extract the used configMap...
 		solrCloud := rawObj.(*solr.SolrCloud)
 		if solrCloud.Spec.SolrTLS == nil || solrCloud.Spec.SolrTLS.PKCS12Secret == nil {
@@ -967,31 +950,55 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &corev1.Secret{}},
-		&handler.EnqueueRequestsFromMapFunc{
-			ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
-				foundClouds := &solr.SolrCloudList{}
-				listOps := &client.ListOptions{
-					FieldSelector: fields.OneTermEqualSelector(".spec.solrTLS.pkcs12Secret", a.Meta.GetName()),
-					Namespace:     a.Meta.GetNamespace(),
-				}
-				err := r.List(context.TODO(), foundClouds, listOps)
-				if err != nil {
-					return []reconcile.Request{}
-				}
-
-				requests := make([]reconcile.Request, len(foundClouds.Items))
-				for i, item := range foundClouds.Items {
-					requests[i] = reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      item.GetName(),
-							Namespace: item.GetNamespace(),
-						},
-					}
-				}
-				return requests
-			}),
-		},
+		r.findSolrCloudByFieldValueFunc(field),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) indexAndWatchForClientTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	field := ".spec.solrClientTLS.pkcs12Secret"
+	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solr.SolrCloud{}, field, func(rawObj runtime.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		solrCloud := rawObj.(*solr.SolrCloud)
+		if solrCloud.Spec.SolrClientTLS == nil || solrCloud.Spec.SolrClientTLS.PKCS12Secret == nil {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{solrCloud.Spec.SolrClientTLS.PKCS12Secret.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &corev1.Secret{}},
+		r.findSolrCloudByFieldValueFunc(field),
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
+}
+
+func (r *SolrCloudReconciler) findSolrCloudByFieldValueFunc(field string) *handler.EnqueueRequestsFromMapFunc {
+	return &handler.EnqueueRequestsFromMapFunc{
+		ToRequests: handler.ToRequestsFunc(func(a handler.MapObject) []reconcile.Request {
+			foundClouds := &solr.SolrCloudList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(field, a.Meta.GetName()),
+				Namespace:     a.Meta.GetNamespace(),
+			}
+			err := r.List(context.TODO(), foundClouds, listOps)
+			if err != nil {
+				return []reconcile.Request{}
+			}
+
+			requests := make([]reconcile.Request, len(foundClouds.Items))
+			for i, item := range foundClouds.Items {
+				requests[i] = reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
+				}
+			}
+			return requests
+		}),
+	}
 }
 
 // Ensure the TLS config is ready, such as verifying the TLS secret exists, to enable TLS on SolrCloud pods
@@ -1058,27 +1065,29 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 
 		// is there a client TLS config too?
 		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
+			clientOpts := tls.ClientConfig.Options
 			// shouldn't configure a client cert if it's the same as the server cert
-			if tls.ClientConfig.Options.PKCS12Secret == tls.ServerConfig.Options.PKCS12Secret {
+			if clientOpts.PKCS12Secret == tls.ServerConfig.Options.PKCS12Secret {
 				return nil, fmt.Errorf("invalid TLS config, the 'solrClientTLS.pkcs12Secret' option should not be the same as the 'solrTLS.pkcs12Secret'")
 			}
 
-			clientSecret, err := r.verifyTLSSecretConfig(tls.ClientConfig.Options.PKCS12Secret.Name, instance.Namespace, tls.ClientConfig.Options.KeyStorePasswordSecret)
+			clientSecret, err := r.verifyTLSSecretConfig(clientOpts.PKCS12Secret.Name, instance.Namespace, clientOpts.KeyStorePasswordSecret)
 			if err != nil {
 				return nil, err
 			}
 
-			if tls.ClientConfig.Options.RestartOnTLSSecretUpdate {
+			if clientOpts.RestartOnTLSSecretUpdate {
 				tls.ClientConfig.CertMd5, err = r.computeCertMd5(clientSecret)
 				if err != nil {
 					return nil, err
 				}
 				tls.ClientConfig.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
+				r.Log.Info("I HERE: Client CertMd5 %s, CertMd5Annotation %s", tls.ClientConfig.CertMd5, tls.ClientConfig.CertMd5Annotation)
 			}
 
-			if tls.ClientConfig.Options.TrustStoreSecret != nil {
+			if clientOpts.TrustStoreSecret != nil {
 				// verify the TrustStore secret is configured correctly
-				err = r.verifyTruststoreConfig(tls.ClientConfig.Options, instance.Namespace)
+				err = r.verifyTruststoreConfig(clientOpts, instance.Namespace)
 				if err != nil {
 					return nil, err
 				}
@@ -1086,11 +1095,11 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solr.SolrCloud) (*uti
 				// does the supplied client keystore secret also contain the truststore?
 				if _, ok := clientSecret.Data[util.DefaultPkcs12TruststoreFile]; ok {
 					// there's a truststore in the supplied TLS secret
-					tls.ClientConfig.Options.TrustStoreSecret = &corev1.SecretKeySelector{
+					clientOpts.TrustStoreSecret = &corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: clientSecret.Name},
 						Key:                  util.DefaultPkcs12TruststoreFile,
 					}
-					tls.ClientConfig.Options.TrustStorePasswordSecret = tls.ClientConfig.Options.KeyStorePasswordSecret
+					clientOpts.TrustStorePasswordSecret = clientOpts.KeyStorePasswordSecret
 				}
 			}
 		}

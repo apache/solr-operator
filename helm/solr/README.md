@@ -190,19 +190,41 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | solrTLS.verifyClientHostname | boolean | `false` | Whether Solr should verify client hostnames |
 | solrTLS.checkPeerName | boolean | `false` | Whether Solr should check peer names |
 | solrTLS.restartOnTLSSecretUpdate | boolean | `false` | Whether Solr pods should auto-restart when the TLS Secrets are updated |
-| solrTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the Solr TLS pkcs12 file |
-| solrTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the Solr TLS pkcs12 file |
-| solrTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS keystore |
-| solrTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS keystore |
+| solrTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the keystore file in PKCS12 format |
+| solrTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the keystore file in PKCS12 format |
+| solrTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the keystore password |
+| solrTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the keystore password |
 | solrTLS.trustStoreSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore |
 | solrTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore |
-| solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore password |
-| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
+| solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the truststore password |
+| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the truststore password |
 | solrTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
-| solrTLS.mountedTLSDir.keystoreFile | string | | Override the name of the keystore file; defaults to keystore.p12 |
+| solrTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
 | solrTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
-| solrTLS.mountedTLSDir.truststoreFile | string | | Override the name of the truststore file; defaults truststore.p12. To use the same file as the keystore, override this variable with the name of your keystore file |
+| solrTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
 | solrTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+
+#### Client TLS Options
+
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+
+Configure Solr to use a separate TLS certificate for client auth.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| solrClientTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the client keystore file in PKCS12 format |
+| solrClientTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the client keystore file in PKCS12 format |
+| solrClientTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the client keystore password |
+| solrClientTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the client keystore password |
+| solrClientTLS.trustStoreSecret.name | string |  | Name of the Secret that stores the client truststore in PKCS12 format |
+| solrClientTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the client truststore in PKCS12 format |
+| solrClientTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the truststore password |
+| solrClientTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the truststore password |
+| solrClientTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
+| solrClientTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
+| solrClientTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrClientTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
+| solrClientTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
 
 ### Global Options
 

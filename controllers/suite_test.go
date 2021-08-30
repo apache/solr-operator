@@ -65,7 +65,7 @@ func TestMain(m *testing.M) {
 			filepath.Join("..", "config", "crd", "bases"),
 			filepath.Join("..", "config", "dependencies"),
 		},
-		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
+		AttachControlPlaneOutput: true, // set to true to get more logging from the control plane
 		KubeAPIServerFlags:       apiServerFlags,
 	}
 	solrv1beta1.AddToScheme(scheme.Scheme)
