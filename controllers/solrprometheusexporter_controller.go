@@ -85,13 +85,15 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	requeueOrNot := ctrl.Result{}
+
 	configMapKey := util.PrometheusExporterConfigMapKey
 	configXmlMd5 := ""
 	if prometheusExporter.Spec.Config == "" && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
 		foundConfigMap := &corev1.ConfigMap{}
 		err = r.Get(context.TODO(), types.NamespacedName{Name: prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap, Namespace: prometheusExporter.Namespace}, foundConfigMap)
 		if err != nil {
-			return ctrl.Result{}, err
+			return requeueOrNot, err
 		}
 
 		if foundConfigMap.Data != nil {
@@ -99,11 +101,11 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 			if ok {
 				configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 			} else {
-				return ctrl.Result{}, fmt.Errorf("required '%s' key not found in provided ConfigMap %s",
+				return requeueOrNot, fmt.Errorf("required '%s' key not found in provided ConfigMap %s",
 					configMapKey, prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 			}
 		} else {
-			return ctrl.Result{}, fmt.Errorf("provided ConfigMap %s has no data",
+			return requeueOrNot, fmt.Errorf("provided ConfigMap %s has no data",
 				prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 		}
 	}
@@ -138,7 +140,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 			}
 		}
 		if err != nil {
-			return ctrl.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
@@ -166,13 +168,13 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		}
 	}
 	if err != nil {
-		return ctrl.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Get the ZkConnectionString to connect to
 	solrConnectionInfo := util.SolrConnectionInfo{}
 	if solrConnectionInfo, err = getSolrConnectionInfo(r, prometheusExporter); err != nil {
-		return ctrl.Result{}, err
+		return requeueOrNot, err
 	}
 
 	// Make sure the TLS config is in order
@@ -180,7 +182,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {
 		tls, err = r.reconcileTLSConfig(prometheusExporter)
 		if err != nil {
-			return ctrl.Result{}, err
+			return requeueOrNot, err
 		}
 	}
 
@@ -207,6 +209,31 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 	deploymentLogger := logger.WithValues("deployment", deploy.Name)
 	foundDeploy := &appsv1.Deployment{}
 	err = r.Get(context.TODO(), types.NamespacedName{Name: deploy.Name, Namespace: deploy.Namespace}, foundDeploy)
+
+	// Set the annotation for a scheduled restart, if necessary.
+	if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(prometheusExporter.Spec.RestartSchedule, foundDeploy.Spec.Template.Annotations); err != nil {
+		logger.Error(err, "Cannot parse restartSchedule cron: %s", prometheusExporter.Spec.RestartSchedule)
+	} else {
+		if nextRestartAnnotation != "" {
+			if deploy.Spec.Template.Annotations == nil {
+				deploy.Spec.Template.Annotations = make(map[string]string, 1)
+			}
+			// Set the new restart time annotation
+			deploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
+			// TODO: Create event for the CRD.
+		} else if existingRestartAnnotation, exists := foundDeploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
+			if deploy.Spec.Template.Annotations == nil {
+				deploy.Spec.Template.Annotations = make(map[string]string, 1)
+			}
+			// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
+			deploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
+		}
+		if reconcileWaitDuration != nil {
+			// Set the requeueAfter if it has not been set, or is greater than the time we need to wait to restart again
+			updateRequeueAfter(&requeueOrNot, *reconcileWaitDuration)
+		}
+	}
+
 	if err != nil && errors.IsNotFound(err) {
 		deploymentLogger.Info("Creating Deployment")
 		if err = controllerutil.SetControllerReference(prometheusExporter, deploy, r.scheme); err == nil {
@@ -225,7 +252,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		ready = foundDeploy.Status.ReadyReplicas > 0
 	}
 	if err != nil {
-		return ctrl.Result{}, err
+		return requeueOrNot, err
 	}
 
 	if ready != prometheusExporter.Status.Ready {
@@ -234,7 +261,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(req ctrl.Request) (ctrl.Res
 		err = r.Status().Update(context.TODO(), prometheusExporter)
 	}
 
-	return ctrl.Result{}, err
+	return requeueOrNot, err
 }
 
 func getSolrConnectionInfo(r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, err error) {

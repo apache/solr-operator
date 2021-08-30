@@ -64,7 +64,7 @@ annotations:
         - name: Zookeeper Operator Release Notes
           url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.12
     - kind: added
-      description: Ability to schedule automatic restarts
+      description: Ability to schedule automatic restarts for SolrClouds
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/281
@@ -142,6 +142,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/268
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/293
+    - kind: added
+      description: Ability to schedule automatic restarts for SolrPrometheusExporters
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/310
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/313
     - kind: added
       description: Ability to specify ZK Config properties for provided Zookeeper Clusters.
       links:

@@ -61,6 +61,19 @@ type SolrPrometheusExporterSpec struct {
 	// with the `spec.solrReference.solrTLS.mountedServerTLSDir` option
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// Perform a scheduled restart on the given schedule, in CRON format.
+	//
+	// Multiple CRON syntaxes are supported
+	//   - Standard CRON (e.g. "CRON_TZ=Asia/Seoul 0 6 * * ?")
+	//   - Predefined Schedules (e.g. "@yearly", "@weekly", etc.)
+	//   - Intervals (e.g. "@every 10h30m")
+	//
+	// For more information please check this reference:
+	// https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
+	//
+	// +optional
+	RestartSchedule string `json:"restartSchedule,omitempty"`
 }
 
 func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bool) {
