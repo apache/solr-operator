@@ -64,6 +64,7 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 					ContainerPort: 3888,
 				},
 			},
+			Conf: zkSpec.Config,
 		},
 	}
 
@@ -297,6 +298,12 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 		logger.Info("Update required because field changed", "field", "Spec.Probes", "from", to.Spec.Probes, "to", from.Spec.Probes)
 		requireUpdate = true
 		to.Spec.Probes = from.Spec.Probes
+	}
+
+	if !DeepEqualWithNils(to.Spec.Conf, from.Spec.Conf) {
+		logger.Info("Update required because field changed", "field", "Spec.Conf", "from", to.Spec.Conf, "to", from.Spec.Conf)
+		requireUpdate = true
+		to.Spec.Conf = from.Spec.Conf
 	}
 
 	return requireUpdate

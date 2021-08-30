@@ -149,6 +149,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/310
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/313
+    - kind: added
+      description: Ability to specify ZK Config properties for provided Zookeeper Clusters.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/290
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/311
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease
