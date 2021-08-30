@@ -191,6 +191,10 @@ spec:
       image:
         {{- toYaml .Values.zk.provided.image | nindent 8 }}
       {{- end }}
+      {{- if .Values.zk.provided.config }}
+      config:
+        {{- toYaml .Values.zk.provided.config | nindent 8 }}
+      {{- end }}
       {{- if (or .Values.zk.provided.persistence (lower .Values.zk.provided.storageType | hasPrefix "persist")) }}
       persistence:
         {{- toYaml .Values.zk.provided.persistence | nindent 8 }}

@@ -640,6 +640,11 @@ type ZookeeperSpec struct {
 	// This ACL should have READ permission in the given chRoot.
 	// +optional
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK for reading operations.
+	// This ACL should have READ permission in the given chRoot.
+	// +optional
+	Config zk.ZookeeperConfig `json:"config,omitempty"`
 }
 
 func (z *ZookeeperSpec) WithDefaults() (changed bool) {

@@ -629,4 +629,13 @@ var (
 		},
 	}
 	testServiceAccountName = "test-service-account"
+	zkConf                 = zkv1beta1.ZookeeperConfig{
+		InitLimit:            1,
+		SyncLimit:            5,
+		PreAllocSize:         2,
+		CommitLogCount:       10,
+		MaxCnxns:             4,
+		MinSessionTimeout:    6,
+		QuorumListenOnAllIPs: true,
+	}
 )

@@ -129,7 +129,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/299
     - kind: security
-      description: Add a mountedTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
+      description: Add a mountedServerTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/291
@@ -149,6 +149,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/310
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/313
+    - kind: added
+      description: Ability to specify ZK Config properties for provided Zookeeper Clusters.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/290
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/311
     - kind: added
       description: Configuration options to support an additional client TLS cert in addition to the server certificate
       links:
