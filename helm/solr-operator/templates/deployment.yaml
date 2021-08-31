@@ -64,9 +64,7 @@ spec:
         {{- if .Values.mTLS.insecureSkipVerify }}
         - --tls-skip-verify-server={{ .Values.mTLS.insecureSkipVerify }}
         {{- end }}
-        {{- if .Values.mTLS.watchForUpdates }}
         - --tls-watch-cert={{ .Values.mTLS.watchForUpdates }}
-        {{- end }}
 
         env:
           - name: POD_NAMESPACE
