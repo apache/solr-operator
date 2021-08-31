@@ -68,6 +68,9 @@ var (
 	clientCertKeyPath string
 	caCertPath        string
 	clientCertWatch   bool
+
+	// Ref to the active client certificate, will get updated when the secret changes if watch enabled
+	clientCertificate *tls.Certificate
 )
 
 func init() {
@@ -212,6 +215,7 @@ func initMTLSConfig(watcher *fsnotify.Watcher) error {
 
 	if watcher != nil {
 		// If the cert file is a symlink (which is the case when loaded from a secret), then we need to re-add the watch after the
+		// Right now, it will always be a symlink, so this is just future proofing when the cert gets loaded from a CSI driver
 		isSymlink := false
 		clientCertFile, _ := filepath.EvalSymlinks(clientCertPath)
 		if clientCertFile != clientCertPath {
@@ -234,14 +238,11 @@ func initMTLSConfig(watcher *fsnotify.Watcher) error {
 
 						clientCert, err = tls.LoadX509KeyPair(clientCertPath, clientCertKeyPath)
 						if err == nil {
-							mTLSTransport, err := buildTLSTransport(&clientCert)
-							if err != nil {
-								setupLog.Error(err, "Failed to build mTLS transport after cert updated", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
-							} else {
-								setupLog.Info("Updated mTLS Http Client after update to cert", "certPath", clientCertPath)
-								solr_api.SetMTLSHttpClient(&http.Client{Transport: mTLSTransport})
-							}
+							// update our global client certificate to the new one
+							clientCertificate = &clientCert
+							setupLog.Info("Updated mTLS Http Client after update to cert", "certPath", clientCertPath)
 						} else {
+							// will keep using the old cert, which eventually will cause failures when the old cert expires
 							setupLog.Error(err, "Error loading clientCert pair (after update) for mTLS transport", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
 						}
 
@@ -274,7 +275,8 @@ func initMTLSConfig(watcher *fsnotify.Watcher) error {
 		setupLog.Info("Watch for mTLS cert updates disabled", "certPath", clientCertPath)
 	}
 
-	mTLSTransport, err := buildTLSTransport(&clientCert)
+	clientCertificate = &clientCert
+	mTLSTransport, err := buildTLSTransport()
 	if err != nil {
 		return err
 	}
@@ -283,9 +285,9 @@ func initMTLSConfig(watcher *fsnotify.Watcher) error {
 	return nil
 }
 
-func buildTLSTransport(clientCert *tls.Certificate) (*http.Transport, error) {
+func buildTLSTransport() (*http.Transport, error) {
 	mTLSTransport := http.DefaultTransport.(*http.Transport).Clone()
-	mTLSTransport.TLSClientConfig = &tls.Config{Certificates: []tls.Certificate{*clientCert}, InsecureSkipVerify: clientSkipVerify}
+	mTLSTransport.TLSClientConfig = &tls.Config{GetClientCertificate: getClientCertificate, InsecureSkipVerify: clientSkipVerify}
 
 	// Add the rootCA if one is provided
 	if caCertPath != "" {
@@ -301,4 +303,8 @@ func buildTLSTransport(clientCert *tls.Certificate) (*http.Transport, error) {
 	}
 
 	return mTLSTransport, nil
+}
+
+func getClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+	return clientCertificate, nil
 }
