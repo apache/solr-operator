@@ -39,6 +39,9 @@ func SetNoVerifyTLSHttpClient(client *http.Client) {
 }
 
 func SetMTLSHttpClient(client *http.Client) {
+	if mTLSHttpClient != nil {
+		mTLSHttpClient.CloseIdleConnections()
+	}
 	mTLSHttpClient = client
 }
 

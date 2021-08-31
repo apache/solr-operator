@@ -141,3 +141,6 @@ The CA certificate needs to be stored in Kubernetes secret in PEM format and pro
 
 In most cases, you'll also want to configure the operator with `mTLS.insecureSkipVerify=true` (the default) as you'll want the operator to skip hostname verification for Solr pods.
 Setting `mTLS.insecureSkipVerify` to `false` means the operator will enforce hostname verification for the certificate provided by Solr pods.
+
+By default, the operator watches for updates to the mTLS client certificate (mounted from the `mTLS.clientCertSecret` secret) and then refreshes the HTTP client to use the updated certificate.
+To disable this behavior, configure the operator using: `--set mTLS.watchForUpdates=false`.

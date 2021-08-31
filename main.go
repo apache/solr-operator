@@ -26,9 +26,11 @@ import (
 	"github.com/apache/solr-operator/controllers"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/apache/solr-operator/version"
+	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"strings"
@@ -65,6 +67,7 @@ var (
 	clientCertPath    string
 	clientCertKeyPath string
 	caCertPath        string
+	clientCertWatch   bool
 )
 
 func init() {
@@ -82,6 +85,7 @@ func init() {
 	flag.StringVar(&clientCertKeyPath, "tls-client-cert-key-path", "", "Path where a TLS client cert key can be found")
 
 	flag.StringVar(&caCertPath, "tls-ca-cert-path", "", "Path where a Certificate Authority (CA) cert in PEM format can be found")
+	flag.BoolVar(&clientCertWatch, "tls-watch-cert", true, "Controls whether the operator performs a hot reload of the mTLS when it gets updated; set to false to disable watching for updates to the TLS cert.")
 
 	flag.Parse()
 }
@@ -147,8 +151,21 @@ func main() {
 
 	controllers.UseZkCRD(useZookeeperCRD)
 
-	if err = initMTLSConfig(); err != nil {
-		os.Exit(1)
+	// watch TLS files for update
+	if clientCertPath != "" {
+		var watcher *fsnotify.Watcher
+		if clientCertWatch {
+			watcher, err = fsnotify.NewWatcher()
+			if err != nil {
+				setupLog.Error(err, "Create new file watcher failed")
+				os.Exit(1)
+			}
+			defer watcher.Close()
+		}
+
+		if err = initMTLSConfig(watcher); err != nil {
+			os.Exit(1)
+		}
 	}
 
 	if err = (&controllers.SolrCloudReconciler{
@@ -181,36 +198,107 @@ func main() {
 	}
 }
 
-func initMTLSConfig() error {
-	if clientCertPath != "" {
-		setupLog.Info("mTLS config", "clientSkipVerify", clientSkipVerify, "clientCertPath", clientCertPath,
-			"clientCertKeyPath", clientCertKeyPath, "caCertPath", caCertPath)
+// Setup for mTLS with Solr pods with hot reload support using the fsnotify Watcher
+func initMTLSConfig(watcher *fsnotify.Watcher) error {
+	setupLog.Info("mTLS config", "clientSkipVerify", clientSkipVerify, "clientCertPath", clientCertPath,
+		"clientCertKeyPath", clientCertKeyPath, "caCertPath", caCertPath, "clientCertWatch", clientCertWatch)
 
-		// Load client cert information from files
-		clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientCertKeyPath)
-		if err != nil {
-			setupLog.Error(err, "Error loading clientCert pair for mTLS transport", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
-			return err
-		}
-
-		mTLSTransport := http.DefaultTransport.(*http.Transport).Clone()
-		mTLSTransport.TLSClientConfig = &tls.Config{Certificates: []tls.Certificate{clientCert}, InsecureSkipVerify: clientSkipVerify}
-
-		// Add the rootCA if one is provided
-		if caCertPath != "" {
-			if caCertBytes, err := ioutil.ReadFile(caCertPath); err == nil {
-				caCertPool := x509.NewCertPool()
-				caCertPool.AppendCertsFromPEM(caCertBytes)
-				mTLSTransport.TLSClientConfig.ClientCAs = caCertPool
-				setupLog.Info("Configured the custom CA pem for the mTLS transport", "path", caCertPath)
-			} else {
-				setupLog.Error(err, "Cannot read provided CA pem for mTLS transport", "path", caCertPath)
-				return err
-			}
-		}
-
-		solr_api.SetMTLSHttpClient(&http.Client{Transport: mTLSTransport})
+	// Load client cert information from files
+	clientCert, err := tls.LoadX509KeyPair(clientCertPath, clientCertKeyPath)
+	if err != nil {
+		setupLog.Error(err, "Error loading clientCert pair for mTLS transport", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
+		return err
 	}
 
+	if watcher != nil {
+		// If the cert file is a symlink (which is the case when loaded from a secret), then we need to re-add the watch after the
+		isSymlink := false
+		clientCertFile, _ := filepath.EvalSymlinks(clientCertPath)
+		if clientCertFile != clientCertPath {
+			isSymlink = true
+		}
+
+		// Watch cert files for updates
+		go func() {
+			for {
+				select {
+				case event, ok := <-watcher.Events:
+					if !ok {
+						return
+					}
+					// If the cert was loaded from a secret, then the path will be for a symlink and an update comes in as a REMOVE event
+					// otherwise, look for a write to the real file
+					if ((isSymlink && event.Op&fsnotify.Remove == fsnotify.Remove) || (event.Op&fsnotify.Write == fsnotify.Write)) && event.Name == clientCertPath {
+						clientCertFile, _ := filepath.EvalSymlinks(clientCertPath)
+						setupLog.Info("mTLS cert file updated", "certPath", clientCertPath, "certFile", clientCertFile)
+
+						clientCert, err = tls.LoadX509KeyPair(clientCertPath, clientCertKeyPath)
+						if err == nil {
+							mTLSTransport, err := buildTLSTransport(&clientCert)
+							if err != nil {
+								setupLog.Error(err, "Failed to build mTLS transport after cert updated", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
+							} else {
+								setupLog.Info("Updated mTLS Http Client after update to cert", "certPath", clientCertPath)
+								solr_api.SetMTLSHttpClient(&http.Client{Transport: mTLSTransport})
+							}
+						} else {
+							setupLog.Error(err, "Error loading clientCert pair (after update) for mTLS transport", "certPath", clientCertPath, "keyPath", clientCertKeyPath)
+						}
+
+						// If the symlink we were watching was removed, re-add the watch
+						if event.Op&fsnotify.Remove == fsnotify.Remove {
+							err = watcher.Add(clientCertPath)
+							if err != nil {
+								setupLog.Error(err, "Re-add fsnotify watch for cert failed", "certPath", clientCertPath)
+							} else {
+								setupLog.Info("Re-added watch for symlink to mTLS cert file", "certPath", clientCertPath, "certFile", clientCertFile)
+							}
+						}
+					}
+				case err, ok := <-watcher.Errors:
+					if !ok {
+						return
+					}
+					setupLog.Error(err, "fsnotify error")
+				}
+			}
+		}()
+
+		err = watcher.Add(clientCertPath)
+		if err != nil {
+			setupLog.Error(err, "Add fsnotify watch for cert failed", "certPath", clientCertPath)
+			return err
+		}
+		setupLog.Info("Added fsnotify watch for mTLS cert file", "certPath", clientCertPath, "certFile", clientCertFile, "isSymlink", isSymlink)
+	} else {
+		setupLog.Info("Watch for mTLS cert updates disabled", "certPath", clientCertPath)
+	}
+
+	mTLSTransport, err := buildTLSTransport(&clientCert)
+	if err != nil {
+		return err
+	}
+	solr_api.SetMTLSHttpClient(&http.Client{Transport: mTLSTransport})
+
 	return nil
+}
+
+func buildTLSTransport(clientCert *tls.Certificate) (*http.Transport, error) {
+	mTLSTransport := http.DefaultTransport.(*http.Transport).Clone()
+	mTLSTransport.TLSClientConfig = &tls.Config{Certificates: []tls.Certificate{*clientCert}, InsecureSkipVerify: clientSkipVerify}
+
+	// Add the rootCA if one is provided
+	if caCertPath != "" {
+		if caCertBytes, err := ioutil.ReadFile(caCertPath); err == nil {
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCertBytes)
+			mTLSTransport.TLSClientConfig.ClientCAs = caCertPool
+			setupLog.Info("Configured the custom CA pem for the mTLS transport", "path", caCertPath)
+		} else {
+			setupLog.Error(err, "Cannot read provided CA pem for mTLS transport", "path", caCertPath)
+			return nil, err
+		}
+	}
+
+	return mTLSTransport, nil
 }
