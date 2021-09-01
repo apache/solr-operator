@@ -18,10 +18,14 @@
 package util
 
 import (
+	"context"
+	"crypto/md5"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
 	"strings"
 )
@@ -66,23 +70,30 @@ type TLSConfig struct {
 	// The paths vary based on whether this config is for a client or server cert
 	KeystorePath   string
 	TruststorePath string
+	VolumePrefix   string
+	Namespace      string
 }
 
 // Get a TLSCerts struct for reconciling TLS on a SolrCloud
 func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
 	tls := &TLSCerts{
 		ServerConfig: &TLSConfig{
-			Options:        instance.Spec.SolrTLS.DeepCopy(),
-			KeystorePath:   DefaultKeyStorePath,
-			TruststorePath: DefaultTrustStorePath,
+			Options:           instance.Spec.SolrTLS.DeepCopy(),
+			KeystorePath:      DefaultKeyStorePath,
+			TruststorePath:    DefaultTrustStorePath,
+			CertMd5Annotation: SolrTlsCertMd5Annotation,
+			Namespace:         instance.Namespace,
 		},
 		InitContainerImage: instance.Spec.BusyBoxImage,
 	}
 	if instance.Spec.SolrClientTLS != nil {
 		tls.ClientConfig = &TLSConfig{
-			Options:        instance.Spec.SolrClientTLS.DeepCopy(),
-			KeystorePath:   DefaultClientKeyStorePath,
-			TruststorePath: DefaultClientTrustStorePath,
+			Options:           instance.Spec.SolrClientTLS.DeepCopy(),
+			KeystorePath:      DefaultClientKeyStorePath,
+			TruststorePath:    DefaultClientTrustStorePath,
+			VolumePrefix:      "client-",
+			CertMd5Annotation: SolrClientTlsCertMd5Annotation,
+			Namespace:         instance.Namespace,
 		}
 	}
 	return tls
@@ -101,9 +112,11 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 	}
 	return &TLSCerts{
 		ClientConfig: &TLSConfig{
-			Options:        prometheusExporter.Spec.SolrReference.SolrTLS.DeepCopy(),
-			KeystorePath:   DefaultKeyStorePath,
-			TruststorePath: DefaultTrustStorePath,
+			Options:           prometheusExporter.Spec.SolrReference.SolrTLS.DeepCopy(),
+			KeystorePath:      DefaultKeyStorePath,
+			TruststorePath:    DefaultTrustStorePath,
+			CertMd5Annotation: SolrClientTlsCertMd5Annotation,
+			Namespace:         prometheusExporter.Namespace,
 		},
 		InitContainerImage: bbImage,
 	}
@@ -126,11 +139,11 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 
 	if serverCert.Options.PKCS12Secret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
-		serverCert.mountTLSSecretOnPodTemplate(&stateful.Spec.Template, "")
+		serverCert.mountTLSSecretOnPodTemplate(&stateful.Spec.Template)
 
 		// mount the client certificate from a different secret (at different mount points)
 		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
-			tls.ClientConfig.mountTLSSecretOnPodTemplate(&stateful.Spec.Template, "client-")
+			tls.ClientConfig.mountTLSSecretOnPodTemplate(&stateful.Spec.Template)
 		}
 	} else if serverCert.Options.MountedTLSDir != nil {
 		// the TLS files come from some auto-mounted directory on the main container
@@ -154,7 +167,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 
 	if clientCert.Options.PKCS12Secret != nil || clientCert.Options.TrustStoreSecret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
-		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template, "")
+		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template)
 	} else if clientCert.Options.MountedTLSDir != nil {
 		// volumes and mounts for TLS when using the mounted dir option
 		clientCert.mountTLSWrapperScriptAndInitContainer(deployment, tls.InitContainerImage)
@@ -162,11 +175,11 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 }
 
 // Configures a pod template (either StatefulSet or Deployment) to mount the TLS files from a secret
-func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSpec, namePrefix string) *corev1.Container {
+func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSpec) *corev1.Container {
 	mainContainer := &template.Spec.Containers[0]
 
 	// the TLS files are mounted from a secret, setup the volumes and mounts
-	vols, mounts := tls.volumesAndMounts(namePrefix)
+	vols, mounts := tls.volumesAndMounts()
 
 	// We need an initContainer to convert a TLS cert into the pkcs12 format Java wants (using openssl)
 	// but openssl cannot write to the /var/solr/tls directory because of the way secret mounts work
@@ -191,8 +204,94 @@ func (tls *TLSConfig) mountTLSSecretOnPodTemplate(template *corev1.PodTemplateSp
 	return mainContainer
 }
 
+// Make sure the secret containing the keystore and corresponding password secret exist and have the expected keys
+// Also, set up to watch for updates if desired
+// Also, verifies the configured truststore if provided
+func (tls *TLSConfig) VerifyKeystoreAndTruststoreSecretConfig(client *client.Client) (*corev1.Secret, error) {
+	opts := tls.Options
+	foundTLSSecret, err := verifyTLSSecretConfig(client, opts.PKCS12Secret.Name, tls.Namespace, opts.KeyStorePasswordSecret)
+	if err != nil {
+		return nil, err
+	} else {
+		if opts.RestartOnTLSSecretUpdate {
+			err = tls.saveCertMd5(foundTLSSecret)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if _, ok := foundTLSSecret.Data[opts.PKCS12Secret.Key]; !ok {
+			// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
+			tls.NeedsPkcs12InitContainer = true
+		}
+	}
+
+	// verify the truststore config is valid too
+	if opts.TrustStoreSecret != nil {
+		// verify the TrustStore secret is configured correctly
+		passwordSecret := opts.TrustStorePasswordSecret
+		if passwordSecret == nil {
+			passwordSecret = opts.KeyStorePasswordSecret
+		}
+		_, err := verifyTLSSecretConfig(client, opts.TrustStoreSecret.Name, tls.Namespace, passwordSecret)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// does the supplied keystore secret also contain the truststore?
+		if _, ok := foundTLSSecret.Data[DefaultPkcs12TruststoreFile]; ok {
+			// there's a truststore in the supplied TLS secret
+			opts.TrustStoreSecret =
+				&corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: foundTLSSecret.Name}, Key: DefaultPkcs12TruststoreFile}
+			if opts.TrustStorePasswordSecret == nil {
+				opts.TrustStorePasswordSecret = opts.KeyStorePasswordSecret
+			}
+		}
+	}
+
+	return foundTLSSecret, nil
+}
+
+// Special case where the user only configured a truststore for the exporter (no keystore)
+func (tls *TLSConfig) VerifyTruststoreOnly(client *client.Client) error {
+	secret := tls.Options.TrustStoreSecret
+	truststoreSecret, err := verifyTLSSecretConfig(client, secret.Name, tls.Namespace, tls.Options.TrustStorePasswordSecret)
+	if err != nil {
+		return err
+	}
+
+	// make sure truststore.p12 is actually in the supplied secret
+	if _, ok := truststoreSecret.Data[secret.Key]; !ok {
+		return fmt.Errorf("%s key not found in truststore password secret %s", secret.Key, secret.Name)
+	}
+
+	// If we have a watch on secrets, then get notified when the secret changes (such as after cert renewal)
+	// capture the hash of the truststore and stash in an annotation so that pods get restarted if the cert changes
+	// If watch = false, then we may be watching the keystore instead
+	if tls.Options.RestartOnTLSSecretUpdate {
+		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(truststoreSecret.Data[secret.Key]))
+	}
+
+	return nil
+}
+
+func (tls *TLSConfig) saveCertMd5(tlsSecret *corev1.Secret) error {
+	// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
+	// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
+	if tlsCertBytes, ok := tlsSecret.Data[TLSCertKey]; ok {
+		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
+		return nil
+	}
+
+	return fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'restartOnTLSSecretUpdate' is enabled", TLSCertKey, tlsSecret.Name)
+}
+
+func (tls *TLSConfig) volumeName(baseName string) string {
+	return tls.VolumePrefix + baseName
+}
+
 // Get a list of volumes for the keystore and optionally a truststore loaded from a TLS secret
-func (tls *TLSConfig) volumesAndMounts(namePrefix string) ([]corev1.Volume, []corev1.VolumeMount) {
+func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount) {
 	optional := false
 	defaultMode := int32(0664)
 	vols := []corev1.Volume{}
@@ -202,7 +301,7 @@ func (tls *TLSConfig) volumesAndMounts(namePrefix string) ([]corev1.Volume, []co
 	opts := tls.Options
 	if opts.PKCS12Secret != nil {
 		keystoreSecretName = opts.PKCS12Secret.Name
-		volName := namePrefix + "keystore"
+		volName := tls.volumeName("keystore")
 		vols = append(vols, corev1.Volume{
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
@@ -219,7 +318,7 @@ func (tls *TLSConfig) volumesAndMounts(namePrefix string) ([]corev1.Volume, []co
 	// if they're using a different truststore other than the keystore, but don't mount an additional volume
 	// if it's just pointing at the same secret
 	if opts.TrustStoreSecret != nil && opts.TrustStoreSecret.Name != keystoreSecretName {
-		volName := namePrefix + "truststore"
+		volName := tls.volumeName("truststore")
 		vols = append(vols, corev1.Volume{
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
@@ -417,7 +516,7 @@ func (tls *TLSConfig) mountTLSWrapperScriptAndInitContainer(deployment *appsv1.D
 
 			#!/bin/bash
 			ksp=$(cat $MOUNTED_TLS_DIR/keystore-password)
-			tsp=$(cat $MOUNTED_TLS_DIR/keystore-password)
+			tsp=$(cat $MOUNTED_TLS_DIR/truststore-password)s
 			JAVA_OPTS="${JAVA_OPTS} -Djavax.net.ssl.keyStorePassword=${ksp} -Djavax.net.ssl.trustStorePassword=${tsp}"
 			/opt/solr/contrib/prometheus-exporter/bin/solr-exporter $@
 
@@ -463,9 +562,9 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 	      #!/bin/bash
 
 	      export SOLR_SSL_KEY_STORE_PASSWORD=`cat $MOUNTED_SERVER_TLS_DIR/keystore-password`
-	      export SOLR_SSL_TRUST_STORE_PASSWORD=`cat $MOUNTED_SERVER_TLS_DIR/keystore-password`
+	      export SOLR_SSL_TRUST_STORE_PASSWORD=`cat $MOUNTED_SERVER_TLS_DIR/truststore-password`
 	      export SOLR_SSL_CLIENT_KEY_STORE_PASSWORD=`cat $MOUNTED_CLIENT_TLS_DIR/keystore-password`
-	      export SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD=`cat $MOUNTED_CLIENT_TLS_DIR/keystore-password`
+	      export SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD=`cat $MOUNTED_CLIENT_TLS_DIR/truststore-password`
 
 	*/
 
@@ -671,4 +770,36 @@ func mountInitDbIfNeeded(stateful *appsv1.StatefulSet) {
 		stateful.Spec.Template.Spec.Volumes = append(stateful.Spec.Template.Spec.Volumes, *vol)
 		mainContainer.VolumeMounts = append(mainContainer.VolumeMounts, *mount)
 	}
+}
+
+// Utility method used during reconcile to verify a TLS secret exists and has the correct key
+// Also verifies the corresponding password secret exists and has the expected key
+// Used for verifying keystore and truststore configuration
+func verifyTLSSecretConfig(client *client.Client, secretName string, secretNamespace string, passwordSecret *corev1.SecretKeySelector) (*corev1.Secret, error) {
+	ctx := context.TODO()
+	reader := *client
+
+	foundTLSSecret := &corev1.Secret{}
+	lookupErr := reader.Get(ctx, types.NamespacedName{Name: secretName, Namespace: secretNamespace}, foundTLSSecret)
+	if lookupErr != nil {
+		return nil, lookupErr
+	} else {
+		if passwordSecret == nil {
+			return nil, fmt.Errorf("no password secret configured for %s", secretName)
+		}
+
+		// Make sure the secret containing the keystore password exists as well
+		keyStorePasswordSecret := &corev1.Secret{}
+		err := reader.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
+		if err != nil {
+			return nil, err
+		}
+
+		// we found the keystore secret, but does it have the key we expect?
+		if _, ok := keyStorePasswordSecret.Data[passwordSecret.Key]; !ok {
+			return nil, fmt.Errorf("%s key not found in password secret %s", passwordSecret.Key, keyStorePasswordSecret.Name)
+		}
+	}
+
+	return foundTLSSecret, nil
 }

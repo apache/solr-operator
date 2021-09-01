@@ -134,6 +134,19 @@ func TestMountedTLSDir(t *testing.T) {
 	verifyReconcileMountedTLSDir(t, instance)
 }
 
+func TestMountedTLSDirNonDefaultFileNames(t *testing.T) {
+	instance := buildTestSolrCloud()
+	mountedDir := &solr.MountedTLSDirectory{
+		Path:                   "/mounted-non-default",
+		KeystoreFile:           "ks.p12",
+		TruststoreFile:         "ts.p12",
+		KeystorePasswordFile:   "ks-password",
+		TruststorePasswordFile: "ts-password",
+	}
+	instance.Spec.SolrTLS = &solr.SolrTLSOptions{MountedTLSDir: mountedDir, CheckPeerName: true, ClientAuth: "Need", VerifyClientHostname: true}
+	verifyReconcileMountedTLSDir(t, instance)
+}
+
 func TestMountedTLSDirWithBasicAuth(t *testing.T) {
 	instance := buildTestSolrCloud()
 	mountedDir := mountedTLSDir("/mounted-tls-dir")
@@ -473,12 +486,28 @@ func expectMountedTLSDirConfigOnPodTemplate(t *testing.T, podTemplate *corev1.Po
 	tlsJavaToolOpts, tlsJavaSysProps := "", ""
 	// if there's a client cert, then the probe should use that, else uses the server cert
 	if sc.Spec.SolrClientTLS != nil && sc.Spec.SolrClientTLS.MountedTLSDir != nil {
-		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-client-tls-dir/keystore-password) " +
-			"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-client-tls-dir/keystore-password)"
+		expectedKeystorePasswordFile := sc.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile
+		expectedTruststorePasswordFile := sc.Spec.SolrClientTLS.MountedTLSDir.Path + "/"
+		if sc.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile != "" {
+			expectedTruststorePasswordFile += sc.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile
+		} else {
+			expectedTruststorePasswordFile += sc.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile
+		}
+
+		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat " + expectedKeystorePasswordFile + ") " +
+			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
 		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
 	} else {
-		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat /mounted-tls-dir/keystore-password) " +
-			"-Djavax.net.ssl.trustStorePassword=$(cat /mounted-tls-dir/keystore-password)"
+		expectedKeystorePasswordFile := sc.Spec.SolrTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
+		expectedTruststorePasswordFile := sc.Spec.SolrTLS.MountedTLSDir.Path + "/"
+		if sc.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile != "" {
+			expectedTruststorePasswordFile += sc.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile
+		} else {
+			expectedTruststorePasswordFile += sc.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
+		}
+
+		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat " + expectedKeystorePasswordFile + ") " +
+			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
 		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE"
 	}
 
@@ -979,8 +1008,8 @@ func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar, sc *solr.
 		assert.Equal(t, 7, len(envVars), "expected SOLR_SSL related env vars not found")
 	}
 
-	expectedKeystorePath := "/mounted-tls-dir/keystore.p12"
-	expectedTruststorePath := "/mounted-tls-dir/truststore.p12"
+	expectedKeystorePath := sc.Spec.SolrTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrTLS.MountedTLSDir.KeystoreFile
+	expectedTruststorePath := sc.Spec.SolrTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrTLS.MountedTLSDir.TruststoreFile
 
 	for _, envVar := range envVars {
 		if envVar.Name == "SOLR_SSL_ENABLED" {
@@ -1009,6 +1038,21 @@ func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar, sc *solr.
 
 		if envVar.Name == "SOLR_SSL_CHECK_PEER_NAME" {
 			assert.Equal(t, "true", envVar.Value)
+		}
+	}
+
+	if sc.Spec.SolrClientTLS != nil && sc.Spec.SolrClientTLS.MountedTLSDir != nil {
+		for _, envVar := range envVars {
+			if envVar.Name == "SOLR_SSL_CLIENT_KEY_STORE" {
+				expectedKeystorePath = sc.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrClientTLS.MountedTLSDir.KeystoreFile
+				assert.Equal(t, expectedKeystorePath, envVar.Value)
+			}
+
+			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE" {
+				expectedTruststorePath = sc.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrClientTLS.MountedTLSDir.TruststoreFile
+				assert.Equal(t, expectedTruststorePath, envVar.Value)
+			}
+
 		}
 	}
 }

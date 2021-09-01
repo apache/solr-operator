@@ -472,20 +472,9 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 		}
 
 		// make sure the PKCS12Secret and corresponding keystore password exist and agree with the supplied config
-		err := r.reconcileKeystoreSecret(tls.ClientConfig, opts.PKCS12Secret, opts.KeyStorePasswordSecret, prometheusExporter.Namespace)
+		_, err := tls.ClientConfig.VerifyKeystoreAndTruststoreSecretConfig(&r.Client)
 		if err != nil {
 			return nil, err
-		}
-
-		if opts.TrustStoreSecret != nil {
-			// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
-			if opts.TrustStorePasswordSecret == nil {
-				opts.TrustStorePasswordSecret = opts.KeyStorePasswordSecret
-			}
-			err := r.reconcileTruststoreSecret(tls.ClientConfig, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, false)
-			if err != nil {
-				return nil, err
-			}
 		}
 	} else if opts.TrustStoreSecret != nil {
 		// no client cert, but we have truststore for the exporter, configure it ...
@@ -495,7 +484,7 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 		}
 
 		// make sure the TrustStoreSecret and corresponding password exist and agree with the supplied config
-		err := r.reconcileTruststoreSecret(tls.ClientConfig, opts.TrustStoreSecret, opts.TrustStorePasswordSecret, prometheusExporter.Namespace, true)
+		err := tls.ClientConfig.VerifyTruststoreOnly(&r.Client)
 		if err != nil {
 			return nil, err
 		}
@@ -511,80 +500,4 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 	}
 
 	return tls, nil
-}
-
-// Make sure the keystore and corresponding password secret exist and have the expected keys
-// Also, set up to watch for updates if desired
-func (r *SolrPrometheusExporterReconciler) reconcileKeystoreSecret(tls *util.TLSConfig, secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string) error {
-	foundTLSSecret, err := r.reconcileTLSSecretAndPassword(secret, passwordSecret, namespace)
-	if err != nil {
-		return err
-	}
-
-	if _, ok := foundTLSSecret.Data[secret.Key]; !ok {
-		// the keystore.p12 key is not in the TLS secret, indicating we need to create it using an initContainer
-		tls.NeedsPkcs12InitContainer = true
-	}
-
-	// We have a watch on secrets, so will get notified when the secret changes (such as after cert renewal)
-	// capture the hash of the secret and stash in an annotation so that pods get restarted if the cert changes
-	if tls.Options.RestartOnTLSSecretUpdate {
-		if tlsCertBytes, ok := foundTLSSecret.Data[util.TLSCertKey]; ok {
-			tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-			tls.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
-		} else {
-			return fmt.Errorf("%s key not found in TLS secret %s, cannot watch for updates to the cert without this data but 'solrTLS.restartOnTLSSecretUpdate' is enabled",
-				util.TLSCertKey, foundTLSSecret.Name)
-		}
-	}
-
-	return nil
-}
-
-func (r *SolrPrometheusExporterReconciler) reconcileTruststoreSecret(tls *util.TLSConfig, secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string, watch bool) error {
-	foundTLSSecret, err := r.reconcileTLSSecretAndPassword(secret, passwordSecret, namespace)
-	if err != nil {
-		return err
-	}
-
-	// make sure truststore.p12 is actually in the supplied secret
-	if _, ok := foundTLSSecret.Data[secret.Key]; !ok {
-		return fmt.Errorf("%s key not found in truststore password secret %s", secret.Key, secret.Name)
-	}
-
-	// If we have a watch on secrets, then get notified when the secret changes (such as after cert renewal)
-	// capture the hash of the truststore and stash in an annotation so that pods get restarted if the cert changes
-	// If watch = false, then we may be watching the keystore instead
-	if watch && tls.Options.RestartOnTLSSecretUpdate {
-		tlsCertBytes := foundTLSSecret.Data[secret.Key]
-		tls.CertMd5 = fmt.Sprintf("%x", md5.Sum(tlsCertBytes))
-		tls.CertMd5Annotation = util.SolrClientTlsCertMd5Annotation
-	}
-
-	return nil
-}
-
-func (r *SolrPrometheusExporterReconciler) reconcileTLSSecretAndPassword(secret *corev1.SecretKeySelector, passwordSecret *corev1.SecretKeySelector, namespace string) (*corev1.Secret, error) {
-	ctx := context.TODO()
-	foundTLSSecret := &corev1.Secret{}
-	lookupErr := r.Get(ctx, types.NamespacedName{Name: secret.Name, Namespace: namespace}, foundTLSSecret)
-	if lookupErr != nil {
-		return nil, lookupErr
-	} else {
-		if passwordSecret == nil {
-			return nil, fmt.Errorf("no keystore password secret configured for %s", secret.Name)
-		}
-
-		// Make sure the secret containing the keystore password exists as well
-		keyStorePasswordSecret := &corev1.Secret{}
-		err := r.Get(ctx, types.NamespacedName{Name: passwordSecret.Name, Namespace: foundTLSSecret.Namespace}, keyStorePasswordSecret)
-		if err != nil {
-			return nil, lookupErr
-		}
-		// we found the keystore's password secret, but does it have the key we expect?
-		if _, ok := keyStorePasswordSecret.Data[passwordSecret.Key]; !ok {
-			return nil, fmt.Errorf("%s key not found in TLS password secret %s", passwordSecret.Key, passwordSecret.Name)
-		}
-	}
-	return foundTLSSecret, nil
 }
