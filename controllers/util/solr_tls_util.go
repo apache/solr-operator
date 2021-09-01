@@ -362,13 +362,15 @@ func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 			Value: needClientAuth,
 		},
 		{
-			Name:  "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION",
-			Value: strconv.FormatBool(opts.VerifyClientHostname),
-		},
-		{
 			Name:  "SOLR_SSL_CHECK_PEER_NAME",
 			Value: strconv.FormatBool(opts.CheckPeerName),
 		},
+	}
+
+	// tricky ... bin/solr checks for null SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION via -z to set -Dsolr.jetty.ssl.verifyClientHostName=HTTPS
+	// so only add the SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION env var if false
+	if !opts.VerifyClientHostname {
+		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION", Value: "false"})
 	}
 
 	// keystore / truststore come from either a mountedTLSDir or sourced from a secret mounted on the pod
@@ -590,6 +592,10 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 		"-Dsolr.ssl.checkPeerName=$(SOLR_SSL_CHECK_PEER_NAME)",
 		"-Djavax.net.ssl.trustStore=$(SOLR_SSL_CLIENT_TRUST_STORE)",
 		"-Djavax.net.ssl.trustStoreType=PKCS12",
+	}
+
+	if tls.Options.VerifyClientHostname {
+		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
 	}
 
 	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystoreFile != "") {

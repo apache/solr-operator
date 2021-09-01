@@ -1003,9 +1003,9 @@ func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar, sc *solr.
 	})
 
 	if sc.Spec.SolrClientTLS != nil {
-		assert.Equal(t, 9, len(envVars), "expected SOLR_SSL and SOLR_SSL_CLIENT related env vars not found")
+		assert.Equal(t, 8, len(envVars), "expected SOLR_SSL and SOLR_SSL_CLIENT related env vars not found")
 	} else {
-		assert.Equal(t, 7, len(envVars), "expected SOLR_SSL related env vars not found")
+		assert.Equal(t, 6, len(envVars), "expected SOLR_SSL related env vars not found")
 	}
 
 	expectedKeystorePath := sc.Spec.SolrTLS.MountedTLSDir.Path + "/" + sc.Spec.SolrTLS.MountedTLSDir.KeystoreFile
@@ -1029,10 +1029,6 @@ func expectMountedTLSDirEnvVars(t *testing.T, envVars []corev1.EnvVar, sc *solr.
 		}
 
 		if envVar.Name == "SOLR_SSL_NEED_CLIENT_AUTH" {
-			assert.Equal(t, "true", envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION" {
 			assert.Equal(t, "true", envVar.Value)
 		}
 
