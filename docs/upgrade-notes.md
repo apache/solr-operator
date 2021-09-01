@@ -2,6 +2,29 @@
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
+## Version Compatibility Matrixes
+
+### Kubernetes Versions
+
+| Solr Operator Version | 1.15 | 1.16 - 1.21 | 1.22 |
+| :---: | :---: | :---: | :---: |
+| v0.2.6 | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| v0.2.7 | :x: | :heavy_check_mark: | :x: |
+| v0.2.8 | :x: | :heavy_check_mark: | :x: |
+| v0.3.0 | :x: | :heavy_check_mark: | :x: |
+| v0.4.0 | :x: | :heavy_check_mark: | :x: |
+
+### Solr Versions
+
+| Solr Operator Version | 7.7 | 8.0 - 8.5 | 8.6 - 8.x |
+| :---: | :---: | :---: | :---: | 
+| v0.2.6 | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| v0.2.7 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| v0.2.8 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| v0.3.0 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| v0.4.0 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+
+
 ## Upgrading from `v0.2.x` to `v0.3.x`
 If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
 This is a special upgrade that requires different instructions.
