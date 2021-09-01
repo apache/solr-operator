@@ -204,11 +204,31 @@ solrTLS: {}
   # verifyClientHostname: false
   # checkPeerName: false
   # restartOnTLSSecretUpdate: false
-  # mountedServerTLSDir:
+  # mountedTLSDir:
   #   path: /path/to/mounted/tls
-  #   keystoreFile: ""
+  #   keystoreFile: "keystore.p12"
   #   keystorePasswordFile: ""
-  #   truststoreFile: ""
+  #   truststoreFile: "truststore.p12"
+  #   truststorePasswordFile: ""
+
+solrClientTLS: {}
+  # pkcs12Secret:
+  #   name: secret-name
+  #   key: pkcs12-key
+  # keyStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # trustStoreSecret:
+  #   name: secret-name
+  #   key: truststore-key
+  # trustStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # mountedTLSDir:
+  #   path: /path/to/mounted/tls
+  #   keystoreFile: "keystore.p12"
+  #   keystorePasswordFile: ""
+  #   truststoreFile: "truststore.p12"
   #   truststorePasswordFile: ""
 
 # Customize the Solr Pod for your needs

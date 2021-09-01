@@ -68,7 +68,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSConfig) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
@@ -351,7 +351,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	if (tls != nil && tls.Options.ClientAuth != solr.None) || (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) {
+	if (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) || (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) {
 		probeCommand, vol, volMount := configureSecureProbeCommand(solrCloud, defaultHandler.HTTPGet)
 		if vol != nil {
 			solrVolumes = append(solrVolumes, *vol)
@@ -803,7 +803,7 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 	var ingressTLS []netv1.IngressTLS
 	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{SecretName: solrCloud.Spec.SolrTLS.PKCS12Secret.Name})
-	} // else if using mountedServerTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
+	} // else if using mountedTLSDir, it's likely they'll have an auto-wired TLS solution for Ingress as well via annotations
 
 	if extOpts.IngressTLSTerminationSecret != "" {
 		ingressTLS = append(ingressTLS, netv1.IngressTLS{
@@ -1290,14 +1290,14 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	}
 
 	// Is TLS enabled? If so we need some additional SSL related props
-	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud.Spec.SolrTLS)
+	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud)
 	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
 
 	// construct the probe command to invoke the SolrCLI "api" action
 	//
 	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
 	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s -Dsolr.ssl.checkPeerName=false %s "+
+	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s %s "+
 		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",

@@ -826,6 +826,11 @@ func (in *SolrCloudSpec) DeepCopyInto(out *SolrCloudSpec) {
 		*out = new(SolrTLSOptions)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.SolrClientTLS != nil {
+		in, out := &in.SolrClientTLS, &out.SolrClientTLS
+		*out = new(SolrTLSOptions)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.SolrSecurity != nil {
 		in, out := &in.SolrSecurity, &out.SolrSecurity
 		*out = new(SolrSecurityOptions)
@@ -1124,8 +1129,8 @@ func (in *SolrTLSOptions) DeepCopyInto(out *SolrTLSOptions) {
 		*out = new(v1.SecretKeySelector)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.MountedServerTLSDir != nil {
-		in, out := &in.MountedServerTLSDir, &out.MountedServerTLSDir
+	if in.MountedTLSDir != nil {
+		in, out := &in.MountedTLSDir, &out.MountedTLSDir
 		*out = new(MountedTLSDirectory)
 		**out = **in
 	}

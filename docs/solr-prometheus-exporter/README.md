@@ -79,7 +79,7 @@ spec:
 #### Mounted TLS Directory
 _Since v0.4.0_
 
-You can use the `spec.solrReference.solrTLS.mountedServerTLSDir.path` to point to a directory containing certificate files mounted by an external agent or CSI driver.
+You can use the `spec.solrReference.solrTLS.mountedTLSDir.path` to point to a directory containing certificate files mounted by an external agent or CSI driver.
 
 ### Prometheus Exporter with Basic Auth
 _Since v0.3.0_

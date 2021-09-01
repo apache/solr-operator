@@ -157,6 +157,11 @@ spec:
     {{- toYaml .Values.solrTLS | nindent 4 }}
   {{- end }}
 
+  {{- if .Values.solrClientTLS }}
+  solrClientTLS:
+    {{- toYaml .Values.solrClientTLS | nindent 4 }}
+  {{- end }}
+
   {{- include "solr.custom-kube-options" . | nindent 2 -}}
 
   {{- if .Values.zk -}}

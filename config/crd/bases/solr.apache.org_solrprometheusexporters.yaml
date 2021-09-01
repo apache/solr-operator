@@ -61,7 +61,7 @@ spec:
             description: SolrPrometheusExporterSpec defines the desired state of SolrPrometheusExporter
             properties:
               busyBoxImage:
-                description: An initContainer is needed to create a wrapper script around the exporter entrypoint when TLS is enabled with the `spec.solrReference.solrTLS.mountedServerTLSDir` option
+                description: An initContainer is needed to create a wrapper script around the exporter entrypoint when TLS is enabled with the `spec.solrReference.solrTLS.mountedTLSDir` option
                 properties:
                   imagePullSecret:
                     type: string
@@ -3454,14 +3454,14 @@ spec:
                         type: boolean
                       clientAuth:
                         default: None
-                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                        description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
                         enum:
                         - None
                         - Want
                         - Need
                         type: string
                       keyStorePasswordSecret:
-                        description: Secret containing the key store password; this field is required unless mountedServerTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+                        description: Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
                         properties:
                           key:
                             description: The key of the secret to select from.  Must be a valid secret key.
@@ -3475,11 +3475,11 @@ spec:
                         required:
                         - key
                         type: object
-                      mountedServerTLSDir:
-                        description: Used to specify a path where the keystore, truststore, and password files for the server certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                      mountedTLSDir:
+                        description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                         properties:
                           keystoreFile:
-                            description: Override the name of the keystore file; defaults to keystore.p12
+                            description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                             type: string
                           keystorePasswordFile:
                             description: Override the name of the keystore password file; defaults to keystore-password
@@ -3488,7 +3488,7 @@ spec:
                             description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
                             type: string
                           truststoreFile:
-                            description: Override the name of the truststore file; defaults truststore.p12 To use the same file as the keystore, override this variable with the name of your keystore file
+                            description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
                             type: string
                           truststorePasswordFile:
                             description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
@@ -3497,7 +3497,7 @@ spec:
                         - path
                         type: object
                       pkcs12Secret:
-                        description: TLS Secret containing a pkcs12 keystore; required unless mountedServerTLSDir is used
+                        description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
                         properties:
                           key:
                             description: The key of the secret to select from.  Must be a valid secret key.
@@ -3512,7 +3512,7 @@ spec:
                         - key
                         type: object
                       restartOnTLSSecretUpdate:
-                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                        description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                         type: boolean
                       trustStorePasswordSecret:
                         description: Secret containing the trust store password; if not provided the keyStorePassword will be used
@@ -3545,7 +3545,7 @@ spec:
                         - key
                         type: object
                       verifyClientHostname:
-                        description: Verify client's hostname during SSL handshake
+                        description: Verify client's hostname during SSL handshake Only applies for server configuration
                         type: boolean
                     type: object
                   standalone:

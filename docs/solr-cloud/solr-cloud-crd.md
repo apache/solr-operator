@@ -525,13 +525,50 @@ _Since v0.4.0_
 
 The options discussed to this point require that all Solr pods share the same certificate and truststore. An emerging pattern in the Kubernetes ecosystem is to issue a unique certificate for each pod.
 Typically this operation is performed by an external agent, such as a cert-manager extension, that uses mutating webhooks to mount a unique certificate and supporting files on each pod dynamically.
-How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedServerTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
-Given the `spec.solrTLS.mountedServerTLSDir.path`, the Solr operator will enable TLS on Solr using the keystore and truststore files in this directory.
+How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
+The following example illustrates how to configure a keystore and truststore in PKCS12 format using the `mountedTLSDir` option:
+```yaml
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    clientAuth: Want
+    checkPeerName: true
+    verifyClientHostname: true
+    mountedTLSDir:
+      path: /pod-server-tls
+      keystoreFile: keystore.p12
+      keystorePasswordFile: keystore-password
+      truststoreFile: truststore.p12
+```
 
 When using the mounted TLS directory option, you need to ensure each Solr pod gets restarted before the certificate expires. Solr does not support hot reloading of the keystore or truststore.
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
 Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
+### Client TLS
+_Since v0.4.0_
+
+Solr supports using separate client and server TLS certificates. Solr uses the client certificate in mutual TLS (mTLS) scenarios to make requests to other Solr pods.
+Use the `spec.solrClientTLS` configuration options to configure a separate client certificate. 
+As this is an advanced option, the supplied client certificate keystore and truststore must already be in PKCS12 format.
+As with the server certificate loaded from `spec.solrTLS.pkcs12Secret`, 
+you can have the operator restart Solr pods after the client TLS secret updates by setting `spec.solrClientTLS.restartOnTLSSecretUpdate` to `true`.
+
+You may need to increase the timeout for the liveness / readiness probes when using mTLS with a separate client certificate, such as: 
+```yaml
+spec:
+  ... other SolrCloud CRD settings ...
+
+  customSolrKubeOptions:
+    podOptions:
+      livenessProbe:
+        timeoutSeconds: 10
+      readinessProbe:
+        timeoutSeconds: 10
+```
+
+You may also use the `spec.solrClientTLS.mountedTLSDir` option to load a pod specific client certificate from a directory mounted by an external agent or CSI driver.  
 
 ### Ingress with TLS protected Solr
 
