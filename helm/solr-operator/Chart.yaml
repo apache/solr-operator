@@ -157,6 +157,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/311
     - kind: added
+      description: Option to watch for updates to the mTLS client certificate used by the operator to call Solr pods.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/317
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/318
+    - kind: added
       description: Configuration options to support an additional client TLS cert in addition to the server certificate
       links:
         - name: Github Issue
