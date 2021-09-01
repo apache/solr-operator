@@ -76,3 +76,4 @@ mTLS:
   caCertSecret: ""
   caCertSecretKey: ca-cert.pem
   insecureSkipVerify: true
+  watchForUpdates: true

@@ -156,6 +156,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/290
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/311
+    - kind: added
+      description: Option to watch for updates to the mTLS client certificate used by the operator to call Solr pods.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/317
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/318
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.4.0-prerelease

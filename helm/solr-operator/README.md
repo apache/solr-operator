@@ -163,6 +163,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
 | mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |
 | mTLS.insecureSkipVerify | boolean | `true` | Skip server certificate and hostname verification when connecting to Solr with ClientAuth. |
+| mTLS.watchForUpdates | boolean | `true` | Watch for updates to the mTLS certificate to reload the HTTP client used to call Solr pods with an updated client certificate. |
 
 ### Running the Solr Operator
 
