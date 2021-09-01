@@ -6,23 +6,23 @@ Please carefully read the entries for all versions between the version you are r
 
 ### Kubernetes Versions
 
-| Solr Operator Version | 1.15 | 1.16 - 1.21 | 1.22 |
+| Solr Operator Version | `1.15` | `1.16` - `1.21` | `1.22` |
 | :---: | :---: | :---: | :---: |
-| v0.2.6 | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| v0.2.7 | :x: | :heavy_check_mark: | :x: |
-| v0.2.8 | :x: | :heavy_check_mark: | :x: |
-| v0.3.0 | :x: | :heavy_check_mark: | :x: |
-| v0.4.0 | :x: | :heavy_check_mark: | :x: |
+| `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.7` | :x: | :heavy_check_mark: | :x: |
+| `v0.2.8` | :x: | :heavy_check_mark: | :x: |
+| `v0.3.0` | :x: | :heavy_check_mark: | :x: |
+| `v0.4.0` | :x: | :heavy_check_mark: | :x: |
 
 ### Solr Versions
 
-| Solr Operator Version | 7.7 | 8.0 - 8.5 | 8.6 - 8.x |
-| :---: | :---: | :---: | :---: | 
-| v0.2.6 | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| v0.2.7 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| v0.2.8 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| v0.3.0 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| v0.4.0 | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Solr Operator Version | `6.6` | `7.7` | `8.0` - `8.5` | `8.6`+ |
+| :---: | :---: | :---: | :---: | :---: | 
+| `v0.2.6` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.7` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.2.8` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.3.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 
 ## Upgrading from `v0.2.x` to `v0.3.x`
