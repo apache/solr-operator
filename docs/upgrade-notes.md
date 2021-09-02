@@ -6,7 +6,7 @@ Please carefully read the entries for all versions between the version you are r
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.21` | `1.22` |
+| Solr Operator Version | `1.15` | `1.16` - `1.21` | `1.22`+ |
 | :---: | :---: | :---: | :---: |
 | `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :x: |
 | `v0.2.7` | :x: | :heavy_check_mark: | :x: |
