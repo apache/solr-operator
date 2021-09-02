@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] -v VERSION -l LOCATION -g GPG_KEY
 
 Test the release candidate in a Kind cluster
 
@@ -32,11 +32,12 @@ Test the release candidate in a Kind cluster
     -i  Solr Operator docker image to use  (Optional, defaults to apache/solr-operator:<version>)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
+    -k  Kubernetes Version to test with (full tag, e.g. v1.21.2)
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:g: opt; do
+while getopts hv:i:l:g:k: opt; do
     case $opt in
         h)
             show_help
@@ -49,6 +50,8 @@ while getopts hv:i:l:g: opt; do
         l)  LOCATION=$OPTARG
             ;;
         g)  GPG_KEY=$OPTARG
+            ;;
+        k)  KUBERNETES_VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -69,6 +72,9 @@ if [[ -z "${LOCATION:-}" ]]; then
 fi
 if [[ -z "${GPG_KEY:-}" ]]; then
   echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
+fi
+if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
+  KUBERNETES_VERSION="v1.21.2"
 fi
 
 # If LOCATION is not a URL, then get the absolute path
@@ -91,7 +97,7 @@ fi
 
 if ! (which kind); then
   echo "Install Kind (Kubernetes in Docker)"
-  GO111MODULE="on" go install sigs.k8s.io/kind@v0.10.0
+  GO111MODULE="on" go install sigs.k8s.io/kind@v0.11.1
 fi
 
 CLUSTER_NAME="solr-operator-${VERSION}-rc"
@@ -102,8 +108,8 @@ if (kind get clusters | grep "${CLUSTER_NAME}"); then
   kind delete clusters "${CLUSTER_NAME}"
 fi
 
-echo "Create test Kubernetes cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
-kind create cluster --name "${CLUSTER_NAME}"
+echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
+kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}"
 
 # Load the docker image into the cluster
 kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
