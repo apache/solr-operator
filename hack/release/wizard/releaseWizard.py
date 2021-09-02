@@ -184,9 +184,17 @@ def check_prerequisites(todo=None):
         asciidoc_ver = ""
         print("WARNING: In order to export asciidoc version to HTML, you will need asciidoctor installed")
     try:
+        go_ver = run("go version").splitlines()[0]
+    except:
+        sys.exit("You will need go installed")
+    try:
         git_ver = run("git --version").splitlines()[0]
     except:
         sys.exit("You will need git installed")
+    try:
+        svn_ver = run("svn --version").splitlines()[0]
+    except:
+        sys.exit("You will need svn installed")
     if not 'EDITOR' in os.environ:
         print("WARNING: Environment variable $EDITOR not set, using %s" % get_editor())
 
@@ -1109,7 +1117,8 @@ def configure_pgp(gpg_todo):
     id = str(input("Please enter your Apache id: (ENTER=skip) "))
     if id.strip() == '':
         return False
-    all_keys = load('https://home.apache.org/keys/group/solr.asc')
+    key_url = "https://home.apache.org/keys/committer/%s.asc" % id.strip()
+    all_keys = load(key_url)
     lines = all_keys.splitlines()
     keyid_linenum = None
     for idx, line in enumerate(lines):
@@ -1122,7 +1131,7 @@ def configure_pgp(gpg_todo):
         gpg_fingerprint = keyid_line[14:].replace(" ", "")
         gpg_id = gpg_fingerprint[-8:]
 
-        print("Found gpg key id %s on file at Apache (https://home.apache.org/keys/group/solr.asc)" % gpg_id)
+        print("Found gpg key id %s on file at Apache (%s)" % (gpg_id, key_url))
     else:
         print(textwrap.dedent("""\
             Could not find your GPG key from Apache servers.
