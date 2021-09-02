@@ -1118,8 +1118,8 @@ def configure_pgp(gpg_todo):
     if id.strip() == '':
         return False
     key_url = "https://home.apache.org/keys/committer/%s.asc" % id.strip()
-    all_keys = load(key_url)
-    lines = all_keys.splitlines()
+    committer_key = load(key_url)
+    lines = committer_key.splitlines()
     keyid_linenum = None
     for idx, line in enumerate(lines):
         if line == 'ASF ID: %s' % id:

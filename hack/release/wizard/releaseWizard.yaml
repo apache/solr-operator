@@ -98,7 +98,7 @@ templates:
 
       <https://apache.github.io/solr-operator/docs/upgrade-notes.html>
 
-    For the most exhaustive list, see the change log on ArtifactHub or by viewing the git history in the solr-operator repo.
+    For the most exhaustive list, see the change log on ArtifactHub or view the git history in the solr-operator repo.
 
       <https://artifacthub.io/packages/helm/apache-solr/solr-operator?modal=changelog>
       <https://github.com/apache/solr-operator/releases/tag/{{ release_version }}>
@@ -286,7 +286,7 @@ groups:
       name: branch_date
   - !Todo
     id: decide_freeze_length
-    title: Decide the lenght of feature freeze
+    title: Decide the length of feature freeze
     types:
     - major
     - minor
@@ -879,6 +879,8 @@ groups:
 
       ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
+
+      If you want to run the smoke test with a specific version of kubernetes, use the -k option with a full version tag. (e.g. -k v1.19.3)
 
       Make sure you have the following installed before running the smoke test:
         - Docker (Give it enough memory and CPU to run ~12 containers, 3 of which are Solr nodes)
