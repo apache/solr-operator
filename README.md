@@ -51,11 +51,7 @@ Example uses of each CRD have been [provided](https://apache.github.io/solr-oper
 
 Make sure to check the [Solr Operator Upgrade notes](docs/upgrade-notes.md), before upgrading the Solr Operator or CRDs in your Kubernetes cluster.
 
-### Compatibility with Kubernetes Versions
-
-#### Fully Compatible - v1.16+
-
-If you require compatibility with previous versions, please install version `v0.2.6` of the Solr Operator.
+This page also contains [Version Compatibility Matrixes](docs/upgrade-notes.md#version-compatibility-matrixes), which detail the compatible Solr versions and Kubernetes versions for each release of the Solr Operator.
 
 ## Contributions
 
