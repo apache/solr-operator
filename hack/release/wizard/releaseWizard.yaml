@@ -626,6 +626,9 @@ groups:
         logfile: git_clean.log
         tee: true
       - !Command
+        cmd: git branch --set-upstream-to=origin/{{ release_branch }} {{ release_branch }}
+        tee: true
+      - !Command
         cmd: git pull --ff-only
         tee: true
       - !Command
