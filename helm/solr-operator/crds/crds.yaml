@@ -6095,8 +6095,8 @@ spec:
                           reclaimPolicy:
                             description: VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete, the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted. The default value is Retain.
                             enum:
-                            - Delete
                             - Retain
+                            - Delete
                             type: string
                           spec:
                             description: PersistentVolumeClaimSpec is the spec to describe PVC for the container This field is optional. If no PVC is specified default persistentvolume will get created.

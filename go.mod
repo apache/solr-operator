@@ -3,6 +3,7 @@ module github.com/apache/solr-operator
 go 1.16
 
 require (
+	github.com/fsnotify/fsnotify v1.4.9 // indirect
 	github.com/go-logr/logr v0.3.0
 	github.com/onsi/ginkgo v1.14.1
 	github.com/onsi/gomega v1.10.2

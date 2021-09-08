@@ -13,16 +13,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-{{- if .Values.rbac.create }}
-{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: {{ include "solr-operator.roleType" $ }}
+kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: {{ include "solr-operator.fullname" $ }}-role
-  namespace: {{ $namespace }}
+  name: solr-operator-role
 rules:
 - apiGroups:
   - ""
@@ -270,6 +266,3 @@ rules:
   - zookeeperclusters/status
   verbs:
   - get
-
-{{- end }}
-{{- end }}
