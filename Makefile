@@ -113,7 +113,7 @@ build-release-artifacts: clean prepare docker-build ## Build all release artifac
 ##@ Build
 
 build: generate ## Build manager binary.
-	BIN=solr-operator GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
+	GIT_SHA=${GIT_SHA} ARCH=${ARCH} GOOS=${GOOS} ./build/build.sh
 
 run: manifests generate fmt vet ## Run a controller from your host
 	go run ./main.go
@@ -229,11 +229,11 @@ helm-deploy-operator: helm-dependency-build docker-build ## Deploy the current v
 
 install-dependencies: .install-dependencies mod-tidy ## Install necessary dependencies for building and testing the Solr Operator
 
-CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
+CONTROLLER_GEN = $(GOBIN)/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0)
 
-KUSTOMIZE = $(shell pwd)/bin/kustomize
+KUSTOMIZE = $(GOBIN)/kustomize
 kustomize: ## Download kustomize locally if necessary.
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.3.0)
 
@@ -242,11 +242,7 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool
 @[ -f $(1) ] || { \
 set -e ;\
-TMP_DIR=$$(mktemp -d) ;\
-cd $$TMP_DIR ;\
-go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
-rm -rf $$TMP_DIR ;\
+go install $(2) ;\
 }
 endef
