@@ -667,6 +667,7 @@ type ZKEphemeral struct {
 	//SizeLimit specifies Total amount of local storage required for this EmptyDir volume.
 	EmptyDirVolumeSource corev1.EmptyDirVolumeSource `json:"emptydirvolumesource,omitempty"`
 }
+
 // ZookeeperConfig is the current configuration of each Zookeeper node, which
 // sets these values in the config-map
 type ZookeeperConfig struct {

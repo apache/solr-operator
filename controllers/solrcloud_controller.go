@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 package controllers
 
 import (
@@ -550,9 +549,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return requeueOrNot, nil
 }
 
-
 func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger,
-		newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
+	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solrv1beta1.SolrTechnologyLabel

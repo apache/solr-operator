@@ -157,7 +157,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "88488bdc.solr.apache.org",
-		NewCache:          		managerWatchCache,
+		NewCache:               managerWatchCache,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start solr operator")
@@ -221,6 +221,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 // Setup for mTLS with Solr pods with hot reload support using the fsnotify Watcher
 func initMTLSConfig(watcher *fsnotify.Watcher) error {
 	setupLog.Info("mTLS config", "clientSkipVerify", clientSkipVerify, "clientCertPath", clientCertPath,

@@ -15,7 +15,6 @@
  * limitations under the License.
  */
 
-
 package controllers
 
 import (
@@ -392,28 +391,28 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &corev1.ConfigMap{}},
 		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
-				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
-				listOps := &client.ListOptions{
-					FieldSelector: fields.OneTermEqualSelector(providedConfigMapField, obj.GetName()),
-					Namespace:     obj.GetNamespace(),
-				}
-				err := r.List(context.Background(), foundExporters, listOps)
-				if err != nil {
-					// if no exporters found, just no-op this
-					return []reconcile.Request{}
-				}
+			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(providedConfigMapField, obj.GetName()),
+				Namespace:     obj.GetNamespace(),
+			}
+			err := r.List(context.Background(), foundExporters, listOps)
+			if err != nil {
+				// if no exporters found, just no-op this
+				return []reconcile.Request{}
+			}
 
-				requests := make([]reconcile.Request, len(foundExporters.Items))
-				for i, item := range foundExporters.Items {
-					requests[i] = reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      item.GetName(),
-							Namespace: item.GetNamespace(),
-						},
-					}
+			requests := make([]reconcile.Request, len(foundExporters.Items))
+			for i, item := range foundExporters.Items {
+				requests[i] = reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
 				}
-				return requests
-			}),
+			}
+			return requests
+		}),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
@@ -475,27 +474,27 @@ func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, 
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &corev1.Secret{}},
 		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
-				foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
-				listOps := &client.ListOptions{
-					FieldSelector: fields.OneTermEqualSelector(secretField, obj.GetName()),
-					Namespace:     obj.GetNamespace(),
-				}
-				err := r.List(context.Background(), foundExporters, listOps)
-				if err != nil {
-					// if no exporters found, just no-op this
-					return []reconcile.Request{}
-				}
+			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(secretField, obj.GetName()),
+				Namespace:     obj.GetNamespace(),
+			}
+			err := r.List(context.Background(), foundExporters, listOps)
+			if err != nil {
+				// if no exporters found, just no-op this
+				return []reconcile.Request{}
+			}
 
-				requests := make([]reconcile.Request, len(foundExporters.Items))
-				for i, item := range foundExporters.Items {
-					requests[i] = reconcile.Request{
-						NamespacedName: types.NamespacedName{
-							Name:      item.GetName(),
-							Namespace: item.GetNamespace(),
-						},
-					}
+			requests := make([]reconcile.Request, len(foundExporters.Items))
+			for i, item := range foundExporters.Items {
+				requests[i] = reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
 				}
-				return requests
-			}),
+			}
+			return requests
+		}),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
