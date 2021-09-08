@@ -18,8 +18,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-kubebuilder_version=2.3.1
-kustomize_version=4.0.5
+kubebuilder_version=3.1.0
+kustomize_version=4.3.0
 controller_gen_version=v0.5.0
 os=$(go env GOOS)
 arch=$(go env GOARCH)

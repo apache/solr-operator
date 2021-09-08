@@ -13,40 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# permissions to do leader election.
+# permissions for end users to view solrprometheusexporters.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: solr-operator-leader-election-role
+  name: solrprometheusexporter-viewer-role
 rules:
 - apiGroups:
-  - ""
+  - solr.apache.org
   resources:
-  - configmaps
+  - solrprometheusexporters
   verbs:
   - get
   - list
   - watch
-  - create
-  - update
-  - patch
-  - delete
 - apiGroups:
-  - coordination.k8s.io
+  - solr.apache.org
   resources:
-  - leases
+  - solrprometheusexporters/status
   verbs:
   - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch

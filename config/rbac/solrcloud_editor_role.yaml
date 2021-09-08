@@ -13,9 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resources:
-- manifests.yaml
-- service.yaml
-
-configurations:
-- kustomizeconfig.yaml
+# permissions for end users to edit solrclouds.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: solrcloud-editor-role
+rules:
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrclouds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrclouds/status
+  verbs:
+  - get

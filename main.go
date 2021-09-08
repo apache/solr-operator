@@ -22,8 +22,6 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
@@ -35,18 +33,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"strings"
 
-	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis"
-	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	// +kubebuilder:scaffold:imports
-)
+	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
+	// to ensure that exec-entrypoint and run can make use of them.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-const (
-	EnvOperatorPodName      = "POD_NAME"
-	EnvOperatorPodNamespace = "POD_NAMESPACE"
+	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/healthz"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers"
+	//+kubebuilder:scaffold:imports
 )
 
 var (
@@ -73,13 +73,17 @@ var (
 	clientCertificate *tls.Certificate
 )
 
+const (
+	EnvOperatorPodName      = "POD_NAME"
+	EnvOperatorPodNamespace = "POD_NAMESPACE"
+)
+
 func init() {
-	_ = clientgoscheme.AddToScheme(scheme)
+	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	_ = solrv1beta1.AddToScheme(scheme)
-	_ = zkv1beta1.AddToScheme(scheme)
+	utilruntime.Must(solrv1beta1.AddToScheme(scheme))
+	//+kubebuilder:scaffold:scheme
 
-	// +kubebuilder:scaffold:scheme
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 
@@ -90,7 +94,6 @@ func init() {
 	flag.StringVar(&caCertPath, "tls-ca-cert-path", "", "Path where a Certificate Authority (CA) cert in PEM format can be found")
 	flag.BoolVar(&clientCertWatch, "tls-watch-cert", true, "Controls whether the operator performs a hot reload of the mTLS when it gets updated; set to false to disable watching for updates to the TLS cert.")
 
-	flag.Parse()
 }
 
 func main() {
@@ -105,12 +108,19 @@ func main() {
 
 	var metricsAddr string
 	var enableLeaderElection bool
-	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
-		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
+	var probeAddr string
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for controller manager. "+
+			"Enabling this will ensure there is only one active controller manager.")
+	opts := zap.Options{
+		Development: true,
+	}
+	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	ctrl.SetLogger(zap.Logger(true))
+	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	fullVersion := version.Version
 	if version.VersionSuffix != "" {
@@ -141,14 +151,16 @@ func main() {
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:             scheme,
-		MetricsBindAddress: metricsAddr,
-		LeaderElection:     enableLeaderElection,
-		Port:               9443,
-		NewCache:           managerWatchCache,
+		Scheme:                 scheme,
+		MetricsBindAddress:     metricsAddr,
+		Port:                   9443,
+		HealthProbeBindAddress: probeAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "88488bdc.solr.apache.org",
+		NewCache:          		managerWatchCache,
 	})
 	if err != nil {
-		setupLog.Error(err, "unable to start manager")
+		setupLog.Error(err, "unable to start solr operator")
 		os.Exit(1)
 	}
 
@@ -173,26 +185,35 @@ func main() {
 
 	if err = (&controllers.SolrCloudReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrCloud")
 		os.Exit(1)
 	}
-	if err = (&controllers.SolrBackupReconciler{
-		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrBackup"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SolrBackup")
-		os.Exit(1)
-	}
 	if err = (&controllers.SolrPrometheusExporterReconciler{
 		Client: mgr.GetClient(),
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrPrometheusExporter"),
+		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrPrometheusExporter")
 		os.Exit(1)
 	}
-	// +kubebuilder:scaffold:builder
+	if err = (&controllers.SolrBackupReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SolrBackup")
+		os.Exit(1)
+	}
+	//+kubebuilder:scaffold:builder
+
+	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up health check")
+		os.Exit(1)
+	}
+	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
+		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
 
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
@@ -200,7 +221,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
 // Setup for mTLS with Solr pods with hot reload support using the fsnotify Watcher
 func initMTLSConfig(watcher *fsnotify.Watcher) error {
 	setupLog.Info("mTLS config", "clientSkipVerify", clientSkipVerify, "clientCertPath", clientCertPath,

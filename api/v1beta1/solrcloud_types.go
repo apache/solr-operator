@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,7 +48,7 @@ const (
 	DefaultZkStorage             = "5Gi"
 	DefaultZkRepo                = "pravega/zookeeper"
 	DefaultZkVersion             = ""
-	DefaultZkVolumeReclaimPolicy = zk.VolumeReclaimPolicyRetain
+	DefaultZkVolumeReclaimPolicy = "Retain"
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
@@ -616,12 +615,12 @@ type ZookeeperSpec struct {
 	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
 	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
 	// +optional
-	Persistence *zk.Persistence `json:"persistence,omitempty"`
+	Persistence *ZKPersistence `json:"persistence,omitempty"`
 
 	// Ephemeral is the configuration which helps create ephemeral storage
 	// At anypoint only one of Persistence or Ephemeral should be present in the manifest
 	// +optional
-	Ephemeral *zk.Ephemeral `json:"ephemeral,omitempty"`
+	Ephemeral *ZKEphemeral `json:"ephemeral,omitempty"`
 
 	// Pod resources for zookeeper pod
 	// +optional
@@ -644,7 +643,129 @@ type ZookeeperSpec struct {
 	// ZooKeeper ACL to use when connecting with ZK for reading operations.
 	// This ACL should have READ permission in the given chRoot.
 	// +optional
-	Config zk.ZookeeperConfig `json:"config,omitempty"`
+	Config ZookeeperConfig `json:"config,omitempty"`
+}
+
+type ZKPersistence struct {
+	// VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete,
+	// the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted.
+	// The default value is Retain.
+	// +kubebuilder:validation:Enum="Delete";"Retain"
+	VolumeReclaimPolicy VolumeReclaimPolicy `json:"reclaimPolicy,omitempty"`
+	// PersistentVolumeClaimSpec is the spec to describe PVC for the container
+	// This field is optional. If no PVC is specified default persistentvolume
+	// will get created.
+	PersistentVolumeClaimSpec corev1.PersistentVolumeClaimSpec `json:"spec,omitempty"`
+	// Annotations specifies the annotations to attach to pvc the operator
+	// creates.
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+type ZKEphemeral struct {
+	//EmptyDirVolumeSource is optional and this will create the emptydir volume
+	//It has two parameters Medium and SizeLimit which are optional as well
+	//Medium specifies What type of storage medium should back this directory.
+	//SizeLimit specifies Total amount of local storage required for this EmptyDir volume.
+	EmptyDirVolumeSource corev1.EmptyDirVolumeSource `json:"emptydirvolumesource,omitempty"`
+}
+// ZookeeperConfig is the current configuration of each Zookeeper node, which
+// sets these values in the config-map
+type ZookeeperConfig struct {
+	// InitLimit is the amount of time, in ticks, to allow followers to connect
+	// and sync to a leader.
+	//
+	// Default value is 10.
+	InitLimit int `json:"initLimit,omitempty"`
+
+	// TickTime is the length of a single tick, which is the basic time unit used
+	// by Zookeeper, as measured in milliseconds
+	//
+	// The default value is 2000.
+	TickTime int `json:"tickTime,omitempty"`
+
+	// SyncLimit is the amount of time, in ticks, to allow followers to sync with
+	// Zookeeper.
+	//
+	// The default value is 2.
+	SyncLimit int `json:"syncLimit,omitempty"`
+
+	// Clients can submit requests faster than ZooKeeper can process them, especially
+	// if there are a lot of clients. Zookeeper will throttle Clients so that requests
+	// won't exceed global outstanding limit.
+	//
+	// The default value is 1000
+	GlobalOutstandingLimit int `json:"globalOutstandingLimit,omitempty"`
+
+	// To avoid seeks ZooKeeper allocates space in the transaction log file in
+	// blocks of preAllocSize kilobytes
+	//
+	// The default value is 64M
+	PreAllocSize int `json:"preAllocSize,omitempty"`
+
+	// ZooKeeper records its transactions using snapshots and a transaction log
+	// The number of transactions recorded in the transaction log before a snapshot
+	// can be taken is determined by snapCount
+	//
+	// The default value is 100,000
+	SnapCount int `json:"snapCount,omitempty"`
+
+	// Zookeeper maintains an in-memory list of last committed requests for fast
+	// synchronization with followers
+	//
+	// The default value is 500
+	CommitLogCount int `json:"commitLogCount,omitempty"`
+
+	// Snapshot size limit in Kb
+	//
+	// The defult value is 4GB
+	SnapSizeLimitInKb int `json:"snapSizeLimitInKb,omitempty"`
+
+	// Limits the total number of concurrent connections that can be made to a
+	//zookeeper server
+	//
+	// The defult value is 0, indicating no limit
+	MaxCnxns int `json:"maxCnxns,omitempty"`
+
+	// Limits the number of concurrent connections that a single client, identified
+	// by IP address, may make to a single member of the ZooKeeper ensemble.
+	//
+	// The default value is 60
+	MaxClientCnxns int `json:"maxClientCnxns,omitempty"`
+
+	// The minimum session timeout in milliseconds that the server will allow the
+	// client to negotiate
+	//
+	// The default value is 4000
+	MinSessionTimeout int `json:"minSessionTimeout,omitempty"`
+
+	// The maximum session timeout in milliseconds that the server will allow the
+	// client to negotiate.
+	//
+	// The default value is 40000
+	MaxSessionTimeout int `json:"maxSessionTimeout,omitempty"`
+
+	// Retain the snapshots according to retain count
+	//
+	// The default value is 3
+	AutoPurgeSnapRetainCount int `json:"autoPurgeSnapRetainCount,omitempty"`
+
+	// The time interval in hours for which the purge task has to be triggered
+	//
+	// Disabled by default
+	AutoPurgePurgeInterval int `json:"autoPurgePurgeInterval,omitempty"`
+
+	// QuorumListenOnAllIPs when set to true the ZooKeeper server will listen for
+	// connections from its peers on all available IP addresses, and not only the
+	// address configured in the server list of the configuration file. It affects
+	// the connections handling the ZAB protocol and the Fast Leader Election protocol.
+	//
+	// The default value is false.
+	QuorumListenOnAllIPs bool `json:"quorumListenOnAllIPs,omitempty"`
+
+	// key-value map of additional zookeeper configuration parameters
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +optional
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
 func (z *ZookeeperSpec) WithDefaults() (changed bool) {

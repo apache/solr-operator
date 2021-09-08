@@ -13,40 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# permissions to do leader election.
+# permissions for end users to edit solrbackups.
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
-  name: solr-operator-leader-election-role
+  name: solrbackup-editor-role
 rules:
 - apiGroups:
-  - ""
+  - solr.apache.org
   resources:
-  - configmaps
+  - solrbackups
   verbs:
+  - create
+  - delete
   - get
   - list
-  - watch
-  - create
-  - update
   - patch
-  - delete
+  - update
+  - watch
 - apiGroups:
-  - coordination.k8s.io
+  - solr.apache.org
   resources:
-  - leases
+  - solrbackups/status
   verbs:
   - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch

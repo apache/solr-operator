@@ -20,14 +20,11 @@ package util
 import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/go-logr/logr"
-	zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
+	//zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	logf "sigs.k8s.io/controller-runtime/pkg/runtime/log"
 	"strings"
 )
-
-var log = logf.Log.WithName("controller")
 
 // GenerateZookeeperCluster returns a new ZookeeperCluster pointer generated for the SolrCloud instance
 // object: SolrCloud instance
