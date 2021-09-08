@@ -91,7 +91,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	logger := log.FromContext(ctx, "namespace", req.Namespace, "solrCloud", req.Name)
 
 	instance := &solrv1beta1.SolrCloud{}
-	err := r.Get(context.TODO(), req.NamespacedName, instance)
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Object not found, return.  Created objects are automatically garbage collected.
@@ -105,7 +105,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	changed := instance.WithDefaults()
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
-		if err := r.Update(context.TODO(), instance); err != nil {
+		if err := r.Update(ctx, instance); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
@@ -127,11 +127,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Check if the Common Service already exists
 	commonServiceLogger := logger.WithValues("service", commonService.Name)
 	foundCommonService := &corev1.Service{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: commonService.Name, Namespace: commonService.Namespace}, foundCommonService)
+	err = r.Get(ctx, types.NamespacedName{Name: commonService.Name, Namespace: commonService.Namespace}, foundCommonService)
 	if err != nil && errors.IsNotFound(err) {
 		commonServiceLogger.Info("Creating Common Service")
 		if err = controllerutil.SetControllerReference(instance, commonService, r.Scheme); err == nil {
-			err = r.Create(context.TODO(), commonService)
+			err = r.Create(ctx, commonService)
 		}
 	} else if err == nil {
 		var needsUpdate bool
@@ -141,7 +141,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Update the found Service and write the result back if there are any changes
 		if needsUpdate && err == nil {
 			commonServiceLogger.Info("Updating Common Service")
-			err = r.Update(context.TODO(), foundCommonService)
+			err = r.Update(ctx, foundCommonService)
 		}
 	}
 	if err != nil {
@@ -177,11 +177,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Check if the HeadlessService already exists
 		headlessServiceLogger := logger.WithValues("service", headless.Name)
 		foundHeadless := &corev1.Service{}
-		err = r.Get(context.TODO(), types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
+		err = r.Get(ctx, types.NamespacedName{Name: headless.Name, Namespace: headless.Namespace}, foundHeadless)
 		if err != nil && errors.IsNotFound(err) {
 			headlessServiceLogger.Info("Creating Headless Service")
 			if err = controllerutil.SetControllerReference(instance, headless, r.Scheme); err == nil {
-				err = r.Create(context.TODO(), headless)
+				err = r.Create(ctx, headless)
 			}
 		} else if err == nil {
 			var needsUpdate bool
@@ -191,7 +191,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Update the found HeadlessService and write the result back if there are any changes
 			if needsUpdate && err == nil {
 				headlessServiceLogger.Info("Updating Headless Service")
-				err = r.Update(context.TODO(), foundHeadless)
+				err = r.Update(ctx, foundHeadless)
 			}
 		}
 		if err != nil {
@@ -208,7 +208,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		providedConfigMapName := instance.Spec.CustomSolrKubeOptions.ConfigMapOptions.ProvidedConfigMap
 		foundConfigMap := &corev1.ConfigMap{}
 		nn := types.NamespacedName{Name: providedConfigMapName, Namespace: instance.Namespace}
-		err = r.Get(context.TODO(), nn, foundConfigMap)
+		err = r.Get(ctx, nn, foundConfigMap)
 		if err != nil {
 			return requeueOrNot, err // if they passed a providedConfigMap name, then it must exist
 		}
@@ -259,11 +259,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Check if the ConfigMap already exists
 		configMapLogger := logger.WithValues("configMap", configMap.Name)
 		foundConfigMap := &corev1.ConfigMap{}
-		err = r.Get(context.TODO(), types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
+		err = r.Get(ctx, types.NamespacedName{Name: configMap.Name, Namespace: configMap.Namespace}, foundConfigMap)
 		if err != nil && errors.IsNotFound(err) {
 			configMapLogger.Info("Creating ConfigMap")
 			if err = controllerutil.SetControllerReference(instance, configMap, r.Scheme); err == nil {
-				err = r.Create(context.TODO(), configMap)
+				err = r.Create(ctx, configMap)
 			}
 		} else if err == nil {
 			var needsUpdate bool
@@ -273,7 +273,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Update the found ConfigMap and write the result back if there are any changes
 			if needsUpdate && err == nil {
 				configMapLogger.Info("Updating ConfigMap")
-				err = r.Update(context.TODO(), foundConfigMap)
+				err = r.Update(ctx, foundConfigMap)
 			}
 		}
 		if err != nil {
@@ -301,7 +301,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 
-		ctx := context.TODO()
 		basicAuthSecret := &corev1.Secret{}
 
 		// user has the option of providing a secret with credentials the operator should use to make requests to Solr
@@ -395,7 +394,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Check if the StatefulSet already exists
 		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
 		foundStatefulSet := &appsv1.StatefulSet{}
-		err = r.Get(context.TODO(), types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
+		err = r.Get(ctx, types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 
 		// Set the annotation for a scheduled restart, if necessary.
 		if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); err != nil {
@@ -419,7 +418,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err != nil && errors.IsNotFound(err) {
 			statefulSetLogger.Info("Creating StatefulSet")
 			if err = controllerutil.SetControllerReference(instance, statefulSet, r.Scheme); err == nil {
-				err = r.Create(context.TODO(), statefulSet)
+				err = r.Create(ctx, statefulSet)
 			}
 			// Find which labels the PVCs will be using, to use for the finalizer
 			pvcLabelSelector = statefulSet.Spec.Selector.MatchLabels
@@ -436,7 +435,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Update the found StatefulSet and write the result back if there are any changes
 			if needsUpdate && err == nil {
 				statefulSetLogger.Info("Updating StatefulSet")
-				err = r.Update(context.TODO(), foundStatefulSet)
+				err = r.Update(ctx, foundStatefulSet)
 			}
 		}
 		if err != nil {
@@ -445,7 +444,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	} else {
 		// If we are blocking the reconciliation of the statefulSet, we still want to find information about it.
 		foundStatefulSet := &appsv1.StatefulSet{}
-		err = r.Get(context.TODO(), types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, foundStatefulSet)
+		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, foundStatefulSet)
 		if err == nil {
 			// Find the status
 			statefulSetStatus = foundStatefulSet.Status
@@ -496,7 +495,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {
-			err = r.Delete(context.Background(), &pod, client.Preconditions{
+			err = r.Delete(ctx, &pod, client.Preconditions{
 				UID: &pod.UID,
 			})
 			if err != nil {
@@ -517,11 +516,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Check if the Ingress already exists
 		ingressLogger := logger.WithValues("ingress", ingress.Name)
 		foundIngress := &netv1.Ingress{}
-		err = r.Get(context.TODO(), types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
+		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
 		if err != nil && errors.IsNotFound(err) {
 			ingressLogger.Info("Creating Ingress")
 			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
-				err = r.Create(context.TODO(), ingress)
+				err = r.Create(ctx, ingress)
 			}
 		} else if err == nil {
 			var needsUpdate bool
@@ -531,7 +530,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Update the found Ingress and write the result back if there are any changes
 			if needsUpdate && err == nil {
 				ingressLogger.Info("Updating Ingress")
-				err = r.Update(context.TODO(), foundIngress)
+				err = r.Update(ctx, foundIngress)
 			}
 		}
 		if err != nil {
@@ -542,7 +541,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		instance.Status = newStatus
 		logger.Info("Updating SolrCloud Status", "status", instance.Status)
-		err = r.Status().Update(context.TODO(), instance)
+		err = r.Status().Update(ctx, instance)
 		if err != nil {
 			return requeueOrNot, err
 		}
@@ -963,7 +962,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrCloud{}, ".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrCloud{}, ".spec.customSolrKubeOptions.configMapOptions.providedConfigMap", func(rawObj client.Object) []string {
 		// grab the SolrCloud object, extract the used configMap...
 		solrCloud := rawObj.(*solrv1beta1.SolrCloud)
 		if solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions == nil {
@@ -986,7 +985,7 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 
 func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	field := ".spec.solrTLS.pkcs12Secret"
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrCloud{}, field, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrCloud{}, field, func(rawObj client.Object) []string {
 		// grab the SolrCloud object, extract the used configMap...
 		solrCloud := rawObj.(*solrv1beta1.SolrCloud)
 		if solrCloud.Spec.SolrTLS == nil || solrCloud.Spec.SolrTLS.PKCS12Secret == nil {
@@ -1006,7 +1005,7 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 
 func (r *SolrCloudReconciler) indexAndWatchForClientTLSSecret(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	field := ".spec.solrClientTLS.pkcs12Secret"
-	if err := mgr.GetFieldIndexer().IndexField(context.TODO(), &solrv1beta1.SolrCloud{}, field, func(rawObj client.Object) []string {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrCloud{}, field, func(rawObj client.Object) []string {
 		// grab the SolrCloud object, extract the used configMap...
 		solrCloud := rawObj.(*solrv1beta1.SolrCloud)
 		if solrCloud.Spec.SolrClientTLS == nil || solrCloud.Spec.SolrClientTLS.PKCS12Secret == nil {
@@ -1032,7 +1031,7 @@ func (r *SolrCloudReconciler) findSolrCloudByFieldValueFunc(field string) handle
 				FieldSelector: fields.OneTermEqualSelector(field, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.TODO(), foundClouds, listOps)
+			err := r.List(context.Background(), foundClouds, listOps)
 			if err != nil {
 				return []reconcile.Request{}
 			}
