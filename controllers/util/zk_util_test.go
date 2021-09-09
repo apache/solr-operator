@@ -17,6 +17,7 @@
 
 package util
 
+/* TODO-ZK
 import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	//zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
@@ -57,3 +58,4 @@ func TestDefaultStorageOptions(t *testing.T) {
 	assert.Equal(t, "ephemeral", zkCluster.Spec.StorageType, "By default when Solr is using ephemeral storage, zk should as well. Wrong storageType")
 	assert.Nil(t, zkCluster.Spec.Persistence, "By default when Solr is using ephemeral storage, zk should as well. Therefore 'persistence' should be nil")
 }
+*/

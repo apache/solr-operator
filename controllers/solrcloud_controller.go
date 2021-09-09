@@ -87,7 +87,7 @@ func UseZkCRD(useCRD bool) {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx, "namespace", req.Namespace, "solrCloud", req.Name)
+	logger := log.FromContext(ctx)
 
 	instance := &solrv1beta1.SolrCloud{}
 	err := r.Get(ctx, req.NamespacedName, instance)
@@ -713,13 +713,13 @@ func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger l
 
 	return nil, ip
 }
-
 func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, newStatus *solrv1beta1.SolrCloudStatus) error {
 	zkRef := instance.Spec.ZookeeperRef
 
 	if zkRef.ConnectionInfo != nil {
 		newStatus.ZookeeperConnectionInfo = *zkRef.ConnectionInfo
 	} else if zkRef.ProvidedZookeeper != nil {
+		/* TODO-ZK
 		pzk := zkRef.ProvidedZookeeper
 		// Generate ZookeeperCluster
 		if !useZkCRD {
@@ -762,6 +762,7 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 			ChRoot:                   pzk.ChRoot,
 		}
 		return err
+*/
 	} else {
 		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}
@@ -953,7 +954,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if useZkCRD {
-		ctrlBuilder = ctrlBuilder.Owns(&zkv1beta1.ZookeeperCluster{})
+		// TODO-ZK: ctrlBuilder = ctrlBuilder.Owns(&zkv1beta1.ZookeeperCluster{})
 	}
 
 	return ctrlBuilder.Complete(r)

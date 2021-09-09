@@ -63,7 +63,7 @@ type SolrBackupReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx, "namespace", req.Namespace, "solrBackup", req.Name)
+	logger := log.FromContext(ctx)
 
 	// Fetch the SolrBackup instance
 	backup := &solrv1beta1.SolrBackup{}

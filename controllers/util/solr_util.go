@@ -604,6 +604,27 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
+const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
+<solr>
+  <solrcloud>
+    <str name="host">${host:}</str>
+    <int name="hostPort">${hostPort:80}</int>
+    <str name="hostContext">${hostContext:solr}</str>
+    <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+    <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
+    <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
+    <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
+    <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
+    <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
+  </solrcloud>
+  <shardHandlerFactory name="shardHandlerFactory"
+    class="HttpShardHandlerFactory">
+    <int name="socketTimeout">${socketTimeout:600000}</int>
+    <int name="connTimeout">${connTimeout:60000}</int>
+  </shardHandlerFactory>
+</solr>
+`
+
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
@@ -624,26 +645,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			"solr.xml": `<?xml version="1.0" encoding="UTF-8" ?>
-<solr>
-  <solrcloud>
-    <str name="host">${host:}</str>
-    <int name="hostPort">${hostPort:80}</int>
-    <str name="hostContext">${hostContext:solr}</str>
-    <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
-    <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
-    <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
-    <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
-    <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
-    <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
-  </solrcloud>
-  <shardHandlerFactory name="shardHandlerFactory"
-    class="HttpShardHandlerFactory">
-    <int name="socketTimeout">${socketTimeout:600000}</int>
-    <int name="connTimeout">${connTimeout:60000}</int>
-  </shardHandlerFactory>
-</solr>
-`,
+			"solr.xml": DefaultSolrXML,
 		},
 	}
 

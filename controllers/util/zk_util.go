@@ -19,6 +19,13 @@ package util
 
 import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	"strings"
+)
+
+/* TODO-ZK
+import (
+	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/go-logr/logr"
 	//zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -305,6 +312,7 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 
 	return requireUpdate
 }
+*/
 
 // AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
 // info: Zookeeper Connection Information

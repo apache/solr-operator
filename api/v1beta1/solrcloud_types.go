@@ -48,7 +48,7 @@ const (
 	DefaultZkStorage             = "5Gi"
 	DefaultZkRepo                = "pravega/zookeeper"
 	DefaultZkVersion             = ""
-	DefaultZkVolumeReclaimPolicy = "Retain"
+	DefaultZkVolumeReclaimPolicy VolumeReclaimPolicy = "Retain"
 
 	SolrTechnologyLabel      = "solr-cloud"
 	ZookeeperTechnologyLabel = "zookeeper"
