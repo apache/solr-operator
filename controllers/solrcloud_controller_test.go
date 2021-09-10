@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"strconv"
+	"strings"
 	"time"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -38,7 +39,7 @@ var _ = Describe("SolrCloud controller", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		timeout  = time.Second * 5
-		duration = time.Second * 3
+		duration = time.Second * 1
 		interval = time.Millisecond * 250
 	)
 	SetDefaultConsistentlyDuration(duration)
@@ -79,16 +80,6 @@ var _ = Describe("SolrCloud controller", func() {
 			}
 			return updatedSolrCloud.WithDefaults(), nil
 		}).Should(BeFalse())
-
-		By("setting a status for the SolrCloud")
-		// We'll need to retry getting this newly created SolrCloud, given that creation may not immediately happen.
-		Eventually(func() (string, error) {
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), updatedSolrCloud)
-			if err != nil {
-				return "", err
-			}
-			return updatedSolrCloud.Status.Version, nil
-		}).Should(Not(BeEmpty()), "Wait until the SolrCloud has a Status")
 	})
 
 	AfterEach(func() {
@@ -374,7 +365,7 @@ var _ = Describe("SolrCloud controller", func() {
 		})
 	})
 
-	Context("Setting default values for the SolrCloud resource", func() {
+	Context("Solr Cloud with an explicit kube domain", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -404,7 +395,7 @@ var _ = Describe("SolrCloud controller", func() {
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
 			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires the solr container.")
-			
+
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
@@ -441,6 +432,239 @@ var _ = Describe("SolrCloud controller", func() {
 			status := expectStatus(ctx, solrCloud)
 			Expect(status.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
 			Expect(status.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
+		})
+	})
+
+	Context("Solr Cloud with a custom Solr XML ConfigMap", func() {
+		testCustomSolrXmlConfigMap := "my-custom-solr-xml"
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
+						ProvidedConfigMap: testCustomSolrXmlConfigMap,
+					},
+				},
+			}
+		})
+		It("has the correct resources", func() {
+			By("ensuring no statefulSet exists when the configMap doesn't exist")
+			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+
+			By("ensuring no statefulSet exists when the configMap is invalid")
+			invalidConfigMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testCustomSolrXmlConfigMap,
+					Namespace: solrCloud.Namespace,
+				},
+				Data: map[string]string{
+					"foo": "bar",
+				},
+			}
+			Expect(k8sClient.Create(ctx, invalidConfigMap)).To(Succeed(), "Create the invalid configMap")
+			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			invalidConfigMap.Data[util.SolrXmlFile] = "Invalid XML"
+			Expect(k8sClient.Update(ctx, invalidConfigMap)).To(Succeed(), "Update the invalid configMap")
+			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("checking that a configured statefulSet exists when the configMap is valid")
+			validConfigMap := util.GenerateConfigMap(solrCloud)
+			validConfigMap.Name = testCustomSolrXmlConfigMap
+			Expect(k8sClient.Update(ctx, validConfigMap)).To(Succeed(), "Make the test configMap valid")
+
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			Expect(statefulSet.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template!")
+			Expect(statefulSet.Spec.Template.Annotations).To(Not(HaveKey(util.LogXmlFile)), "Custom log4j2.xml MD5 annotation should not be set on the pod template.")
+
+			Expect(statefulSet.Spec.Template.Annotations).To(Not(BeNil()), "The Solr pod volumes should not be empty, because they must contain a solr-xml entry")
+			var solrXmlVol *corev1.Volume = nil
+			for _, vol := range statefulSet.Spec.Template.Spec.Volumes {
+				if vol.Name == "solr-xml" {
+					solrXmlVol = &vol
+					break
+				}
+			}
+			Expect(solrXmlVol).To(Not(BeNil()), "Didn't find custom solr.xml volume in sts config!")
+			Expect(solrXmlVol.VolumeSource.ConfigMap).To(Not(BeNil()), "solr-xml Volume should have a ConfigMap source")
+			Expect(solrXmlVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomSolrXmlConfigMap), "solr-xml has the wrong configMap as its source")
+
+			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
+
+			By("making sure a rolling restart happens when the solr.xml is changed")
+			validConfigMap.Data[util.SolrXmlFile] = strings.Replace(validConfigMap.Data[util.SolrXmlFile], "${zkClientTimeout:30000}", "${zkClientTimeout:15000}", 1)
+			Expect(k8sClient.Update(ctx, validConfigMap)).To(Succeed(), "Change the valid test configMap")
+
+			updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(validConfigMap.Data[util.SolrXmlFile])))
+			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template!")
+				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
+			})
+		})
+	})
+
+	Context("Solr Cloud with a custom Solr Log4J ConfigMap", func() {
+		testCustomConfigMap := "my-custom-config-xml"
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
+						ProvidedConfigMap: testCustomConfigMap,
+					},
+				},
+			}
+		})
+		It("has the correct resources", func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testCustomConfigMap,
+					Namespace: solrCloud.Namespace,
+				},
+				Data: map[string]string{
+					util.LogXmlFile: "<Configuration/>",
+				},
+			}
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed(), "Create the valid configMap")
+
+			expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+
+				g.Expect(s.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
+				var customConfigVol *corev1.Volume = nil
+				for _, vol := range s.Spec.Template.Spec.Volumes {
+					if vol.Name == "log4j2-xml" {
+						customConfigVol = &vol
+						break
+					}
+				}
+				g.Expect(customConfigVol).To(Not(BeNil()), "Didn't find custom solr-xml volume in pod template!")
+				g.Expect(customConfigVol.VolumeSource.ConfigMap, "solr-xml Volume should have a ConfigMap source")
+				g.Expect(customConfigVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomConfigMap), "solr-xml has the wrong configMap as its source")
+
+				var logXmlVolMount *corev1.VolumeMount = nil
+				for _, mount := range s.Spec.Template.Spec.Containers[0].VolumeMounts {
+					if mount.Name == "log4j2-xml" {
+						logXmlVolMount = &mount
+						break
+					}
+				}
+				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
+				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
+
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(util.DefaultSolrXML)))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+			})
+
+			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.DefaultSolrXML})
+
+			By("updating the user-provided log XML to trigger a pod rolling restart")
+			configMap.Data[util.LogXmlFile] = "<Configuration>Updated!</Configuration>"
+			Expect(k8sClient.Update(ctx, configMap)).To(Succeed(), "Change the test log4j configMap")
+
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log XML MD5 annotation should be updated on the pod template.")
+
+				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+			})
+
+			By("updating the user-provided log XML again to trigger another pod rolling restart")
+			configMap.Data[util.LogXmlFile] = "<Configuration monitorInterval=\\\"30\\\">Updated!</Configuration>"
+			Expect(k8sClient.Update(ctx, configMap)).To(Succeed(), "Change the test log4j configMap")
+
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
+				g.Expect(s.Spec.Template.Annotations).To(Not(HaveKey(util.LogXmlMd5Annotation)), "Custom log XML MD5 annotation should not be set on the pod template, when monitorInterval is used")
+
+				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+			})
+		})
+	})
+
+	Context("Solr Cloud with a custom Solr Log4J and solr.xml ConfigMap", func() {
+		testCustomConfigMap := "my-custom-config-xml"
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
+						ProvidedConfigMap: testCustomConfigMap,
+					},
+				},
+			}
+		})
+		It("has the correct resources", func() {
+			configMap := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      testCustomConfigMap,
+					Namespace: solrCloud.Namespace,
+				},
+				Data: map[string]string{
+					util.LogXmlFile:  "<Configuration/>",
+					util.SolrXmlFile: "<solr> ${hostPort:} </solr>", // the controller checks for ${hostPort: in the solr.xml
+				},
+			}
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed(), "Create the valid configMap")
+
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+
+				g.Expect(s.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
+				var customConfigVol *corev1.Volume = nil
+				for _, vol := range s.Spec.Template.Spec.Volumes {
+					if vol.Name == "solr-xml" {
+						customConfigVol = &vol
+						break
+					}
+				}
+				g.Expect(customConfigVol).To(Not(BeNil()), "Didn't find custom solr-xml volume in pod template!")
+				g.Expect(customConfigVol.VolumeSource.ConfigMap, "solr-xml Volume should have a ConfigMap source")
+				g.Expect(customConfigVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomConfigMap), "solr-xml has the wrong configMap as its source")
+
+				var logXmlVolMount *corev1.VolumeMount = nil
+				for _, mount := range s.Spec.Template.Spec.Containers[0].VolumeMounts {
+					if mount.Name == "solr-xml" {
+						logXmlVolMount = &mount
+						break
+					}
+				}
+				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
+				expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
+				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
+
+
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+
+				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+			})
+
+			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
 		})
 	})
 })
