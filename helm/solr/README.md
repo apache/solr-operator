@@ -78,7 +78,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
-| image.repository | string | `"apache/solr"` | The repository of the Solr image |
+| image.repository | string | `"solr"` | The repository of the Solr image |
 | image.tag | string | `"8.9"` | The tag/version of Solr to run |
 | image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string |  | PullSecret for the Solr image |
@@ -137,7 +137,7 @@ External addressability is disabled by default.
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
 | addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with Solr TLS enabled (not TLS Termination described below). |
-| addressability.external.ingressTLSTerminationSecret | int | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
+| addressability.external.ingressTLSTerminationSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
 
 ### ZK Options
 

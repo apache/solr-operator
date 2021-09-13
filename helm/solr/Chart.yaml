@@ -64,7 +64,8 @@ annotations:
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
-      image: apache/solr:8.9
+      image: solr:8.9
+      whitelisted: true
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
