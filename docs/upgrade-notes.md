@@ -2,6 +2,29 @@
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
+## Version Compatibility Matrixes
+
+### Kubernetes Versions
+
+| Solr Operator Version | `1.15` | `1.16` - `1.21` | `1.22`+ |
+| :---: | :---: | :---: | :---: |
+| `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.7` | :x: | :heavy_check_mark: | :x: |
+| `v0.2.8` | :x: | :heavy_check_mark: | :x: |
+| `v0.3.0` | :x: | :heavy_check_mark: | :x: |
+| `v0.4.0` | :x: | :heavy_check_mark: | :x: |
+
+### Solr Versions
+
+| Solr Operator Version | `6.6` | `7.7` | `8.0` - `8.5` | `8.6`+ |
+| :---: | :---: | :---: | :---: | :---: | 
+| `v0.2.6` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.7` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.2.8` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.3.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+
+
 ## Upgrading from `v0.2.x` to `v0.3.x`
 If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
 This is a special upgrade that requires different instructions.
@@ -45,13 +68,34 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.3.0
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.4.0/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.4.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
 ## Upgrade Warnings and Notes
+
+### v0.4.0
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.9` to `v0.2.12`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
+  Make sure to install the correct version of the Zookeeper Operator CRDS, as [shown above](#upgrading-the-zookeeper-operator).
+
+- The deprecated Solr Operator Helm chart option `useZkOperator` has been removed, use `zookeeper-operator.use` instead.  
+  **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
+  
+- The default Solr version for `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `7.7.0` to `8.9`.
+  This will not effect any existing resources, as default versions are hard-written to the resources immediately.
+  Only new resources created after the Solr Operator is upgraded to `v0.4.0` will be affected.
+  
+- In previous versions of the Solr Operator, the provided Zookeeper instances could only use Persistent Storage.
+  Now ephemeral storage is enabled, and used by default if Solr is using ephemeral storage.
+  The ZK storage type can be explicitly set via `Spec.zookeeperRef.provided.ephemeral` or `Spec.zookeeperRef.provided.persistence`,
+  however if neither is set, the Solr Operator will default to use the type of storage (persistent or ephemeral) that Solr is using.  
+  **This means that the default Zookeeper Storage type can change for users using ephemeral storage for Solr.
+  If you require ephemeral Solr storage and persistent Zookeeper Storage, be sure to explicitly set that starting in `v0.4.0`.**
 
 ### v0.3.0
 - All deprecated CRD fields and Solr Operator options from `v0.2.*` have been removed.

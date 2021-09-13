@@ -73,9 +73,9 @@ This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-
 
 ```bash
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.3.0/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.3.0
+$ helm install solr-operator apache-solr/solr-operator --version 0.4.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -105,23 +105,13 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a  a 3-node cluster v8.3 with 300m Heap each:
-cat <<EOF | kubectl apply -f -
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCloud
-metadata:
-  name: example
-spec:
-  replicas: 3
-  solrImage:
-    tag: "8.3"
-  solrJavaMem: "-Xms300m -Xmx300m"
-  solrAddressability:
-    external:
-      method: Ingress
-      domainName: "ing.local.domain"
-      useExternalAddress: true
-EOF
+# Create a 3-node cluster v8.3 with 300m Heap each:
+helm install example-solr apache-solr/solr --version 0.4.0 \
+  --set image.tag=8.3 \
+  --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
+  --set addressability.external.method=Ingress \
+  --set addressability.external.domainName="ing.local.domain" \
+  --set addressability.external.useExternalAddress="true"
 
 # The solr-operator has created a new resource type 'solrclouds' which we can query
 # Check the status live as the deploy happens
@@ -192,6 +182,7 @@ spec:
 
 Make sure that you are not overwriting the `SolrCloud.Spec.replicas` field when doing `kubectl apply`,
 otherwise you will be undoing the autoscaler's work.
+By default, the helm chart does not set the `replicas` field, so it is safe to use with the HPA.
 
 ## Upgrade to newer version
 
@@ -201,23 +192,10 @@ So we wish to upgrade to a newer Solr version:
 # Take note of the current version, which is 8.3.1
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
-# Update the solrCloud configuration with the new version, keeping 5 nodes
-cat <<EOF | kubectl apply -f -
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCloud
-metadata:
-  name: example
-spec:
-  replicas: 5
-  solrImage:
-    tag: "8.7"
-  solrJavaMem: "-Xms300m -Xmx300m"
-  solrAddressability:
-    external:
-      method: Ingress
-      domainName: "ing.local.domain"
-      useExternalAddress: true
-EOF
+# Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
+helm upgrade example-solr apache-solr/solr --version 0.4.0 \
+  --reuse-values \
+  --set image.tag=8.7
 
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column

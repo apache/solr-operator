@@ -3,17 +3,18 @@
 [![License](https://img.shields.io/badge/LICENSE-Apache2.0-ff69b4.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![Artifact HUB](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/apache-solr)](https://artifacthub.io/packages/search?repo=apache-solr)
 [![Commit since last release](https://img.shields.io/github/commits-since/apache/solr-operator/latest.svg)](https://github.com/apache/solr-operator/commits/main)
-[![Docker Pulls](https://img.shields.io/docker/pulls/bloomberg/solr-operator)](https://hub.docker.com/r/bloomberg/solr-operator/)
+[![Docker Pulls](https://img.shields.io/docker/pulls/apache/solr-operator)](https://hub.docker.com/r/apache/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
-[![Mailing List]]
 
-The __Solr Operator__ manages Apache Solr Clouds within Kubernetes. It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
+The __[Solr Operator](https://solr.apache.org/operator/)__ manages Apache Solr Clouds within Kubernetes.
+It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
+Please visit the [official site](https://solr.apache.org/operator/) for more information.
 
 The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
 
 If you run into issues using the Solr Operator, please:
 - Reference the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) provided below
-- Create a Github Issue in this repo, describing your problem with as much detail as possible
+- Create a GitHub Issue in this repo, describing your problem with as much detail as possible
 - Reach out on our Slack channel!
 
 Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-operator) channel in the official Kubernetes slack workspace.
@@ -50,11 +51,7 @@ Example uses of each CRD have been [provided](https://apache.github.io/solr-oper
 
 Make sure to check the [Solr Operator Upgrade notes](docs/upgrade-notes.md), before upgrading the Solr Operator or CRDs in your Kubernetes cluster.
 
-### Compatibility with Kubernetes Versions
-
-#### Fully Compatible - v1.16+
-
-If you require compatibility with previous versions, please install version `v0.2.6` of the Solr Operator.
+This page also contains [Version Compatibility Matrixes](docs/upgrade-notes.md#version-compatibility-matrixes), which detail the compatible Solr versions and Kubernetes versions for each release of the Solr Operator.
 
 ## Contributions
 
@@ -65,7 +62,7 @@ Have you had a good experience with the **Solr Operator**? Why not share some lo
 We welcome issue reports [here](../../issues); be sure to choose the proper issue template for your issue, so that we can be sure you're providing the necessary information.
 
 Before submitting a PR, please be sure to run `make prepare` before committing.
-Otherwise the github checks are likely to fail.
+Otherwise the GitHub checks are likely to fail.
 
 ## License
 
