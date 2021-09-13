@@ -32,17 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"testing"
 )
-
-const timeout = 5
-
-func emptyRequests(requests chan reconcile.Request) {
-	for len(requests) > 0 {
-		<-requests
-	}
-}
 
 func resourceKey(solrCloud *solrv1beta1.SolrCloud, name string) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: solrCloud.Namespace}
@@ -225,6 +216,14 @@ func expectNoService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serv
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), &corev1.Service{})
 	}).Should(MatchError("services \""+serviceName+"\" not found"), message)
+}
+
+func expectNoServices(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, message string, serviceNames... string) {
+	Consistently(func(g Gomega) {
+		for _, serviceName := range serviceNames {
+			g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
+		}
+	}).Should(Succeed())
 }
 
 func expectIngress(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string) *netv1.Ingress {
@@ -584,6 +583,14 @@ func cleanupTest(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
 	By("deleting all managed resources")
 	for _, obj := range cleanupObjects {
 		Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(solrCloud.Namespace))).To(Succeed())
+	}
+
+	By("deleting all services individually")
+	// Clean up Services individually, since they do not support delete collection
+	serviceList := &corev1.ServiceList{}
+	Expect(k8sClient.List(ctx, serviceList, client.InNamespace(solrCloud.Namespace))).To(Succeed(), "List all of the services to delete in the namespace")
+	for _, item := range serviceList.Items {
+		Expect(k8sClient.Delete(ctx, &item)).To(Succeed())
 	}
 }
 

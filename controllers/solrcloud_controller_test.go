@@ -363,7 +363,9 @@ var _ = Describe("SolrCloud controller", func() {
 
 	Context("Solr Cloud with an explicit kube domain", func() {
 		BeforeEach(func() {
+			replicas := int32(2)
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				Replicas: &replicas,
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
 						InternalConnectionString: "host:7271",
@@ -416,10 +418,7 @@ var _ = Describe("SolrCloud controller", func() {
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
 			By("making sure no individual Solr Node Services exist")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
-			for _, nodeName := range nodeNames {
-				expectNoService(ctx, solrCloud, nodeName, "Node service shouldn't exist, but it does.")
-			}
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames()...)
 
 			By("making sure no Ingress was created")
 			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
