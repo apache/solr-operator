@@ -40,6 +40,7 @@ type SolrBackupSpec struct {
 
 	// The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the
 	// auto-configured repository for legacy singleton volumes).
+	// +optional
 	RepositoryName string `json:"repositoryName,omitempty"`
 
 	// The list of collections to backup. If empty, all collections in the cloud will be backed up.
@@ -47,11 +48,14 @@ type SolrBackupSpec struct {
 	Collections []string `json:"collections,omitempty"`
 
 	// Persistence is the specification on how to persist the backup data.
-	Persistence PersistenceSource `json:"persistence,omitempty"`
+	// +optional
+	Persistence *PersistenceSource `json:"persistence,omitempty"`
 }
 
 func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
-	changed = spec.Persistence.withDefaults(backupName) || changed
+	if spec.Persistence != nil {
+		changed = spec.Persistence.withDefaults(backupName) || changed
+	}
 
 	return changed
 }
@@ -321,3 +325,4 @@ type SolrBackupList struct {
 func init() {
 	SchemeBuilder.Register(&SolrBackup{}, &SolrBackupList{})
 }
+

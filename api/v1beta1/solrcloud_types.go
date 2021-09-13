@@ -329,34 +329,6 @@ type SolrEphemeralDataStorageOptions struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
-func (backupOptions *SolrBackupRestoreOptions) IsManaged() bool {
-	return true
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetVolumeSource() corev1.VolumeSource {
-	return *backupOptions.Volume
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetDirectory() string {
-	return backupOptions.Directory
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetSolrMountPath() string {
-	return BaseBackupRestorePath
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetInitPodMountPath() string {
-	return BackupRestoreInitContainerPath
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetBackupPath(backupName string) string {
-	return backupOptions.GetSolrMountPath() + "/backups/" + backupName
-}
-
-func (backupOptions *SolrBackupRestoreOptions) GetVolumeName() string {
-	return BackupRestoreVolume
-}
-
 type SolrBackupRestoreOptions struct {
 	// TODO Do we need to support this (Volume) here for backcompat, or can it live exclusively in ManagedStorage?
 
@@ -391,44 +363,9 @@ type GcsStorage struct {
 
 	// The name of a Kubernetes secret holding a Google cloud service account key
 	GcsCredentialSecret string `json:"gcsCredentialSecret"`
-	// JEGERLOW TODO Should 'baseLocation' be optional?
-	// A chroot within the bucket to store data in.  If specified this should already exist
-	BaseLocation string `json:"baseLocation"`
-}
-
-func VolumeExistsWithName(needle string, haystack []corev1.Volume) bool {
-	for _, volume := range haystack {
-		if volume.Name == needle {
-			return true
-		}
-	}
-	return false
-}
-
-func (gcsRepository *GcsStorage) IsManaged() bool { return false }
-
-func (gcsRepository *GcsStorage) GetSolrMountPath() string {
-	return fmt.Sprintf("%s-%s-%s", BaseBackupRestorePath, "gcscredential", gcsRepository.Name)
-}
-
-func (gcsRepository *GcsStorage) GetInitPodMountPath() string {
-	return ""
-}
-
-func (gcsRepository *GcsStorage) GetBackupPath(backupName string) string {
-	if gcsRepository.BaseLocation != "" {
-		return gcsRepository.BaseLocation
-	}
-	return "/"
-}
-
-func (gcsRepository *GcsStorage) GetVolumeName() string {
-	return fmt.Sprintf("%s-%s", gcsRepository.Name, BackupRestoreCredentialVolume)
-}
-
-func (gcs *GcsStorage) IsCredentialVolumePresent(volumes []corev1.Volume) bool {
-	expectedVolumeName := gcs.GetVolumeName()
-	return VolumeExistsWithName(expectedVolumeName, volumes)
+	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
+	// +optional
+	BaseLocation string `json:"baseLocation,omitempty"`
 }
 
 type ManagedStorage struct {
@@ -436,49 +373,16 @@ type ManagedStorage struct {
 	Name string `json:"name"`
 
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
-	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
+	// The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	Volume *corev1.VolumeSource `json:"volume,omitempty"`
+	Volume *corev1.VolumeSource `json:"volume"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
 	// +optional
 	Directory string `json:"directory,omitempty"`
-}
-
-func (managedRepository *ManagedStorage) IsManaged() bool { return true }
-
-func (managedRepository *ManagedStorage) GetVolumeSource() corev1.VolumeSource {
-	return *managedRepository.Volume
-}
-
-func (managedRepository *ManagedStorage) GetDirectory() string {
-	return managedRepository.Directory
-}
-
-func (managedRepository *ManagedStorage) GetSolrMountPath() string {
-	return fmt.Sprintf("%s-%s-%s", BaseBackupRestorePath, "managed", managedRepository.Name)
-}
-
-func (managedRepository *ManagedStorage) GetInitPodMountPath() string {
-	return fmt.Sprintf("/backup-restore-managed-%s", managedRepository.Name)
-}
-
-func (managedRepository *ManagedStorage) GetBackupPath(backupName string) string {
-	return managedRepository.GetSolrMountPath() + "/backups/" + backupName
-}
-
-func (managedRepository *ManagedStorage) GetVolumeName() string {
-	return fmt.Sprintf("%s-%s", managedRepository.Name, BackupRestoreVolume)
-}
-
-// TODO JEGERLOW: Is this the most natural place for this?  'IsDataVolumePresent' seems like a method that'd fit
-// better on 'pod' and take in a ManagedStorage
-func (managedRepository *ManagedStorage) IsBackupVolumePresent(volumes []corev1.Volume) bool {
-	expectedVolumeName := managedRepository.GetVolumeName()
-	return VolumeExistsWithName(expectedVolumeName, volumes)
 }
 
 type SolrAddressabilityOptions struct {

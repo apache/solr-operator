@@ -4560,7 +4560,7 @@ spec:
                         items:
                           properties:
                             baseLocation:
-                              description: JEGERLOW TODO Should 'baseLocation' be optional? A chroot within the bucket to store data in.  If specified this should already exist
+                              description: An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
                               type: string
                             bucket:
                               description: The name of the GCS bucket that all backup data will be stored in
@@ -4572,7 +4572,6 @@ spec:
                               description: A name used to identify this GCS storage profile.
                               type: string
                           required:
-                          - baseLocation
                           - bucket
                           - gcsCredentialSecret
                           - name
@@ -4589,7 +4588,7 @@ spec:
                               description: A name used to identify this local storage profile.
                               type: string
                             volume:
-                              description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
+                              description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
                               properties:
                                 awsElasticBlockStore:
                                   description: 'AWSElasticBlockStore represents an AWS Disk resource that is attached to a kubelet''s host machine and then exposed to the pod. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore'
@@ -5485,6 +5484,7 @@ spec:
                               type: object
                           required:
                           - name
+                          - volume
                           type: object
                         type: array
                       volume:
