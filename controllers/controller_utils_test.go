@@ -48,13 +48,56 @@ func resourceKey(solrCloud *solrv1beta1.SolrCloud, name string) types.Namespaced
 	return types.NamespacedName{Name: name, Namespace: solrCloud.Namespace}
 }
 
-func expectStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *solrv1beta1.SolrCloudStatus {
-	return expectStatusWithChecks(ctx, solrCloud, nil)
+func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *solrv1beta1.SolrCloud {
+	return expectSolrCloudWithChecks(ctx, solrCloud, nil)
 }
 
-func expectStatusWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus)) *solrv1beta1.SolrCloudStatus {
+func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud)) *solrv1beta1.SolrCloud {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
 	Eventually(func(g Gomega) error {
+		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
+		if err == nil && additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+		return err
+	}).Should(Succeed())
+
+	return foundSolrCloud
+}
+
+func expectSolrCloudWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud)) *solrv1beta1.SolrCloud {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	Consistently(func(g Gomega) error {
+		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
+		if err == nil && additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+		return err
+	}).Should(Succeed())
+
+	return foundSolrCloud
+}
+
+func expectSolrCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *solrv1beta1.SolrCloudStatus {
+	return expectSolrCloudStatusWithChecks(ctx, solrCloud, nil)
+}
+
+func expectSolrCloudStatusWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus)) *solrv1beta1.SolrCloudStatus {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	Eventually(func(g Gomega) error {
+		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
+		if err == nil && additionalChecks != nil {
+			additionalChecks(g, &foundSolrCloud.Status)
+		}
+		return err
+	}).Should(Succeed())
+
+	return &foundSolrCloud.Status
+}
+
+func expectSolrCloudStatusConsistentWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus)) *solrv1beta1.SolrCloudStatus {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	Consistently(func(g Gomega) error {
 		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
 		if err == nil && additionalChecks != nil {
 			additionalChecks(g, &foundSolrCloud.Status)
@@ -94,6 +137,22 @@ func expectStatefulSetWithChecks(ctx context.Context, solrCloud *solrv1beta1.Sol
 			}
 			return newResource.UID, nil
 		}).Should(And(Not(BeEmpty()), Not(Equal(statefulSet.UID))), "New StatefulSet, with new UID, not created.")
+
+	return statefulSet
+}
+
+func expectStatefulSetWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet)) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, statefulSetName), statefulSet)).To(Succeed())
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Should(Succeed())
 
 	return statefulSet
 }
@@ -141,6 +200,27 @@ func expectServiceWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 	return service
 }
 
+func expectServiceWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service)) *corev1.Service {
+	service := &corev1.Service{}
+	Consistently(func(g Gomega) {
+		Expect(k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), service)).To(Succeed())
+
+		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
+
+		if isHeadless {
+			g.Expect(service.Spec.ClusterIP).To(Equal("None"), "The clusterIP field of a headless service should be None")
+		} else {
+			g.Expect(service.Spec.ClusterIP).To(Not(Equal("None")), "The clusterIP field of a non-headless service should not be None")
+		}
+
+		if additionalChecks != nil {
+			additionalChecks(g, service)
+		}
+	}).Should(Succeed())
+
+	return service
+}
+
 func expectNoService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, message string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), &corev1.Service{})
@@ -172,6 +252,19 @@ func expectIngressWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 			}
 			return newResource.UID, nil
 		}).Should(And(Not(BeEmpty()), Not(Equal(ingress.UID))), "New Ingress, with new UID, not created.")
+
+	return ingress
+}
+
+func expectIngressWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string, additionalChecks func(Gomega, *netv1.Ingress)) *netv1.Ingress {
+	ingress := &netv1.Ingress{}
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, ingressName), ingress)).To(Succeed())
+
+		if additionalChecks != nil {
+			additionalChecks(g, ingress)
+		}
+	}).Should(Succeed())
 
 	return ingress
 }
@@ -214,6 +307,22 @@ func expectConfigMapWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 	return configMap
 }
 
+func expectConfigMapWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap)) *corev1.ConfigMap {
+	configMap := &corev1.ConfigMap{}
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), configMap)).To(Succeed())
+
+		// Verify the ConfigMap Data
+		g.Expect(configMap.Data).To(Equal(configMapData), "ConfigMap does not have the correct data.")
+
+		if additionalChecks != nil {
+			additionalChecks(g, configMap)
+		}
+	}).Should(Succeed())
+
+	return configMap
+}
+
 func expectNoConfigMap(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), &corev1.ConfigMap{})
@@ -249,6 +358,23 @@ func expectDeploymentWithChecks(ctx context.Context, solrCloud *solrv1beta1.Solr
 			}
 			return newResource.UID, nil
 		}).Should(And(Not(BeEmpty()), Not(Equal(deployment.UID))), "New Deployment, with new UID, not created.")
+
+	return deployment
+}
+
+func expectDeploymentWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment)) *appsv1.Deployment {
+	deployment := &appsv1.Deployment{}
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, deploymentName), deployment)).To(Succeed())
+
+		// Verify the Deployment Specs
+		testMapContainsOtherWithGomega(g, "Deployment pod template selector", deployment.Spec.Template.Labels, deployment.Spec.Selector.MatchLabels)
+		g.Expect(len(deployment.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "Deployment pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, deployment)
+		}
+	}).Should(Succeed())
 
 	return deployment
 }
@@ -445,9 +571,6 @@ func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
 }
 
 func cleanupTest(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
-	By("deleting the SolrCloud")
-	Expect(k8sClient.Delete(ctx, solrCloud)).To(Succeed())
-
 	cleanupObjects := []client.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},

@@ -51,7 +51,6 @@ var _ = Describe("SolrCloud controller", func() {
 		ctx context.Context
 
 		solrCloud *solrv1beta1.SolrCloud
-		updatedSolrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
@@ -71,15 +70,9 @@ var _ = Describe("SolrCloud controller", func() {
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
 		By("defaulting the missing SolrCloud values")
-		updatedSolrCloud = &solrv1beta1.SolrCloud{}
-		// We'll need to retry getting this newly created SolrCloud, given that creation may not immediately happen.
-		Eventually(func() (bool, error) {
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), updatedSolrCloud)
-			if err != nil {
-				return true, err
-			}
-			return updatedSolrCloud.WithDefaults(), nil
-		}).Should(BeFalse())
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.WithDefaults()).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
+		})
 	})
 
 	AfterEach(func() {
@@ -297,7 +290,7 @@ var _ = Describe("SolrCloud controller", func() {
 		})
 		It("has the correct resources", func() {
 			By("testing the Solr Status values")
-			status := expectStatus(ctx, solrCloud)
+			status := expectSolrCloudStatus(ctx, solrCloud)
 			Expect(status.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connString), "Wrong internal zkConnectionString in status")
 			Expect(status.ZookeeperConnectionInfo.ExternalConnectionString).To(Not(BeNil()), "External zkConnectionString in status should not be nil")
 			Expect(*status.ZookeeperConnectionInfo.ExternalConnectionString).To(Equal(connString), "Wrong external zkConnectionString in status")
@@ -336,31 +329,34 @@ var _ = Describe("SolrCloud controller", func() {
 			}
 		})
 		It("has the correct default values", func() {
-			// Solr defaults
-			Expect(updatedSolrCloud.Spec.Replicas).To(Not(BeNil()), "Bad Default - Spec.Replicas")
-			Expect(*updatedSolrCloud.Spec.Replicas).To(Equal(solrv1beta1.DefaultSolrReplicas), "Bad Default - Spec.Replicas")
-			Expect(updatedSolrCloud.Spec.SolrImage).To(Not(BeNil()), "Bad Default - instance.Spec.SolrImage")
-			Expect(updatedSolrCloud.Spec.SolrImage.Repository).To(Equal(solrv1beta1.DefaultSolrRepo), "Bad Default - instance.Spec.SolrImage.Repository")
-			Expect(updatedSolrCloud.Spec.SolrImage.Tag).To(Equal(solrv1beta1.DefaultSolrVersion), "Bad Default - instance.Spec.SolrImage.Tag")
-			Expect(updatedSolrCloud.Spec.BusyBoxImage).To(Not(BeNil()), "Bad Default - instance.Spec.BusyBoxImage")
-			Expect(updatedSolrCloud.Spec.BusyBoxImage.Repository).To(Equal(solrv1beta1.DefaultBusyBoxImageRepo), "Bad Default - instance.Spec.BusyBoxImage.Repository")
-			Expect(updatedSolrCloud.Spec.BusyBoxImage.Tag).To(Equal(solrv1beta1.DefaultBusyBoxImageVersion), "Bad Default - instance.Spec.BusyBoxImage.Tag")
-			Expect(updatedSolrCloud.Spec.SolrAddressability.CommonServicePort).To(Equal(80), "Bad Default - instance.Spec.SolrAddressability.CommonServicePort")
-			Expect(updatedSolrCloud.Spec.SolrAddressability.PodPort).To(Equal(8983), "Bad Default - instance.Spec.SolrAddressability.PodPort")
-			Expect(updatedSolrCloud.Spec.SolrAddressability.External).To(BeNil(), "Bad Default - instance.Spec.SolrAddressability.External")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 
-			// Check the default Zookeeper
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Replicas).To(Not(BeNil()), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
-			Expect(*updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Replicas).To(Equal(solrv1beta1.DefaultZkReplicas), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Image).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Image.Repository).To(Equal(solrv1beta1.DefaultZkRepo), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Repository")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Image.Tag).To(Equal(solrv1beta1.DefaultZkVersion), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Tag")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy).To(Equal(solrv1beta1.DefaultZkVolumeReclaimPolicy), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy).To(Equal(solrv1beta1.DefaultZkVolumeReclaimPolicy), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
-			Expect(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec")
-			Expect(len(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.Resources.Requests)).To(Equal(1), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources length")
-			Expect(len(updatedSolrCloud.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.AccessModes)).To(Equal(1), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.AccesModes length")
+				// Solr defaults
+				g.Expect(found.Spec.Replicas).To(Not(BeNil()), "Bad Default - Spec.Replicas")
+				g.Expect(*found.Spec.Replicas).To(Equal(solrv1beta1.DefaultSolrReplicas), "Bad Default - Spec.Replicas")
+				g.Expect(found.Spec.SolrImage).To(Not(BeNil()), "Bad Default - instance.Spec.SolrImage")
+				g.Expect(found.Spec.SolrImage.Repository).To(Equal(solrv1beta1.DefaultSolrRepo), "Bad Default - instance.Spec.SolrImage.Repository")
+				g.Expect(found.Spec.SolrImage.Tag).To(Equal(solrv1beta1.DefaultSolrVersion), "Bad Default - instance.Spec.SolrImage.Tag")
+				g.Expect(found.Spec.BusyBoxImage).To(Not(BeNil()), "Bad Default - instance.Spec.BusyBoxImage")
+				g.Expect(found.Spec.BusyBoxImage.Repository).To(Equal(solrv1beta1.DefaultBusyBoxImageRepo), "Bad Default - instance.Spec.BusyBoxImage.Repository")
+				g.Expect(found.Spec.BusyBoxImage.Tag).To(Equal(solrv1beta1.DefaultBusyBoxImageVersion), "Bad Default - instance.Spec.BusyBoxImage.Tag")
+				g.Expect(found.Spec.SolrAddressability.CommonServicePort).To(Equal(80), "Bad Default - instance.Spec.SolrAddressability.CommonServicePort")
+				g.Expect(found.Spec.SolrAddressability.PodPort).To(Equal(8983), "Bad Default - instance.Spec.SolrAddressability.PodPort")
+				g.Expect(found.Spec.SolrAddressability.External).To(BeNil(), "Bad Default - instance.Spec.SolrAddressability.External")
+
+				// Check the default Zookeeper
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Replicas).To(Not(BeNil()), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
+				g.Expect(*found.Spec.ZookeeperRef.ProvidedZookeeper.Replicas).To(Equal(solrv1beta1.DefaultZkReplicas), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Replicas")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Image).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Image.Repository).To(Equal(solrv1beta1.DefaultZkRepo), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Repository")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Image.Tag).To(Equal(solrv1beta1.DefaultZkVersion), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Image.Tag")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy).To(Equal(solrv1beta1.DefaultZkVolumeReclaimPolicy), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.VolumeReclaimPolicy).To(Equal(solrv1beta1.DefaultZkVolumeReclaimPolicy), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.VolumeReclaimPolicy")
+				g.Expect(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec).To(Not(BeNil()), "Bad Default - instance.Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec")
+				g.Expect(len(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.Resources.Requests)).To(Equal(1), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.Resources length")
+				g.Expect(len(found.Spec.ZookeeperRef.ProvidedZookeeper.Persistence.PersistentVolumeClaimSpec.AccessModes)).To(Equal(1), "Bad Default - Spec.ZookeeperRef.ProvidedZookeeper.Zookeeper.Persistence.PersistentVolumeClaimSpec.AccesModes length")
+			})
 
 		})
 	})
@@ -429,9 +425,10 @@ var _ = Describe("SolrCloud controller", func() {
 			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
 			By("making sure the node addresses in the Status are correct")
-			status := expectStatus(ctx, solrCloud)
-			Expect(status.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
-			Expect(status.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
+			})
 		})
 	})
 
@@ -502,9 +499,9 @@ var _ = Describe("SolrCloud controller", func() {
 			Expect(k8sClient.Update(ctx, validConfigMap)).To(Succeed(), "Change the valid test configMap")
 
 			updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(validConfigMap.Data[util.SolrXmlFile])))
-			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template!")
-				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
+			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template!")
+				g.Expect(found.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
 			})
 		})
 	})
@@ -538,12 +535,12 @@ var _ = Describe("SolrCloud controller", func() {
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed(), "Create the valid configMap")
 
 			expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
 
-				g.Expect(s.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
 				var customConfigVol *corev1.Volume = nil
-				for _, vol := range s.Spec.Template.Spec.Volumes {
+				for _, vol := range found.Spec.Template.Spec.Volumes {
 					if vol.Name == "log4j2-xml" {
 						customConfigVol = &vol
 						break
@@ -554,7 +551,7 @@ var _ = Describe("SolrCloud controller", func() {
 				g.Expect(customConfigVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomConfigMap), "solr-xml has the wrong configMap as its source")
 
 				var logXmlVolMount *corev1.VolumeMount = nil
-				for _, mount := range s.Spec.Template.Spec.Containers[0].VolumeMounts {
+				for _, mount := range found.Spec.Template.Spec.Containers[0].VolumeMounts {
 					if mount.Name == "log4j2-xml" {
 						logXmlVolMount = &mount
 						break
@@ -563,13 +560,13 @@ var _ = Describe("SolrCloud controller", func() {
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
 
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
-				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(util.DefaultSolrXML)))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(util.DefaultSolrXML)))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
-				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
-				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
 			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.DefaultSolrXML})
@@ -578,23 +575,23 @@ var _ = Describe("SolrCloud controller", func() {
 			configMap.Data[util.LogXmlFile] = "<Configuration>Updated!</Configuration>"
 			Expect(k8sClient.Update(ctx, configMap)).To(Succeed(), "Change the test log4j configMap")
 
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
-				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log XML MD5 annotation should be updated on the pod template.")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+				g.Expect(found.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log XML MD5 annotation should be updated on the pod template.")
 
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
-				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
 			By("updating the user-provided log XML again to trigger another pod rolling restart")
 			configMap.Data[util.LogXmlFile] = "<Configuration monitorInterval=\\\"30\\\">Updated!</Configuration>"
 			Expect(k8sClient.Update(ctx, configMap)).To(Succeed(), "Change the test log4j configMap")
 
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
-				g.Expect(s.Spec.Template.Annotations).To(Not(HaveKey(util.LogXmlMd5Annotation)), "Custom log XML MD5 annotation should not be set on the pod template, when monitorInterval is used")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(Not(HaveKey(util.LogXmlMd5Annotation)), "Custom log XML MD5 annotation should not be set on the pod template, when monitorInterval is used")
 
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
-				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 		})
 	})
@@ -628,12 +625,12 @@ var _ = Describe("SolrCloud controller", func() {
 			}
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed(), "Create the valid configMap")
 
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, s *appsv1.StatefulSet) {
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log XML MD5 annotation should be set on the pod template!")
 
-				g.Expect(s.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(Not(BeNil()), "Volumes are required for the Solr Pod")
 				var customConfigVol *corev1.Volume = nil
-				for _, vol := range s.Spec.Template.Spec.Volumes {
+				for _, vol := range found.Spec.Template.Spec.Volumes {
 					if vol.Name == "solr-xml" {
 						customConfigVol = &vol
 						break
@@ -644,7 +641,7 @@ var _ = Describe("SolrCloud controller", func() {
 				g.Expect(customConfigVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomConfigMap), "solr-xml has the wrong configMap as its source")
 
 				var logXmlVolMount *corev1.VolumeMount = nil
-				for _, mount := range s.Spec.Template.Spec.Containers[0].VolumeMounts {
+				for _, mount := range found.Spec.Template.Spec.Containers[0].VolumeMounts {
 					if mount.Name == "solr-xml" {
 						logXmlVolMount = &mount
 						break
@@ -655,13 +652,13 @@ var _ = Describe("SolrCloud controller", func() {
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
 
 
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
-				g.Expect(s.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.SolrXmlMd5Annotation), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations[util.SolrXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 
-				g.Expect(s.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
-				g.Expect(s.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKey(util.LogXmlMd5Annotation), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations[util.LogXmlMd5Annotation]).To(Equal(fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
-				testPodEnvVariablesWithGomega(g, expectedEnvVars, s.Spec.Template.Spec.Containers[0].Env)
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
 			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
