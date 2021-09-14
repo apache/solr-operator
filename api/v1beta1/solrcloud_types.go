@@ -344,7 +344,7 @@ type SolrBackupRestoreOptions struct {
 	// Allows specification of multiple different "repositories" for Solr to use when backing up data "locally".
 	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
 	// post-backup compression.
-	ManagedRepositories *[]ManagedStorage `json:"managedRepositories,omitempty""`
+	ManagedRepositories *[]ManagedStorage `json:"managedRepositories,omitempty"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
