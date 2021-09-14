@@ -19,28 +19,14 @@ package controllers
 
 import (
 	"context"
-	"github.com/apache/solr-operator/controllers/util"
-	"time"
-
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("SolrCloud controller - External DNS", func() {
-
-	// Define utility constants for object names and testing timeouts/durations and intervals.
-	const (
-		timeout  = time.Second * 5
-		duration = time.Second * 1
-		interval = time.Millisecond * 250
-	)
-	SetDefaultConsistentlyDuration(duration)
-	SetDefaultConsistentlyPollingInterval(interval)
-	SetDefaultEventuallyTimeout(timeout)
-	SetDefaultEventuallyPollingInterval(interval)
-
+var _ = FDescribe("SolrCloud controller - External DNS", func() {
 	var (
 		ctx context.Context
 
@@ -107,7 +93,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -128,7 +114,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
@@ -138,7 +124,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("headless service annotations", expectedHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -181,7 +167,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -202,14 +188,14 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
-			testMapsEqual("headless service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -252,7 +238,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -270,7 +256,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
-			testMapsEqual("common service annotations", testCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(testCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
@@ -280,7 +266,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("headless service annotations", expectedHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -322,7 +308,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -343,7 +329,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
@@ -353,7 +339,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("headless service annotations", expectedHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -390,7 +376,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -416,7 +402,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
@@ -426,7 +412,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
 			})
-			testMapsEqual("headless service annotations", expectedHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -470,7 +456,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -491,14 +477,14 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
-			testMapsEqual("headless service annotations", testHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
@@ -535,7 +521,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
 			// Host Alias Tests
 			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
@@ -556,7 +542,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("common service annotations", expectedCommonServiceAnnotations, commonService.Annotations)
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
@@ -566,7 +552,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
 				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
 			})
-			testMapsEqual("headless service annotations", expectedHeadlessServiceAnnotations, headlessService.Annotations)
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")

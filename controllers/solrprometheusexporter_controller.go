@@ -281,7 +281,11 @@ func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconci
 			solrConnectionInfo.CloudZkConnnectionInfo = cloudRef.ZookeeperConnectionInfo
 		} else if cloudRef.Name != "" {
 			solrCloud := &solrv1beta1.SolrCloud{}
-			err = r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: prometheusExporter.Spec.SolrReference.Cloud.Namespace}, solrCloud)
+			solrNamespace := prometheusExporter.Spec.SolrReference.Cloud.Namespace
+			if solrNamespace == "" {
+				solrNamespace = prometheusExporter.Namespace
+			}
+			err = r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: solrNamespace}, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
 			}
@@ -343,6 +347,11 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) er
 		Owns(&appsv1.Deployment{})
 
 	var err error
+	ctrlBuilder, err = r.indexAndWatchForSolrClouds(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)
 	if err != nil {
 		return err
@@ -368,6 +377,52 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) er
 	}
 
 	return ctrlBuilder.Complete(r)
+}
+
+func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	solrCloudField := ".spec.solrReference.cloud.name"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, solrCloudField, func(rawObj client.Object) []string {
+		// grab the SolrCloud object, extract the used configMap...
+		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
+		if exporter.Spec.SolrReference.Cloud == nil {
+			return nil
+		}
+		if exporter.Spec.SolrReference.Cloud.Name == "" {
+			return nil
+		}
+		// ...and if so, return it
+		return []string{exporter.Spec.SolrReference.Cloud.Name}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
+				Namespace:     obj.GetNamespace(),
+			}
+			err := r.List(context.Background(), foundExporters, listOps)
+			if err != nil {
+				// if no exporters found, just no-op this
+				return []reconcile.Request{}
+			}
+
+			requests := make([]reconcile.Request, len(foundExporters.Items))
+			for i, item := range foundExporters.Items {
+				requests[i] = reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Name:      item.GetName(),
+						Namespace: item.GetNamespace(),
+					},
+				}
+			}
+			return requests
+		}),
+		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
 func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {

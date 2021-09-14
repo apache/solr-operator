@@ -35,8 +35,8 @@ import (
 	"testing"
 )
 
-func resourceKey(solrCloud *solrv1beta1.SolrCloud, name string) types.NamespacedName {
-	return types.NamespacedName{Name: name, Namespace: solrCloud.Namespace}
+func resourceKey(parentResource client.Object, name string) types.NamespacedName {
+	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
 }
 
 func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *solrv1beta1.SolrCloud {
@@ -45,12 +45,11 @@ func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *sol
 
 func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud)) *solrv1beta1.SolrCloud {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
-	Eventually(func(g Gomega) error {
-		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
-		if err == nil && additionalChecks != nil {
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
 			additionalChecks(g, foundSolrCloud)
 		}
-		return err
 	}).Should(Succeed())
 
 	return foundSolrCloud
@@ -58,12 +57,11 @@ func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 
 func expectSolrCloudWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud)) *solrv1beta1.SolrCloud {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
-	Consistently(func(g Gomega) error {
-		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
-		if err == nil && additionalChecks != nil {
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
 			additionalChecks(g, foundSolrCloud)
 		}
-		return err
 	}).Should(Succeed())
 
 	return foundSolrCloud
@@ -75,12 +73,11 @@ func expectSolrCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud
 
 func expectSolrCloudStatusWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus)) *solrv1beta1.SolrCloudStatus {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
-	Eventually(func(g Gomega) error {
-		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
-		if err == nil && additionalChecks != nil {
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
 			additionalChecks(g, &foundSolrCloud.Status)
 		}
-		return err
 	}).Should(Succeed())
 
 	return &foundSolrCloud.Status
@@ -88,25 +85,52 @@ func expectSolrCloudStatusWithChecks(ctx context.Context, solrCloud *solrv1beta1
 
 func expectSolrCloudStatusConsistentWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus)) *solrv1beta1.SolrCloudStatus {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
-	Consistently(func(g Gomega) error {
-		err := k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)
-		if err == nil && additionalChecks != nil {
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
 			additionalChecks(g, &foundSolrCloud.Status)
 		}
-		return err
 	}).Should(Succeed())
 
 	return &foundSolrCloud.Status
 }
 
-func expectStatefulSet(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSetName string) *appsv1.StatefulSet {
-	return expectStatefulSetWithChecks(ctx, solrCloud, statefulSetName, nil)
+func expectSolrPrometheusExporter(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) *solrv1beta1.SolrPrometheusExporter {
+	return expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, nil)
 }
 
-func expectStatefulSetWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet)) *appsv1.StatefulSet {
+func expectSolrPrometheusExporterWithChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, additionalChecks func(Gomega, *solrv1beta1.SolrPrometheusExporter)) *solrv1beta1.SolrPrometheusExporter {
+	foundSolrPrometheusExporter := &solrv1beta1.SolrPrometheusExporter{}
+	Eventually(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, solrPrometheusExporter.Name), foundSolrPrometheusExporter)).To(Succeed(), "Expected SolrPrometheusExporter does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrPrometheusExporter)
+		}
+	}).Should(Succeed())
+
+	return foundSolrPrometheusExporter
+}
+
+func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud)) *solrv1beta1.SolrCloud {
+	foundSolrPrometheusExporter := &solrv1beta1.SolrCloud{}
+	Consistently(func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, solrPrometheusExporter.Name), foundSolrPrometheusExporter)).To(Succeed(), "Expected SolrPrometheusExporter does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrPrometheusExporter)
+		}
+	}).Should(Succeed())
+
+	return foundSolrPrometheusExporter
+}
+
+func expectStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string) *appsv1.StatefulSet {
+	return expectStatefulSetWithChecks(ctx, parentResource, statefulSetName, nil)
+}
+
+func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Object, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet)) *appsv1.StatefulSet {
 	statefulSet := &appsv1.StatefulSet{}
 	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, statefulSetName), statefulSet)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
 
 		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
 		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
@@ -122,7 +146,7 @@ func expectStatefulSetWithChecks(ctx context.Context, solrCloud *solrv1beta1.Sol
 	Eventually(
 		func() (types.UID, error) {
 			newResource := &appsv1.StatefulSet{}
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, statefulSetName), newResource)
+			err := k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), newResource)
 			if err != nil {
 				return "", err
 			}
@@ -132,10 +156,10 @@ func expectStatefulSetWithChecks(ctx context.Context, solrCloud *solrv1beta1.Sol
 	return statefulSet
 }
 
-func expectStatefulSetWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet)) *appsv1.StatefulSet {
+func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource client.Object, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet)) *appsv1.StatefulSet {
 	statefulSet := &appsv1.StatefulSet{}
 	Consistently(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, statefulSetName), statefulSet)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
 
 		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
 		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
@@ -148,20 +172,20 @@ func expectStatefulSetWithConsistentChecks(ctx context.Context, solrCloud *solrv
 	return statefulSet
 }
 
-func expectNoStatefulSet(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSetName string) {
+func expectNoStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string) {
 	Consistently(func() error {
-		return k8sClient.Get(ctx, resourceKey(solrCloud, statefulSetName), &appsv1.StatefulSet{})
-	}).Should(MatchError("statefulsets.apps \"" + statefulSetName + "\" not found"))
+		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
+	}).Should(MatchError("statefulsets.apps \"" + statefulSetName + "\" not found"), "StatefulSet exists when it should not")
 }
 
-func expectService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, selectorLables map[string]string, isHeadless bool) *corev1.Service {
-	return expectServiceWithChecks(ctx, solrCloud, serviceName, selectorLables, isHeadless, nil)
+func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool) *corev1.Service {
+	return expectServiceWithChecks(ctx, parentResource, serviceName, selectorLables, isHeadless, nil)
 }
 
-func expectServiceWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service)) *corev1.Service {
+func expectServiceWithChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service)) *corev1.Service {
 	service := &corev1.Service{}
 	Eventually(func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), service)).To(Succeed())
+		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -181,7 +205,7 @@ func expectServiceWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 	Eventually(
 		func() (types.UID, error) {
 			newResource := &corev1.Service{}
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), newResource)
+			err := k8sClient.Get(ctx, resourceKey(parentResource, serviceName), newResource)
 			if err != nil {
 				return "", err
 			}
@@ -191,10 +215,10 @@ func expectServiceWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 	return service
 }
 
-func expectServiceWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service)) *corev1.Service {
+func expectServiceWithConsistentChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service)) *corev1.Service {
 	service := &corev1.Service{}
 	Consistently(func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), service)).To(Succeed())
+		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -212,28 +236,28 @@ func expectServiceWithConsistentChecks(ctx context.Context, solrCloud *solrv1bet
 	return service
 }
 
-func expectNoService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceName string, message string) {
+func expectNoService(ctx context.Context, parentResource client.Object, serviceName string, message string) {
 	Consistently(func() error {
-		return k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), &corev1.Service{})
-	}).Should(MatchError("services \""+serviceName+"\" not found"), message)
+		return k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})
+	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
 }
 
-func expectNoServices(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, message string, serviceNames... string) {
+func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames... string) {
 	Consistently(func(g Gomega) {
 		for _, serviceName := range serviceNames {
-			g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
 		}
 	}).Should(Succeed())
 }
 
-func expectIngress(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string) *netv1.Ingress {
-	return expectIngressWithChecks(ctx, solrCloud, ingressName, nil)
+func expectIngress(ctx context.Context, parentResource client.Object, ingressName string) *netv1.Ingress {
+	return expectIngressWithChecks(ctx, parentResource, ingressName, nil)
 }
 
-func expectIngressWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string, additionalChecks func(Gomega, *netv1.Ingress)) *netv1.Ingress {
+func expectIngressWithChecks(ctx context.Context, parentResource client.Object, ingressName string, additionalChecks func(Gomega, *netv1.Ingress)) *netv1.Ingress {
 	ingress := &netv1.Ingress{}
 	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, ingressName), ingress)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, ingressName), ingress)).To(Succeed(), "Expected Ingress does not exist")
 
 		if additionalChecks != nil {
 			additionalChecks(g, ingress)
@@ -245,7 +269,7 @@ func expectIngressWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 	Eventually(
 		func() (types.UID, error) {
 			newResource := &netv1.Ingress{}
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, ingressName), newResource)
+			err := k8sClient.Get(ctx, resourceKey(parentResource, ingressName), newResource)
 			if err != nil {
 				return "", err
 			}
@@ -255,10 +279,10 @@ func expectIngressWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrClo
 	return ingress
 }
 
-func expectIngressWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string, additionalChecks func(Gomega, *netv1.Ingress)) *netv1.Ingress {
+func expectIngressWithConsistentChecks(ctx context.Context, parentResource client.Object, ingressName string, additionalChecks func(Gomega, *netv1.Ingress)) *netv1.Ingress {
 	ingress := &netv1.Ingress{}
 	Consistently(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, ingressName), ingress)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, ingressName), ingress)).To(Succeed(), "Expected Ingress does not exist")
 
 		if additionalChecks != nil {
 			additionalChecks(g, ingress)
@@ -268,20 +292,20 @@ func expectIngressWithConsistentChecks(ctx context.Context, solrCloud *solrv1bet
 	return ingress
 }
 
-func expectNoIngress(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, ingressName string) {
+func expectNoIngress(ctx context.Context, parentResource client.Object, ingressName string) {
 	Consistently(func() error {
-		return k8sClient.Get(ctx, resourceKey(solrCloud, ingressName), &netv1.Ingress{})
-	}).Should(MatchError("ingresses.networking.k8s.io \"" + ingressName + "\" not found"))
+		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
+	}).Should(MatchError("ingresses.networking.k8s.io \"" + ingressName + "\" not found"), "Ingress exists when it should not")
 }
 
-func expectConfigMap(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string, configMapData map[string]string) *corev1.ConfigMap {
-	return expectConfigMapWithChecks(ctx, solrCloud, configMapName, configMapData, nil)
+func expectConfigMap(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string) *corev1.ConfigMap {
+	return expectConfigMapWithChecks(ctx, parentResource, configMapName, configMapData, nil)
 }
 
-func expectConfigMapWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap)) *corev1.ConfigMap {
+func expectConfigMapWithChecks(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap)) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{}
 	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), configMap)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, configMapName), configMap)).To(Succeed(), "Expected ConfigMap does not exist")
 
 		// Verify the ConfigMap Data
 		g.Expect(configMap.Data).To(Equal(configMapData), "ConfigMap does not have the correct data.")
@@ -296,7 +320,7 @@ func expectConfigMapWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 	Eventually(
 		func() (types.UID, error) {
 			newResource := &corev1.ConfigMap{}
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), newResource)
+			err := k8sClient.Get(ctx, resourceKey(parentResource, configMapName), newResource)
 			if err != nil {
 				return "", err
 			}
@@ -306,10 +330,10 @@ func expectConfigMapWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 	return configMap
 }
 
-func expectConfigMapWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap)) *corev1.ConfigMap {
+func expectConfigMapWithConsistentChecks(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap)) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{}
 	Consistently(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), configMap)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, configMapName), configMap)).To(Succeed(), "Expected ConfigMap does not exist")
 
 		// Verify the ConfigMap Data
 		g.Expect(configMap.Data).To(Equal(configMapData), "ConfigMap does not have the correct data.")
@@ -322,20 +346,20 @@ func expectConfigMapWithConsistentChecks(ctx context.Context, solrCloud *solrv1b
 	return configMap
 }
 
-func expectNoConfigMap(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, configMapName string) {
+func expectNoConfigMap(ctx context.Context, parentResource client.Object, configMapName string) {
 	Consistently(func() error {
-		return k8sClient.Get(ctx, resourceKey(solrCloud, configMapName), &corev1.ConfigMap{})
-	}).Should(MatchError("configmaps \"" + configMapName + "\" not found"))
+		return k8sClient.Get(ctx, resourceKey(parentResource, configMapName), &corev1.ConfigMap{})
+	}).Should(MatchError("configmaps \"" + configMapName + "\" not found"), "ConfigMap exists when it should not")
 }
 
-func expectDeployment(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, deploymentName string) *appsv1.Deployment {
-	return expectDeploymentWithChecks(ctx, solrCloud, deploymentName, nil)
+func expectDeployment(ctx context.Context, parentResource client.Object, deploymentName string) *appsv1.Deployment {
+	return expectDeploymentWithChecks(ctx, parentResource, deploymentName, nil)
 }
 
-func expectDeploymentWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment)) *appsv1.Deployment {
+func expectDeploymentWithChecks(ctx context.Context, parentResource client.Object, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment)) *appsv1.Deployment {
 	deployment := &appsv1.Deployment{}
 	Eventually(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, deploymentName), deployment)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), deployment)).To(Succeed(), "Expected Deployment does not exist")
 
 		// Verify the Deployment Specs
 		testMapContainsOtherWithGomega(g, "Deployment pod template selector", deployment.Spec.Template.Labels, deployment.Spec.Selector.MatchLabels)
@@ -351,7 +375,7 @@ func expectDeploymentWithChecks(ctx context.Context, solrCloud *solrv1beta1.Solr
 	Eventually(
 		func() (types.UID, error) {
 			newResource := &appsv1.Deployment{}
-			err := k8sClient.Get(ctx, resourceKey(solrCloud, deploymentName), newResource)
+			err := k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), newResource)
 			if err != nil {
 				return "", err
 			}
@@ -361,10 +385,10 @@ func expectDeploymentWithChecks(ctx context.Context, solrCloud *solrv1beta1.Solr
 	return deployment
 }
 
-func expectDeploymentWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment)) *appsv1.Deployment {
+func expectDeploymentWithConsistentChecks(ctx context.Context, parentResource client.Object, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment)) *appsv1.Deployment {
 	deployment := &appsv1.Deployment{}
 	Consistently(func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, deploymentName), deployment)).To(Succeed())
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), deployment)).To(Succeed(), "Expected Deployment does not exist")
 
 		// Verify the Deployment Specs
 		testMapContainsOtherWithGomega(g, "Deployment pod template selector", deployment.Spec.Template.Labels, deployment.Spec.Selector.MatchLabels)
@@ -376,6 +400,12 @@ func expectDeploymentWithConsistentChecks(ctx context.Context, solrCloud *solrv1
 	}).Should(Succeed())
 
 	return deployment
+}
+
+func expectNoDeployment(ctx context.Context, parentResource client.Object, deploymentName string) {
+	Consistently(func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), &appsv1.Deployment{})
+	}).Should(MatchError("deployments.apps \"" + deploymentName + "\" not found"), "Deployment exists when it should not")
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
@@ -476,18 +506,6 @@ func testGenericPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]s
 	g.Expect(foundEnvVars[len(foundEnvVars)-1].Name).To(Equal(lastVarName), "%s must be the last envVar set, as it uses other envVars.", lastVarName)
 }
 
-func testPodTolerations(expectedTolerations []corev1.Toleration, foundTolerations []corev1.Toleration) {
-	Expect(foundTolerations).To(Equal(expectedTolerations), "Expected tolerations and found tolerations don't match")
-}
-
-func testPodProbe(expectedProbe *corev1.Probe, foundProbe *corev1.Probe, probeType string) {
-	Expect(foundProbe).To(Equal(expectedProbe), "Incorrect default container %s probe", probeType)
-}
-
-func testMapsEqual(mapName string, expected map[string]string, found map[string]string) {
-	Expect(found).To(Equal(expected), "Expected and found %s are not the same", mapName)
-}
-
 func testMapContainsOther(mapName string, base map[string]string, other map[string]string) {
 	testMapContainsOtherWithGomega(Default, mapName, base, other)
 }
@@ -569,7 +587,7 @@ func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
 	Expect(actualEnvVars).To(Equal(zkAclEnvVars), "ZK ACL Env Vars are not correct")
 }
 
-func cleanupTest(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+func cleanupTest(ctx context.Context, parentResource client.Object) {
 	cleanupObjects := []client.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
@@ -582,13 +600,13 @@ func cleanupTest(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
 	}
 	By("deleting all managed resources")
 	for _, obj := range cleanupObjects {
-		Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(solrCloud.Namespace))).To(Succeed())
+		Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(parentResource.GetNamespace()))).To(Succeed())
 	}
 
 	By("deleting all services individually")
 	// Clean up Services individually, since they do not support delete collection
 	serviceList := &corev1.ServiceList{}
-	Expect(k8sClient.List(ctx, serviceList, client.InNamespace(solrCloud.Namespace))).To(Succeed(), "List all of the services to delete in the namespace")
+	Expect(k8sClient.List(ctx, serviceList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed(), "List all of the services to delete in the namespace")
 	for _, item := range serviceList.Items {
 		Expect(k8sClient.Delete(ctx, &item)).To(Succeed())
 	}
@@ -757,8 +775,8 @@ var (
 	one                = int64(1)
 	two                = int64(2)
 	four               = int32(4)
-	five               = int32(5)
-	podSecurityContext = corev1.PodSecurityContext{
+	five                   = int32(5)
+	testPodSecurityContext = corev1.PodSecurityContext{
 		RunAsUser:  &one,
 		RunAsGroup: &two,
 	}
@@ -776,7 +794,7 @@ var (
 			},
 		},
 	}
-	affinity = &corev1.Affinity{
+	testAffinity = &corev1.Affinity{
 		PodAffinity: &corev1.PodAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
 				{
@@ -786,7 +804,7 @@ var (
 			PreferredDuringSchedulingIgnoredDuringExecution: nil,
 		},
 	}
-	resources = corev1.ResourceRequirements{
+	testResources = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
 		},
