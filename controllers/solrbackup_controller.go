@@ -100,15 +100,24 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	} else if solrCloud == nil {
 		requeueOrNot = reconcile.Result{}
 	} else {
-		// Only persist if the backup CRD is not finished (something bad happended)
+		// Only persist if the backup CRD is not finished (something bad happened)
 		// and the collection backups are all complete (not necessarily successful)
 		// Do not do this right after the collectionsBackup have been complete, wait till the next cycle
 		if allCollectionsComplete && !backup.Status.Finished {
-			// We will count on the Job updates to be notifified
-			requeueOrNot = reconcile.Result{}
-			err = persistSolrCloudBackups(r, backup, solrCloud)
-			if err != nil {
-				r.Log.Error(err, "Error while persisting SolrCloud backup")
+			if backup.Spec.Persistence != nil {
+				// We will count on the Job updates to be notified
+				requeueOrNot = reconcile.Result{}
+				err = persistSolrCloudBackups(r, backup, solrCloud)
+				if err != nil {
+					r.Log.Error(err, "Error while persisting SolrCloud backup")
+				}
+			} else {
+				// Persistence not configured for this backup, mark as finished.
+				tru := true
+				backup.Status.Finished = true
+				backup.Status.Successful = &tru
+				now := metav1.Now()
+				backup.Status.FinishTime = &now
 			}
 		}
 	}

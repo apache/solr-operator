@@ -4553,7 +4553,7 @@ spec:
                     description: Options required for backups to be enabled for this solrCloud.
                     properties:
                       directory:
-                        description: TODO Do we need to support this here for backcompat, or can it live exclusively in ManagedStorage Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default.
+                        description: 'Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default. Deprecated: Create an explicit ''managedRepositories'' entry instead.'
                         type: string
                       gcsRepositories:
                         description: Allows specification of multiple different "repositories" for Solr to use when backing up data to GCS.
@@ -4569,7 +4569,7 @@ spec:
                               description: The name of a Kubernetes secret holding a Google cloud service account key
                               type: string
                             name:
-                              description: A name used to identify this GCS storage profile.
+                              description: 'A name used to identify this GCS storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'
                               type: string
                           required:
                           - bucket
@@ -4585,7 +4585,7 @@ spec:
                               description: Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default.
                               type: string
                             name:
-                              description: A name used to identify this local storage profile.
+                              description: 'A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'
                               type: string
                             volume:
                               description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
@@ -5488,7 +5488,7 @@ spec:
                           type: object
                         type: array
                       volume:
-                        description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
+                        description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume. Deprecated: Create an explicit ''managedRepositories'' entry instead.'
                         properties:
                           awsElasticBlockStore:
                             description: 'AWSElasticBlockStore represents an AWS Disk resource that is attached to a kubelet''s host machine and then exposed to the pod. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore'

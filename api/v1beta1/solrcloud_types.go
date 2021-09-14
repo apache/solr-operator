@@ -330,13 +330,12 @@ type SolrEphemeralDataStorageOptions struct {
 }
 
 type SolrBackupRestoreOptions struct {
-	// TODO Do we need to support this (Volume) here for backcompat, or can it live exclusively in ManagedStorage?
-
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
+	// Deprecated: Create an explicit 'managedRepositories' entry instead.
 	Volume *corev1.VolumeSource `json:"volume,omitempty"`
 
 	// Allows specification of multiple different "repositories" for Solr to use when backing up data to GCS.
@@ -347,15 +346,16 @@ type SolrBackupRestoreOptions struct {
 	// post-backup compression.
 	ManagedRepositories *[]ManagedStorage `json:"managedRepositories,omitempty""`
 
-	// TODO Do we need to support this here for backcompat, or can it live exclusively in ManagedStorage
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
+	// Deprecated: Create an explicit 'managedRepositories' entry instead.
 	// +optional
 	Directory string `json:"directory,omitempty"`
 }
 
 type GcsStorage struct {
-	// A name used to identify this GCS storage profile.
+	// A name used to identify this GCS storage profile.  Values should follow RFC-1123.  (See here for more details:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
 	Name string `json:"name"`
 
 	// The name of the GCS bucket that all backup data will be stored in
@@ -369,7 +369,8 @@ type GcsStorage struct {
 }
 
 type ManagedStorage struct {
-	// A name used to identify this local storage profile.
+	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
+	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
 	Name string `json:"name"`
 
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
