@@ -299,7 +299,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use internal address with ExternalDNS", func() {
+	Context("Use internal address for addressability in Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -446,7 +446,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use kube domain with ExternalDNS using internal address", func() {
+	Context("Use explicit kube domain & use internal address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -518,7 +518,7 @@ var _ = Describe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use kube domain with ExternalDNS using external address", func() {
+	Context("Use explicit kube domain & use external address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
