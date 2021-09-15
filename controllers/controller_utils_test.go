@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"testing"
 )
 
 func resourceKey(parentResource client.Object, name string) types.NamespacedName {
@@ -520,10 +519,10 @@ func testMapContainsOtherWithGomega(g Gomega, mapName string, base map[string]st
 	}
 }
 
-func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
+func testACLEnvVars(actualEnvVars []corev1.EnvVar, hasReadOnly bool) {
 	/*
 		This test verifies ACL related env vars are set correctly and in the correct order, but expects a very specific config to be used in your test SolrCloud config:
-
+		set hasReadOnly = false if ReadOnlyACL is not provided
 					AllACL: &solrv1beta1.ZookeeperACL{
 						SecretRef:   "secret-name",
 						UsernameKey: "user",
@@ -558,31 +557,41 @@ func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
 				},
 			},
 		},
-		{
-			Name: "ZK_READ_ACL_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-user",
-					Optional:             &f,
+	}
+	if hasReadOnly {
+		zkAclEnvVars = append(zkAclEnvVars,
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_USERNAME",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+						Key:                  "read-only-user",
+						Optional:             &f,
+					},
 				},
 			},
-		},
-		{
-			Name: "ZK_READ_ACL_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-pass",
-					Optional:             &f,
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+						Key:                  "read-only-pass",
+						Optional:             &f,
+					},
 				},
 			},
-		},
-		{
-			Name:      "SOLR_ZK_CREDS_AND_ACLS",
-			Value:     "-DzkACLProvider=org.apache.solrv1beta1.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solrv1beta1.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
-			ValueFrom: nil,
-		},
+			corev1.EnvVar{
+				Name:      "SOLR_ZK_CREDS_AND_ACLS",
+				Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
+				ValueFrom: nil,
+			})
+	} else {
+		zkAclEnvVars = append(zkAclEnvVars,
+			corev1.EnvVar{
+				Name:      "SOLR_ZK_CREDS_AND_ACLS",
+				Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)",
+				ValueFrom: nil,
+			})
 	}
 	Expect(actualEnvVars).To(Equal(zkAclEnvVars), "ZK ACL Env Vars are not correct")
 }

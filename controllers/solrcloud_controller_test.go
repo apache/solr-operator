@@ -117,7 +117,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_LOG_LEVEL": "DEBUG",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
 			}
-			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
 			// TODO: Make this not invalidate foundEnv
 			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
 
@@ -276,12 +277,13 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 		It("has the correct resources", func() {
 			By("testing the Solr Status values")
-			status := expectSolrCloudStatus(ctx, solrCloud)
-			Expect(status.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connString), "Wrong internal zkConnectionString in status")
-			Expect(status.ZookeeperConnectionInfo.ExternalConnectionString).To(Not(BeNil()), "External zkConnectionString in status should not be nil")
-			Expect(*status.ZookeeperConnectionInfo.ExternalConnectionString).To(Equal(connString), "Wrong external zkConnectionString in status")
-			Expect(status.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
-			Expect(status.ZookeeperConnectionInfo.ZkConnectionString()).To(Equal(connString + "/a-ch/root"), "Wrong zkConnectionString()")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connString), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(Not(BeNil()), "External zkConnectionString in status should not be nil")
+				g.Expect(*found.ZookeeperConnectionInfo.ExternalConnectionString).To(Equal(connString), "Wrong external zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ZkConnectionString()).To(Equal(connString + "/a-ch/root"), "Wrong zkConnectionString()")
+			})
 
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
