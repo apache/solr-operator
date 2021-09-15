@@ -80,7 +80,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		cleanupTest(ctx, solrPrometheusExporter)
 	})
 
-	Context("Use explicit ZK Connection Info - Default Config", func() {
+	FContext("Use explicit ZK Connection Info - Default Config", func() {
 		testNumThreads := int32(4)
 		testScrapeInterval := int32(10)
 		testZkCnxString := "host:2181"
@@ -99,7 +99,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				ScrapeInterval: testScrapeInterval,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrPrometheusExporter Deployment")
 			deployment := expectDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
 
@@ -118,7 +118,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		})
 	})
 
-	Context("All possible customization options - Custom Config", func() {
+	FContext("All possible customization options - Custom Config", func() {
 		testExporterConfig := "This is a test config."
 		testNumThreads := int32(4)
 		testScrapeInterval := int32(10)
@@ -176,7 +176,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				Config: testExporterConfig,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrPrometheusExporter ConfigMap")
 			configMap := expectConfigMap(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsConfigMapName(), map[string]string{util.PrometheusExporterConfigMapKey: testExporterConfig})
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.Labels), testConfigMapLabels)), "Incorrect configMap labels")
@@ -265,7 +265,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		})
 	})
 
-	Context("With a Solr Reference & ZK ACLs", func() {
+	FContext("With a Solr Reference & ZK ACLs", func() {
 		solrName := "test-solr"
 		testZkCnxString := "host-from-solr:2181"
 		testZKChroot := "/this/path"
@@ -310,7 +310,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			}
 			Expect(k8sClient.Create(ctx, solrRef)).To(Succeed(), "Creating test SolrCloud for Prometheus Exporter to connect to")
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrPrometheusExporter Deployment")
 			expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
 				expectedArgs := []string{
@@ -404,7 +404,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		})
 	})
 
-	Context("Updating a user-provided ConfigMap", func() {
+	FContext("Updating a user-provided ConfigMap", func() {
 		testZkCnxString := "host-from-solr:2181"
 		testZKChroot := "/this/path"
 		withUserProvidedConfigMapName := "custom-exporter-config"
@@ -425,7 +425,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrPrometheusExporter Deployment is not created without an existing configMap")
 			expectNoDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
 

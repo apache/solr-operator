@@ -58,7 +58,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	Context("ZK Connection String - Admin ACL", func() {
+	FContext("ZK Connection String - Admin ACL", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -79,7 +79,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -104,7 +104,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		})
 	})
 
-	Context("ZK Connection String - Admin & Read ACL", func() {
+	FContext("ZK Connection String - Admin & Read ACL", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -130,7 +130,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 

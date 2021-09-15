@@ -65,7 +65,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	Context("Regular Solr Cloud", func() {
+	FContext("Regular Solr Cloud", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -89,7 +89,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -149,7 +149,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with Custom Kube Options", func() {
+	FContext("Solr Cloud with Custom Kube Options", func() {
 		BeforeEach(func() {
 			replicas := int32(4)
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -201,7 +201,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr ConfigMap")
 			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.DefaultSolrXML})
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testConfigMapLabels)), "Incorrect configMap labels")
@@ -263,7 +263,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with External Zookeeper & Chroot", func() {
+	FContext("Solr Cloud with External Zookeeper & Chroot", func() {
 		connString := "host:7271,host2:7271"
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -275,7 +275,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr Status values")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connString), "Wrong internal zkConnectionString in status")
@@ -306,7 +306,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Setting default values for the SolrCloud resource", func() {
+	FContext("Setting default values for the SolrCloud resource", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -316,7 +316,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct default values", func() {
+		FIt("has the correct default values", func() {
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 
 				// Solr defaults
@@ -349,7 +349,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with an explicit kube domain", func() {
+	FContext("Solr Cloud with an explicit kube domain", func() {
 		BeforeEach(func() {
 			replicas := int32(2)
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -376,7 +376,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -419,7 +419,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with a custom Solr XML ConfigMap", func() {
+	FContext("Solr Cloud with a custom Solr XML ConfigMap", func() {
 		testCustomSolrXmlConfigMap := "my-custom-solr-xml"
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -435,7 +435,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring no statefulSet exists when the configMap doesn't exist")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -491,7 +491,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with a custom Solr Log4J ConfigMap", func() {
+	FContext("Solr Cloud with a custom Solr Log4J ConfigMap", func() {
 		testCustomConfigMap := "my-custom-config-xml"
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -507,7 +507,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			configMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testCustomConfigMap,
@@ -578,7 +578,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	Context("Solr Cloud with a custom Solr Log4J and solr.xml ConfigMap", func() {
+	FContext("Solr Cloud with a custom Solr Log4J and solr.xml ConfigMap", func() {
 		testCustomConfigMap := "my-custom-config-xml"
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -594,7 +594,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			configMap := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      testCustomConfigMap,

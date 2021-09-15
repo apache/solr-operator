@@ -79,7 +79,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	Context("Persistent Data - Custom name & labels", func() {
+	FContext("Persistent Data - Custom name & labels", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
@@ -93,7 +93,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when the reclaim policy is Retain")
@@ -111,7 +111,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Persistent Data - PVC Delete on Reclaim", func() {
+	FContext("Persistent Data - PVC Delete on Reclaim", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
@@ -125,7 +125,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(1), "The solrcloud should have no finalizers when the reclaim policy is Retain")
@@ -151,13 +151,13 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Ephemeral Data - Default", func() {
+	FContext("Ephemeral Data - Default", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -174,7 +174,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Ephemeral Data - Nil EmptyDir", func() {
+	FContext("Ephemeral Data - Nil EmptyDir", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
@@ -182,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -199,7 +199,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Ephemeral Data - EmptyDir with Specs", func() {
+	FContext("Ephemeral Data - EmptyDir with Specs", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
@@ -210,7 +210,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -228,7 +228,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Ephemeral Data - HostPath with Specs", func() {
+	FContext("Ephemeral Data - HostPath with Specs", func() {
 		hostPathType := corev1.HostPathDirectoryOrCreate
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
@@ -240,7 +240,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -258,7 +258,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	Context("Ephemeral Data - HostPath and EmptyDir (HostPath should win)", func() {
+	FContext("Ephemeral Data - HostPath and EmptyDir (HostPath should win)", func() {
 		hostPathType := corev1.HostPathDirectoryOrCreate
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
@@ -274,7 +274,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")

@@ -77,7 +77,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	Context("Full ExternalDNS", func() {
+	FContext("Full ExternalDNS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -89,7 +89,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -144,7 +144,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Hiding Nodes from ExternalDNS", func() {
+	FContext("Hiding Nodes from ExternalDNS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -157,7 +157,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 5000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -215,7 +215,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Hiding Common from ExternalDNS", func() {
+	FContext("Hiding Common from ExternalDNS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -228,7 +228,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 2000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -285,7 +285,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use internal address for addressability in Solr", func() {
+	FContext("Use internal address for addressability in Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -298,7 +298,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -359,7 +359,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use extra domains with ExternalDNS", func() {
+	FContext("Use extra domains with ExternalDNS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -372,7 +372,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -432,7 +432,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use explicit kube domain & use internal address for Solr", func() {
+	FContext("Use explicit kube domain & use internal address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -446,7 +446,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -504,7 +504,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	Context("Use explicit kube domain & use external address for Solr", func() {
+	FContext("Use explicit kube domain & use external address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -517,7 +517,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 

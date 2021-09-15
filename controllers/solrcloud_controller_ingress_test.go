@@ -88,7 +88,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	Context("Full Ingress", func() {
+	FContext("Full Ingress", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -101,7 +101,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -162,7 +162,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Hide Nodes from external connections", func() {
+	FContext("Hide Nodes from external connections", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -176,7 +176,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -235,7 +235,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Hide Common endpoint from external connections", func() {
+	FContext("Hide Common endpoint from external connections", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -249,7 +249,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -309,7 +309,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Use internal address for addressability in Solr", func() {
+	FContext("Use internal address for addressability in Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -322,7 +322,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -380,7 +380,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Use extra domains", func() {
+	FContext("Use extra domains", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -394,7 +394,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -455,7 +455,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Use explicit kube domain & use internal address for Solr", func() {
+	FContext("Use explicit kube domain & use internal address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -468,7 +468,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				KubeDomain: testKubeDomain,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -526,7 +526,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	Context("Use explicit kube domain & use external address for Solr", func() {
+	FContext("Use explicit kube domain & use external address for Solr", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -539,7 +539,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				KubeDomain: testKubeDomain,
 			}
 		})
-		It("has the correct resources", func() {
+		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
