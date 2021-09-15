@@ -39,7 +39,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		replicas := int32(2)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
+				Name:      "foo",
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrCloudSpec{

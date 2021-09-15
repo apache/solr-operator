@@ -44,10 +44,10 @@ const (
 	DefaultBusyBoxImageRepo    = "library/busybox"
 	DefaultBusyBoxImageVersion = "1.28.0-glibc"
 
-	DefaultZkReplicas            = int32(3)
-	DefaultZkStorage             = "5Gi"
-	DefaultZkRepo                = "pravega/zookeeper"
-	DefaultZkVersion             = ""
+	DefaultZkReplicas                                = int32(3)
+	DefaultZkStorage                                 = "5Gi"
+	DefaultZkRepo                                    = "pravega/zookeeper"
+	DefaultZkVersion                                 = ""
 	DefaultZkVolumeReclaimPolicy VolumeReclaimPolicy = "Retain"
 
 	SolrTechnologyLabel      = "solr-cloud"

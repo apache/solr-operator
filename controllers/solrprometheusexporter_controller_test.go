@@ -59,7 +59,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 
 		solrPrometheusExporter = &solrv1beta1.SolrPrometheusExporter{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
+				Name:      "foo",
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrPrometheusExporterSpec{},
@@ -182,7 +182,6 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.Labels), testConfigMapLabels)), "Incorrect configMap labels")
 			Expect(configMap.Annotations).To(Equal(testConfigMapAnnotations), "Incorrect configMap annotations")
 
-
 			By("testing the SolrPrometheusExporter Deployment")
 			deployment := expectDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
 			expectedDeploymentLabels := util.MergeLabelsOrAnnotations(solrPrometheusExporter.SharedLabelsWith(solrPrometheusExporter.Labels), map[string]string{"technology": solrv1beta1.SolrPrometheusExporterTechnologyLabel})
@@ -192,7 +191,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			testPodAnnotations[util.PrometheusExporterConfigXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
 			Expect(deployment.Spec.Template.ObjectMeta.Annotations).To(Equal(testPodAnnotations), "Incorrect pod annotations")
 
-			Expect(deployment.Spec.Template.Spec.Containers).To(HaveLen(len(extraContainers1) + 1), "Wrong number of containers for the Deployment")
+			Expect(deployment.Spec.Template.Spec.Containers).To(HaveLen(len(extraContainers1)+1), "Wrong number of containers for the Deployment")
 			Expect(deployment.Spec.Template.Spec.Containers[1:]).To(Equal(extraContainers1), "Incorrect sidecar containers")
 
 			Expect(deployment.Spec.Template.Spec.InitContainers).To(HaveLen(len(extraContainers2)), "Wrong number of initContainers for the Deployment")
@@ -207,7 +206,6 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			}
 			Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
-
 
 			By("testing the SolrPrometheusExporter Deployment Custom Options")
 			Expect(deployment.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
@@ -243,14 +241,14 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.Volumes[0].Name).To(Equal("solr-prometheus-exporter-xml"), "PrometheusExporter Config VolumeMount not using the correct volume name.")
 			Expect(deployment.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap).To(Not(BeNil()), "PrometheusExporter Config Volume not using a configMap volume source.")
 			Expect(deployment.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.Name).To(Equal(configMap.Name), "PrometheusExporter Config Volume not using the correct configMap.")
-			Expect(deployment.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.Items).To(Equal([]corev1.KeyToPath{{Key:  util.PrometheusExporterConfigMapKey, Path: util.PrometheusExporterConfigMapKey,}}), "PrometheusExporter Config Volume ConfigMap has wrong items.")
+			Expect(deployment.Spec.Template.Spec.Volumes[0].VolumeSource.ConfigMap.Items).To(Equal([]corev1.KeyToPath{{Key: util.PrometheusExporterConfigMapKey, Path: util.PrometheusExporterConfigMapKey}}), "PrometheusExporter Config Volume ConfigMap has wrong items.")
 
 			// Extra Volumes
 			for i, volume := range extraVolumes {
 				volume.DefaultContainerMount.Name = volume.Name
-				Expect(deployment.Spec.Template.Spec.Containers[i].VolumeMounts[i + 1]).To(Equal(*volume.DefaultContainerMount), "Additional Volume [%d] from podOptions not mounted into container properly.", i)
-				Expect(deployment.Spec.Template.Spec.Volumes[i + 1].Name).To(Equal(volume.Name), "Additional Volume [%d] from podOptions not loaded into pod properly.", i)
-				Expect(deployment.Spec.Template.Spec.Volumes[i + 1].VolumeSource).To(Equal(volume.Source), "Additional Volume [%d] from podOptions not loaded into pod properly.", i)
+				Expect(deployment.Spec.Template.Spec.Containers[i].VolumeMounts[i+1]).To(Equal(*volume.DefaultContainerMount), "Additional Volume [%d] from podOptions not mounted into container properly.", i)
+				Expect(deployment.Spec.Template.Spec.Volumes[i+1].Name).To(Equal(volume.Name), "Additional Volume [%d] from podOptions not loaded into pod properly.", i)
+				Expect(deployment.Spec.Template.Spec.Volumes[i+1].VolumeSource).To(Equal(volume.Source), "Additional Volume [%d] from podOptions not loaded into pod properly.", i)
 			}
 
 			// Probes
@@ -281,21 +279,21 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				},
 				CustomKubeOptions: solrv1beta1.CustomExporterKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
-						EnvVariables:                  extraVars,
+						EnvVariables: extraVars,
 					},
 				},
 			}
 
 			solrRef = &solrv1beta1.SolrCloud{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "test-solr",
+					Name:      "test-solr",
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
 					ZookeeperRef: &solrv1beta1.ZookeeperRef{
 						ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
 							InternalConnectionString: testZkCnxString,
-							ChRoot: testZKChroot,
+							ChRoot:                   testZKChroot,
 							AllACL: &solrv1beta1.ZookeeperACL{
 								SecretRef:   "secret-name",
 								UsernameKey: "user",

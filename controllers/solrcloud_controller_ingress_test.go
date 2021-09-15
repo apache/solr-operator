@@ -42,7 +42,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		int32Replicas := int32(replicas)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
+				Name:      "foo",
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
@@ -157,7 +157,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
@@ -230,7 +230,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
@@ -375,7 +375,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
@@ -384,7 +384,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
-					Method:             solrv1beta1.Ingress,
+					Method:                solrv1beta1.Ingress,
 					UseExternalAddress:    true,
 					DomainName:            testDomain,
 					AdditionalDomainNames: testAdditionalDomains,
@@ -450,7 +450,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
@@ -460,9 +460,9 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
 					Method:             solrv1beta1.Ingress,
-					UseExternalAddress:    false,
-					DomainName:            testDomain,
-					NodePortOverride:      100,
+					UseExternalAddress: false,
+					DomainName:         testDomain,
+					NodePortOverride:   100,
 				},
 				PodPort:    3000,
 				KubeDomain: testKubeDomain,
@@ -521,7 +521,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
@@ -531,9 +531,9 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
 					Method:             solrv1beta1.Ingress,
-					UseExternalAddress:    true,
-					DomainName:            testDomain,
-					NodePortOverride:      100,
+					UseExternalAddress: true,
+					DomainName:         testDomain,
+					NodePortOverride:   100,
 				},
 				PodPort:    3000,
 				KubeDomain: testKubeDomain,
@@ -595,13 +595,13 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
-				g.Expect(*found.ExternalCommonAddress).To(Equal( "http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud"+"."+testDomain), "Wrong external common address in status")
 			})
 		})
 	})
 })
 
-func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, withCommon bool, withNodes int, commonPort int, nodePort int, domainNames... string) {
+func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, withCommon bool, withNodes int, commonPort int, nodePort int, domainNames ...string) {
 	expected := 0
 	if withCommon {
 		expected += 1
@@ -650,4 +650,3 @@ func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, 
 func ingressLabelsWithDefaults(labels map[string]string) map[string]string {
 	return util.MergeLabelsOrAnnotations(labels, map[string]string{"nginx.ingress.kubernetes.io/backend-protocol": "HTTP"})
 }
-

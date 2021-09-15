@@ -46,7 +46,7 @@ var testEnv *envtest.Environment
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t,"Controller Suite")
+	RunSpecs(t, "Controller Suite")
 }
 
 var _ = BeforeSuite(func() {
@@ -75,7 +75,6 @@ var _ = BeforeSuite(func() {
 
 	err = solrv1beta1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-
 
 	//+kubebuilder:scaffold:scheme
 

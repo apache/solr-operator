@@ -139,7 +139,6 @@ func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Obje
 		}
 	}).Should(Succeed())
 
-
 	By("recreating the StatefulSet after it is deleted")
 	Expect(k8sClient.Delete(ctx, statefulSet)).To(Succeed())
 	Eventually(
@@ -174,7 +173,7 @@ func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource c
 func expectNoStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
-	}).Should(MatchError("statefulsets.apps \"" + statefulSetName + "\" not found"), "StatefulSet exists when it should not")
+	}).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
 }
 
 func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool) *corev1.Service {
@@ -241,7 +240,7 @@ func expectNoService(ctx context.Context, parentResource client.Object, serviceN
 	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
 }
 
-func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames... string) {
+func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames ...string) {
 	Consistently(func(g Gomega) {
 		for _, serviceName := range serviceNames {
 			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
@@ -294,7 +293,7 @@ func expectIngressWithConsistentChecks(ctx context.Context, parentResource clien
 func expectNoIngress(ctx context.Context, parentResource client.Object, ingressName string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
-	}).Should(MatchError("ingresses.networking.k8s.io \"" + ingressName + "\" not found"), "Ingress exists when it should not")
+	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
 }
 
 func expectConfigMap(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string) *corev1.ConfigMap {
@@ -348,7 +347,7 @@ func expectConfigMapWithConsistentChecks(ctx context.Context, parentResource cli
 func expectNoConfigMap(ctx context.Context, parentResource client.Object, configMapName string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, configMapName), &corev1.ConfigMap{})
-	}).Should(MatchError("configmaps \"" + configMapName + "\" not found"), "ConfigMap exists when it should not")
+	}).Should(MatchError("configmaps \""+configMapName+"\" not found"), "ConfigMap exists when it should not")
 }
 
 func expectDeployment(ctx context.Context, parentResource client.Object, deploymentName string) *appsv1.Deployment {
@@ -404,7 +403,7 @@ func expectDeploymentWithConsistentChecks(ctx context.Context, parentResource cl
 func expectNoDeployment(ctx context.Context, parentResource client.Object, deploymentName string) {
 	Consistently(func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), &appsv1.Deployment{})
-	}).Should(MatchError("deployments.apps \"" + deploymentName + "\" not found"), "Deployment exists when it should not")
+	}).Should(MatchError("deployments.apps \""+deploymentName+"\" not found"), "Deployment exists when it should not")
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
@@ -781,9 +780,9 @@ var (
 			},
 		},
 	}
-	one                = int64(1)
-	two                = int64(2)
-	four               = int32(4)
+	one                    = int64(1)
+	two                    = int64(2)
+	four                   = int32(4)
 	five                   = int32(5)
 	testPodSecurityContext = corev1.PodSecurityContext{
 		RunAsUser:  &one,

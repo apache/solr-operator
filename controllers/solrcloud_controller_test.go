@@ -44,7 +44,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
+				Name:      "foo",
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrCloudSpec{},
@@ -282,7 +282,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(Not(BeNil()), "External zkConnectionString in status should not be nil")
 				g.Expect(*found.ZookeeperConnectionInfo.ExternalConnectionString).To(Equal(connString), "Wrong external zkConnectionString in status")
 				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
-				g.Expect(found.ZookeeperConnectionInfo.ZkConnectionString()).To(Equal(connString + "/a-ch/root"), "Wrong zkConnectionString()")
+				g.Expect(found.ZookeeperConnectionInfo.ZkConnectionString()).To(Equal(connString+"/a-ch/root"), "Wrong zkConnectionString()")
 			})
 
 			By("testing the Solr StatefulSet")
@@ -438,7 +438,6 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		It("has the correct resources", func() {
 			By("ensuring no statefulSet exists when the configMap doesn't exist")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
-
 
 			By("ensuring no statefulSet exists when the configMap is invalid")
 			invalidConfigMap := &corev1.ConfigMap{
@@ -633,7 +632,6 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
-
 
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 

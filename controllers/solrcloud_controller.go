@@ -762,7 +762,7 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 			ChRoot:                   pzk.ChRoot,
 		}
 		return err
-*/
+		*/
 	} else {
 		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}

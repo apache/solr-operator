@@ -41,7 +41,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "foo",
+				Name:      "foo",
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
@@ -50,8 +50,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 						InternalConnectionString: "host:7271",
 					},
 				},
-				SolrJavaMem:  "-Xmx4G",
-				SolrOpts:     "extra-opts",
+				SolrJavaMem: "-Xmx4G",
+				SolrOpts:    "extra-opts",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						EnvVariables:       extraVars,
@@ -96,12 +96,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when the reclaim policy is Retain")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when the reclaim policy is Retain")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Name).To(Equal(solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name), "Data volume claim doesn't exist")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel]).To(Equal("solr-cloud"), "PVC Technology label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
@@ -128,13 +128,13 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(1) , "The solrcloud should have no finalizers when the reclaim policy is Retain")
+				g.Expect(found.GetFinalizers()).To(HaveLen(1), "The solrcloud should have no finalizers when the reclaim policy is Retain")
 				g.Expect(found.GetFinalizers()[0]).To(Equal(util.SolrStorageFinalizer), "Incorrect finalizer set for deleting persistent storage.")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Name).To(Equal(solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name), "Data volume claim doesn't exist")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel]).To(Equal("solr-cloud"), "PVC Technology label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
@@ -147,7 +147,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 
 			Eventually(func() error {
 				return k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), &solrv1beta1.SolrCloud{})
-			}).Should(MatchError("solrclouds.solr.apache.org \"" + solrCloud.Name + "\" not found"), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
+			}).Should(MatchError("solrclouds.solr.apache.org \""+solrCloud.Name+"\" not found"), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
 		})
 	})
 
@@ -160,12 +160,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when ephemeral storage is used")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
@@ -185,12 +185,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when ephemeral storage is used")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
@@ -213,12 +213,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when ephemeral storage is used")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
@@ -243,12 +243,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when ephemeral storage is used")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
@@ -277,12 +277,12 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		It("has the correct resources", func() {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(HaveLen(0) , "The solrcloud should have no finalizers when ephemeral storage is used")
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
 			By("testing the Solr StatefulSet PVC Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3) , "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
