@@ -707,10 +707,6 @@ func GenerateBackupRepositoriesForSolrXml(backupOptions *solr.SolrBackupRestoreO
 	managedBackupRepositoryXml := ""
 	gcsBackupRepositoryXml := ""
 
-	// TODO JEGERLOW: How should we handle the name field here?  Should we absolutely require a name on 'solrbackup'?
-	// Should we detect when there's only a single repository configured and try to be smart about it at backup time?
-	// Right now let's give the legacy a default name.  Users can specify that explicitly in solrbackup, or the
-	// solrbackup code can be smart about detecting this case (i.e. there's only a single repo defined and it's singleton-local)
 	if backupOptions.Volume != nil {
 		singletonBackupRepositoryXml = fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, solr.DefaultBackupRepositoryName)
 	}
