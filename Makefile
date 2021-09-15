@@ -139,11 +139,16 @@ uninstall: ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config
 	kubectl delete -k config/crd
 	kubectl delete -f config/dependencies
 
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config
-	cd config/manager && touch kustomization.yaml && $(KUSTOMIZE) edit add resource manager.yaml && $(KUSTOMIZE) edit add transformer config.yaml && $(KUSTOMIZE) edit set image apache/solr-operator=${IMG}:${TAG}
+prepare-deploy-kustomize: kustomize
+	cd config/manager && \
+	cp kustomization_base.yaml kustomization.yaml && \
+	$(KUSTOMIZE) edit add resource manager.yaml && \
+	$(KUSTOMIZE) edit set image apache/solr-operator=${IMG}:${TAG}
+
+deploy: manifests prepare-deploy-kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config
 	kubectl apply -k config/default
 
-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config
+undeploy: prepare-deploy-kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config
 	kubectl delete -k config/default
 
 ##@ Tests and Checks

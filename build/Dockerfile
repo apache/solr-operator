@@ -63,6 +63,6 @@ WORKDIR /
 COPY --from=builder workspace/bin/solr-operator .
 COPY --from=builder workspace/LICENSE workspace/NOTICE etc/licenses/
 COPY --from=builder workspace/licenses etc/licenses/dependencies
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/solr-operator"]
