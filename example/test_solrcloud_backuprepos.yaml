@@ -1,0 +1,55 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+apiVersion: solr.apache.org/v1beta1
+kind: SolrCloud
+metadata:
+  name: multiple-backup-repositories-solr
+spec:
+  replicas: 1
+  solrImage:
+    tag: 8.9.0
+  dataStorage:
+    backupRestoreOptions:
+      # Deprecated syntax for defining a backup repository (local backups only)
+      # A repository of this type can be referenced from a 'solrbackup' by
+      # specifying a 'repositoryName' of "legacy_local_repository".
+      volume:
+        persistentVolumeClaim:
+          claimName: "pvc-test" # PVC expected to already exist!
+      # "Managed" repositories store backup data in a Kubernetes volume, This
+      # allows the operator to make several advanced features available, such as
+      # backup compression and relocation ("persistence").
+      #
+      # This syntax replaces the deprecated local-backup syntax above.
+      managedRepositories:
+        - name: "managedrepository1"
+          volume:
+            persistentVolumeClaim:
+              claimName: "pvc-test-2" 
+      # Creates repositories that backup data to Google Cloud Storage ("GCS").
+      # GCS credentials are taken from the secret 'gcsCredentialSecret', which
+      # should have a key 'service-account-key.json' whose value is a JSON token
+      # as described here: https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+      #
+      # Requires Solr >= 8.9.
+      gcsRepositories: 
+        - name: "main_collection_backup_repository"
+          bucket: "product_catalog"
+          gcsCredentialSecret: "some-secret-name"
+        - name: "ancillary_collection_backup_repository"
+          bucket: "log_data"
+          gcsCredentialSecret: "some-secret-name-2"
+          baseLocation: "/logs"
