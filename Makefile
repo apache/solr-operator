@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
+
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
@@ -21,8 +23,8 @@ NAME ?= solr-operator
 REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
 IMG = $(REPOSITORY)/$(NAME)
 # Default tag from info in version/version.go
-VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)
-TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)
+VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)
+TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)
 ifneq (,$(VERSION_SUFFIX))
 VERSION = $(TMP_VERSION)-$(VERSION_SUFFIX)
 else
@@ -34,12 +36,6 @@ GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
 GO111MODULE ?= on
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
-ifeq (,$(shell go env GOBIN))
-GOBIN=$(shell go env GOPATH)/bin
-else
-GOBIN=$(shell go env GOBIN)
-endif
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
@@ -76,6 +72,7 @@ help: ## Display this help.
 
 clean: ## Clean build directories across the project
 	rm -rf ./bin
+	rm -rf ./testbin
 	rm -rf ./release-artifacts
 	rm -rf ./helm/*/charts ./helm/*/Chart.lock
 	rm -rf ./cover.out
@@ -101,11 +98,11 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
-fetch-licenses-list: ## Fetch the list of license types
-	go-licenses csv . | grep -v -E "solr-operator" | sort > dependency_licenses.csv
+fetch-licenses-list: go-licenses ## Fetch the list of license types
+	$(GO_LICENSES) csv . | grep -v -E "solr-operator" | sort > dependency_licenses.csv
 
-fetch-licenses-full: ## Fetch all licenses
-	go-licenses save . --save_path licenses --force
+fetch-licenses-full: go-licenses ## Fetch all licenses
+	$(GO_LICENSES) save . --save_path licenses --force
 
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts)
@@ -140,7 +137,7 @@ uninstall: ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config
 	kubectl delete -f config/dependencies
 
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config
-	cd config/manager && touch kustomization.yaml && kustomize edit add resource manager.yaml && kustomize edit add transformer config.yaml && $(KUSTOMIZE) edit set image apache/solr-operator=${IMG}:${TAG}
+	cd config/manager && touch kustomization.yaml && $(KUSTOMIZE) edit add resource manager.yaml && $(KUSTOMIZE) edit add transformer config.yaml && $(KUSTOMIZE) edit set image apache/solr-operator=${IMG}:${TAG}
 	kubectl apply -k config/default
 
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config
@@ -155,14 +152,14 @@ lint: check-zk-op-version check-mod vet check-format check-licenses check-manife
 check-format: ## Check the codebase to make sure it adheres to golang standards
 	./hack/check_format.sh
 
-check-licenses: ## Ensure the licenses for dependencies are valid and the license list file is up-to-date
+check-licenses: go-licenses ## Ensure the licenses for dependencies are valid and the license list file is up-to-date
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	go-licenses csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
+	$(GO_LICENSES) csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
 
 check-zk-op-version: ## Ensure the zookeeper-operator version is standard throughout the codebase
-	./hack/zk-operator/check-version.sh
+	#./hack/zk-operator/check-version.sh
 
 check-manifests: ## Ensure the manifest files (CRDs, RBAC, etc) are up-to-date across the project, including the helm charts
 	rm -rf generated-check
@@ -224,18 +221,19 @@ helm-deploy-operator: helm-dependency-build docker-build ## Deploy the current v
 
 ##@ Dependencies
 
-.install-dependencies:
-	./hack/install_dependencies.sh
+install-dependencies: controller-gen kustomize go-licenses ## Install necessary dependencies for building and testing the Solr Operator
 
-install-dependencies: .install-dependencies mod-tidy ## Install necessary dependencies for building and testing the Solr Operator
-
-CONTROLLER_GEN = $(GOBIN)/controller-gen
+CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0)
 
-KUSTOMIZE = $(GOBIN)/kustomize
+KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.3.0)
+
+GO_LICENSES = $(PROJECT_DIR)/bin/go-licenses
+go-licenses: ## Download go-licenses locally if necessary.
+	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@latest)
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
@@ -243,6 +241,6 @@ define go-get-tool
 @[ -f $(1) ] || { \
 set -e ;\
 echo "Downloading $(2)" ;\
-go install $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
 }
 endef

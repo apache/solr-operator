@@ -42,7 +42,7 @@ if [ -n "${licRes}" ]; then
 fi
 
 licRes=$(
-    find . -type f -iname '*.sh' -not -name 'build.sh' ! -exec \
+    find . -type f -iname '*.sh' -not -regex '.*/testbin/.*'  -not -name 'build.sh' ! -exec \
          sh -c 'head -n5 $1 | grep -Eq "(Licensed to the Apache Software Foundation)" || echo -e  $1' {} {} \;
 )
 
