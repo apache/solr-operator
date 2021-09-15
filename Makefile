@@ -35,6 +35,9 @@ GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
+KUSTOMIZE_VERSION=4.3.0
+CONTROLLER_GEN_VERSION=v0.5.0
+
 GO111MODULE ?= on
 
 # Setting SHELL to bash allows bash commands to be executed by recipes.
@@ -225,11 +228,17 @@ install-dependencies: controller-gen kustomize go-licenses ## Install necessary 
 
 CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION))
 
 KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
+# Uncomment and remove other lines once kustomize supports "go install"
+# https://github.com/kubernetes-sigs/kustomize/issues/3618
+# $(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v$(KUSTOMIZE_VERSION))
 kustomize: ## Download kustomize locally if necessary.
-	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.3.0)
+ifeq (,$(wildcard $(KUSTOMIZE)))
+	@echo "Downloading kustomize"
+	(cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- $(KUSTOMIZE_VERSION) $(PROJECT_DIR)/bin)
+endif
 
 GO_LICENSES = $(PROJECT_DIR)/bin/go-licenses
 go-licenses: ## Download go-licenses locally if necessary.
