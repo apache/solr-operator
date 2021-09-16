@@ -59,30 +59,24 @@ type ManagedBackupRepository interface {
 }
 
 func GetBackupRepositoryByName(backupOptions *solr.SolrBackupRestoreOptions, repositoryName string) (BackupRepository, bool) {
-
-	log.Info("JEGERLOW Doing repository lookup, repoName is: " + repositoryName)
 	//Build map of string->BackupRepository
 	repositoriesByName := make(map[string]BackupRepository)
 	if backupOptions.Volume != nil {
-		log.Info("JEGERLOW: Adding legacy volume to map with key " + solr.DefaultBackupRepositoryName)
 		repositoriesByName[solr.DefaultBackupRepositoryName] = BackupRepository(backupOptions)
 	}
 	if backupOptions.ManagedRepositories != nil {
 		for _, managedRepository := range *backupOptions.ManagedRepositories {
-			log.Info("JEGERLOW: Adding managed repo to map with key: " + managedRepository.Name)
 			repositoriesByName[managedRepository.Name] = BackupRepository(&managedRepository)
 		}
 	}
 	if backupOptions.GcsRepositories != nil {
 		for _, gcsRepository := range *backupOptions.GcsRepositories {
-			log.Info("JEGERLOW: Adding managed repo to map with key: " + gcsRepository.Name)
 			repositoriesByName[gcsRepository.Name] = BackupRepository(&gcsRepository)
 		}
 	}
 
 	// Return right away if the backup supplies a valid repository name
 	if repository, ok := repositoriesByName[repositoryName] ; ok {
-		log.Info("JEGERLOW: Successfully looked up repo by name " + repositoryName)
 		return repository, true
 	} else if len(repositoriesByName) == 1 && repositoryName == "" {
 		// Return lone value if there's only one and 'name' is blank.
