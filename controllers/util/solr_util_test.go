@@ -33,15 +33,15 @@ func TestNoRepositoryXmlGeneratedWhenNoRepositoriesExist(t *testing.T) {
 }
 
 func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
-	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{},}
-	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1",}
-	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2",}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
+	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{}}
+	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1"}
+	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2"}
 	backupOptions := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
-		Directory: "/somedirectory",
+		Volume:              &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
+		Directory:           "/somedirectory",
 		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1, managedRepository2},
-		GcsRepositories: &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
+		GcsRepositories:     &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
 	}
 
 	xmlString := GenerateBackupRepositoriesForSolrXml(&backupOptions)

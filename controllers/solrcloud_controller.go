@@ -631,7 +631,6 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 			newStatus.ReadyReplicas += 1
 		}
 
-
 		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
 		if allPodsBackupReady {
 			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(p, solrCloud.Spec.StorageOptions.BackupRestoreOptions)
@@ -704,7 +703,7 @@ func isPodReadyForBackup(pod corev1.Pod, backupOptions *solr.SolrBackupRestoreOp
 
 	// Ensure that the singleton local volume (legacy syntax) is mounted on the pod.
 	if backupOptions.Volume != nil {
-		if ! solr.VolumeExistsWithName(solr.BackupRestoreVolume, pod.Spec.Volumes) {
+		if !solr.VolumeExistsWithName(solr.BackupRestoreVolume, pod.Spec.Volumes) {
 			return false
 		}
 	}
@@ -712,7 +711,7 @@ func isPodReadyForBackup(pod corev1.Pod, backupOptions *solr.SolrBackupRestoreOp
 	// Ensure that each configured GCS repository has a volume mounted for its credential file
 	if backupOptions.GcsRepositories != nil {
 		for _, gcsRepository := range *backupOptions.GcsRepositories {
-			if ! gcsRepository.IsCredentialVolumePresent(pod.Spec.Volumes) {
+			if !gcsRepository.IsCredentialVolumePresent(pod.Spec.Volumes) {
 				return false
 			}
 		}
@@ -721,7 +720,7 @@ func isPodReadyForBackup(pod corev1.Pod, backupOptions *solr.SolrBackupRestoreOp
 	// Ensure that each configured 'managed' (i.e. local) repository has a volume mounted for backup storage
 	if backupOptions.ManagedRepositories != nil {
 		for _, managedRepository := range *backupOptions.ManagedRepositories {
-			if ! managedRepository.IsBackupVolumePresent(pod.Spec.Volumes) {
+			if !managedRepository.IsBackupVolumePresent(pod.Spec.Volumes) {
 				return false
 			}
 		}

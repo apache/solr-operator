@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	SolrClientPortName  = "solr-client"
+	SolrClientPortName = "solr-client"
 
 	BackupRestoreCredentialSecretKey = "service-account-key.json"
 
@@ -239,14 +239,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if backupOptions.ManagedRepositories != nil {
 			for _, managedRepository := range *backupOptions.ManagedRepositories {
 				solrVolumes = append(solrVolumes, corev1.Volume{
-					Name: managedRepository.GetVolumeName(),
+					Name:         managedRepository.GetVolumeName(),
 					VolumeSource: *managedRepository.Volume,
 				})
 				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name:		managedRepository.GetVolumeName(),
-					MountPath:	managedRepository.GetSolrMountPath(),
-					SubPath:	BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
-					ReadOnly: false,
+					Name:      managedRepository.GetVolumeName(),
+					MountPath: managedRepository.GetSolrMountPath(),
+					SubPath:   BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
+					ReadOnly:  false,
 				})
 			}
 		}
@@ -256,20 +256,20 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			for _, gcsRepository := range *backupOptions.GcsRepositories {
 				fals := false
 				solrVolumes = append(solrVolumes, corev1.Volume{
-					Name:				gcsRepository.GetVolumeName(),
-					VolumeSource:		corev1.VolumeSource{
+					Name: gcsRepository.GetVolumeName(),
+					VolumeSource: corev1.VolumeSource{
 						Secret: &corev1.SecretVolumeSource{
 							SecretName: gcsRepository.GcsCredentialSecret,
-							Items: []corev1.KeyToPath{{Key: BackupRestoreCredentialSecretKey, Path: BackupRestoreCredentialSecretKey}},
-							Optional: &fals,
+							Items:      []corev1.KeyToPath{{Key: BackupRestoreCredentialSecretKey, Path: BackupRestoreCredentialSecretKey}},
+							Optional:   &fals,
 						},
 					},
 				})
 
 				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name:		gcsRepository.GetVolumeName(),
-					MountPath: 	gcsRepository.GetSolrMountPath(),
-					ReadOnly:	true,
+					Name:      gcsRepository.GetVolumeName(),
+					MountPath: gcsRepository.GetSolrMountPath(),
+					ReadOnly:  true,
 				})
 			}
 		}
@@ -665,10 +665,10 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		if backupOptions.ManagedRepositories != nil {
 			for _, managedRepository := range *backupOptions.ManagedRepositories {
 				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name: managedRepository.GetVolumeName(),
+					Name:      managedRepository.GetVolumeName(),
 					MountPath: fmt.Sprintf("/backup-restore-managed-%s", managedRepository.Name),
-					SubPath: BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
-					ReadOnly: false,
+					SubPath:   BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
+					ReadOnly:  false,
 				})
 
 				setupCommands = append(setupCommands, fmt.Sprintf(
@@ -699,7 +699,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 }
 
 func GenerateBackupRepositoriesForSolrXml(backupOptions *solr.SolrBackupRestoreOptions) string {
-	if backupOptions == nil || (backupOptions.Volume == nil && backupOptions.ManagedRepositories == nil && backupOptions.GcsRepositories == nil)  {
+	if backupOptions == nil || (backupOptions.Volume == nil && backupOptions.ManagedRepositories == nil && backupOptions.GcsRepositories == nil) {
 		return ""
 	}
 	libXml := ""
@@ -724,7 +724,7 @@ func GenerateBackupRepositoriesForSolrXml(backupOptions *solr.SolrBackupRestoreO
 <repository name="%s" class="org.apache.solr.gcs.GCSBackupRepository">
     <str name="gcsBucket">%s</str>
     <str name="gcsCredentialPath">%s</str>
-</repository>`, gcsRepository.Name, gcsRepository.Bucket, gcsRepository.GetSolrMountPath() + "/" + BackupRestoreCredentialSecretKey)
+</repository>`, gcsRepository.Name, gcsRepository.Bucket, gcsRepository.GetSolrMountPath()+"/"+BackupRestoreCredentialSecretKey)
 		}
 	}
 	return fmt.Sprintf(

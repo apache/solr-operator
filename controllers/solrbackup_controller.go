@@ -171,8 +171,8 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 	actionTaken = true
 	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-	if ! found {
-		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+	if !found {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
 		return solrCloud, collectionBackupsFinished, actionTaken, err
@@ -195,7 +195,6 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
 		backup.Status.SolrVersion = solrCloud.Status.Version
-
 
 	}
 
@@ -226,8 +225,8 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
 		backupRepository, repositoryFound := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-		if ! repositoryFound {
-			err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+		if !repositoryFound {
+			err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 				"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 				backup.Name, backup.Spec.RepositoryName)
 			return false, err
@@ -280,8 +279,8 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 	now := metav1.Now()
 
 	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-	if ! found {
-		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository" +
+	if !found {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 			"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
 		return err

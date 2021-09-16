@@ -325,4 +325,3 @@ type SolrBackupList struct {
 func init() {
 	SchemeBuilder.Register(&SolrBackup{}, &SolrBackupList{})
 }
-

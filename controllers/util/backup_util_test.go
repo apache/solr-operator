@@ -27,7 +27,7 @@ import (
 
 func TestSolrBackupApiParamsForLegacyBackup(t *testing.T) {
 	legacyRepository := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Actual volume info doesn't matter here
+		Volume:    &corev1.VolumeSource{}, // Actual volume info doesn't matter here
 		Directory: "/somedirectory",
 	}
 	backupConfig := solr.SolrBackup{
@@ -35,9 +35,9 @@ func TestSolrBackupApiParamsForLegacyBackup(t *testing.T) {
 			Name: "somebackupname",
 		},
 		Spec: solr.SolrBackupSpec{
-			SolrCloud: "solrcloudcluster",
+			SolrCloud:      "solrcloudcluster",
 			RepositoryName: "legacy_local_repository",
-			Collections: []string{"col1", "col2"},
+			Collections:    []string{"col1", "col2"},
 		},
 	}
 
@@ -53,8 +53,8 @@ func TestSolrBackupApiParamsForLegacyBackup(t *testing.T) {
 
 func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 	managedRepository := solr.ManagedStorage{
-		Name: "somemanagedrepository",
-		Volume: &corev1.VolumeSource{}, // Actual volume info doesn't matter here
+		Name:      "somemanagedrepository",
+		Volume:    &corev1.VolumeSource{}, // Actual volume info doesn't matter here
 		Directory: "/somedirectory",
 	}
 	backupConfig := solr.SolrBackup{
@@ -62,9 +62,9 @@ func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 			Name: "somebackupname",
 		},
 		Spec: solr.SolrBackupSpec{
-			SolrCloud: "solrcloudcluster",
+			SolrCloud:      "solrcloudcluster",
 			RepositoryName: "somemanagedrepository",
-			Collections: []string{"col1", "col2"},
+			Collections:    []string{"col1", "col2"},
 		},
 	}
 
@@ -80,19 +80,19 @@ func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 
 func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 	gcsRepository := solr.GcsStorage{
-		Name: "somegcsrepository",
-		Bucket: "some-gcs-bucket",
+		Name:                "somegcsrepository",
+		Bucket:              "some-gcs-bucket",
 		GcsCredentialSecret: "some-secret-name",
-		BaseLocation: "/some/gcs/path",
+		BaseLocation:        "/some/gcs/path",
 	}
 	backupConfig := solr.SolrBackup{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "somebackupname",
 		},
 		Spec: solr.SolrBackupSpec{
-			SolrCloud: "solrcloudcluster",
+			SolrCloud:      "solrcloudcluster",
 			RepositoryName: "somegcsrepository",
-			Collections: []string{"col1", "col2"},
+			Collections:    []string{"col1", "col2"},
 		},
 	}
 
@@ -108,10 +108,10 @@ func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 
 func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {
 	backupOptions := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
-		Directory: "/somedirectory",
+		Volume:              &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
+		Directory:           "/somedirectory",
 		ManagedRepositories: &[]solr.ManagedStorage{},
-		GcsRepositories: &[]solr.GcsStorage{},
+		GcsRepositories:     &[]solr.GcsStorage{},
 	}
 
 	_, found := GetBackupRepositoryByName(&backupOptions, "managedrepository2")
@@ -120,15 +120,15 @@ func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {
 }
 
 func TestCanLookupManagedRepositoryByName(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
-	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{},}
-	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1",}
-	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2",}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
+	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{}}
+	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1"}
+	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2"}
 	backupOptions := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
-		Directory: "/somedirectory",
+		Volume:              &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
+		Directory:           "/somedirectory",
 		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1, managedRepository2},
-		GcsRepositories: &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
+		GcsRepositories:     &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
 	}
 
 	foundRepo, found := GetBackupRepositoryByName(&backupOptions, "managedrepository2")
@@ -138,15 +138,15 @@ func TestCanLookupManagedRepositoryByName(t *testing.T) {
 }
 
 func TestCanLookupGcsRepositoryByName(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
-	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{},}
-	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1",}
-	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2",}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
+	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{}}
+	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1"}
+	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2"}
 	backupOptions := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
-		Directory: "/somedirectory",
+		Volume:              &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
+		Directory:           "/somedirectory",
 		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1, managedRepository2},
-		GcsRepositories: &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
+		GcsRepositories:     &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
 	}
 
 	foundRepo, found := GetBackupRepositoryByName(&backupOptions, "gcsrepository2")
@@ -156,15 +156,15 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 }
 
 func TestCanLookupLegacyRepositoryByName(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
-	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{},}
-	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1",}
-	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2",}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
+	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{}}
+	gcsRepository1 := solr.GcsStorage{Name: "gcsrepository1", Bucket: "some-bucket-name1", GcsCredentialSecret: "some-secret-name1"}
+	gcsRepository2 := solr.GcsStorage{Name: "gcsrepository2", Bucket: "some-bucket-name2", GcsCredentialSecret: "some-secret-name2"}
 	backupOptions := solr.SolrBackupRestoreOptions{
-		Volume: &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
-		Directory: "/somedirectory",
+		Volume:              &corev1.VolumeSource{}, // Define a 'legacy'-style backup repository
+		Directory:           "/somedirectory",
 		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1, managedRepository2},
-		GcsRepositories: &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
+		GcsRepositories:     &[]solr.GcsStorage{gcsRepository1, gcsRepository2},
 	}
 
 	foundRepo, found := GetBackupRepositoryByName(&backupOptions, "legacy_local_repository")
@@ -176,10 +176,10 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 // If 'solrcloud' only has 1 repository configured and the backup doesn't specify a name, we still want to choose the
 // only option available.
 func TestRepositoryLookupSucceedsIfNoNameProvidedButOnlyOneRepositoryDefined(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
 	backupOptions := solr.SolrBackupRestoreOptions{
-		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1,},
-		GcsRepositories: &[]solr.GcsStorage{},
+		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1},
+		GcsRepositories:     &[]solr.GcsStorage{},
 	}
 
 	foundRepo, found := GetBackupRepositoryByName(&backupOptions, "")
@@ -189,11 +189,11 @@ func TestRepositoryLookupSucceedsIfNoNameProvidedButOnlyOneRepositoryDefined(t *
 }
 
 func TestRepositoryLookupFailsIfNoNameProvidedAndMultipleRepositoriesDefined(t *testing.T) {
-	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{},}
-	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{},}
+	managedRepository1 := solr.ManagedStorage{Name: "managedrepository1", Volume: &corev1.VolumeSource{}}
+	managedRepository2 := solr.ManagedStorage{Name: "managedrepository2", Volume: &corev1.VolumeSource{}}
 	backupOptions := solr.SolrBackupRestoreOptions{
 		ManagedRepositories: &[]solr.ManagedStorage{managedRepository1, managedRepository2},
-		GcsRepositories: &[]solr.GcsStorage{},
+		GcsRepositories:     &[]solr.GcsStorage{},
 	}
 
 	_, found := GetBackupRepositoryByName(&backupOptions, "")

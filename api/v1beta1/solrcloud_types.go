@@ -54,11 +54,11 @@ const (
 
 	DefaultBasicAuthUsername = "k8s-oper"
 
-	DefaultBackupRepositoryName = "legacy_local_repository"
-	BaseBackupRestorePath = "/var/solr/data/backup-restore"
-	BackupRestoreInitContainerPath  = "/backup-restore"
-	BackupRestoreVolume = "backup-restore"
-	BackupRestoreCredentialVolume = "backup-restore-credential"
+	DefaultBackupRepositoryName    = "legacy_local_repository"
+	BaseBackupRestorePath          = "/var/solr/data/backup-restore"
+	BackupRestoreInitContainerPath = "/backup-restore"
+	BackupRestoreVolume            = "backup-restore"
+	BackupRestoreCredentialVolume  = "backup-restore-credential"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud

@@ -33,11 +33,11 @@ import (
 )
 
 const (
-	BackupRestoreCredentialDirPath  = "/backup-restore-credential"
+	BackupRestoreCredentialDirPath = "/backup-restore-credential"
 
-	TarredFile                      = "/var/solr/data/backup-restore/backup.tgz"
-	CleanupCommand                  = " && rm -rf " + solr.BaseBackupRestorePath + "/*"
-	BackupTarCommand                = "cd " + solr.BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
+	TarredFile       = "/var/solr/data/backup-restore/backup.tgz"
+	CleanupCommand   = " && rm -rf " + solr.BaseBackupRestorePath + "/*"
+	BackupTarCommand = "cd " + solr.BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
 
 	AWSSecretDir = "/var/aws"
 
@@ -76,11 +76,13 @@ func GetBackupRepositoryByName(backupOptions *solr.SolrBackupRestoreOptions, rep
 	}
 
 	// Return right away if the backup supplies a valid repository name
-	if repository, ok := repositoriesByName[repositoryName] ; ok {
+	if repository, ok := repositoriesByName[repositoryName]; ok {
 		return repository, true
 	} else if len(repositoriesByName) == 1 && repositoryName == "" {
 		// Return lone value if there's only one and 'name' is blank.
-		for key := range repositoriesByName { return repositoriesByName[key], true }
+		for key := range repositoriesByName {
+			return repositoriesByName[key], true
+		}
 	}
 
 	return nil, false
@@ -344,7 +346,6 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 
 	return image, envVars, command, volume, volumeMount, numRetries
 }
-
 
 func GenerateQueryParamsForBackup(backupRepository BackupRepository, backup *solr.SolrBackup, collection string) url.Values {
 	queryParams := url.Values{}
