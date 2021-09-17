@@ -328,6 +328,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
+	// Default preStop hook
+	preStop := &corev1.Handler{
+		Exec: &corev1.ExecAction{
+			Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
+		},
+	}
+
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -423,6 +430,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
 				PostStart: postStart,
+				PreStop:   preStop,
 			},
 		},
 	}
