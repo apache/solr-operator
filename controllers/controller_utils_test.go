@@ -132,14 +132,14 @@ func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrP
 	return foundSolrPrometheusExporter
 }
 
-func expectSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, secretName string, additionalOffset ...int) *corev1.Secret {
-	return expectSecretWithChecks(ctx, solrCloud, secretName, nil, resolveOffset(additionalOffset))
+func expectSecret(ctx context.Context, parentResource client.Object, secretName string, additionalOffset ...int) *corev1.Secret {
+	return expectSecretWithChecks(ctx, parentResource, secretName, nil, resolveOffset(additionalOffset))
 }
 
-func expectSecretWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, secretName string, additionalChecks func(Gomega, *corev1.Secret), additionalOffset ...int) *corev1.Secret {
+func expectSecretWithChecks(ctx context.Context, parentResource client.Object, secretName string, additionalChecks func(Gomega, *corev1.Secret), additionalOffset ...int) *corev1.Secret {
 	found := &corev1.Secret{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, secretName), found)).To(Succeed(), "Expected Secret does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, secretName), found)).To(Succeed(), "Expected Secret does not exist")
 		if additionalChecks != nil {
 			additionalChecks(g, found)
 		}

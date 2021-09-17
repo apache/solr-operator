@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
 
@@ -436,7 +437,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 				g.Expect(envVar.Value).To(Equal(expectedTrustStorePath), "Wrong envVar value for %s", envVar.Name)
 			}
 			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD" {
-				g.Expect(envVar.Value).To(Not(BeEmpty()), "EnvVar %s should not use an explicit Value, since it is populated from a secret", envVar.Name)
+				g.Expect(envVar.Value).To(BeEmpty(), "EnvVar %s should not use an explicit Value, since it is populated from a secret", envVar.Name)
 				g.Expect(envVar.ValueFrom).To(Not(BeNil()), "EnvVar %s must have a ValueFrom, since it is populated from a secret", envVar.Name)
 				g.Expect(envVar.ValueFrom.SecretKeyRef).To(Not(BeNil()), "EnvVar %s must have a ValueFrom.SecretKeyRef, since it is populated from a secret", envVar.Name)
 				g.Expect(envVar.ValueFrom.SecretKeyRef.Name).To(Equal(tls.TrustStorePasswordSecret.Name), "EnvVar %s is using the wrong secret to populate the value", envVar.Name)
@@ -668,7 +669,7 @@ func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLS
 	}
 }
 
-func createMockTLSSecret(ctx context.Context, secretName string, secretKey string, ns string, keystorePasswordKey string, truststoreKey string) corev1.Secret {
+func createMockTLSSecret(ctx context.Context, parentObject client.Object, secretName string, secretKey string, keystorePasswordKey string, truststoreKey string) corev1.Secret {
 	secretData := map[string][]byte{}
 	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
 	secretData[util.TLSCertKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock tls.crt")))
@@ -682,7 +683,7 @@ func createMockTLSSecret(ctx context.Context, secretName string, secretKey strin
 	}
 
 	mockTLSSecret := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
+		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: parentObject.GetNamespace()},
 		Data:       secretData,
 		Type:       corev1.SecretTypeOpaque,
 	}
@@ -888,8 +889,8 @@ func verifyReconcileUserSuppliedTLS(ctx context.Context, solrCloud *solrv1beta1.
 
 	// Create a mock secret in the background so the isCert ready function returns
 	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.PKCS12Secret != nil {
-		createMockTLSSecret(ctx, solrCloud.Spec.SolrTLS.PKCS12Secret.Name, tlsKey,
-			solrCloud.Namespace, solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Key, "")
+		createMockTLSSecret(ctx, solrCloud, solrCloud.Spec.SolrTLS.PKCS12Secret.Name, tlsKey,
+			solrCloud.Spec.SolrTLS.KeyStorePasswordSecret.Key, "")
 	}
 
 	// need a secret for the client cert too?
@@ -898,8 +899,8 @@ func verifyReconcileUserSuppliedTLS(ctx context.Context, solrCloud *solrv1beta1.
 		if solrCloud.Spec.SolrClientTLS.TrustStoreSecret == solrCloud.Spec.SolrClientTLS.PKCS12Secret {
 			truststoreKey = solrCloud.Spec.SolrClientTLS.TrustStoreSecret.Key
 		}
-		createMockTLSSecret(ctx, solrCloud.Spec.SolrClientTLS.PKCS12Secret.Name, util.DefaultPkcs12KeystoreFile,
-			solrCloud.Namespace, solrCloud.Spec.SolrClientTLS.KeyStorePasswordSecret.Key, truststoreKey)
+		createMockTLSSecret(ctx, solrCloud, solrCloud.Spec.SolrClientTLS.PKCS12Secret.Name, util.DefaultPkcs12KeystoreFile,
+			solrCloud.Spec.SolrClientTLS.KeyStorePasswordSecret.Key, truststoreKey)
 	}
 
 	statefulSet := expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
