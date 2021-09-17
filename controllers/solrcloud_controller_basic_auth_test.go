@@ -74,7 +74,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
-				ProbesRequireAuth: true,
+				ProbesRequireAuth:  true,
 			}
 		})
 		FIt("has the correct resources", func() {
@@ -86,7 +86,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
-				ProbesRequireAuth: true,
+				ProbesRequireAuth:  true,
 			}
 			solrCloud.Spec.ZookeeperRef.ConnectionInfo.AllACL = &solrv1beta1.ZookeeperACL{
 				SecretRef:   "secret-name",
@@ -129,7 +129,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			basicAuthSecretName := "my-basic-auth-secret"
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
-				BasicAuthSecret: basicAuthSecretName,
+				BasicAuthSecret:    basicAuthSecretName,
 			}
 		})
 		FIt("has the correct resources", func() {
@@ -229,10 +229,10 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount).To(Not(BeNil()), "No Basic Auth volume mount used in Solr container")
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
-		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password)\" java " +
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory " +
-			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" " +
-			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" " +
+		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password)\" java "+
+			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
+			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
+			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
 			"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system",
 			solrCloud.Name, solrCloud.Name)
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
@@ -285,8 +285,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 						}
 						return container.Command[2]
 					},
-					Not(ContainSubstring("SECURITY_JSON"),
-				))), "setup-zk initContainer not reconciled after bootstrap secret deleted")
+					Not(ContainSubstring("SECURITY_JSON")))), "setup-zk initContainer not reconciled after bootstrap secret deleted")
 		}
 
 	}

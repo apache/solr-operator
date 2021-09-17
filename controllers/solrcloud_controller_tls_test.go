@@ -116,7 +116,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
-				ProbesRequireAuth: true,
+				ProbesRequireAuth:  true,
 			}
 			solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
 				ReadinessProbe: &corev1.Probe{
@@ -147,9 +147,9 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		mountedDir := mountedTLSDir("/mounted-tls-dir")
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
-				MountedTLSDir: mountedDir,
-				CheckPeerName: true,
-				ClientAuth: "Need",
+				MountedTLSDir:        mountedDir,
+				CheckPeerName:        true,
+				ClientAuth:           "Need",
 				VerifyClientHostname: true,
 			}
 		})
@@ -169,9 +169,9 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		}
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
-				MountedTLSDir: mountedDir,
-				CheckPeerName: true,
-				ClientAuth: "Need",
+				MountedTLSDir:        mountedDir,
+				CheckPeerName:        true,
+				ClientAuth:           "Need",
 				VerifyClientHostname: true,
 			}
 		})
@@ -192,9 +192,9 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		mountedDir := mountedTLSDir("/mounted-tls-dir")
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
-				MountedTLSDir: mountedDir,
-				CheckPeerName: true,
-				ClientAuth: "Need",
+				MountedTLSDir:        mountedDir,
+				CheckPeerName:        true,
+				ClientAuth:           "Need",
 				VerifyClientHostname: true,
 			}
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
@@ -212,9 +212,9 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		mountedClientTLSDir := mountedTLSDir("/mounted-client-tls-dir")
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
-				MountedTLSDir: mountedServerTLSDir,
-				CheckPeerName: true,
-				ClientAuth: "Need",
+				MountedTLSDir:        mountedServerTLSDir,
+				CheckPeerName:        true,
+				ClientAuth:           "Need",
 				VerifyClientHostname: true,
 			}
 			solrCloud.Spec.SolrClientTLS = &solrv1beta1.SolrTLSOptions{
@@ -385,7 +385,6 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		})
 	})
 })
-
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
 func expectTLSConfigOnPodTemplate(tls *solrv1beta1.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) *corev1.Container {
@@ -690,7 +689,6 @@ func createMockTLSSecret(ctx context.Context, secretName string, secretKey strin
 	Expect(k8sClient.Create(ctx, &mockTLSSecret)).To(Succeed(), "Could not create mock TLS Secret")
 	return mockTLSSecret
 }
-
 
 func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
 	statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
