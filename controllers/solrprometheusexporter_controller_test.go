@@ -20,6 +20,10 @@ package controllers
 import (
 	"crypto/md5"
 	"fmt"
+	"strings"
+	"testing"
+	"time"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/onsi/gomega"
@@ -34,9 +38,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
-	"testing"
-	"time"
 )
 
 var _ reconcile.Reconciler = &SolrPrometheusExporterReconciler{}

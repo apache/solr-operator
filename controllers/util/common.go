@@ -18,6 +18,10 @@
 package util
 
 import (
+	"reflect"
+	"strconv"
+	"strings"
+
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,10 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"strconv"
-	"strings"
 )
 
 // CopyLabelsAndAnnotations copies the labels and annotations from one object to another.
@@ -557,6 +558,12 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"StartupProbe", "from", to[i].StartupProbe, "to", from[i].StartupProbe)
 				to[i].StartupProbe = from[i].StartupProbe
+			}
+
+			if !DeepEqualWithNils(to[i].Lifecycle, from[i].Lifecycle) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"Lifecycle", "from", to[i].Lifecycle, "to", from[i].Lifecycle)
+				to[i].Lifecycle = from[i].Lifecycle
 			}
 
 			if from[i].TerminationMessagePath != "" && !DeepEqualWithNils(to[i].TerminationMessagePath, from[i].TerminationMessagePath) {

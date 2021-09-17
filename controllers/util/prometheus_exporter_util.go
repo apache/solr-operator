@@ -18,14 +18,15 @@
 package util
 
 import (
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"strconv"
-	"strings"
 )
 
 const (
