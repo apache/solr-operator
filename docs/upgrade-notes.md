@@ -93,6 +93,11 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ## Upgrade Warnings and Notes
 
+### v0.5.0
+- Default ports when using TLS are now set to 443 instead of 80.
+  This affects `solrCloud.Spec.SolrAddressability.CommonServicePort` and `solrCloud.Spec.SolrAddressability.CommonServicePort` field defaulting.
+  Users already explicitly setting these values will not be affected.
+
 ### v0.4.0
 - The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.9` to `v0.2.12`.
   If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.

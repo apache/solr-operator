@@ -147,7 +147,7 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
-	changed = spec.SolrAddressability.withDefaults() || changed
+	changed = spec.SolrAddressability.withDefaults(spec.SolrTLS != nil) || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
 
@@ -354,7 +354,7 @@ type SolrAddressabilityOptions struct {
 	PodPort int `json:"podPort,omitempty"`
 
 	// CommonServicePort defines the port to have the common Solr service listen on.
-	// Defaults to 80
+	// Defaults to 80 (when not using TLS) or 443 (when using TLS)
 	// +optional
 	CommonServicePort int `json:"commonServicePort,omitempty"`
 
@@ -364,9 +364,9 @@ type SolrAddressabilityOptions struct {
 	KubeDomain string `json:"kubeDomain,omitempty"`
 }
 
-func (opts *SolrAddressabilityOptions) withDefaults() (changed bool) {
+func (opts *SolrAddressabilityOptions) withDefaults(usesTLS bool) (changed bool) {
 	if opts.External != nil {
-		changed = opts.External.withDefaults()
+		changed = opts.External.withDefaults(usesTLS)
 	}
 	if opts.PodPort == 0 {
 		changed = true
@@ -374,7 +374,11 @@ func (opts *SolrAddressabilityOptions) withDefaults() (changed bool) {
 	}
 	if opts.CommonServicePort == 0 {
 		changed = true
-		opts.CommonServicePort = 80
+		if usesTLS {
+			opts.CommonServicePort = 443
+		} else {
+			opts.CommonServicePort = 80
+		}
 	}
 	return changed
 }
@@ -428,7 +432,7 @@ type ExternalAddressability struct {
 	// If using method=Ingress, your ingress controller is required to listen on this port.
 	// If your ingress controller is not listening on the podPort, then this option is required for solr to be addressable via an Ingress.
 	//
-	// Defaults to 80 if HideNodes=false and method=Ingress, otherwise this is optional.
+	// Defaults to 80 (without TLS) or 443 (with TLS) if HideNodes=false and method=Ingress, otherwise this is optional.
 	// +optional
 	NodePortOverride int `json:"nodePortOverride,omitempty"`
 
@@ -460,16 +464,20 @@ const (
 	LoadBalancer ExternalAddressabilityMethod = "LoadBalancer"
 )
 
-func (opts *ExternalAddressability) withDefaults() (changed bool) {
+func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
 	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTerminationSecret != "") {
 		changed = true
 		opts.UseExternalAddress = false
 	}
-	// If the Ingress method is used, default the nodePortOverride to 80, since that is the port that most ingress controllers listen on.
+	// If the Ingress method is used, default the nodePortOverride to 80 or 443, since that is the port that most ingress controllers listen on.
 	if !opts.HideNodes && opts.Method == Ingress && opts.NodePortOverride == 0 {
 		changed = true
-		opts.NodePortOverride = 80
+		if usesTLS {
+			opts.NodePortOverride = 443
+		} else {
+			opts.NodePortOverride = 80
+		}
 	}
 	// If a headless service is used, aka not using individual node services, then a nodePortOverride is not allowed.
 	if !opts.UsesIndividualNodeServices() && opts.NodePortOverride > 0 {
