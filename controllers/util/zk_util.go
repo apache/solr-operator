@@ -19,7 +19,7 @@ package util
 
 import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/zk-api"
+	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -121,6 +121,10 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 
 	if zkSpec.ZookeeperPod.ServiceAccountName != "" {
 		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
+	}
+
+	if zkSpec.Image.ImagePullSecret != "" {
+		zkCluster.Spec.Pod.ImagePullSecrets = []corev1.LocalObjectReference{{Name: zkSpec.Image.ImagePullSecret}}
 	}
 
 	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.

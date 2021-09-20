@@ -18,7 +18,7 @@
 package controllers
 
 import (
-	zk_api "github.com/apache/solr-operator/controllers/zk-api"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"

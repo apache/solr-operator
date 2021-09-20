@@ -23,7 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
-	zk_api "github.com/apache/solr-operator/controllers/zk-api"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"

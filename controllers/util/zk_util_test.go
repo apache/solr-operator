@@ -19,7 +19,7 @@ package util
 
 import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/zk-api"
+	"github.com/apache/solr-operator/controllers/zk_api"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

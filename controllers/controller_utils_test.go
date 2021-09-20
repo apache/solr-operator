@@ -20,7 +20,7 @@ package controllers
 import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	zk_api "github.com/apache/solr-operator/controllers/zk-api"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
