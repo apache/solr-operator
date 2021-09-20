@@ -91,7 +91,7 @@ prepare: fmt generate manifests fetch-licenses-list mod-tidy ## Prepare the code
 
 manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects
 	rm -rf generated-check/api
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./..." output:rbac:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/rbac output:crd:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/crd/bases
+	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=solr-operator-role webhook paths="./api/..." paths="./controllers/." output:rbac:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/rbac output:crd:artifacts:config=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config)/crd/bases
 	CONFIG_DIRECTORY=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config) HELM_DIRECTORY=$(or $(TMP_HELM_OUTPUT_DIRECTORY),helm) ./hack/config/copy_crds_roles_helm.sh
 	CONFIG_DIRECTORY=$(or $(TMP_CONFIG_OUTPUT_DIRECTORY),config) ./hack/config/add_crds_roles_headers.sh
 

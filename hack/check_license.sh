@@ -22,7 +22,7 @@ set -o pipefail
 set -u
 
 licRes=$(
-    find . -type f -iname '*.go' ! -exec \
+    find . -type f -iname '*.go' -not -name 'zkcluster.go' -not -name 'zkstatus.go' ! -exec \
          sh -c 'head -n5 $1 | grep -Eq "(Licensed to the Apache Software Foundation)" || echo -e  $1' {} {} \;
 )
 
