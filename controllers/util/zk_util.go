@@ -84,7 +84,7 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 	// Set the persistence/ephemeral options if necessary
 	if zkSpec.Persistence != nil && zkCluster.Spec.StorageType == "persistence" {
 		zkCluster.Spec.Persistence = &zk_api.Persistence{
-			VolumeReclaimPolicy: zk_api.VolumeReclaimPolicy(zkSpec.Persistence.VolumeReclaimPolicy),
+			VolumeReclaimPolicy:       zk_api.VolumeReclaimPolicy(zkSpec.Persistence.VolumeReclaimPolicy),
 			PersistentVolumeClaimSpec: zkSpec.Persistence.PersistentVolumeClaimSpec,
 			Annotations:               zkSpec.Persistence.Annotations,
 		}

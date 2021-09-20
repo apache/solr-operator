@@ -291,9 +291,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
 						Replicas: &four,
 						Image: &solrv1beta1.ContainerImage{
-							Repository: "test-repo",
-							Tag:        "test-tag",
-							PullPolicy: corev1.PullNever,
+							Repository:      "test-repo",
+							Tag:             "test-tag",
+							PullPolicy:      corev1.PullNever,
 							ImagePullSecret: testImagePullSecretName,
 						},
 						Persistence: &solrv1beta1.ZKPersistence{
@@ -398,7 +398,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Not(BeNil()), "All ACL in SolrCloud Status should not be nil when it is provided in the Spec")
 				g.Expect(*found.ZookeeperConnectionInfo.AllACL).To(Equal(solrCloud.Spec.ZookeeperRef.ProvidedZookeeper.AllACL), "Incorrect All ACL in SolrCloud Status")
 				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(BeNil(), "ReadOnly ACL in SolrCloud Status should be nil when not provided in the Spec")
-				 */
+				*/
 			})
 
 			By("testing the Solr StatefulSet")
@@ -414,7 +414,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
-				"ZK_CHROOT": 	  "/a-ch/root",
+				"ZK_CHROOT":      "/a-ch/root",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
