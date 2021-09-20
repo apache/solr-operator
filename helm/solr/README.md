@@ -255,6 +255,7 @@ Configure Solr to use a separate TLS certificate for client auth.
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |
 | podOptions.startupProbe | object |  | Custom startup probe for the Solr container |
+| podOptions.lifecycle | object |  | Custom lifecycle for the Solr container |
 | podOptions.imagePullSecrets | []object |  | List of image pull secrets to inject into the Solr pod, in addition to `global.imagePullSecrets` |
 | podOptions.volumes | []object |  | List of additional volumes to attach to the Solr pod, and optionally how to mount them to the Solr container |
 | statefulSetOptions.annotations | map[string]string |  | Custom annotations to add to the Solr statefulSet |
