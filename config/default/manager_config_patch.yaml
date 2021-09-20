@@ -16,22 +16,20 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solr-operator 
+  name: solr-operator
+  namespace: solr-operator
 spec:
   template:
     spec:
       containers:
       - name: solr-operator
-        ports:
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
+        args:
+        - "--config=solr_operator_config.yaml"
         volumeMounts:
-        - mountPath: /tmp/k8s-webhook-server/serving-certs
-          name: cert
-          readOnly: true
+        - name: solr-operator-config
+          mountPath: /solr_operator_config.yaml
+          subPath: solr_operator_config.yaml
       volumes:
-      - name: cert
-        secret:
-          defaultMode: 420
-          secretName: webhook-server-secret 
+      - name: solr-operator-config
+        configMap:
+          name: solr-operator-config

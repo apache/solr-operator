@@ -24,12 +24,15 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"strconv"
 	"testing"
 	"time"
 )
 
 func TestPickPodsToUpgrade(t *testing.T) {
+	log := ctrl.Log
+
 	overseerLeader := "pod-0.foo-solrcloud-headless.default:2000_solr"
 
 	maxshardReplicasUnavailable := intstr.FromInt(1)

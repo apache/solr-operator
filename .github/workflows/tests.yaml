@@ -38,16 +38,6 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      - uses: actions/cache@v2
-        with:
-          path: |
-            /usr/local/bin/kustomize
-            /usr/local/kubebuilder
-            ~/go/bin
-          key: ${{ runner.os }}-build-dependencies-${{ hashFiles('hack/install_dependencies') }}
-          restore-keys: |
-            ${{ runner.os }}-build-dependencies
-
       # Cleanup & Install dependencies
       - run: make clean
       - run: make install-dependencies

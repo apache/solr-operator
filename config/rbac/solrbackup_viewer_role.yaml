@@ -13,14 +13,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-apiVersion: v1
-kind: Service
+# permissions for end users to view solrbackups.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
 metadata:
-  name: webhook-service
-  namespace: system
-spec:
-  ports:
-    - port: 443
-      targetPort: 9443
-  selector:
-    control-plane: controller-manager
+  name: solrbackup-viewer-role
+rules:
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrbackups
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrbackups/status
+  verbs:
+  - get

@@ -19,17 +19,18 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-if [ -z "${ARCH}" ]; then
-    echo "ARCH must be set"
-    exit 1
+if [ -z "${ARCH:-}" ]; then
+    ARCH=$(go env GOARCH)
 fi
-if [ -z "${BIN}" ]; then
-    echo "BIN must be set"
-    exit 1
+if [ -z "${GOOS:-}" ]; then
+    GOOS=$(go env GOOS)
+fi
+if [ -z "${BIN:-}" ]; then
+    BIN="solr-operator"
 fi
 export CGO_ENABLED=0
 export GOARCH="${ARCH}"
-export GOOS=${GOOS:-}
+export GOOS="${GOOS:-}"
 
 go build \
     -ldflags "-X 'github.com/apache/solr-operator/version.GitSHA=${GIT_SHA}' -X 'github.com/apache/solr-operator/version.BuildTime=$(date)'" \

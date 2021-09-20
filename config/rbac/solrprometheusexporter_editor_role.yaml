@@ -13,8 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-resources:
-- certificate.yaml
-
-configurations:
-- kustomizeconfig.yaml
+# permissions for end users to edit solrprometheusexporters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: solrprometheusexporter-editor-role
+rules:
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrprometheusexporters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrprometheusexporters/status
+  verbs:
+  - get

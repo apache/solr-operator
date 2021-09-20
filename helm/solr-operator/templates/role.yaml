@@ -42,8 +42,6 @@ rules:
   - configmaps/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - ""
   resources:
@@ -104,8 +102,6 @@ rules:
   - services/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - apps
   resources:
@@ -142,8 +138,6 @@ rules:
   - statefulsets/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - batch
   resources:
@@ -162,8 +156,6 @@ rules:
   - jobs/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - networking.k8s.io
   resources:
@@ -182,8 +174,6 @@ rules:
   - ingresses/status
   verbs:
   - get
-  - patch
-  - update
 - apiGroups:
   - solr.apache.org
   resources:
@@ -196,6 +186,12 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - solr.apache.org
+  resources:
+  - solrbackups/finalizers
+  verbs:
+  - update
 - apiGroups:
   - solr.apache.org
   resources:
@@ -245,6 +241,12 @@ rules:
 - apiGroups:
   - solr.apache.org
   resources:
+  - solrprometheusexporters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - solr.apache.org
+  resources:
   - solrprometheusexporters/status
   verbs:
   - get
@@ -268,8 +270,6 @@ rules:
   - zookeeperclusters/status
   verbs:
   - get
-  - patch
-  - update
 
 {{- end }}
 {{- end }}

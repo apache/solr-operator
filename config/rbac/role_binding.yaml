@@ -24,4 +24,4 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: solr-operator
-  namespace: default
+  namespace: solr-operator

@@ -13,30 +13,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    control-plane: solr-operator
+  name: solr-operator
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: solr-operator 
+  name: solr-operator
   labels:
     control-plane: solr-operator
+  namespace: solr-operator
 spec:
   selector:
     matchLabels:
-      control-plane: solr-operator 
+      control-plane: solr-operator
   replicas: 1
   template:
     metadata:
       labels:
-        control-plane: solr-operator 
+        control-plane: solr-operator
     spec:
-      serviceAccountName: solr-operator
+      securityContext:
+        runAsNonRoot: true
       containers:
       - args:
-        - -zk-operator=true
+        - --leader-elect
         image: apache/solr-operator:latest
         imagePullPolicy: IfNotPresent
         name: solr-operator
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
         env:
           - name: POD_NAMESPACE
             valueFrom:
@@ -46,11 +75,5 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
-        resources:
-          limits:
-            cpu: 200m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
+      serviceAccountName: solr-operator
       terminationGracePeriodSeconds: 10

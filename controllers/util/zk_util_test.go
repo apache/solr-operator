@@ -18,25 +18,26 @@
 package util
 
 import (
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/zk_api"
+
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 )
 
 func TestDefaultStorageOptions(t *testing.T) {
-	solrCloud := &solr.SolrCloud{
+	solrCloud := &solrv1beta1.SolrCloud{
 		ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"},
-		Spec:       solr.SolrCloudSpec{},
+		Spec:       solrv1beta1.SolrCloudSpec{},
 	}
-	zkSpec := &solr.ZookeeperSpec{
+	zkSpec := &solrv1beta1.ZookeeperSpec{
 		Persistence: nil,
 		Ephemeral:   nil,
 	}
 	zkSpec.WithDefaults()
 
-	var zkCluster *zkv1beta1.ZookeeperCluster
+	var zkCluster *zk_api.ZookeeperCluster
 
 	// Solr uses nothing (defaults to ephemeral)
 	zkCluster = GenerateZookeeperCluster(solrCloud, zkSpec)
@@ -44,7 +45,7 @@ func TestDefaultStorageOptions(t *testing.T) {
 	assert.Nil(t, zkCluster.Spec.Persistence, "By default when no storage is specified for Solr or ZK, the storage should be ephemeral. Therefore 'persistence' should be nil")
 
 	// Solr uses Persistent
-	solrCloud.Spec.StorageOptions.PersistentStorage = &solr.SolrPersistentDataStorageOptions{}
+	solrCloud.Spec.StorageOptions.PersistentStorage = &solrv1beta1.SolrPersistentDataStorageOptions{}
 	solrCloud.Spec.StorageOptions.EphemeralStorage = nil
 	zkCluster = GenerateZookeeperCluster(solrCloud, zkSpec)
 	assert.Equal(t, "persistence", zkCluster.Spec.StorageType, "By default when Solr is using persistent storage, zk should as well. Wrong storageType")
@@ -52,7 +53,7 @@ func TestDefaultStorageOptions(t *testing.T) {
 
 	// Solr uses Ephemeral
 	solrCloud.Spec.StorageOptions.PersistentStorage = nil
-	solrCloud.Spec.StorageOptions.EphemeralStorage = &solr.SolrEphemeralDataStorageOptions{}
+	solrCloud.Spec.StorageOptions.EphemeralStorage = &solrv1beta1.SolrEphemeralDataStorageOptions{}
 	zkCluster = GenerateZookeeperCluster(solrCloud, zkSpec)
 	assert.Equal(t, "ephemeral", zkCluster.Spec.StorageType, "By default when Solr is using ephemeral storage, zk should as well. Wrong storageType")
 	assert.Nil(t, zkCluster.Spec.Persistence, "By default when Solr is using ephemeral storage, zk should as well. Therefore 'persistence' should be nil")

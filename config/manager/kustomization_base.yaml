@@ -13,21 +13,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This patch enables Prometheus scraping for the manager pod.
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: solr-operator 
-spec:
-  template:
-    metadata:
-      annotations:
-        prometheus.io/scrape: 'true'
-    spec:
-      containers:
-      # Expose the prometheus metrics on default port
-      - name: solr-operator
-        ports:
-        - containerPort: 8080
-          name: metrics
-          protocol: TCP
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: solr-operator-config
+    files:
+      - solr_operator_config.yaml

@@ -1,3 +1,20 @@
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ -->
+
 # Solr Operator Upgrade Notes
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
@@ -75,6 +92,11 @@ helm upgrade solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
 ## Upgrade Warnings and Notes
+
+### v0.5.0
+- Default ports when using TLS are now set to 443 instead of 80.
+  This affects `solrCloud.Spec.SolrAddressability.CommonServicePort` and `solrCloud.Spec.SolrAddressability.CommonServicePort` field defaulting.
+  Users already explicitly setting these values will not be affected.
 
 ### v0.4.0
 - The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.9` to `v0.2.12`.

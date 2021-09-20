@@ -15,12 +15,16 @@
  * limitations under the License.
  */
 
-package version
+package controllers
 
-var (
-	// Version information for the Solr Operator
-	Version       = "v0.5.0"
-	VersionSuffix = "prerelease"
-	BuildTime     string
-	GitSHA        string
+import (
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"time"
 )
+
+// Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
+func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
+	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {
+		requeueOrNot.RequeueAfter = newWait
+	}
+}

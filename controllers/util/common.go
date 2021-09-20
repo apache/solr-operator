@@ -21,15 +21,24 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
+func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
+	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {
+		requeueOrNot.RequeueAfter = newWait
+	}
+}
 
 // CopyLabelsAndAnnotations copies the labels and annotations from one object to another.
 // Additional Labels and Annotations in the 'to' object will not be removed.
@@ -258,16 +267,10 @@ func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 						toPath.Path = fromPath.Path
 					}
 
-					if !DeepEqualWithNils(toPath.Backend.ServiceName, fromPath.Backend.ServiceName) {
+					if !DeepEqualWithNils(toPath.Backend.Service, fromPath.Backend.Service) {
 						requireUpdate = true
-						logger.Info("Update required because field changed", "field", pathBase+"Backend.ServiceName", "from", toPath.Backend.ServiceName, "to", fromPath.Backend.ServiceName)
-						toPath.Backend.ServiceName = fromPath.Backend.ServiceName
-					}
-
-					if !DeepEqualWithNils(toPath.Backend.ServicePort, fromPath.Backend.ServicePort) {
-						requireUpdate = true
-						logger.Info("Update required because field changed", "field", pathBase+"Backend.ServicePort", "from", toPath.Backend.ServicePort, "to", fromPath.Backend.ServicePort)
-						toPath.Backend.ServicePort = fromPath.Backend.ServicePort
+						logger.Info("Update required because field changed", "field", pathBase+"Backend.Service", "from", toPath.Backend.Service, "to", fromPath.Backend.Service)
+						toPath.Backend.Service = fromPath.Backend.Service
 					}
 
 					if !DeepEqualWithNils(toPath.Backend.Resource, fromPath.Backend.Resource) {
@@ -282,7 +285,14 @@ func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 
 	if !DeepEqualWithNils(to.Spec.TLS, from.Spec.TLS) {
 		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.TLS", "from", to.Spec.TLS, "to", from.Spec.TLS)
 		to.Spec.TLS = from.Spec.TLS
+	}
+
+	if !DeepEqualWithNils(to.Spec.IngressClassName, from.Spec.IngressClassName) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.IngressClassName", "from", to.Spec.IngressClassName, "to", from.Spec.IngressClassName)
+		to.Spec.IngressClassName = from.Spec.IngressClassName
 	}
 
 	return requireUpdate

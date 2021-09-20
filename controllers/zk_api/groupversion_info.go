@@ -15,12 +15,23 @@
  * limitations under the License.
  */
 
-package version
+// Package v1beta1 contains API Schema definitions for the zookeeper.pravega.io v1beta1 API group
+//+kubebuilder:object:generate=true
+//+groupName=zookeeper.pravega.io
+package zk_api
+
+import (
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
+)
 
 var (
-	// Version information for the Solr Operator
-	Version       = "v0.5.0"
-	VersionSuffix = "prerelease"
-	BuildTime     string
-	GitSHA        string
+	// GroupVersion is group version used to register these objects
+	GroupVersion = schema.GroupVersion{Group: "zookeeper.pravega.io", Version: "v1beta1"}
+
+	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
+	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+
+	// AddToScheme adds the types in this group-version to the given scheme.
+	AddToScheme = SchemeBuilder.AddToScheme
 )

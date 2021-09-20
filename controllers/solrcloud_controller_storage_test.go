@@ -18,417 +18,251 @@
 package controllers
 
 import (
-	"testing"
-
+	"context"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-
-	"github.com/apache/solr-operator/controllers/util"
-	"github.com/stretchr/testify/assert"
-
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/onsi/gomega"
-	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var _ reconcile.Reconciler = &SolrCloudReconciler{}
+var _ = FDescribe("SolrCloud controller - Storage", func() {
+	var (
+		ctx context.Context
 
-func TestPersistentStorageVolumesRetain(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
+		solrCloud *solrv1beta1.SolrCloud
+	)
 
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		solrCloud = &solrv1beta1.SolrCloud{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "default",
+			},
+			Spec: solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				SolrJavaMem: "-Xmx4G",
+				SolrOpts:    "extra-opts",
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables:       extraVars,
+						PodSecurityContext: &testPodSecurityContext,
+						Volumes:            extraVolumes,
+						Affinity:           testAffinity,
+						Resources:          testResources,
+					},
 				},
 			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				PersistentStorage: &solr.SolrPersistentDataStorageOptions{
-					VolumeReclaimPolicy: solr.VolumeReclaimPolicyRetain,
-					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
-						ObjectMeta: solr.TemplateMeta{
+		}
+	})
+
+	JustBeforeEach(func() {
+		By("creating the SolrCloud")
+		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		By("defaulting the missing SolrCloud values")
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.WithDefaults()).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
+		})
+	})
+
+	AfterEach(func() {
+		cleanupTest(ctx, solrCloud)
+	})
+
+	FContext("Persistent Data - Custom name & labels", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
+					VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyRetain,
+					PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
+						ObjectMeta: solrv1beta1.TemplateMeta{
 							Name:   "other-data-1",
 							Labels: map[string]string{"base": "here"},
 						},
 					},
 				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when the reclaim policy is Retain")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Name).To(Equal(solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name), "Data volume claim doesn't exist")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel]).To(Equal("solr-cloud"), "PVC Technology label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel]).To(Equal(solrCloud.Name), "PVC Instance label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels["base"]).To(Equal("here"), "Additional PVC label doesn't match")
+			})
+		})
+	})
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Fetch new value of instance to check finalizers
-	foundInstance := &solr.SolrCloud{}
-	g.Eventually(func() error {
-		return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, foundInstance)
-	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, 0, len(foundInstance.GetFinalizers()), "The solrcloud should have no finalizers when the reclaim policy is Retain")
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
-	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "PVC Technology label doesn't match")
-	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "PVC Storage label doesn't match")
-	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "PVC Instance label doesn't match")
-	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Labels["base"], "Additional PVC label doesn't match")
-}
-
-func TestPersistentStorageVolumesDelete(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				PersistentStorage: &solr.SolrPersistentDataStorageOptions{
-					VolumeReclaimPolicy: solr.VolumeReclaimPolicyDelete,
-					PersistentVolumeClaimTemplate: solr.PersistentVolumeClaimTemplate{
-						ObjectMeta: solr.TemplateMeta{
-							Name:        "other-data-2",
-							Annotations: map[string]string{"base": "here"},
+	FContext("Persistent Data - PVC Delete on Reclaim", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
+					VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyDelete,
+					PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
+						ObjectMeta: solrv1beta1.TemplateMeta{
+							Name:   "other-data-2",
+							Labels: map[string]string{"base": "here"},
 						},
 					},
 				},
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(1), "The solrcloud should have no finalizers when the reclaim policy is Retain")
+				g.Expect(found.GetFinalizers()[0]).To(Equal(util.SolrStorageFinalizer), "Incorrect finalizer set for deleting persistent storage.")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(2), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Name).To(Equal(solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name), "Data volume claim doesn't exist")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel]).To(Equal("solr-cloud"), "PVC Technology label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel]).To(Equal(solrCloud.Name), "PVC Instance label doesn't match")
+				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels["base"]).To(Equal("here"), "Additional PVC label doesn't match")
+			})
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			By("ensuring that the PVCs are deleted and the finalizer is removed when the SolrCloud is deleted")
+			Expect(k8sClient.Delete(ctx, solrCloud)).To(Succeed(), "Could not delete solrCloud")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			Eventually(func() error {
+				return k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), &solrv1beta1.SolrCloud{})
+			}).Should(MatchError("solrclouds.solr.apache.org \""+solrCloud.Name+"\" not found"), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
+		})
+	})
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+	FContext("Ephemeral Data - Default", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
+			})
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
+				dataVolume := found.Spec.Template.Spec.Volumes[1]
+				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
+				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
+			})
+		})
+	})
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Fetch new value of instance to check finalizers
-	foundInstance := &solr.SolrCloud{}
-	g.Eventually(func() error {
-		return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, foundInstance)
-	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, 1, len(foundInstance.GetFinalizers()), "The solrcloud should have 1 storage finalizer when persistent storage reclaim policy is set to Delete")
-	assert.Equal(t, util.SolrStorageFinalizer, foundInstance.GetFinalizers()[0], "Incorrect finalizer set for deleting persistent storage.")
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 2, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name, statefulSet.Spec.VolumeClaimTemplates[0].Name, "Data volume claim doesn't exist")
-	assert.Equal(t, "solr-cloud", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCTechnologyLabel], "PVC Technology label doesn't match")
-	assert.Equal(t, "data", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel], "PVC Storage label doesn't match")
-	assert.Equal(t, "foo-clo", statefulSet.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel], "PVC Instance label doesn't match")
-	assert.Equal(t, "here", statefulSet.Spec.VolumeClaimTemplates[0].Annotations["base"], "Additional PVC label doesn't match")
-
-	// Explicitly delete, make sure that finalizers are removed from the object so that kubernetes can delete it.
-	testClient.Delete(context.TODO(), instance)
-	for i := 0; i < 5; i++ {
-		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
-		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance)
-		if err != nil {
-			break
-		}
-	}
-	g.Expect(err).To(gomega.HaveOccurred(), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
-}
-
-func TestDefaultEphemeralStorage(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
-
-	testForDefaultEmptyDirSpecs(t, g, instance)
-}
-
-func TestDefaultEphemeralStorageWhenNilEmptyDir(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{
+	FContext("Ephemeral Data - Nil EmptyDir", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
 					EmptyDir: nil,
 				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
+			})
 
-	testForDefaultEmptyDirSpecs(t, g, instance)
-}
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
+				dataVolume := found.Spec.Template.Spec.Volumes[1]
+				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
+				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
+			})
+		})
+	})
 
-func TestEphemeralStorageWithEmptyDirSpecs(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{
+	FContext("Ephemeral Data - EmptyDir with Specs", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
 					EmptyDir: &corev1.EmptyDirVolumeSource{
 						Medium:    corev1.StorageMediumMemory,
 						SizeLimit: resource.NewQuantity(1028*1028*1028, resource.BinarySI),
 					},
 				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
+				dataVolume := found.Spec.Template.Spec.Volumes[1]
+				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
+				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
+				g.Expect(dataVolume.EmptyDir).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir), "The empty dir settings do not match with what was provided.")
+			})
+		})
+	})
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Fetch new value of instance to check finalizers
-	foundInstance := &solr.SolrCloud{}
-	g.Eventually(func() error {
-		return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, foundInstance)
-	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, 0, len(foundInstance.GetFinalizers()), "The solrcloud should have no finalizers when ephemeral storage is used")
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, 0, len(statefulSet.Spec.VolumeClaimTemplates), "No data volume claims should exist when using ephemeral storage")
-	dataVolume := statefulSet.Spec.Template.Spec.Volumes[1]
-	assert.NotNil(t, dataVolume.EmptyDir, "The data volume should be an empty-dir.")
-	assert.Nil(t, dataVolume.HostPath, "The data volume should not be a hostPath volume.")
-	assert.EqualValues(t, instance.Spec.StorageOptions.EphemeralStorage.EmptyDir, dataVolume.EmptyDir, "The empty dir settings do not match with what was provided.")
-}
-
-func TestEphemeralStorageWithHostPathSpecs(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	hostPathType := corev1.HostPathDirectoryOrCreate
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{
+	FContext("Ephemeral Data - HostPath with Specs", func() {
+		hostPathType := corev1.HostPathDirectoryOrCreate
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
 					HostPath: &corev1.HostPathVolumeSource{
 						Path: "/tmp",
 						Type: &hostPathType,
 					},
 				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
+			})
 
-	testHostPathSpecs(t, g, instance)
-}
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
+				dataVolume := found.Spec.Template.Spec.Volumes[1]
+				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
+				g.Expect(dataVolume.HostPath).To(Not(BeNil()), "The data volume should be a hostPath volume.")
+				g.Expect(dataVolume.HostPath).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath), "The hostPath  settings do not match with what was provided.")
+			})
+		})
+	})
 
-func TestEphemeralStorageWithHostPathAndEmptyDirSpecs(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-
-	hostPathType := corev1.HostPathDirectoryOrCreate
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrJavaMem:  "-Xmx4G",
-			SolrOpts:     "extra-opts",
-			SolrLogLevel: "DEBUG",
-			StorageOptions: solr.SolrDataStorageOptions{
-				EphemeralStorage: &solr.SolrEphemeralDataStorageOptions{
+	FContext("Ephemeral Data - HostPath and EmptyDir (HostPath should win)", func() {
+		hostPathType := corev1.HostPathDirectoryOrCreate
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{
 					HostPath: &corev1.HostPathVolumeSource{
 						Path: "/tmp",
 						Type: &hostPathType,
@@ -438,115 +272,23 @@ func TestEphemeralStorageWithHostPathAndEmptyDirSpecs(t *testing.T) {
 						SizeLimit: resource.NewQuantity(1028*1028*1028, resource.BinarySI),
 					},
 				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables:       extraVars,
-					PodSecurityContext: &podSecurityContext,
-					Volumes:            extraVolumes,
-					Affinity:           affinity,
-					Resources:          resources,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrCloud finalizers")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
+			})
 
-	testHostPathSpecs(t, g, instance)
-}
-
-func testHostPathSpecs(t *testing.T, g *gomega.GomegaWithT, instance *solr.SolrCloud) {
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Fetch new value of instance to check finalizers
-	foundInstance := &solr.SolrCloud{}
-	g.Eventually(func() error {
-		return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, foundInstance)
-	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, 0, len(foundInstance.GetFinalizers()), "The solrcloud should have no finalizers when ephemeral storage is used")
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, 0, len(statefulSet.Spec.VolumeClaimTemplates), "No data volume claims should exist when using ephemeral storage")
-	dataVolume := statefulSet.Spec.Template.Spec.Volumes[1]
-	assert.NotNil(t, dataVolume.HostPath, "The data volume should be a hostPath volume.")
-	assert.Nil(t, dataVolume.EmptyDir, "The data volume should not be an emptyDir volume.")
-	assert.EqualValues(t, instance.Spec.StorageOptions.EphemeralStorage.HostPath, dataVolume.HostPath, "The hostPath settings do not match with what was provided.")
-}
-
-func testForDefaultEmptyDirSpecs(t *testing.T, g *gomega.GomegaWithT, instance *solr.SolrCloud) {
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Fetch new value of instance to check finalizers
-	foundInstance := &solr.SolrCloud{}
-	g.Eventually(func() error {
-		return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, foundInstance)
-	}, timeout).Should(gomega.Succeed())
-	assert.Equal(t, 0, len(foundInstance.GetFinalizers()), "The solrcloud should have no finalizers when ephemeral storage is used")
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 3, len(statefulSet.Spec.Template.Spec.Volumes), "Pod has wrong number of volumes")
-	assert.Equal(t, 0, len(statefulSet.Spec.VolumeClaimTemplates), "No data volume claims should exist when using ephemeral storage")
-	dataVolume := statefulSet.Spec.Template.Spec.Volumes[1]
-	assert.NotNil(t, dataVolume.EmptyDir, "The data volume should be an empty-dir.")
-}
+			By("testing the Solr StatefulSet PVC Spec")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
+				dataVolume := found.Spec.Template.Spec.Volumes[1]
+				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
+				g.Expect(dataVolume.HostPath).To(Not(BeNil()), "The data volume should be a hostPath volume.")
+				g.Expect(dataVolume.HostPath).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath), "The hostPath  settings do not match with what was provided.")
+			})
+		})
+	})
+})
