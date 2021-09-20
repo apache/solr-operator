@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
+	zk_api "github.com/apache/solr-operator/controllers/zk-api"
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
@@ -82,6 +83,8 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(solrv1beta1.AddToScheme(scheme))
+
+	utilruntime.Must(zk_api.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")

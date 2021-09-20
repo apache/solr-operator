@@ -22,8 +22,8 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/zk-api"
 	"github.com/go-logr/logr"
-	//zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -719,7 +719,6 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 	if zkRef.ConnectionInfo != nil {
 		newStatus.ZookeeperConnectionInfo = *zkRef.ConnectionInfo
 	} else if zkRef.ProvidedZookeeper != nil {
-		/* TODO-ZK
 		pzk := zkRef.ProvidedZookeeper
 		// Generate ZookeeperCluster
 		if !useZkCRD {
@@ -729,7 +728,7 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 
 		// Check if the ZookeeperCluster already exists
 		zkLogger := logger.WithValues("zookeeperCluster", zkCluster.Name)
-		foundZkCluster := &zkv1beta1.ZookeeperCluster{}
+		foundZkCluster := &zk_api.ZookeeperCluster{}
 		err := r.Get(ctx, types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
 		if err != nil && errors.IsNotFound(err) {
 			zkLogger.Info("Creating Zookeeer Cluster")
@@ -762,7 +761,6 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 			ChRoot:                   pzk.ChRoot,
 		}
 		return err
-		*/
 	} else {
 		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}
@@ -954,7 +952,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if useZkCRD {
-		// TODO-ZK: ctrlBuilder = ctrlBuilder.Owns(&zkv1beta1.ZookeeperCluster{})
+		ctrlBuilder = ctrlBuilder.Owns(&zk_api.ZookeeperCluster{})
 	}
 
 	return ctrlBuilder.Complete(r)

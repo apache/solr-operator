@@ -18,6 +18,7 @@
 package controllers
 
 import (
+	zk_api "github.com/apache/solr-operator/controllers/zk-api"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
@@ -65,7 +66,10 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{
+			filepath.Join("..", "config", "crd", "bases"),
+			filepath.Join("..", "config", "dependencies"), // Add ZookeeperCluster CRD
+		},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -74,9 +78,11 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	err = solrv1beta1.AddToScheme(scheme.Scheme)
+	err = zk_api.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme
+	UseZkCRD(true)
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())

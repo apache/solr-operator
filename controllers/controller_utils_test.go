@@ -20,6 +20,7 @@ package controllers
 import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
+	zk_api "github.com/apache/solr-operator/controllers/zk-api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
@@ -633,6 +634,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 	cleanupObjects := []client.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
+		&zk_api.ZookeeperCluster{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &batchv1.Job{}, &netv1.Ingress{},
@@ -887,7 +889,7 @@ var (
 		},
 	}
 	testServiceAccountName = "test-service-account"
-	/*zkConf                 = zkv1beta1.ZookeeperConfig{
+	zkConf                 = solrv1beta1.ZookeeperConfig{
 		InitLimit:            1,
 		SyncLimit:            5,
 		PreAllocSize:         2,
@@ -895,5 +897,5 @@ var (
 		MaxCnxns:             4,
 		MinSessionTimeout:    6,
 		QuorumListenOnAllIPs: true,
-	}*/
+	}
 )

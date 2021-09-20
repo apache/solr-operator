@@ -18,16 +18,9 @@
 package util
 
 import (
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	"strings"
-)
-
-/* TODO-ZK
-import (
-	solr "github.com/apache/solr-operator/api/v1beta1"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/zk-api"
 	"github.com/go-logr/logr"
-	//zk "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
@@ -36,18 +29,18 @@ import (
 // GenerateZookeeperCluster returns a new ZookeeperCluster pointer generated for the SolrCloud instance
 // object: SolrCloud instance
 // zkSpec: the spec of the ZookeeperCluster to generate
-func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperSpec) *zk.ZookeeperCluster {
+func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1beta1.ZookeeperSpec) *zk_api.ZookeeperCluster {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["technology"] = solr.ZookeeperTechnologyLabel
+	labels["technology"] = solrv1beta1.ZookeeperTechnologyLabel
 
-	zkCluster := &zk.ZookeeperCluster{
+	zkCluster := &zk_api.ZookeeperCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrCloud.ProvidedZookeeperName(),
 			Namespace: solrCloud.GetNamespace(),
 			Labels:    labels,
 		},
-		Spec: zk.ZookeeperClusterSpec{
-			Image: zk.ContainerImage{
+		Spec: zk_api.ZookeeperClusterSpec{
+			Image: zk_api.ContainerImage{
 				Repository: zkSpec.Image.Repository,
 				Tag:        zkSpec.Image.Tag,
 				PullPolicy: zkSpec.Image.PullPolicy,
@@ -68,7 +61,7 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 					ContainerPort: 3888,
 				},
 			},
-			Conf: zkSpec.Config,
+			Conf: zk_api.ZookeeperConfig(zkSpec.Config),
 		},
 	}
 
@@ -90,9 +83,15 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 
 	// Set the persistence/ephemeral options if necessary
 	if zkSpec.Persistence != nil && zkCluster.Spec.StorageType == "persistence" {
-		zkCluster.Spec.Persistence = zkSpec.Persistence
+		zkCluster.Spec.Persistence = &zk_api.Persistence{
+			VolumeReclaimPolicy: zk_api.VolumeReclaimPolicy(zkSpec.Persistence.VolumeReclaimPolicy),
+			PersistentVolumeClaimSpec: zkSpec.Persistence.PersistentVolumeClaimSpec,
+			Annotations:               zkSpec.Persistence.Annotations,
+		}
 	} else if zkSpec.Ephemeral != nil && zkCluster.Spec.StorageType == "ephemeral" {
-		zkCluster.Spec.Ephemeral = zkSpec.Ephemeral
+		zkCluster.Spec.Ephemeral = &zk_api.Ephemeral{
+			EmptyDirVolumeSource: zkSpec.Ephemeral.EmptyDirVolumeSource,
+		}
 	}
 
 	// Append Pod Policies if provided by user
@@ -134,7 +133,7 @@ func GenerateZookeeperCluster(solrCloud *solr.SolrCloud, zkSpec *solr.ZookeeperS
 
 // CopyZookeeperClusterFields copies the owned fields from one ZookeeperCluster to another
 // Returns true if the fields copied from don't match to.
-func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logger) bool {
+func CopyZookeeperClusterFields(from, to *zk_api.ZookeeperCluster, logger logr.Logger) bool {
 	logger = logger.WithValues("kind", "zookeeperCluster")
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
 
@@ -312,11 +311,10 @@ func CopyZookeeperClusterFields(from, to *zk.ZookeeperCluster, logger logr.Logge
 
 	return requireUpdate
 }
-*/
 
 // AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
 // info: Zookeeper Connection Information
-func AddACLsToEnv(allACL *solr.ZookeeperACL, readOnlyACL *solr.ZookeeperACL) (hasACLs bool, envVars []corev1.EnvVar) {
+func AddACLsToEnv(allACL *solrv1beta1.ZookeeperACL, readOnlyACL *solrv1beta1.ZookeeperACL) (hasACLs bool, envVars []corev1.EnvVar) {
 	if allACL == nil && readOnlyACL == nil {
 		return false, envVars
 	}
