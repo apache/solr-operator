@@ -428,6 +428,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
+			Lifecycle: &corev1.Lifecycle{
+				PostStart: postStart,
+				PreStop:   preStop,
+			},
 		},
 	}
 
@@ -506,9 +510,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	if nil != customPodOptions {
 		solrContainer := &stateful.Spec.Template.Spec.Containers[0]
 
-		solrContainer.Lifecycle.PostStart = postStart
-		solrContainer.Lifecycle.PreStop = preStop
-
 		if customPodOptions.ServiceAccountName != "" {
 			stateful.Spec.Template.Spec.ServiceAccountName = customPodOptions.ServiceAccountName
 		}
@@ -525,12 +526,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
 
-		if customPodOptions.Lifecycle.PostStart != nil {
-			solrContainer.Lifecycle.PostStart = customPodOptions.Lifecycle.PostStart
-		}
-
-		if customPodOptions.Lifecycle.PreStop != nil {
-			solrContainer.Lifecycle.PreStop = customPodOptions.Lifecycle.PreStop
+		if customPodOptions.Lifecycle != nil {
+			solrContainer.Lifecycle = customPodOptions.Lifecycle
 		}
 
 		if customPodOptions.Tolerations != nil {
