@@ -23,6 +23,9 @@ import (
 	"strconv"
 	"time"
 
+	"strings"
+	"testing"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/onsi/gomega"
@@ -36,8 +39,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strings"
-	"testing"
 )
 
 var _ reconcile.Reconciler = &SolrCloudReconciler{}
@@ -206,6 +207,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 					LivenessProbe:                 testProbeLivenessNonDefaults,
 					ReadinessProbe:                testProbeReadinessNonDefaults,
 					StartupProbe:                  testProbeStartup,
+					Lifecycle:                     testLifecycle,
 					PriorityClassName:             testPriorityClass,
 					ImagePullSecrets:              testAdditionalImagePullSecrets,
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
@@ -297,7 +299,7 @@ func TestCustomKubeOptionsCloudReconcile(t *testing.T) {
 	testPodProbe(t, testProbeLivenessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe, "liveness")
 	testPodProbe(t, testProbeReadinessNonDefaults, statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe, "readiness")
 	testPodProbe(t, testProbeStartup, statefulSet.Spec.Template.Spec.Containers[0].StartupProbe, "startup")
-	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
+	testPodLifecycle(t, testLifecycle, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle)
 	testPodTolerations(t, testTolerations, statefulSet.Spec.Template.Spec.Tolerations)
 	assert.EqualValues(t, testPriorityClass, statefulSet.Spec.Template.Spec.PriorityClassName, "Incorrect Priority class name for Pod Spec")
 	assert.ElementsMatch(t, append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName}), statefulSet.Spec.Template.Spec.ImagePullSecrets, "Incorrect imagePullSecrets")

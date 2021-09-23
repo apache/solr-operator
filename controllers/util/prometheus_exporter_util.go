@@ -323,6 +323,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		if customPodOptions.LivenessProbe != nil {
 			metricsContainer.LivenessProbe = customizeProbe(metricsContainer.LivenessProbe, *customPodOptions.LivenessProbe)
 		}
+
+		if customPodOptions.Lifecycle != nil {
+			metricsContainer.Lifecycle = customPodOptions.Lifecycle
+		}
 	}
 
 	// Enrich the deployment definition to allow the exporter to make requests to TLS enabled Solr pods

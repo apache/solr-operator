@@ -69,6 +69,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 					TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 					LivenessProbe:                 testProbeLivenessNonDefaults,
 					ReadinessProbe:                testProbeReadinessNonDefaults,
+					Lifecycle:                     testLifecycle,
 				},
 			},
 			ExporterEntrypoint: "/test/entry-point",
@@ -138,6 +139,7 @@ func TestMetricsReconcileWithoutExporterConfig(t *testing.T) {
 
 	testPodProbe(t, testProbeLivenessNonDefaults, deployment.Spec.Template.Spec.Containers[0].LivenessProbe, "liveness")
 	testPodProbe(t, testProbeReadinessNonDefaults, deployment.Spec.Template.Spec.Containers[0].ReadinessProbe, "readiness")
+	testPodLifecycle(t, testLifecycle, deployment.Spec.Template.Spec.Containers[0].Lifecycle)
 	assert.Nilf(t, deployment.Spec.Template.Spec.Containers[0].StartupProbe, "%s probe should be nil since it was not specified", "startup")
 
 	// Check the Service
@@ -161,6 +163,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 					NodeSelector:      testNodeSelectors,
 					PriorityClassName: testPriorityClass,
 					StartupProbe:      testProbeStartup,
+					Lifecycle:         testLifecycle,
 				},
 				DeploymentOptions: &solr.DeploymentOptions{
 					Annotations: testDeploymentAnnotations,
@@ -253,6 +256,7 @@ func TestMetricsReconcileWithExporterConfig(t *testing.T) {
 		FailureThreshold:    3,
 	}, deployment.Spec.Template.Spec.Containers[0].LivenessProbe, "liveness")
 	testPodProbe(t, testProbeStartup, deployment.Spec.Template.Spec.Containers[0].StartupProbe, "startup")
+	testPodLifecycle(t, testLifecycle, deployment.Spec.Template.Spec.Containers[0].Lifecycle)
 	assert.Nilf(t, deployment.Spec.Template.Spec.Containers[0].ReadinessProbe, "%s probe should be nil since it was not specified", "readiness")
 
 	// Check the Service

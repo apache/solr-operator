@@ -19,13 +19,14 @@ package controllers
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/apache/solr-operator/controllers/util"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	"github.com/pravega/zookeeper-operator/pkg/controller/zookeepercluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 
@@ -400,7 +401,6 @@ func TestZKACLsCloudReconcile(t *testing.T) {
 	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
 	// TODO: Make this not invalidate foundEnv
 	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
-	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
@@ -545,7 +545,6 @@ func testZkACLsReconcile(t *testing.T, useZkCRD bool, instance *solr.SolrCloud, 
 	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
 	// TODO: Make this not invalidate foundEnv
 	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
-	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
 
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)

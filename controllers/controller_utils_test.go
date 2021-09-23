@@ -19,10 +19,11 @@ package controllers
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/apache/solr-operator/controllers/util"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
@@ -276,6 +277,10 @@ func testPodProbe(t *testing.T, expectedProbe *corev1.Probe, foundProbe *corev1.
 	assert.EqualValuesf(t, expectedProbe, foundProbe, "Incorrect default container %s probe", probeType)
 }
 
+func testPodLifecycle(t *testing.T, expectedLifecycle *corev1.Lifecycle, foundLifecycle *corev1.Lifecycle) {
+	assert.EqualValuesf(t, expectedLifecycle, foundLifecycle, "Expected Lifecycle and found Lifecyle don't match")
+}
+
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
 	assert.Equal(t, expected, found, "Expected and found %s are not the same", mapName)
 }
@@ -517,6 +522,18 @@ var (
 				Command: []string{
 					"ls",
 				},
+			},
+		},
+	}
+	testLifecycle = &corev1.Lifecycle{
+		PostStart: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the postStart handler"},
+			},
+		},
+		PreStop: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the preStop handler"},
 			},
 		},
 	}
