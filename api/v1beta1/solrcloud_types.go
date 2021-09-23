@@ -54,11 +54,8 @@ const (
 
 	DefaultBasicAuthUsername = "k8s-oper"
 
-	DefaultBackupRepositoryName    = "legacy_local_repository"
-	BaseBackupRestorePath          = "/var/solr/data/backup-restore"
-	BackupRestoreInitContainerPath = "/backup-restore"
-	BackupRestoreVolume            = "backup-restore"
-	BackupRestoreCredentialVolume  = "backup-restore-credential"
+	LegacyBackupRepositoryName = "legacy_local_repository"
+	BaseBackupRestorePath      = "/var/solr/data/backup-restore"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -176,6 +173,19 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
+	// TODO: Deprecated in v0.5.0 - remove in v0.6.0
+	if spec.StorageOptions.BackupRestoreOptions != nil {
+		spec.BackupRepositories = append(spec.BackupRepositories, SolrBackupRepository{
+			Name: LegacyBackupRepositoryName,
+			Managed: &ManagedRepository{
+				Volume:    spec.StorageOptions.BackupRestoreOptions.Volume,
+				Directory: spec.StorageOptions.BackupRestoreOptions.Directory,
+			},
+		})
+		spec.StorageOptions.BackupRestoreOptions = nil
+		changed = true
+	}
+
 	return changed
 }
 
@@ -228,6 +238,7 @@ type SolrDataStorageOptions struct {
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
 
 	// Options required for backups to be enabled for this solrCloud.
+	// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }
@@ -335,6 +346,7 @@ type SolrEphemeralDataStorageOptions struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
+// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
 type SolrBackupRestoreOptions struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
@@ -342,7 +354,7 @@ type SolrBackupRestoreOptions struct {
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
 	// Deprecated: Create an explicit 'managedRepositories' entry instead.
-	Volume *corev1.VolumeSource `json:"volume,omitempty"`
+	Volume corev1.VolumeSource `json:"volume"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
@@ -356,7 +368,7 @@ type SolrBackupRestoreOptions struct {
 type SolrBackupRepository struct {
 	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
 
 	// A GCSRepository for Solr to use when backing up and restoring collections.
 	//+optional
