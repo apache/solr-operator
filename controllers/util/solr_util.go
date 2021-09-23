@@ -218,7 +218,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		volumeSource, mount := repo.GetVolumeSourceAndMount(solrCloud.Name)
 		if volumeSource != nil {
 			solrVolumes = append(solrVolumes, corev1.Volume{
-				Name: repo.VolumeName(),
+				Name:         repo.VolumeName(),
 				VolumeSource: *volumeSource,
 			})
 			mount.Name = repo.VolumeName()

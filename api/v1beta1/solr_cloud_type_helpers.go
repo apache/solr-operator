@@ -27,7 +27,7 @@ const (
 
 	GCSCredentialSecretKey = "service-account-key.json"
 
-	DistLibs = "/opt/solr/dist"
+	DistLibs    = "/opt/solr/dist"
 	ContribLibs = "/opt/solr/contrib/%s/lib"
 )
 
@@ -51,7 +51,7 @@ func BackupSubPathForCloud(directoryOverride string, cloud string, backupName st
 }
 
 func (repo *SolrBackupRepository) GcsSecretMountPath() string {
-	return fmt.Sprintf("%s/%s", BaseBackupRestoreSecretsPath, repo.Name, "gcscredential")
+	return fmt.Sprintf("%s/%s/%s", BaseBackupRestoreSecretsPath, repo.Name, "gcscredential")
 }
 
 func (repo *SolrBackupRepository) ManagedVolumeMountPath() string {

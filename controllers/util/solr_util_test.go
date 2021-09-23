@@ -31,13 +31,13 @@ func TestNoRepositoryXmlGeneratedWhenNoRepositoriesExist(t *testing.T) {
 func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 	repos := []solr.SolrBackupRepository{
 		{
-			Name:    "managedrepository1",
+			Name: "managedrepository1",
 			Managed: &solr.ManagedRepository{
 				Volume: corev1.VolumeSource{},
 			},
 		},
 		{
-			Name:    "gcsrepository1",
+			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -47,13 +47,13 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			},
 		},
 		{
-			Name:    "managedrepository2",
+			Name: "managedrepository2",
 			Managed: &solr.ManagedRepository{
 				Volume: corev1.VolumeSource{},
 			},
 		},
 		{
-			Name:    "gcsrepository2",
+			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
 				GcsCredentialSecret: corev1.SecretKeySelector{

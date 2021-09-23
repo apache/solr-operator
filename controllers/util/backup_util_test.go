@@ -27,7 +27,7 @@ import (
 
 func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 	managedRepository := &solr.SolrBackupRepository{
-		Name:    "somemanagedrepository",
+		Name: "somemanagedrepository",
 		Managed: &solr.ManagedRepository{
 			Volume:    corev1.VolumeSource{}, // Actual volume info doesn't matter here
 			Directory: "/somedirectory",
@@ -56,14 +56,14 @@ func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 
 func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 	gcsRepository := &solr.SolrBackupRepository{
-		Name:    "somegcsrepository",
+		Name: "somegcsrepository",
 		GCS: &solr.GcsRepository{
 			Bucket: "some-gcs-bucket",
 			GcsCredentialSecret: corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
 				Key:                  "some-secret-key",
 			},
-			BaseLocation:        "/some/gcs/path",
+			BaseLocation: "/some/gcs/path",
 		},
 	}
 	backupConfig := solr.SolrBackup{
@@ -94,7 +94,7 @@ func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository1",
+			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -116,7 +116,7 @@ func TestCanLookupManagedRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository1",
+			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -130,7 +130,7 @@ func TestCanLookupManagedRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository2",
+			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -154,7 +154,7 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository1",
+			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -168,7 +168,7 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository2",
+			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -192,7 +192,7 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository1",
+			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
 				GcsCredentialSecret: corev1.SecretKeySelector{
@@ -206,7 +206,7 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 			Managed: &solr.ManagedRepository{Volume: corev1.VolumeSource{}},
 		},
 		{
-			Name:    "gcsrepository2",
+			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
 				GcsCredentialSecret: corev1.SecretKeySelector{
