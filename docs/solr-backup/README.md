@@ -24,8 +24,7 @@ In this example, we'll create a Kubernetes persistent volume to mount on each So
 
 A volume for this purpose can be created as below:
 
-```
-$ echo "
+```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -38,9 +37,6 @@ spec:
       storage: 1Gi 
   storageClassName: hostpath
   volumeMode: Filesystem
-" > backup-pvc.yaml
-$ cat backup-pvc.yaml | kubectl apply -f -
-persistentvolumeclaim/collection-backup-pvc created
 ```
 
 Note that this PVC specifies `ReadWriteMany` access, which is required for Solr clusters with more than node.
@@ -50,11 +46,11 @@ Not all Kubernetes clusters support this `storageClassName` value - you may need
 Next, modify your existing SolrCloud instance by adding a backup repository definition that uses the recently created volume.
 To do this, run `kubectl edit solrcloud example`, adding the following YAML nested under the `spec` property:
 
-```
-dataStorage:
-  backupRestoreOptions:
-    managedRepositories:
-      - name: "local-collection-backups-1"
+```yaml
+spec:
+  backupRepositories:
+    - name: "local-collection-backups-1"
+      managed:
         volume:
           persistentVolumeClaim:
             claimName: "collection-backup-pvc"
@@ -65,8 +61,7 @@ The operator will notice this change and create new Solr pods that have the 'col
 
 Now that there's a backup repository available to use, a backup can be triggered anytime by creating a new SolrBackup instance.
 
-```
-$ echo "
+```yaml
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:
@@ -78,15 +73,12 @@ spec:
   collections:
     - techproducts
     - books
-" > backup-trigger.yaml
-$ cat backup-trigger.yaml | kubectl apply -f
-solrbackup.solr.apache.org/local-backup-without-persistence created
 ```
 
 This will create a backup of both the 'techproducts' and 'books' collections, storing the data on the 'collection-backup-pvc' volume.
 The status of our triggered backup can be checked with the command below.
 
-```
+```bash
 $ kubectl get solrbackups
 NAME                               CLOUD     FINISHED   SUCCESSFUL   AGE
 local-backup-without-persistence   example   true       true         72s
@@ -96,7 +88,7 @@ local-backup-without-persistence   example   true       true         72s
 
 Once the operator completes a backup, the SolrBackup instance can be safely deleted.
 
-```
+```bash
 $ kubectl delete solrbackup local-backup-without-persistence
 TODO command output
 ```
@@ -104,7 +96,7 @@ TODO command output
 Note that deleting SolrBackup instances doesn't delete the backed up data, which the operator views as already persisted and outside its control.
 In our example this data can still be found on the volume we created earlier
 
-```
+```bash
 $ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/local-backup-without-persistence
 total 8K
 drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 books
@@ -113,13 +105,30 @@ drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 techproducts
 
 Managed backup data, as in our example, can always be deleted using standard shell commands if desired:
 
-```
+```bash
 kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/local-backup-without-persistence
 ```
 
 ## Supported Repository Types
 
 The Solr-operator currently supports two different backup repository types: managed ("local") and Google Cloud Storage ("GCS")
+
+Multiple repositories can be defined under the `SolrCloud.spec.backupRepositories` field.
+Specify a unique name and repo type that you want to connect to.
+Repository-type specific options are found under the object named with the repository-type.
+Examples can be found below under each repository-type section below.
+Feel free to mix and match multiple backup repository types to fit your use case:
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "local-collection-backups-1"
+      managed:
+        ...
+    - name: "gcs-collection-backups-1"
+      gcs:
+        ...
+```
 
 ### Managed ("Local") Backup Repositories
 
@@ -128,15 +137,42 @@ Managed repositories are so called because with the data stored in and managed b
 
 The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_local_backup_with_persistence.yaml) for more details.
 
+An example of a SolrCloud spec with only one backup repository, with type Managed:
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "local-collection-backups-1"
+      managed:
+        volume: # Required
+          persistentVolumeClaim:
+            claimName: "collection-backup-pvc"
+        directory: "store/here" # Optional
+```
+
 ### GCS Backup Repositories
 
 GCS Repositories store backup data remotely in Google Cloud Storage.
-This repository type is only supported in deployments that use a Solr version >= 8.9.0.
+This repository type is only supported in deployments that use a Solr version >= `8.9.0`.
 
 Each repository must specify the GCS bucket to store data in (the `bucket` property), and the name of a Kubernetes secret containing credentials for accessing GCS (the `gcsCredentialSecret` property).
 This secret must have a key `service-account-key.json` whose value is a JSON service account key as described [here](https://cloud.google.com/iam/docs/creating-managing-service-account-keys)
 If you already have your service account key, this secret can be created using a command like the one below.
 
-```
+```bash
 kubectl create secret generic <secretName> --from-file=service-account-key.json=<path-to-service-account-key>
+```
+
+An example of a SolrCloud spec with only one backup repository, with type GCS:
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "gcs-backups-1"
+      gcs:
+        bucket: "backup-bucket" # Required
+        gcsCredentialSecret: # Required
+          name: "secretName"
+          key: "service-account-key.json"
+        baseLocation: "/store/here" # Optional
 ```

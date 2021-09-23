@@ -21,35 +21,34 @@ spec:
   replicas: 1
   solrImage:
     tag: 8.9.0
-  dataStorage:
-    backupRestoreOptions:
-      # Deprecated syntax for defining a backup repository (local backups only)
-      # A repository of this type can be referenced from a 'solrbackup' by
-      # specifying a 'repositoryName' of "legacy_local_repository".
-      volume:
-        persistentVolumeClaim:
-          claimName: "pvc-test" # PVC expected to already exist!
-      # "Managed" repositories store backup data in a Kubernetes volume, This
-      # allows the operator to make several advanced features available, such as
-      # backup compression and relocation ("persistence").
-      #
-      # This syntax replaces the deprecated local-backup syntax above.
-      managedRepositories:
-        - name: "managedrepository1"
-          volume:
-            persistentVolumeClaim:
-              claimName: "pvc-test-2" 
-      # Creates repositories that backup data to Google Cloud Storage ("GCS").
-      # GCS credentials are taken from the secret 'gcsCredentialSecret', which
-      # should have a key 'service-account-key.json' whose value is a JSON token
-      # as described here: https://cloud.google.com/iam/docs/creating-managing-service-account-keys
-      #
-      # Requires Solr >= 8.9.
-      gcsRepositories: 
-        - name: "main_collection_backup_repository"
-          bucket: "product_catalog"
-          gcsCredentialSecret: "some-secret-name"
-        - name: "ancillary_collection_backup_repository"
-          bucket: "log_data"
-          gcsCredentialSecret: "some-secret-name-2"
-          baseLocation: "/logs"
+  backupRepositories:
+    # "Managed" repositories store backup data in a Kubernetes volume, This
+    # allows the operator to make several advanced features available, such as
+    # backup compression and relocation ("persistence").
+    #
+    # This syntax replaces the deprecated local-backup syntax above.
+    - name: "managed_repository_1"
+      managed:
+        volume:
+          persistentVolumeClaim:
+            claimName: "pvc-test-1" # PVC expected to already exist!
+
+    # Creates repositories that backup data to Google Cloud Storage ("GCS").
+    # GCS credentials are taken from the secret 'gcsCredentialSecret', which
+    # should have a key 'service-account-key.json' whose value is a JSON token
+    # as described here: https://cloud.google.com/iam/docs/creating-managing-service-account-keys
+    #
+    # Requires Solr >= 8.9.
+    - name: "main_collection_backup_repository"
+      gcs:
+        bucket: "product_catalog"
+        gcsCredentialSecret:
+          name: "some-secret-name"
+          key: "service-account-key.json"
+    - name: "main_collection_backup_repository"
+      gcs:
+        bucket: "log_data"
+        gcsCredentialSecret:
+          name: "some-secret-name-2"
+          key: "service-account-key.json"
+        baseLocation: "/logs"

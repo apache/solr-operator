@@ -20,7 +20,7 @@ metadata:
   name: local-backup-without-persistence
   namespace: default
 spec:
-  repositoryName: "managedrepository1"
+  repositoryName: "managed_repository_1"
   solrCloud: multiple-backup-repositories-solr
   collections:
     - example
