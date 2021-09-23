@@ -33,37 +33,41 @@ import (
 )
 
 const (
-	BaseBackupRestorePath = "/var/solr/data/backup-restore"
-	TarredFile            = "/var/solr/data/backup-restore/backup.tgz"
-	CleanupCommand        = " && rm -rf " + BaseBackupRestorePath + "/*"
-	BackupTarCommand      = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
+	TarredFile       = "/var/solr/data/backup-restore/backup.tgz"
+	CleanupCommand   = " && rm -rf " + solr.BaseBackupRestorePath + "/*"
+	BackupTarCommand = "cd " + solr.BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
 
 	AWSSecretDir = "/var/aws"
 
 	JobTTLSeconds = int32(60)
 )
 
-func BackupRestoreSubPathForCloud(directoryOverride string, cloud string) string {
-	if directoryOverride == "" {
-		directoryOverride = cloud
+type BackupRepository interface {
+	IsManaged() bool
+	GetSolrMountPath() string
+	GetInitPodMountPath() string
+	GetBackupPath(backupName string) string
+	VolumeName() string
+}
+
+type ManagedBackupRepository interface {
+	BackupRepository
+	GetVolumeSource() corev1.VolumeSource
+	GetDirectory() string
+}
+
+func GetBackupRepositoryByName(backupRepos []solr.SolrBackupRepository, repositoryName string) *solr.SolrBackupRepository {
+	// If no name is given and only 1 repo exists, return the repo
+	if repositoryName == "" && len(backupRepos) == 1 {
+		return &backupRepos[0]
 	}
-	return "cloud/" + directoryOverride
-}
-
-func BackupSubPathForCloud(directoryOverride string, cloud string, backupName string) string {
-	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/backups/" + backupName
-}
-
-func RestoreSubPathForCloud(directoryOverride string, cloud string, restoreName string) string {
-	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/restores/" + restoreName
-}
-
-func BackupPath(backupName string) string {
-	return BaseBackupRestorePath + "/backups/" + backupName
-}
-
-func RestorePath(backupName string) string {
-	return BaseBackupRestorePath + "/restores/" + backupName
+	//Build map of string->BackupRepository
+	for _, repo := range backupRepos {
+		if repo.Name == repositoryName {
+			return &repo
+		}
+	}
+	return nil
 }
 
 func AsyncIdForCollectionBackup(collection string, backupName string) string {
@@ -92,18 +96,14 @@ func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) 
 	return
 }
 
-func GenerateBackupPersistenceJobForCloud(backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
-	var backupVolume corev1.VolumeSource
-	var solrCloudBackupDirectoryOverride string
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		backupVolume = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume
-		solrCloudBackupDirectoryOverride = solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory
-	}
-	return GenerateBackupPersistenceJob(backup, backupVolume, BackupSubPathForCloud(solrCloudBackupDirectoryOverride, solrCloud.Name, backup.Name))
+func GenerateBackupPersistenceJobForCloud(managedBackupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
+	backupVolume, _ := managedBackupRepository.GetVolumeSourceAndMount(solrCloud.Name)
+	solrCloudBackupDirectoryOverride := managedBackupRepository.Managed.Directory
+	return GenerateBackupPersistenceJob(backup, backupVolume, solr.BackupSubPathForCloud(solrCloudBackupDirectoryOverride, solrCloud.Name, backup.Name))
 }
 
 // GenerateBackupPersistenceJob creates a Job that will persist backup data and purge the backup from the solrBackupVolume
-func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume corev1.VolumeSource, backupSubPath string) *batchv1.Job {
+func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume *corev1.VolumeSource, backupSubPath string) *batchv1.Job {
 	copyLabels := solrBackup.GetLabels()
 	if copyLabels == nil {
 		copyLabels = map[string]string{}
@@ -117,12 +117,12 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 	volumes := []corev1.Volume{
 		{
 			Name:         "backup-data",
-			VolumeSource: solrBackupVolume,
+			VolumeSource: *solrBackupVolume,
 		},
 	}
 	volumeMounts := []corev1.VolumeMount{
 		{
-			MountPath: BaseBackupRestorePath,
+			MountPath: solr.BaseBackupRestorePath,
 			Name:      "backup-data",
 			SubPath:   backupSubPath,
 			ReadOnly:  false,
@@ -178,7 +178,8 @@ func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume 
 }
 
 // GeneratePersistenceOptions creates options for a Job that will persist backup data
-func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume corev1.VolumeSource) (image solr.ContainerImage, envVars []corev1.EnvVar, command []string, volume *corev1.Volume, volumeMount *corev1.VolumeMount, numRetries *int32) {
+func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume *corev1.VolumeSource) (image solr.ContainerImage, envVars []corev1.EnvVar, command []string, volume *corev1.Volume, volumeMount *corev1.VolumeMount, numRetries *int32) {
+	// 'Persistence' expected to be non-nil
 	persistenceSource := solrBackup.Spec.Persistence
 	if persistenceSource.Volume != nil {
 		// Options for persisting to a volume
@@ -190,9 +191,9 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 			},
 		}
 
-		finalLocation := BaseBackupRestorePath
+		finalLocation := solr.BaseBackupRestorePath
 		// If the persistence volume is the same as the backup volume, we cannot mount the same volume twice.
-		if !DeepEqualWithNils(solrBackupVolume, persistenceSource.Volume.VolumeSource) {
+		if !DeepEqualWithNils(*solrBackupVolume, persistenceSource.Volume.VolumeSource) {
 			finalLocation = "/var/backup-persistence"
 			volume = &corev1.Volume{
 				Name:         "persistence",
@@ -317,17 +318,22 @@ func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume co
 	return image, envVars, command, volume, volumeMount, numRetries
 }
 
-func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupName string, httpHeaders map[string]string) (success bool, err error) {
+func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, collection string) url.Values {
 	queryParams := url.Values{}
 	queryParams.Add("action", "BACKUP")
 	queryParams.Add("collection", collection)
 	queryParams.Add("name", collection)
-	queryParams.Add("location", BackupPath(backupName))
-	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backupName))
+	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backup.Name))
+	queryParams.Add("location", backupRepository.BackupLocationPath(backup.Name))
+	queryParams.Add("repository", backup.Spec.RepositoryName)
+	return queryParams
+}
 
+func StartBackupForCollection(cloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, collection string, httpHeaders map[string]string) (success bool, err error) {
+	queryParams := GenerateQueryParamsForBackup(backupRepository, backup, collection)
 	resp := &solr_api.SolrAsyncResponse{}
 
-	log.Info("Calling to start collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
+	log.Info("Calling to start collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backup.Name)
 	err = solr_api.CallCollectionsApi(cloud, queryParams, httpHeaders, resp)
 
 	if err == nil {
@@ -335,7 +341,7 @@ func StartBackupForCollection(cloud *solr.SolrCloud, collection string, backupNa
 			success = true
 		}
 	} else {
-		log.Error(err, "Error starting collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backupName)
+		log.Error(err, "Error starting collection backup", "namespace", cloud.Namespace, "cloud", cloud.Name, "collection", collection, "backup", backup.Name)
 	}
 
 	return success, err
@@ -386,15 +392,18 @@ func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupNa
 	return err
 }
 
-func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backup string, config *rest.Config) (err error) {
-	backupPath := BackupPath(backup)
-	// Create an empty directory for the backup
-	return RunExecForPod(
-		solrCloud.GetAllSolrNodeNames()[0],
-		solrCloud.Namespace,
-		[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
-		*config,
-	)
+func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backupName string, config *rest.Config) (err error) {
+	// Directory creation only required/possible for managed (i.e. local) backups
+	if backupRepository.IsManaged() {
+		backupPath := backupRepository.BackupLocationPath(backupName)
+		return RunExecForPod(
+			solrCloud.GetAllSolrNodeNames()[0],
+			solrCloud.Namespace,
+			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
+			*config,
+		)
+	}
+	return nil
 }
 
 func RunExecForPod(podName string, namespace string, command []string, config rest.Config) (err error) {

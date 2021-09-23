@@ -1048,11 +1048,13 @@ spec:
                     - source
                     type: object
                 type: object
+              repositoryName:
+                description: The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the auto-configured repository for legacy singleton volumes).
+                type: string
               solrCloud:
                 description: A reference to the SolrCloud to create a backup for
                 type: string
             required:
-            - persistence
             - solrCloud
             type: object
           status:

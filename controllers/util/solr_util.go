@@ -38,8 +38,7 @@ import (
 )
 
 const (
-	SolrClientPortName  = "solr-client"
-	BackupRestoreVolume = "backup-restore"
+	SolrClientPortName = "solr-client"
 
 	SolrNodeContainer = "solrcloud-node"
 
@@ -202,18 +201,18 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
 	}
-	// Add backup volumes
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name:         BackupRestoreVolume,
-			VolumeSource: solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume,
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: BaseBackupRestorePath,
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+
+	// Add necessary specs for backupRepos
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		volumeSource, mount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+		if volumeSource != nil {
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name:         repo.VolumeName(),
+				VolumeSource: *volumeSource,
+			})
+			mount.Name = repo.VolumeName()
+			volumeMounts = append(volumeMounts, *mount)
+		}
 	}
 
 	if nil != customPodOptions {
@@ -582,17 +581,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
 
-	// Add prep for backup-restore volume
+	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: "/backup-restore",
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if repo.IsManaged() {
+			_, volumeMount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+			volumeMounts = append(volumeMounts, *volumeMount)
 
-		setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+			setupCommands = append(setupCommands, fmt.Sprintf(
+				"chown -R %d:%d %s",
+				DefaultSolrUser,
+				DefaultSolrGroup,
+				volumeMount.MountPath))
+		}
 	}
 
 	volumePrepInitContainer := corev1.Container{
@@ -612,6 +613,39 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
+func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepository) string {
+	if len(backupRepos) == 0 {
+		return ""
+	}
+	libs := make(map[string]bool, 0)
+	repoXMLs := make([]string, len(backupRepos))
+
+	for i, repo := range backupRepos {
+		for _, lib := range repo.GetAdditionalLibs() {
+			libs[lib] = true
+		}
+		repoXMLs[i] = repo.GetRepoXML()
+	}
+	sort.Strings(repoXMLs)
+
+	libXml := ""
+	if len(libs) > 0 {
+		libList := make([]string, 0)
+		for lib := range libs {
+			libList = append(libList, lib)
+		}
+		sort.Strings(libList)
+		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	}
+
+	return fmt.Sprintf(
+		`%s 
+		<backup>
+		%s
+		</backup>`, libXml, strings.Join(repoXMLs, `
+`))
+}
+
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
@@ -624,15 +658,8 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        solrCloud.ConfigMapName(),
-			Namespace:   solrCloud.GetNamespace(),
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Data: map[string]string{
-			"solr.xml": `<?xml version="1.0" encoding="UTF-8" ?>
+	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
+	solrXml := `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   <solrcloud>
     <str name="host">${host:}</str>
@@ -650,8 +677,18 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
+  ` + backupSection + `
 </solr>
-`,
+`
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        solrCloud.ConfigMapName(),
+			Namespace:   solrCloud.GetNamespace(),
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Data: map[string]string{
+			"solr.xml": solrXml,
 		},
 	}
 
