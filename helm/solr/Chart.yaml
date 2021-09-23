@@ -16,7 +16,6 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-
 version: 0.5.0-prerelease
 appVersion: 8.9.0
 kubeVersion: ">= 1.16.0-0"
@@ -42,26 +41,15 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
-      description: Official Solr Helm chart created. Works with the Solr Operator.
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/112
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/276
+          url: https://github.com/issue-url
     - kind: changed
-      description: Default Solr Version upgraded to 8.9, does not affect existing clouds
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/285
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/287
-    - kind: added
-      description: Ability to create serviceAccount for SolrCloud deployment through Helm chart.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/264
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/283
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

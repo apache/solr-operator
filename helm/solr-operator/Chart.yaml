@@ -54,122 +54,16 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: added
+      description: Addition 1
+      links:
+        - name: Github Issue
+          url: https://github.com/issue-url
     - kind: changed
-      description: Zookeeper Operator supported version changed to v0.2.12
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/271
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/304
-        - name: Zookeeper Operator Release Notes
-          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.12
-    - kind: added
-      description: Ability to schedule automatic restarts for SolrClouds
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/281
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/279
-    - kind: removed
-      description: "Removed deprecated Solr Operator Helm chart option `useZkOperator`, use `zookeeper-operator.use` instead"
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/286
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/288
-        - name: Deprecating Github PR
-          url: https://github.com/apache/solr-operator/pull/231
-    - kind: changed
-      description: Default Solr Version upgraded to 8.9, does not affect existing clouds
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/285
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/287
-    - kind: added
-      description: Customize serviceAccountName for SolrCloud and SolrPrometheusExporter
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/264
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/283
-    - kind: added
-      description: Introduced ephemeral option for Zookeeper storage
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/259
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/284
-    - kind: security
-      description: Changed Solr Operator base Docker image to reduce vulnerabilities.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/294
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/295
-    - kind: added
-      description: Ability to customize probes for PrometheusExporter
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/282
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/297
-    - kind: security
-      description: Remove users role from the all permission in the initial security.json
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/274
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/299
-    - kind: fixed
-      description: Grant access to the /admin/zookeeper/status path to the k8s role in the initial security.json
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/289
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/299
-    - kind: security
-      description: Add a mountedServerTLSDir config option to support a unique certificate per pod mounted dynamically by an external agent or CSI driver
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/291
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/292
-    - kind: added
-      description: Ability to terminate TLS at Ingress for SolrCloud.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/268
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/293
-    - kind: added
-      description: Ability to schedule automatic restarts for SolrPrometheusExporters
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/310
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/313
-    - kind: added
-      description: Ability to specify ZK Config properties for provided Zookeeper Clusters.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/290
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/311
-    - kind: added
-      description: Option to watch for updates to the mTLS client certificate used by the operator to call Solr pods.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/317
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/318
-    - kind: added
-      description: Configuration options to support an additional client TLS cert in addition to the server certificate
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/300
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/312
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
@@ -228,3 +122,4 @@ annotations:
         numThreads: 4
         image:
           tag: 8.7.0
+  artifacthub.io/containsSecurityUpdates: "false"
