@@ -119,6 +119,12 @@ type SolrCloudSpec struct {
 	// Options to enable Solr security
 	// +optional
 	SolrSecurity *SolrSecurityOptions `json:"solrSecurity,omitempty"`
+
+	// Allows specification of multiple different "repositories" for Solr to use when backing up data.
+	//+optional
+	//+listType:=map
+	//+listMapKey:=name
+	BackupRepositories []SolrBackupRepository `json:"backupRepositories,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
@@ -338,14 +344,6 @@ type SolrBackupRestoreOptions struct {
 	// Deprecated: Create an explicit 'managedRepositories' entry instead.
 	Volume *corev1.VolumeSource `json:"volume,omitempty"`
 
-	// Allows specification of multiple different "repositories" for Solr to use when backing up data to GCS.
-	GcsRepositories *[]GcsStorage `json:"gcsRepositories,omitempty"`
-
-	// Allows specification of multiple different "repositories" for Solr to use when backing up data "locally".
-	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
-	// post-backup compression.
-	ManagedRepositories *[]ManagedStorage `json:"managedRepositories,omitempty"`
-
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
 	// Deprecated: Create an explicit 'managedRepositories' entry instead.
@@ -353,32 +351,43 @@ type SolrBackupRestoreOptions struct {
 	Directory string `json:"directory,omitempty"`
 }
 
-type GcsStorage struct {
-	// A name used to identify this GCS storage profile.  Values should follow RFC-1123.  (See here for more details:
+//+kubebuilder:validation:MinProperties:=2
+//+kubebuilder:validation:MaxProperties:=2
+type SolrBackupRepository struct {
+	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
-	Name string `json:"name"`
+	Name string `json:"name,omitempty"`
 
+	// A GCSRepository for Solr to use when backing up and restoring collections.
+	//+optional
+	GCS *GcsRepository `json:"gcs,omitempty"`
+
+	// Allows specification of a "repository" for Solr to use when backing up data "locally".
+	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
+	// post-backup compression.
+	//+optional
+	Managed *ManagedRepository `json:"managed,omitempty"`
+}
+
+type GcsRepository struct {
 	// The name of the GCS bucket that all backup data will be stored in
 	Bucket string `json:"bucket"`
 
-	// The name of a Kubernetes secret holding a Google cloud service account key
-	GcsCredentialSecret string `json:"gcsCredentialSecret"`
+	// The name & key of a Kubernetes secret holding a Google cloud service account key
+	GcsCredentialSecret corev1.SecretKeySelector `json:"gcsCredentialSecret"`
+
 	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
 	// +optional
 	BaseLocation string `json:"baseLocation,omitempty"`
 }
 
-type ManagedStorage struct {
-	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
-	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
-	Name string `json:"name"`
-
+type ManagedRepository struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	Volume *corev1.VolumeSource `json:"volume"`
+	Volume corev1.VolumeSource `json:"volume"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.

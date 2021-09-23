@@ -633,7 +633,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 
 		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
 		if allPodsBackupReady {
-			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(p, solrCloud.Spec.StorageOptions.BackupRestoreOptions)
+			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(&p, solrCloud)
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
@@ -694,35 +694,16 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
 }
 
-func isPodReadyForBackup(pod corev1.Pod, backupOptions *solr.SolrBackupRestoreOptions) bool {
+func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solr.SolrCloud) bool {
 
 	// If solrcloud doesn't request backup support then everything is 'ready' implicitly
-	if backupOptions == nil {
-		return true
+	if len(solrCloud.Spec.BackupRepositories) == 0 {
+		return false
 	}
 
-	// Ensure that the singleton local volume (legacy syntax) is mounted on the pod.
-	if backupOptions.Volume != nil {
-		if !solr.VolumeExistsWithName(solr.BackupRestoreVolume, pod.Spec.Volumes) {
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if !repo.IsBackupVolumePresent(pod) {
 			return false
-		}
-	}
-
-	// Ensure that each configured GCS repository has a volume mounted for its credential file
-	if backupOptions.GcsRepositories != nil {
-		for _, gcsRepository := range *backupOptions.GcsRepositories {
-			if !gcsRepository.IsCredentialVolumePresent(pod.Spec.Volumes) {
-				return false
-			}
-		}
-	}
-
-	// Ensure that each configured 'managed' (i.e. local) repository has a volume mounted for backup storage
-	if backupOptions.ManagedRepositories != nil {
-		for _, managedRepository := range *backupOptions.ManagedRepositories {
-			if !managedRepository.IsBackupVolumePresent(pod.Spec.Volumes) {
-				return false
-			}
 		}
 	}
 

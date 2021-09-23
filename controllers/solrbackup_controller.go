@@ -170,8 +170,8 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	}
 
 	actionTaken = true
-	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-	if !found {
+	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
+	if backupRepository == nil {
 		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
@@ -200,7 +200,7 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 	// Go through each collection specified and reconcile the backup.
 	for _, collection := range backup.Spec.Collections {
-		_, err = reconcileSolrCollectionBackup(backup, solrCloud, collection, httpHeaders)
+		_, err = reconcileSolrCollectionBackup(backup, solrCloud, backupRepository, collection, httpHeaders)
 	}
 
 	// First check if the collection backups have been completed
@@ -209,7 +209,7 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	return solrCloud, collectionBackupsFinished, actionTaken, err
 }
 
-func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, collection string, httpHeaders map[string]string) (finished bool, err error) {
+func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, httpHeaders map[string]string) (finished bool, err error) {
 	now := metav1.Now()
 	collectionBackupStatus := solrv1beta1.CollectionBackupStatus{}
 	collectionBackupStatus.Collection = collection
@@ -224,13 +224,6 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
-		backupRepository, repositoryFound := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-		if !repositoryFound {
-			err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
-				"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
-				backup.Name, backup.Spec.RepositoryName)
-			return false, err
-		}
 		// Start the backup by calling solr
 		started, err := util.StartBackupForCollection(solrCloud, backupRepository, backup, collection, httpHeaders)
 		if err != nil {
@@ -278,17 +271,16 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 	}
 	now := metav1.Now()
 
-	backupRepository, found := util.GetBackupRepositoryByName(solrCloud.Spec.StorageOptions.BackupRestoreOptions, backup.Spec.RepositoryName)
-	if !found {
+	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
+	if backupRepository == nil {
 		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
-			"[%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
 		return err
 	}
 
-	managedBackupRepository, ok := backupRepository.(util.ManagedBackupRepository)
-	if ok {
-		persistenceJob := util.GenerateBackupPersistenceJobForCloud(managedBackupRepository, backup, solrCloud)
+	if backupRepository.IsManaged() {
+		persistenceJob := util.GenerateBackupPersistenceJobForCloud(backupRepository, backup, solrCloud)
 		if err := controllerutil.SetControllerReference(backup, persistenceJob, r.scheme); err != nil {
 			return err
 		}

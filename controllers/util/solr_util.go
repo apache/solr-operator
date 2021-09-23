@@ -39,8 +39,6 @@ import (
 const (
 	SolrClientPortName = "solr-client"
 
-	BackupRestoreCredentialSecretKey = "service-account-key.json"
-
 	SolrNodeContainer = "solrcloud-node"
 
 	DefaultSolrUser  = 8983
@@ -214,64 +212,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
 	}
-	// Add backup volumes
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		backupOptions := solrCloud.Spec.StorageOptions.BackupRestoreOptions
-		// Backup volumes can come from three sources: a singleton volume for local backups (legacy), a list of "managed"
-		// (i.e. local) repositories, and a list of gcs repositories.  All three of these require a volume and
-		// accompanying mount: either for credentials to reach GCS or for the data itself.
 
-		// Handle the "singleton" local volume first
-		if backupOptions.Volume != nil {
+	// Add necessary specs for backupRepos
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		volumeSource, mount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+		if volumeSource != nil {
 			solrVolumes = append(solrVolumes, corev1.Volume{
-				Name:         solr.BackupRestoreVolume,
-				VolumeSource: *backupOptions.Volume,
+				Name: repo.VolumeName(),
+				VolumeSource: *volumeSource,
 			})
-			volumeMounts = append(volumeMounts, corev1.VolumeMount{
-				Name:      solr.BackupRestoreVolume,
-				MountPath: solr.BaseBackupRestorePath,
-				SubPath:   BackupRestoreSubPathForCloud(backupOptions.Directory, solrCloud.Name),
-				ReadOnly:  false,
-			})
-		}
-
-		// Then handle any other managed volumes
-		if backupOptions.ManagedRepositories != nil {
-			for _, managedRepository := range *backupOptions.ManagedRepositories {
-				solrVolumes = append(solrVolumes, corev1.Volume{
-					Name:         managedRepository.GetVolumeName(),
-					VolumeSource: *managedRepository.Volume,
-				})
-				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name:      managedRepository.GetVolumeName(),
-					MountPath: managedRepository.GetSolrMountPath(),
-					SubPath:   BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
-					ReadOnly:  false,
-				})
-			}
-		}
-
-		// Lastly, handle the volumes needed for any GCS credentials.
-		if backupOptions.GcsRepositories != nil {
-			for _, gcsRepository := range *backupOptions.GcsRepositories {
-				fals := false
-				solrVolumes = append(solrVolumes, corev1.Volume{
-					Name: gcsRepository.GetVolumeName(),
-					VolumeSource: corev1.VolumeSource{
-						Secret: &corev1.SecretVolumeSource{
-							SecretName: gcsRepository.GcsCredentialSecret,
-							Items:      []corev1.KeyToPath{{Key: BackupRestoreCredentialSecretKey, Path: BackupRestoreCredentialSecretKey}},
-							Optional:   &fals,
-						},
-					},
-				})
-
-				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name:      gcsRepository.GetVolumeName(),
-					MountPath: gcsRepository.GetSolrMountPath(),
-					ReadOnly:  true,
-				})
-			}
+			mount.Name = repo.VolumeName()
+			volumeMounts = append(volumeMounts, *mount)
 		}
 	}
 
@@ -647,37 +598,18 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
 
-	// Add prep for backup-restore volume
+	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
-	if backupOptions := solrCloud.Spec.StorageOptions.BackupRestoreOptions; backupOptions != nil {
-		// Handle permission setting on the singleton volume (legacy)
-		if backupOptions.Volume != nil {
-			volumeMounts = append(volumeMounts, corev1.VolumeMount{
-				Name:      solr.BackupRestoreVolume,
-				MountPath: "/backup-restore",
-				SubPath:   BackupRestoreSubPathForCloud(backupOptions.Directory, solrCloud.Name),
-				ReadOnly:  false,
-			})
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if repo.IsManaged() {
+			_, volumeMount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+			volumeMounts = append(volumeMounts, *volumeMount)
 
-			setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
-		}
-
-		if backupOptions.ManagedRepositories != nil {
-			for _, managedRepository := range *backupOptions.ManagedRepositories {
-				volumeMounts = append(volumeMounts, corev1.VolumeMount{
-					Name:      managedRepository.GetVolumeName(),
-					MountPath: fmt.Sprintf("/backup-restore-managed-%s", managedRepository.Name),
-					SubPath:   BackupRestoreSubPathForCloud(managedRepository.Directory, solrCloud.Name),
-					ReadOnly:  false,
-				})
-
-				setupCommands = append(setupCommands, fmt.Sprintf(
-					"chown -R %d:%d %s",
-					DefaultSolrUser,
-					DefaultSolrGroup,
-					managedRepository.GetInitPodMountPath()))
-			}
-
+			setupCommands = append(setupCommands, fmt.Sprintf(
+				"chown -R %d:%d %s",
+				DefaultSolrUser,
+				DefaultSolrGroup,
+				volumeMount.MountPath))
 		}
 	}
 
@@ -698,42 +630,37 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
-func GenerateBackupRepositoriesForSolrXml(backupOptions *solr.SolrBackupRestoreOptions) string {
-	if backupOptions == nil || (backupOptions.Volume == nil && backupOptions.ManagedRepositories == nil && backupOptions.GcsRepositories == nil) {
+func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepository) string {
+	if len(backupRepos) == 0 {
 		return ""
 	}
+	libs := make(map[string]bool, 0)
+	repoXMLs := make([]string, len(backupRepos))
+
+	for i, repo := range backupRepos {
+		for _, lib := range repo.GetAdditionalLibs() {
+			libs[lib] = true
+		}
+		repoXMLs[i] = repo.GetRepoXML()
+	}
+	sort.Strings(repoXMLs)
+
 	libXml := ""
-	singletonBackupRepositoryXml := ""
-	managedBackupRepositoryXml := ""
-	gcsBackupRepositoryXml := ""
-
-	if backupOptions.Volume != nil {
-		singletonBackupRepositoryXml = fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, solr.DefaultBackupRepositoryName)
-	}
-
-	if backupOptions.ManagedRepositories != nil {
-		for _, managedRepository := range *backupOptions.ManagedRepositories {
-			managedBackupRepositoryXml += fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, managedRepository.Name)
+	if len(libs) > 0 {
+		libList := make([]string, 0)
+		for lib := range libs {
+			libList = append(libList, lib)
 		}
+		sort.Strings(libList)
+		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
 	}
 
-	if backupOptions.GcsRepositories != nil {
-		libXml += "<str name=\"sharedLib\">/opt/solr/dist,/opt/solr/contrib/gcs-repository/lib</str>"
-		for _, gcsRepository := range *backupOptions.GcsRepositories {
-			gcsBackupRepositoryXml += fmt.Sprintf(`
-<repository name="%s" class="org.apache.solr.gcs.GCSBackupRepository">
-    <str name="gcsBucket">%s</str>
-    <str name="gcsCredentialPath">%s</str>
-</repository>`, gcsRepository.Name, gcsRepository.Bucket, gcsRepository.GetSolrMountPath()+"/"+BackupRestoreCredentialSecretKey)
-		}
-	}
 	return fmt.Sprintf(
 		`%s 
 		<backup>
 		%s
-		%s
-		%s
-		</backup>`, libXml, singletonBackupRepositoryXml, managedBackupRepositoryXml, gcsBackupRepositoryXml)
+		</backup>`, libXml, strings.Join(repoXMLs, `
+`))
 }
 
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
@@ -748,7 +675,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.StorageOptions.BackupRestoreOptions)
+	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	solrXml := `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   <solrcloud>
