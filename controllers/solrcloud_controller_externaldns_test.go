@@ -18,8 +18,9 @@
 package controllers
 
 import (
-	"k8s.io/apimachinery/pkg/types"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"

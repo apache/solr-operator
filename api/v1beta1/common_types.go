@@ -110,6 +110,10 @@ type PodOptions struct {
 	// +optional
 	PriorityClassName string `json:"priorityClassName,omitempty"`
 
+	// Lifecycle for the main container
+	// +optional
+	Lifecycle *corev1.Lifecycle `json:"lifecycle,omitempty"`
+
 	// Sidecar containers to run in the pod. These are in addition to the Solr Container
 	// +optional
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`

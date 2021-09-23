@@ -465,6 +465,11 @@ func (in *PodOptions) DeepCopyInto(out *PodOptions) {
 		*out = new(v1.Probe)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Lifecycle != nil {
+		in, out := &in.Lifecycle, &out.Lifecycle
+		*out = new(v1.Lifecycle)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.SidecarContainers != nil {
 		in, out := &in.SidecarContainers, &out.SidecarContainers
 		*out = make([]v1.Container, len(*in))

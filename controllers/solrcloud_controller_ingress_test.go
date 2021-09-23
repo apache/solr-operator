@@ -18,10 +18,11 @@
 package controllers
 
 import (
-	extv1 "k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/types"
 	"strconv"
 	"testing"
+
+	extv1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"

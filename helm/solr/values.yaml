@@ -255,6 +255,9 @@ podOptions:
   livenessProbe: {}
   readinessProbe: {}
   startupProbe: {}
+  
+  # Lifecycle for the Solr container
+  lifecycle: {}
 
   imagePullSecrets: []
 

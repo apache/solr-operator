@@ -82,6 +82,10 @@ readinessProbe:
 startupProbe:
   {{- toYaml .Values.podOptions.startupProbe | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.lifecycle -}}
+lifecycle:
+  {{- toYaml .Values.podOptions.lifecycle | nindent 2 }}
+{{ end }}
 {{- if .Values.podOptions.sidecarContainers -}}
 sidecarContainers:
   {{- toYaml .Values.podOptions.sidecarContainers | nindent 2 }}

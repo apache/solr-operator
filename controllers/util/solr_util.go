@@ -22,18 +22,19 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	solr "github.com/apache/solr-operator/api/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
@@ -327,6 +328,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
+	// Default preStop hook
+	preStop := &corev1.Handler{
+		Exec: &corev1.ExecAction{
+			Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
+		},
+	}
+
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -422,11 +430,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
 				PostStart: postStart,
-				PreStop: &corev1.Handler{
-					Exec: &corev1.ExecAction{
-						Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
-					},
-				},
+				PreStop:   preStop,
 			},
 		},
 	}
@@ -520,6 +524,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.PodSecurityContext != nil {
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
+		}
+
+		if customPodOptions.Lifecycle != nil {
+			solrContainer.Lifecycle = customPodOptions.Lifecycle
 		}
 
 		if customPodOptions.Tolerations != nil {

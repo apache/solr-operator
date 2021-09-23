@@ -19,13 +19,14 @@ package controllers
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/apache/solr-operator/controllers/util"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	"github.com/pravega/zookeeper-operator/pkg/controller/zookeepercluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 
