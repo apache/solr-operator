@@ -37,6 +37,8 @@ spec:
         {{ toYaml .Values.labels | nindent 8 }}
         {{- end }}
     spec:
+      securityContext:
+        runAsNonRoot: true
       serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
@@ -78,6 +80,22 @@ spec:
           {{- if .Values.envVars }}
           {{- toYaml .Values.envVars | nindent 10 }}
           {{- end }}
+
+        securityContext:
+          allowPrivilegeEscalation: false
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
         {{- if (include "solr-operator.mTLS.volumeMounts" .) }}
