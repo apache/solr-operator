@@ -54,7 +54,7 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: changed
+    - kind: added
       description: Customize the Lifecycle for Solr and PrometheusExporter containers
       links:
         - name: Github Issue
@@ -119,3 +119,4 @@ annotations:
         numThreads: 4
         image:
           tag: 8.7.0
+  artifacthub.io/containsSecurityUpdates: "false"
