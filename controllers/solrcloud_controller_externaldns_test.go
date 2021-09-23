@@ -466,6 +466,7 @@ func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
 	}
 	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 	assert.Equal(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
+
 	// Check the client Service
 	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
 	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
