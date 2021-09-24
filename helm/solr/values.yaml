@@ -76,9 +76,11 @@ addressability:
     # method: "Ingress"
     # domainName: "example.com"
     # additionalDomainNames: []
+    # useExternalAddress: false
     # hideNodes: false
     # hideCommon: false
     # nodePortOverride: null
+    # ingressTLSTerminationSecret: ""
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
@@ -181,6 +183,9 @@ zk:
     ephemeral: {}
       # emptydirvolumesource: {}
 
+    # Zookeeper Config Options to set for the provided cluster
+    config: {}
+
   # Use this section to inject ACL information for your zookeeper from a Kube secret in the same namespace as your SolrCloud
   acl: {}
     # secret: zk-acls
@@ -213,6 +218,32 @@ solrTLS: {}
   # verifyClientHostname: false
   # checkPeerName: false
   # restartOnTLSSecretUpdate: false
+  # mountedTLSDir:
+  #   path: /path/to/mounted/tls
+  #   keystoreFile: "keystore.p12"
+  #   keystorePasswordFile: ""
+  #   truststoreFile: "truststore.p12"
+  #   truststorePasswordFile: ""
+
+solrClientTLS: {}
+  # pkcs12Secret:
+  #   name: secret-name
+  #   key: pkcs12-key
+  # keyStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # trustStoreSecret:
+  #   name: secret-name
+  #   key: truststore-key
+  # trustStorePasswordSecret:
+  #   name: secret-name
+  #   key: password-key
+  # mountedTLSDir:
+  #   path: /path/to/mounted/tls
+  #   keystoreFile: "keystore.p12"
+  #   keystorePasswordFile: ""
+  #   truststoreFile: "truststore.p12"
+  #   truststorePasswordFile: ""
 
 # Customize the Solr Pod for your needs
 podOptions:
@@ -238,6 +269,9 @@ podOptions:
   livenessProbe: {}
   readinessProbe: {}
   startupProbe: {}
+  
+  # Lifecycle for the Solr container
+  lifecycle: {}
 
   imagePullSecrets: []
 

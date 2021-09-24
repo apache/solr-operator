@@ -108,9 +108,13 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrGCTune string `json:"solrGCTune,omitempty"`
 
-	// Options to enable TLS between Solr pods
+	// Options to enable the server TLS certificate for Solr pods
 	// +optional
 	SolrTLS *SolrTLSOptions `json:"solrTLS,omitempty"`
+
+	// Options to configure client TLS certificate for Solr pods
+	// +optional
+	SolrClientTLS *SolrTLSOptions `json:"solrClientTLS,omitempty"`
 
 	// Options to enable Solr security
 	// +optional
@@ -496,6 +500,16 @@ type ExternalAddressability struct {
 	// Defaults to 80 if HideNodes=false and method=Ingress, otherwise this is optional.
 	// +optional
 	NodePortOverride int `json:"nodePortOverride,omitempty"`
+
+	// IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress.
+	//
+	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
+	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr.
+	//
+	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
+	//
+	// +optional
+	IngressTLSTerminationSecret string `json:"ingressTLSTerminationSecret,omitempty"`
 }
 
 // ExternalAddressability is a string enumeration type that enumerates
@@ -517,7 +531,7 @@ const (
 
 func (opts *ExternalAddressability) withDefaults() (changed bool) {
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
-	if opts.UseExternalAddress && opts.HideNodes {
+	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTerminationSecret != "") {
 		changed = true
 		opts.UseExternalAddress = false
 	}
@@ -694,6 +708,11 @@ type ZookeeperSpec struct {
 	// This ACL should have READ permission in the given chRoot.
 	// +optional
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
+
+	// ZooKeeper ACL to use when connecting with ZK for reading operations.
+	// This ACL should have READ permission in the given chRoot.
+	// +optional
+	Config zk.ZookeeperConfig `json:"config,omitempty"`
 }
 
 func (z *ZookeeperSpec) WithDefaults() (changed bool) {
@@ -907,7 +926,7 @@ func (sc *SolrCloud) CommonServiceName() string {
 
 // InternalURLForCloud returns the name of the common service for the cloud
 func InternalURLForCloud(sc *SolrCloud) string {
-	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(), sc.Name, sc.Namespace, sc.CommonPortSuffix())
+	return fmt.Sprintf("%s://%s-solrcloud-common.%s%s", sc.UrlScheme(false), sc.Name, sc.Namespace, sc.CommonPortSuffix(false))
 }
 
 // HeadlessServiceName returns the name of the headless service for the cloud
@@ -971,10 +990,6 @@ func (sc *SolrCloud) CommonExternalPrefix() string {
 	return fmt.Sprintf("%s-%s-solrcloud", sc.Namespace, sc.Name)
 }
 
-func (sc *SolrCloud) CommonExternalUrl(domainName string) string {
-	return fmt.Sprintf("%s.%s", sc.CommonExternalPrefix(), domainName)
-}
-
 func (sc *SolrCloud) NodeIngressPrefix(nodeName string) string {
 	return fmt.Sprintf("%s-%s", sc.Namespace, nodeName)
 }
@@ -994,7 +1009,7 @@ func (sc *SolrCloud) customKubeDomain() string {
 func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) (url string) {
 	url = fmt.Sprintf("%s.%s.%s", nodeName, sc.HeadlessServiceName(), sc.Namespace) + sc.customKubeDomain()
 	if withPort {
-		url += sc.NodePortSuffix()
+		url += sc.NodePortSuffix(false)
 	}
 	return url
 }
@@ -1002,17 +1017,17 @@ func (sc *SolrCloud) NodeHeadlessUrl(nodeName string, withPort bool) (url string
 func (sc *SolrCloud) NodeServiceUrl(nodeName string, withPort bool) (url string) {
 	url = fmt.Sprintf("%s.%s", nodeName, sc.Namespace) + sc.customKubeDomain()
 	if withPort {
-		url += sc.NodePortSuffix()
+		url += sc.NodePortSuffix(false)
 	}
 	return url
 }
 
-func (sc *SolrCloud) CommonPortSuffix() string {
-	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort)
+func (sc *SolrCloud) CommonPortSuffix(external bool) string {
+	return sc.PortToSuffix(sc.Spec.SolrAddressability.CommonServicePort, external)
 }
 
-func (sc *SolrCloud) NodePortSuffix() string {
-	return sc.PortToSuffix(sc.NodePort())
+func (sc *SolrCloud) NodePortSuffix(external bool) string {
+	return sc.PortToSuffix(sc.NodePort(), external)
 }
 
 func (sc *SolrCloud) NodePort() int {
@@ -1025,9 +1040,9 @@ func (sc *SolrCloud) NodePort() int {
 	return port
 }
 
-func (sc *SolrCloud) PortToSuffix(port int) string {
+func (sc *SolrCloud) PortToSuffix(port int, external bool) string {
 	suffix := ""
-	if sc.UrlScheme() == "https" {
+	if sc.UrlScheme(external) == "https" {
 		if port != 443 {
 			suffix = ":" + strconv.Itoa(port)
 		}
@@ -1052,7 +1067,7 @@ func (sc *SolrCloud) InternalNodeUrl(nodeName string, withPort bool) string {
 func (sc *SolrCloud) InternalCommonUrl(withPort bool) (url string) {
 	url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.Namespace) + sc.customKubeDomain()
 	if withPort {
-		url += sc.CommonPortSuffix()
+		url += sc.CommonPortSuffix(false)
 	}
 	return url
 }
@@ -1064,8 +1079,10 @@ func (sc *SolrCloud) ExternalNodeUrl(nodeName string, domainName string, withPor
 		url = fmt.Sprintf("%s.%s", nodeName, sc.ExternalDnsDomain(domainName))
 	}
 	// TODO: Add LoadBalancer stuff here
-	if withPort {
-		url += sc.NodePortSuffix()
+
+	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress {
+		// Ingress does not require a port, since the port is whatever the ingress is listening on (80 and 443)
+		url += sc.NodePortSuffix(true)
 	}
 	return url
 }
@@ -1076,15 +1093,20 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	} else if sc.Spec.SolrAddressability.External.Method == ExternalDNS {
 		url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.ExternalDnsDomain(domainName))
 	}
-	if withPort {
-		url += sc.CommonPortSuffix()
+	// TODO: Add LoadBalancer stuff here
+
+	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress {
+		// Ingress does not require a port, since the port is whatever the ingress is listening on (80 and 443)
+		url += sc.CommonPortSuffix(true)
 	}
 	return url
 }
 
-func (sc *SolrCloud) UrlScheme() string {
+func (sc *SolrCloud) UrlScheme(external bool) string {
 	urlScheme := "http"
 	if sc.Spec.SolrTLS != nil {
+		urlScheme = "https"
+	} else if external && sc.Spec.SolrAddressability.External != nil && sc.Spec.SolrAddressability.External.Method == Ingress && sc.Spec.SolrAddressability.External.IngressTLSTerminationSecret != "" {
 		urlScheme = "https"
 	}
 	return urlScheme
@@ -1142,12 +1164,37 @@ const (
 	Need ClientAuthType = "Need"
 )
 
-type SolrTLSOptions struct {
-	// TLS Secret containing a pkcs12 keystore
-	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret"`
+type MountedTLSDirectory struct {
+	// The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
+	Path string `json:"path"`
 
-	// Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
-	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret"`
+	// Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding
+	// env vars and Java system properties will not be configured for the pod template
+	// +optional
+	KeystoreFile string `json:"keystoreFile,omitempty"`
+
+	// Override the name of the keystore password file; defaults to keystore-password
+	// +optional
+	KeystorePasswordFile string `json:"keystorePasswordFile,omitempty"`
+
+	// Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding
+	// env vars and Java system properties will not be configured for the pod template
+	// +optional
+	TruststoreFile string `json:"truststoreFile,omitempty"`
+
+	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+	// +optional
+	TruststorePasswordFile string `json:"truststorePasswordFile,omitempty"`
+}
+
+type SolrTLSOptions struct {
+	// TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
+	// +optional
+	PKCS12Secret *corev1.SecretKeySelector `json:"pkcs12Secret,omitempty"`
+
+	// Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+	// +optional
+	KeyStorePasswordSecret *corev1.SecretKeySelector `json:"keyStorePasswordSecret,omitempty"`
 
 	// TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore
 	// The specified key is used as the truststore file name when mounted into Solr pods
@@ -1160,10 +1207,12 @@ type SolrTLSOptions struct {
 
 	// Determines the client authentication method, either None, Want, or Need;
 	// this affects K8s ability to call liveness / readiness probes so use cautiously.
+	// Only applies for server certificates, has no effect on client certificates
 	// +kubebuilder:default=None
 	ClientAuth ClientAuthType `json:"clientAuth,omitempty"`
 
 	// Verify client's hostname during SSL handshake
+	// Only applies for server configuration
 	// +optional
 	VerifyClientHostname bool `json:"verifyClientHostname,omitempty"`
 
@@ -1172,8 +1221,15 @@ type SolrTLSOptions struct {
 	CheckPeerName bool `json:"checkPeerName,omitempty"`
 
 	// Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+	// This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option,
+	// you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
 	// +optional
 	RestartOnTLSSecretUpdate bool `json:"restartOnTLSSecretUpdate,omitempty"`
+
+	// Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver.
+	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+	// +optional
+	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Basic

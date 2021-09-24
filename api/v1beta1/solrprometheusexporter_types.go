@@ -56,6 +56,24 @@ type SolrPrometheusExporterSpec struct {
 	// The xml config for the metrics
 	// +optional
 	Config string `json:"metricsConfig,omitempty"`
+
+	// An initContainer is needed to create a wrapper script around the exporter entrypoint when TLS is enabled
+	// with the `spec.solrReference.solrTLS.mountedTLSDir` option
+	// +optional
+	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// Perform a scheduled restart on the given schedule, in CRON format.
+	//
+	// Multiple CRON syntaxes are supported
+	//   - Standard CRON (e.g. "CRON_TZ=Asia/Seoul 0 6 * * ?")
+	//   - Predefined Schedules (e.g. "@yearly", "@weekly", etc.)
+	//   - Intervals (e.g. "@every 10h30m")
+	//
+	// For more information please check this reference:
+	// https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
+	//
+	// +optional
+	RestartSchedule string `json:"restartSchedule,omitempty"`
 }
 
 func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bool) {
@@ -235,6 +253,17 @@ func (sc *SolrPrometheusExporter) MetricsIngressPrefix() string {
 
 func (sc *SolrPrometheusExporter) MetricsIngressUrl(ingressBaseUrl string) string {
 	return fmt.Sprintf("%s.%s", sc.MetricsIngressPrefix(), ingressBaseUrl)
+}
+
+func (sc *SolrPrometheusExporter) BusyBoxImage() *ContainerImage {
+	c := sc.Spec.BusyBoxImage
+	if c == nil {
+		c = &ContainerImage{}
+		c.Repository = DefaultBusyBoxImageRepo
+		c.Tag = DefaultBusyBoxImageVersion
+		c.PullPolicy = DefaultPullPolicy
+	}
+	return c
 }
 
 //+kubebuilder:object:root=true

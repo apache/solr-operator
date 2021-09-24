@@ -38,7 +38,7 @@ There may be breaking changes between the version you are using and the version 
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.4.0-prerelease --set image.tag=8.8.0
+helm install example apache-solr/solr --version 0.5.0-prerelease --set image.tag=8.8.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -52,7 +52,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-helm upgrade example apache-solr/solr --version 0.4.0-prerelease --reuse-values --set image.tag=8.9.0
+helm upgrade example apache-solr/solr --version 0.5.0-prerelease --reuse-values --set image.tag=8.9.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
@@ -78,7 +78,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
-| image.repository | string | `"apache/solr"` | The repository of the Solr image |
+| image.repository | string | `"solr"` | The repository of the Solr image |
 | image.tag | string | `"8.9"` | The tag/version of Solr to run |
 | image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string |  | PullSecret for the Solr image |
@@ -134,10 +134,11 @@ External addressability is disabled by default.
 | addressability.external.method | string | | The method by which Solr should be made addressable outside of the Kubernetes cluster. Either `Ingress` or `ExternalDNS` |
 | addressability.external.domainName | string | | The base domain name that Solr nodes should be addressed under. |
 | addressability.external.additionalDomainNames | []string | | Additional base domain names that Solr nodes should be addressed under. These are not used to advertise Solr locations, just the `domainName` is. |
+| addressability.external.useExternalAddress | boolean | `false` | Make the official hostname of the SolrCloud nodes the external address. This cannot be used when `hideNodes` is set to `true` or `ingressTLSTerminationSecret` is set to `true`. |
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
-| addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with TLS. |
-
+| addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with Solr TLS enabled (not TLS Termination described below). |
+| addressability.external.ingressTLSTerminationSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
 
 ### ZK Options
 
@@ -161,7 +162,9 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.storageType | string |  | Explicitly set the Zookeeper storage type, not necessary if providing a "persistence" or "ephemeral" option below, or if you want to use same option that you use for Solr. |
 | zk.provided.persistence.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when ZooKeeper is deleted or scaled down. Either `Retain` or `Delete`. |
 | zk.provided.persistence.spec | object | | A PVC Spec for the ZooKeeper PVC(s) |
+| zk.provided.persistence.annotations | object | | Annotations to use for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
+| zk.provided.config | object | | Zookeeper Config Options to set for the provided cluster. For all possible options, run: `kubectl explain solrcloud.spec.zookeeperRef.provided.config` |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
@@ -189,15 +192,41 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | solrTLS.verifyClientHostname | boolean | `false` | Whether Solr should verify client hostnames |
 | solrTLS.checkPeerName | boolean | `false` | Whether Solr should check peer names |
 | solrTLS.restartOnTLSSecretUpdate | boolean | `false` | Whether Solr pods should auto-restart when the TLS Secrets are updated |
-| solrTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the Solr TLS pkcs12 file |
-| solrTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the Solr TLS pkcs12 file |
-| solrTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS keystore |
-| solrTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS keystore |
+| solrTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the keystore file in PKCS12 format |
+| solrTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the keystore file in PKCS12 format |
+| solrTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the keystore password |
+| solrTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the keystore password |
 | solrTLS.trustStoreSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore |
 | solrTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore |
-| solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the Solr TLS truststore password |
-| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
-| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the Solr TLS truststore password |
+| solrTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the truststore password |
+| solrTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the truststore password |
+| solrTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
+| solrTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
+| solrTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
+| solrTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+
+#### Client TLS Options
+
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+
+Configure Solr to use a separate TLS certificate for client auth.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| solrClientTLS.pkcs12Secret.name | string |  | Name of the Secret that stores the client keystore file in PKCS12 format |
+| solrClientTLS.pkcs12Secret.key | string |  | Key in the Secret that stores the client keystore file in PKCS12 format |
+| solrClientTLS.keyStorePasswordSecret.name | string |  | Name of the Secret that stores the client keystore password |
+| solrClientTLS.keyStorePasswordSecret.key | string |  | Key in the Secret that stores the client keystore password |
+| solrClientTLS.trustStoreSecret.name | string |  | Name of the Secret that stores the client truststore in PKCS12 format |
+| solrClientTLS.trustStoreSecret.key | string |  | Key in the Secret that stores the client truststore in PKCS12 format |
+| solrClientTLS.trustStorePasswordSecret.name | string |  | Name of the Secret that stores the truststore password |
+| solrClientTLS.trustStorePasswordSecret.key | string |  | Key in the Secret that stores the truststore password |
+| solrClientTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
+| solrClientTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
+| solrClientTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrClientTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
+| solrClientTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
 
 ### Global Options
 
@@ -227,6 +256,7 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |
 | podOptions.startupProbe | object |  | Custom startup probe for the Solr container |
+| podOptions.lifecycle | object |  | Custom lifecycle for the Solr container |
 | podOptions.imagePullSecrets | []object |  | List of image pull secrets to inject into the Solr pod, in addition to `global.imagePullSecrets` |
 | podOptions.volumes | []object |  | List of additional volumes to attach to the Solr pod, and optionally how to mount them to the Solr container |
 | statefulSetOptions.annotations | map[string]string |  | Custom annotations to add to the Solr statefulSet |

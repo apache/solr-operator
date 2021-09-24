@@ -88,7 +88,7 @@ templates:
 
     This release contains numerous bug fixes, optimizations, and improvements, some of which are highlighted below. The release is available for immediate download at:
 
-      <https://solr.apache.org/operator/downloads.html>
+      <https://solr.apache.org/operator/artifacts.html>
 
     ### Solr Operator {{ release_version }} Release Highlights:
 
@@ -98,8 +98,9 @@ templates:
 
       <https://apache.github.io/solr-operator/docs/upgrade-notes.html>
 
-    For the most exhaustive list, see the full release notes in the Github Releases or by viewing the git history in the solr-operator repo.
+    For the most exhaustive list, see the change log on ArtifactHub or view the git history in the solr-operator repo.
 
+      <https://artifacthub.io/packages/helm/apache-solr/solr-operator?modal=changelog>
       <https://github.com/apache/solr-operator/releases/tag/{{ release_version }}>
 
   announce_solr_operator_mail: |
@@ -285,7 +286,7 @@ groups:
       name: branch_date
   - !Todo
     id: decide_freeze_length
-    title: Decide the lenght of feature freeze
+    title: Decide the length of feature freeze
     types:
     - major
     - minor
@@ -445,6 +446,9 @@ groups:
         cmd: git checkout main
         tee: true
       - !Command
+        cmd: ./hack/release/version/remove_version_specific_info.sh -v {{ next_version }}
+        tee: true
+      - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
         tee: true
       - !Command
@@ -469,6 +473,9 @@ groups:
       commands:
       - !Command
         cmd: git checkout {{ stable_branch }}
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/remove_version_specific_info.sh -v {{ next_version }}
         tee: true
       - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
@@ -625,6 +632,9 @@ groups:
         logfile: git_clean.log
         tee: true
       - !Command
+        cmd: git branch --set-upstream-to=origin/{{ release_branch }} {{ release_branch }}
+        tee: true
+      - !Command
         cmd: git pull --ff-only
         tee: true
       - !Command
@@ -657,15 +667,17 @@ groups:
         - !Command
           cmd: "{{ editor }} helm/solr-operator/Chart.yaml"
           comment: |
-            Add changelog at annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
-            This will replace the "Change 1" and "Change 2" lines.
+            Make sure the changelog is complete at path annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
             The Changelog format is described here: https://artifacthub.io/docs/topics/annotations/helm/#example
+            Our current stance is that Solr Operator features belong in the Solr Operator Helm chart changelog,
+            while the Solr Helm chart changelog should only contain differences to how the Solr Helm chart behaves.
+            This is to ensure that users are able to easily find information around changes even if they do not use the
+            Solr Helm chart.
           tee: true
         - !Command
           cmd: "{{ editor }} helm/solr/Chart.yaml"
           comment: |
-            Add changelog at annotations.'artifacthub.io/changes', in helm/solr/Chart.yaml.
-            This will replace the "Change 1" and "Change 2" lines.
+            Make sure the changelog is complete at path annotations.'artifacthub.io/changes', in helm/solr-operator/Chart.yaml.
             The Changelog format is described here: https://artifacthub.io/docs/topics/annotations/helm/#example
           tee: true
         - !Command
@@ -876,6 +888,8 @@ groups:
 
       ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
+
+      If you want to run the smoke test with a specific version of kubernetes, use the -k option with a full version tag. (e.g. -k v1.19.3)
 
       Make sure you have the following installed before running the smoke test:
         - Docker (Give it enough memory and CPU to run ~12 containers, 3 of which are Solr nodes)

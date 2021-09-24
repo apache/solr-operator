@@ -36,12 +36,14 @@ golang.org/x/crypto/ssh/terminal,Unknown,BSD-3-Clause
 golang.org/x/net,Unknown,BSD-3-Clause
 golang.org/x/oauth2,Unknown,BSD-3-Clause
 golang.org/x/sys,Unknown,BSD-3-Clause
+golang.org/x/term,Unknown,BSD-3-Clause
 golang.org/x/text,Unknown,BSD-3-Clause
 golang.org/x/time/rate,Unknown,BSD-3-Clause
 gomodules.xyz/jsonpatch/v2,Unknown,Apache-2.0
 google.golang.org/protobuf,Unknown,BSD-3-Clause
 gopkg.in/inf.v0,Unknown,BSD-3-Clause
 gopkg.in/yaml.v2,Unknown,Apache-2.0
+gopkg.in/yaml.v3,Unknown,MIT
 k8s.io/api,Unknown,Apache-2.0
 k8s.io/apiextensions-apiserver/pkg/apis/apiextensions,Unknown,Apache-2.0
 k8s.io/apimachinery,Unknown,Apache-2.0

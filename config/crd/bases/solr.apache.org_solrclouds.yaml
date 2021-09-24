@@ -2283,6 +2283,140 @@ spec:
                           type: string
                         description: Labels to be added for pods.
                         type: object
+                      lifecycle:
+                        description: Lifecycle for the main container
+                        properties:
+                          postStart:
+                            description: 'PostStart is called immediately after a container is created. If the handler fails, the container is terminated and restarted according to its restart policy. Other management of the container blocks until the hook completes. More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks'
+                            properties:
+                              exec:
+                                description: One and only one of the following should be specified. Exec specifies the action to take.
+                                properties:
+                                  command:
+                                    description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
+                                    items:
+                                      type: string
+                                    type: array
+                                type: object
+                              httpGet:
+                                description: HTTPGet specifies the http request to perform.
+                                properties:
+                                  host:
+                                    description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                                    type: string
+                                  httpHeaders:
+                                    description: Custom headers to set in the request. HTTP allows repeated headers.
+                                    items:
+                                      description: HTTPHeader describes a custom header to be used in HTTP probes
+                                      properties:
+                                        name:
+                                          description: The header field name
+                                          type: string
+                                        value:
+                                          description: The header field value
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    type: array
+                                  path:
+                                    description: Path to access on the HTTP server.
+                                    type: string
+                                  port:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                                    x-kubernetes-int-or-string: true
+                                  scheme:
+                                    description: Scheme to use for connecting to the host. Defaults to HTTP.
+                                    type: string
+                                required:
+                                - port
+                                type: object
+                              tcpSocket:
+                                description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
+                                properties:
+                                  host:
+                                    description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                                    type: string
+                                  port:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                                    x-kubernetes-int-or-string: true
+                                required:
+                                - port
+                                type: object
+                            type: object
+                          preStop:
+                            description: 'PreStop is called immediately before a container is terminated due to an API request or management event such as liveness/startup probe failure, preemption, resource contention, etc. The handler is not called if the container crashes or exits. The reason for termination is passed to the handler. The Pod''s termination grace period countdown begins before the PreStop hooked is executed. Regardless of the outcome of the handler, the container will eventually terminate within the Pod''s termination grace period. Other management of the container blocks until the hook completes or until the termination grace period is reached. More info: https://kubernetes.io/docs/concepts/containers/container-lifecycle-hooks/#container-hooks'
+                            properties:
+                              exec:
+                                description: One and only one of the following should be specified. Exec specifies the action to take.
+                                properties:
+                                  command:
+                                    description: Command is the command line to execute inside the container, the working directory for the command  is root ('/') in the container's filesystem. The command is simply exec'd, it is not run inside a shell, so traditional shell instructions ('|', etc) won't work. To use a shell, you need to explicitly call out to that shell. Exit status of 0 is treated as live/healthy and non-zero is unhealthy.
+                                    items:
+                                      type: string
+                                    type: array
+                                type: object
+                              httpGet:
+                                description: HTTPGet specifies the http request to perform.
+                                properties:
+                                  host:
+                                    description: Host name to connect to, defaults to the pod IP. You probably want to set "Host" in httpHeaders instead.
+                                    type: string
+                                  httpHeaders:
+                                    description: Custom headers to set in the request. HTTP allows repeated headers.
+                                    items:
+                                      description: HTTPHeader describes a custom header to be used in HTTP probes
+                                      properties:
+                                        name:
+                                          description: The header field name
+                                          type: string
+                                        value:
+                                          description: The header field value
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    type: array
+                                  path:
+                                    description: Path to access on the HTTP server.
+                                    type: string
+                                  port:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Name or number of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                                    x-kubernetes-int-or-string: true
+                                  scheme:
+                                    description: Scheme to use for connecting to the host. Defaults to HTTP.
+                                    type: string
+                                required:
+                                - port
+                                type: object
+                              tcpSocket:
+                                description: 'TCPSocket specifies an action involving a TCP port. TCP hooks not yet supported TODO: implement a realistic TCP lifecycle hook'
+                                properties:
+                                  host:
+                                    description: 'Optional: Host name to connect to, defaults to the pod IP.'
+                                    type: string
+                                  port:
+                                    anyOf:
+                                    - type: integer
+                                    - type: string
+                                    description: Number or name of the port to access on the container. Number must be in the range 1 to 65535. Name must be an IANA_SVC_NAME.
+                                    x-kubernetes-int-or-string: true
+                                required:
+                                - port
+                                type: object
+                            type: object
+                        type: object
                       livenessProbe:
                         description: Liveness probe parameters
                         properties:
@@ -5447,6 +5581,9 @@ spec:
                       hideNodes:
                         description: Do not expose each of the Solr Node services externally. The number of services this affects could range from 1 (a headless service for ExternalDNS) to the number of Solr pods your cloud contains (individual node services for Ingress/LoadBalancer). Defaults to false.
                         type: boolean
+                      ingressTLSTerminationSecret:
+                        description: "IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress. \n This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination. This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr. \n When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS."
+                        type: string
                       method:
                         description: The way in which this SolrCloud's service(s) should be made addressable externally.
                         enum:
@@ -5469,6 +5606,108 @@ spec:
                   podPort:
                     description: PodPort defines the port to have the Solr Pod listen on. Defaults to 8983
                     type: integer
+                type: object
+              solrClientTLS:
+                description: Options to configure client TLS certificate for Solr pods
+                properties:
+                  checkPeerName:
+                    description: TLS certificates contain host/ip "peer name" information that is validated by default.
+                    type: boolean
+                  clientAuth:
+                    default: None
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
+                    enum:
+                    - None
+                    - Want
+                    - Need
+                    type: string
+                  keyStorePasswordSecret:
+                    description: Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  mountedTLSDir:
+                    description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                    properties:
+                      keystoreFile:
+                        description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      keystorePasswordFile:
+                        description: Override the name of the keystore password file; defaults to keystore-password
+                        type: string
+                      path:
+                        description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
+                        type: string
+                      truststoreFile:
+                        description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      truststorePasswordFile:
+                        description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+                        type: string
+                    required:
+                    - path
+                    type: object
+                  pkcs12Secret:
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  restartOnTLSSecretUpdate:
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
+                    type: boolean
+                  trustStorePasswordSecret:
+                    description: Secret containing the trust store password; if not provided the keyStorePassword will be used
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  trustStoreSecret:
+                    description: TLS Secret containing a pkcs12 truststore; if not provided, then the keystore and password are used for the truststore The specified key is used as the truststore file name when mounted into Solr pods
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be a valid secret key.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  verifyClientHostname:
+                    description: Verify client's hostname during SSL handshake Only applies for server configuration
+                    type: boolean
                 type: object
               solrGCTune:
                 description: Set GC Tuning configuration through GC_TUNE environment variable
@@ -5510,21 +5749,21 @@ spec:
                     type: boolean
                 type: object
               solrTLS:
-                description: Options to enable TLS between Solr pods
+                description: Options to enable the server TLS certificate for Solr pods
                 properties:
                   checkPeerName:
                     description: TLS certificates contain host/ip "peer name" information that is validated by default.
                     type: boolean
                   clientAuth:
                     default: None
-                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously.
+                    description: Determines the client authentication method, either None, Want, or Need; this affects K8s ability to call liveness / readiness probes so use cautiously. Only applies for server certificates, has no effect on client certificates
                     enum:
                     - None
                     - Want
                     - Need
                     type: string
                   keyStorePasswordSecret:
-                    description: Secret containing the key store password; this field is required as most JVMs do not support pkcs12 keystores without a password
+                    description: Secret containing the key store password; this field is required unless mountedTLSDir is used, as most JVMs do not support pkcs12 keystores without a password
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -5538,8 +5777,29 @@ spec:
                     required:
                     - key
                     type: object
+                  mountedTLSDir:
+                    description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
+                    properties:
+                      keystoreFile:
+                        description: Override the name of the keystore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      keystorePasswordFile:
+                        description: Override the name of the keystore password file; defaults to keystore-password
+                        type: string
+                      path:
+                        description: The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver
+                        type: string
+                      truststoreFile:
+                        description: Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding env vars and Java system properties will not be configured for the pod template
+                        type: string
+                      truststorePasswordFile:
+                        description: Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+                        type: string
+                    required:
+                    - path
+                    type: object
                   pkcs12Secret:
-                    description: TLS Secret containing a pkcs12 keystore
+                    description: TLS Secret containing a pkcs12 keystore; required for Solr pods unless mountedTLSDir is used
                     properties:
                       key:
                         description: The key of the secret to select from.  Must be a valid secret key.
@@ -5554,7 +5814,7 @@ spec:
                     - key
                     type: object
                   restartOnTLSSecretUpdate:
-                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false.
+                    description: Opt-in flag to restart Solr pods after TLS secret updates, such as if the cert is renewed; default is false. This option only applies when using the `spec.solrTLS.pkcs12Secret` option; when using the `spec.solrTLS.mountedTLSDir` option, you need to ensure pods get restarted before the certs expire, see `spec.updateStrategy.restartSchedule` for scheduling restarts.
                     type: boolean
                   trustStorePasswordSecret:
                     description: Secret containing the trust store password; if not provided the keyStorePassword will be used
@@ -5587,11 +5847,8 @@ spec:
                     - key
                     type: object
                   verifyClientHostname:
-                    description: Verify client's hostname during SSL handshake
+                    description: Verify client's hostname during SSL handshake Only applies for server configuration
                     type: boolean
-                required:
-                - keyStorePasswordSecret
-                - pkcs12Secret
                 type: object
               updateStrategy:
                 description: Define how Solr rolling updates are executed.
@@ -5696,6 +5953,61 @@ spec:
                       chroot:
                         description: The ChRoot to connect solr at
                         type: string
+                      config:
+                        description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                        properties:
+                          additionalConfig:
+                            additionalProperties:
+                              type: string
+                            description: key-value map of additional zookeeper configuration parameters
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                          autoPurgePurgeInterval:
+                            description: "The time interval in hours for which the purge task has to be triggered \n Disabled by default"
+                            type: integer
+                          autoPurgeSnapRetainCount:
+                            description: "Retain the snapshots according to retain count \n The default value is 3"
+                            type: integer
+                          commitLogCount:
+                            description: "Zookeeper maintains an in-memory list of last committed requests for fast synchronization with followers \n The default value is 500"
+                            type: integer
+                          globalOutstandingLimit:
+                            description: "Clients can submit requests faster than ZooKeeper can process them, especially if there are a lot of clients. Zookeeper will throttle Clients so that requests won't exceed global outstanding limit. \n The default value is 1000"
+                            type: integer
+                          initLimit:
+                            description: "InitLimit is the amount of time, in ticks, to allow followers to connect and sync to a leader. \n Default value is 10."
+                            type: integer
+                          maxClientCnxns:
+                            description: "Limits the number of concurrent connections that a single client, identified by IP address, may make to a single member of the ZooKeeper ensemble. \n The default value is 60"
+                            type: integer
+                          maxCnxns:
+                            description: "Limits the total number of concurrent connections that can be made to a zookeeper server \n The defult value is 0, indicating no limit"
+                            type: integer
+                          maxSessionTimeout:
+                            description: "The maximum session timeout in milliseconds that the server will allow the client to negotiate. \n The default value is 40000"
+                            type: integer
+                          minSessionTimeout:
+                            description: "The minimum session timeout in milliseconds that the server will allow the client to negotiate \n The default value is 4000"
+                            type: integer
+                          preAllocSize:
+                            description: "To avoid seeks ZooKeeper allocates space in the transaction log file in blocks of preAllocSize kilobytes \n The default value is 64M"
+                            type: integer
+                          quorumListenOnAllIPs:
+                            description: "QuorumListenOnAllIPs when set to true the ZooKeeper server will listen for connections from its peers on all available IP addresses, and not only the address configured in the server list of the configuration file. It affects the connections handling the ZAB protocol and the Fast Leader Election protocol. \n The default value is false."
+                            type: boolean
+                          snapCount:
+                            description: "ZooKeeper records its transactions using snapshots and a transaction log The number of transactions recorded in the transaction log before a snapshot can be taken is determined by snapCount \n The default value is 100,000"
+                            type: integer
+                          snapSizeLimitInKb:
+                            description: "Snapshot size limit in Kb \n The defult value is 4GB"
+                            type: integer
+                          syncLimit:
+                            description: "SyncLimit is the amount of time, in ticks, to allow followers to sync with Zookeeper. \n The default value is 2."
+                            type: integer
+                          tickTime:
+                            description: "TickTime is the length of a single tick, which is the basic time unit used by Zookeeper, as measured in milliseconds \n The default value is 2000."
+                            type: integer
+                        type: object
                       ephemeral:
                         description: Ephemeral is the configuration which helps create ephemeral storage At anypoint only one of Persistence or Ephemeral should be present in the manifest
                         properties:
@@ -5730,6 +6042,11 @@ spec:
                       persistence:
                         description: Persistence is the configuration for zookeeper persistent layer. PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here. At anypoint only one of Persistence or Ephemeral should be present in the manifest
                         properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations specifies the annotations to attach to pvc the operator creates.
+                            type: object
                           reclaimPolicy:
                             description: VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete, the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted. The default value is Retain.
                             enum:

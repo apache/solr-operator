@@ -86,7 +86,7 @@ Under `SolrCloud.Spec.solrAddressability`:
   - **`useExternalAddress`** - Use the external address to advertise the SolrNode. If a domain name is required for the chosen external `method`, then the one provided in `domainName` will be used.
   - **`hideCommon`** - Do not externally expose the common service (one endpoint for all solr nodes).
   - **`hideNodes`** - Do not externally expose each node. (This cannot be set to `true` if the cloud is running across multiple kubernetes clusters)
-  - **`nodePortOverride`** - Make the Node Service(s) override the podPort. This is only available for the `Ingress` external method. If `hideNodes` is set to `true`, then this option is ignored. If provided, his port will be used to advertise the Solr Node. \
+  - **`nodePortOverride`** - Make the Node Service(s) override the podPort. This is only available for the `Ingress` external method. If `hideNodes` is set to `true`, then this option is ignored. If provided, this port will be used to advertise the Solr Node. \
   If `method: Ingress` and `hideNodes: false`, then this value defaults to `80` since that is the default port that ingress controllers listen on.
 
 **Note:** Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
@@ -307,21 +307,22 @@ data:
 ## Enable TLS Between Solr Pods
 _Since v0.3.0_
 
-A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and leave all traffic between Solr pods un-encrypted.
+A common approach to securing traffic to your Solr cluster is to perform [**TLS termination** at the Ingress](#enable-ingress-tls-termination) and leave all traffic between Solr pods un-encrypted.
 However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
 The Solr operator provides **optional** configuration settings to enable TLS for encrypting traffic between Solr pods.
 
 Enabling TLS for Solr is a straight-forward process once you have a [**PKCS12 keystore**]((https://en.wikipedia.org/wiki/PKCS_12)) containing an [X.509](https://en.wikipedia.org/wiki/X.509) certificate and private key; as of Java 8, PKCS12 is the default keystore format supported by the JVM.
 
-There are two basic use cases supported by the Solr operator. First, you can use cert-manager to issue a certificate and store the resulting PKCS12 keystore in a Kubernetes TLS secret. 
+There are three basic use cases supported by the Solr operator. First, you can use cert-manager to issue a certificate and store the resulting PKCS12 keystore in a Kubernetes TLS secret. 
 Alternatively, you can create the TLS secret manually from a certificate obtained by some other means. In both cases, you simply point your SolrCloud CRD to the resulting TLS secret and corresponding keystore password secret.
+Lastly, as of **v0.4.0**, you can supply the path to a directory containing TLS files that are mounted by some external agent or CSI driver.  
 
 ### Use cert-manager to issue the certificate
 
 [cert-manager](https://cert-manager.io/docs/) is a popular Kubernetes controller for managing TLS certificates, including renewing certificates prior to expiration. 
 One of the primary benefits of cert-manager is it supports pluggable certificate `Issuer` implementations, including a self-signed Issuer for local development and an [ACME compliant](https://tools.ietf.org/html/rfc8555) Issuer for working with services like [Let’s Encrypt](https://letsencrypt.org/).
 
-If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to [I already have a TLS Certificate](#-Already-Have-a-TLS-Certificate) later in this section.
+If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to [I already have a TLS Certificate](#i-already-have-a-tls-certificate) later in this section.
 If you do not have a TLS certificate, then we recommend installing **cert-manager** as it makes working with TLS in Kubernetes much easier.
 
 #### Install cert-manager
@@ -340,7 +341,7 @@ issuers.cert-manager.io
 orders.acme.cert-manager.io
 ```
 
-If not intalled, use Helm to install it into the `cert-manager` namespace:
+If not installed, use Helm to install it into the `cert-manager` namespace:
 ```bash
 if ! helm repo list | grep -q "https://charts.jetstack.io"; then
   helm repo add jetstack https://charts.jetstack.io
@@ -519,7 +520,57 @@ spec:
 ``` 
 _Tip: if your truststore is not in PKCS12 format, use `openssl` to convert it._ 
 
-### Ingress
+### Mounted TLS Directory
+_Since v0.4.0_
+
+The options discussed to this point require that all Solr pods share the same certificate and truststore. An emerging pattern in the Kubernetes ecosystem is to issue a unique certificate for each pod.
+Typically this operation is performed by an external agent, such as a cert-manager extension, that uses mutating webhooks to mount a unique certificate and supporting files on each pod dynamically.
+How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
+The following example illustrates how to configure a keystore and truststore in PKCS12 format using the `mountedTLSDir` option:
+```yaml
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    clientAuth: Want
+    checkPeerName: true
+    verifyClientHostname: true
+    mountedTLSDir:
+      path: /pod-server-tls
+      keystoreFile: keystore.p12
+      keystorePasswordFile: keystore-password
+      truststoreFile: truststore.p12
+```
+
+When using the mounted TLS directory option, you need to ensure each Solr pod gets restarted before the certificate expires. Solr does not support hot reloading of the keystore or truststore.
+Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
+Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
+
+### Client TLS
+_Since v0.4.0_
+
+Solr supports using separate client and server TLS certificates. Solr uses the client certificate in mutual TLS (mTLS) scenarios to make requests to other Solr pods.
+Use the `spec.solrClientTLS` configuration options to configure a separate client certificate. 
+As this is an advanced option, the supplied client certificate keystore and truststore must already be in PKCS12 format.
+As with the server certificate loaded from `spec.solrTLS.pkcs12Secret`, 
+you can have the operator restart Solr pods after the client TLS secret updates by setting `spec.solrClientTLS.restartOnTLSSecretUpdate` to `true`.
+
+You may need to increase the timeout for the liveness / readiness probes when using mTLS with a separate client certificate, such as: 
+```yaml
+spec:
+  ... other SolrCloud CRD settings ...
+
+  customSolrKubeOptions:
+    podOptions:
+      livenessProbe:
+        timeoutSeconds: 10
+      readinessProbe:
+        timeoutSeconds: 10
+```
+
+You may also use the `spec.solrClientTLS.mountedTLSDir` option to load a pod specific client certificate from a directory mounted by an external agent or CSI driver.  
+
+### Ingress with TLS protected Solr
 
 The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
 ```yaml
@@ -534,6 +585,10 @@ spec:
   tls:
   - secretName: my-selfsigned-cert-tls
 ```
+
+If using the mounted TLS Directory option with an Ingress, you will need to inject the ingress with TLS information as well.
+The [Ingress TLS Termination section below](#enable-ingress-tls-termination) shows how this can be done when using cert-manager.
+
 
 ### Certificate Renewal and Rolling Restarts
 
@@ -627,7 +682,7 @@ which you can request TLS certificates from LetsEncrypt assuming you own the `k8
 Mutual TLS (mTLS) provides an additional layer of security by ensuring the client applications sending requests to Solr are trusted.
 To enable mTLS, simply set `spec.solrTLS.clientAuth` to either `Want` or `Need`. When mTLS is enabled, the Solr operator needs to
 supply a client certificate that is trusted by Solr; the operator makes API calls to Solr to get cluster status. 
-To configure the client certificate for the operator, see [Running the Operator > mTLS](../running-the-operator.md#Client-Auth-for-mTLS-enabled-Solr-clusters)
+To configure the client certificate for the operator, see [Running the Operator > mTLS](../running-the-operator.md#client-auth-for-mtls-enabled-solr-clusters)
 
 When mTLS is enabled, the liveness and readiness probes are configured to execute a local command on each Solr pod instead of the default HTTP Get request.
 Using a command is required so that we can use the correct TLS certificate when making an HTTPs call to the probe endpoints.
@@ -643,6 +698,62 @@ curl "https://localhost:8983/solr/admin/info/system" -v \
   --cacert root-ca/root-ca.pem
 ```
 The `--cacert` option supplies the CA's certificate needed to trust the server certificate provided by the Solr pods during TLS handshake.
+
+## Enable Ingress TLS Termination
+_Since v0.4.0_
+
+A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and either leave all traffic between Solr pods un-encrypted or use private CAs for inter-pod communication.
+The operator supports this paradigm, to ensure all external traffic is encrypted.
+
+```yaml
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: my-selfsigned-cert-tls
+```
+
+The only additional settings required here are:
+- Making sure that you are not using the external TLS address for Solr to communicate internally via `useExternalAddress: false`.
+  This will be ignored, even if it is set to `true`.
+- Adding a TLS secret through `ingressTLSTerminationSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+  _This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
+
+To generate a TLS secret, follow the [instructions above](#use-cert-manager-to-issue-the-certificate) and use the templated Hostname: `<namespace>-<name>-solrcloud.<domain>`
+
+If you configure your SolrCloud correctly, cert-manager can auto-inject the TLS secrets for you as well:
+
+```yaml
+kind: SolrCloud
+metadata:
+  name: search
+  namespace: explore
+spec:
+  ... other SolrCloud CRD settings ...
+  customSolrKubeOptions:
+    ingressOptions:
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        cert-manager.io/issuer: "<issuer-name>"
+        cert-manager.io/common-name: explore-search-solrcloud.apple.com
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: myingress-cert
+```
+
+For more information on the Ingress TLS Termination options for cert-manager, [refer to the documentation](https://cert-manager.io/docs/usage/ingress/).
 
 ## Authentication and Authorization
 _Since v0.3.0_
@@ -792,15 +903,17 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "collection": null,
         "path": "/admin/metrics"
       },
+      { 
+         "name": "k8s-zk", 
+         "role":"k8s", 
+         "collection": null, 
+         "path":"/admin/zookeeper/status" 
+      },
       {
         "name": "k8s-ping",
         "role": "k8s",
         "collection": "*",
         "path": "/admin/ping"
-      },
-      {
-        "name": "all",
-        "role": [ "admin", "users" ]
       },
       {
         "name": "read",
@@ -812,11 +925,15 @@ Take a moment to review these authorization rules so that you're aware of the ro
       },
       {
         "name": "security-read",
-        "role": "admin"
+        "role": [ "admin" ]
       },
       {
         "name": "security-edit",
-        "role": "admin"
+        "role": [ "admin" ]
+      },
+      {
+        "name": "all",
+        "role": [ "admin" ]
       }
     ]
   }
@@ -863,6 +980,10 @@ The exporter also hits the `/admin/ping` endpoint for every collection, which re
       },
 ```
 The `"collection":"*"` setting indicates this path applies to all collections, which maps to endpoint `/collections/<COLL>/admin/ping` at runtime.
+
+The initial authorization config grants the `read` permission to the `users` role, which allows `users` to send query requests but cannot add / update / delete documents.
+For instance, the `solr` user is mapped to the `users` role, so the `solr` user can send query requests only. 
+In general, please verify the initial authorization rules for each role before sharing user credentials.
 
 ### Option 2: User-provided Basic Auth Secret
 

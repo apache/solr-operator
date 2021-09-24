@@ -120,13 +120,17 @@ spec:
           annotations:
             {{- toYaml .Values.dataStorage.persistent.pvc.annotations | nindent 12 }}
           {{- end }}
+        {{- if (or .Values.dataStorage.capacity .Values.dataStorage.persistent.pvc.storageClassName) }}
         spec:
           {{- if .Values.dataStorage.capacity }}
           resources:
             requests:
               storage: {{ .Values.dataStorage.capacity | quote }}
           {{- end }}
+          {{- if .Values.dataStorage.persistent.pvc.storageClassName }}
           storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName | quote }}
+          {{- end }}
+        {{- end }}
     {{- else }}
     ephemeral:
       {{- if (and .Values.dataStorage.ephemeral.hostPath (not .Values.dataStorage.ephemeral.emptyDir)) }}
@@ -158,6 +162,11 @@ spec:
     {{- toYaml .Values.solrTLS | nindent 4 }}
   {{- end }}
 
+  {{- if .Values.solrClientTLS }}
+  solrClientTLS:
+    {{- toYaml .Values.solrClientTLS | nindent 4 }}
+  {{- end }}
+
   {{- include "solr.custom-kube-options" . | nindent 2 -}}
 
   {{- if .Values.zk -}}
@@ -186,6 +195,10 @@ spec:
       {{- if .Values.zk.provided.image }}
       image:
         {{- toYaml .Values.zk.provided.image | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.config }}
+      config:
+        {{- toYaml .Values.zk.provided.config | nindent 8 }}
       {{- end }}
       {{- if (or .Values.zk.provided.persistence (lower .Values.zk.provided.storageType | hasPrefix "persist")) }}
       persistence:

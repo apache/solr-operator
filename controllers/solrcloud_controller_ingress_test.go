@@ -18,10 +18,11 @@
 package controllers
 
 import (
-	extv1 "k8s.io/api/extensions/v1beta1"
-	"k8s.io/apimachinery/pkg/types"
 	"strconv"
 	"testing"
+
+	extv1 "k8s.io/api/extensions/v1beta1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
@@ -160,14 +161,14 @@ func TestIngressCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestIngressNoNodesCloudReconcile(t *testing.T) {
@@ -288,14 +289,14 @@ func TestIngressNoNodesCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, 0, []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestIngressNoCommonCloudReconcile(t *testing.T) {
@@ -422,7 +423,7 @@ func TestIngressNoCommonCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, false, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
@@ -549,14 +550,14 @@ func TestIngressUseInternalAddressCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 4000, 100)
 
 	// Check that the Addresses in the status are correct
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
@@ -684,14 +685,14 @@ func TestIngressExtraDomainsCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), append([]string{testDomain}, testAdditionalDomains...), 4000, 100)
 
 	// Check that the Addresses in the status are correct
 	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
 	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
 	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
+	assert.EqualValues(t, "http://"+instance.Namespace+"-"+instance.Name+"-solrcloud"+"."+testDomain, *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
 }
 
 func TestIngressKubeDomainCloudReconcile(t *testing.T) {
@@ -808,7 +809,7 @@ func TestIngressKubeDomainCloudReconcile(t *testing.T) {
 	// Check the ingress
 	ingress := expectIngress(g, requests, expectedCloudRequest, cloudIKey)
 	testMapsEqual(t, "ingress labels", util.MergeLabelsOrAnnotations(instance.SharedLabelsWith(instance.Labels), testIngressLabels), ingress.Labels)
-	testMapsEqual(t, "ingress annotations", testIngressAnnotations, ingress.Annotations)
+	testMapsEqual(t, "ingress annotations", ingressLabelsWithDefaults(testIngressAnnotations), ingress.Annotations)
 	testIngressRules(t, ingress, true, int(replicas), []string{testDomain}, 80, 100)
 
 	// Check that the Addresses in the status are correct
@@ -860,4 +861,8 @@ func testIngressRules(t *testing.T, ingress *extv1.Ingress, withCommon bool, wit
 			assert.EqualValues(t, port, path.Backend.ServicePort.IntVal, "Wrong port name for ingress rule: "+ruleName)
 		}
 	}
+}
+
+func ingressLabelsWithDefaults(labels map[string]string) map[string]string {
+	return util.MergeLabelsOrAnnotations(labels, map[string]string{"nginx.ingress.kubernetes.io/backend-protocol": "HTTP"})
 }

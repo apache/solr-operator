@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] [-k KUBERNETES_VERSION] -v VERSION -l LOCATION -g GPG_KEY
 
 Smoke test the Solr Operator release artifacts.
 
@@ -33,11 +33,12 @@ Smoke test the Solr Operator release artifacts.
     -s  GitSHA of the last commit for this version of Solr (Optional, check will not happen if not provided)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
+    -k  Kubernetes Version to test with (Optional, defaults to a compatible version)
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:s:g: opt; do
+while getopts hv:i:l:s:g:k: opt; do
     case $opt in
         h)
             show_help
@@ -52,6 +53,8 @@ while getopts hv:i:l:s:g: opt; do
         l)  LOCATION=$OPTARG
             ;;
         g)  GPG_KEY=$OPTARG
+            ;;
+        k)  KUBERNETES_VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -73,6 +76,9 @@ fi
 if [[ -z "${GPG_KEY:-}" ]]; then
   echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
 fi
+if [[ -n "${KUBERNETES_VERSION:-}" ]]; then
+  export KUBERNETES_VERSION="${KUBERNETES_VERSION}"
+fi
 
 PULL_PASS_THROUGH=""
 # If LOCATION is a URL, we want to pull the Docker image
@@ -87,7 +93,7 @@ fi
 
 # Add GOBIN to PATH
 if [[ -z "${GOBIN:-}" ]]; then
-  export GOBIN="$(cd ${GOPATH:-~/go}/bin && pwd)"
+  export GOBIN="$(cd "${GOPATH:-~/go}/bin" && pwd)"
 fi
 export PATH="${PATH}:${GOBIN}"
 

@@ -21,8 +21,8 @@ Next, install the Solr Operator chart. Note this is using Helm v3, use the offic
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
-$ helm install solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
+$ helm install solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -141,3 +141,6 @@ The CA certificate needs to be stored in Kubernetes secret in PEM format and pro
 
 In most cases, you'll also want to configure the operator with `mTLS.insecureSkipVerify=true` (the default) as you'll want the operator to skip hostname verification for Solr pods.
 Setting `mTLS.insecureSkipVerify` to `false` means the operator will enforce hostname verification for the certificate provided by Solr pods.
+
+By default, the operator watches for updates to the mTLS client certificate (mounted from the `mTLS.clientCertSecret` secret) and then refreshes the HTTP client to use the updated certificate.
+To disable this behavior, configure the operator using: `--set mTLS.watchForUpdates=false`.

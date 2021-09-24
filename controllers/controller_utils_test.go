@@ -18,13 +18,12 @@
 package controllers
 
 import (
-	b64 "encoding/base64"
 	"fmt"
+	"testing"
+
 	"github.com/apache/solr-operator/controllers/util"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
-	"testing"
 
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/onsi/gomega"
@@ -110,6 +109,7 @@ func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expec
 	// Delete the Ingress and expect Reconcile to be called for Ingress deletion
 	g.Expect(testClient.Delete(context.TODO(), ingress)).NotTo(gomega.HaveOccurred())
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
 	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
 		Should(gomega.Succeed())
 
@@ -183,180 +183,59 @@ func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconci
 	return deploy
 }
 
-func verifyUserSuppliedTLSConfig(t *testing.T, tls *solr.SolrTLSOptions, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, expectedTlsSecretName string, needsPkcs12InitContainer bool) {
-	assert.NotNil(t, tls)
-	assert.Equal(t, expectedKeystorePasswordSecretName, tls.KeyStorePasswordSecret.Name)
-	assert.Equal(t, expectedKeystorePasswordSecretKey, tls.KeyStorePasswordSecret.Key)
-	assert.Equal(t, expectedTlsSecretName, tls.PKCS12Secret.Name)
-	assert.Equal(t, "keystore.p12", tls.PKCS12Secret.Key)
-
-	// is there a separate truststore?
-	expectedTrustStorePath := ""
-	if tls.TrustStoreSecret != nil {
-		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
-	}
-
-	expectTLSEnvVars(t, util.TLSEnvVars(tls, needsPkcs12InitContainer), expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer, expectedTrustStorePath)
-}
-
-func createTLSOptions(tlsSecretName string, keystorePassKey string, restartOnTLSSecretUpdate bool) *solr.SolrTLSOptions {
-	return &solr.SolrTLSOptions{
-		KeyStorePasswordSecret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
-			Key:                  keystorePassKey,
-		},
-		PKCS12Secret: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
-			Key:                  util.Pkcs12KeystoreFile,
-		},
-		RestartOnTLSSecretUpdate: restartOnTLSSecretUpdate,
-	}
-}
-
-func createMockTLSSecret(ctx context.Context, apiClient client.Client, secretName string, secretKey string, ns string, keystorePasswordKey string) (corev1.Secret, error) {
-	secretData := map[string][]byte{}
-	secretData[secretKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore")))
-	secretData[util.TLSCertKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock tls.crt")))
-
-	if keystorePasswordKey != "" {
-		secretData[keystorePasswordKey] = []byte(b64.StdEncoding.EncodeToString([]byte("mock keystore password")))
-	}
-
-	mockTLSSecret := corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: ns},
-		Data:       secretData,
-		Type:       corev1.SecretTypeOpaque,
-	}
-	err := apiClient.Create(ctx, &mockTLSSecret)
-	return mockTLSSecret, err
-}
-
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
 	secretData := map[string][]byte{corev1.BasicAuthUsernameKey: []byte(key), corev1.BasicAuthPasswordKey: []byte("secret password")}
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
 }
 
-// Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
-func expectTLSConfigOnPodTemplate(t *testing.T, tls *solr.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool) *corev1.Container {
+func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
 	assert.NotNil(t, podTemplate.Spec.Volumes)
-	var keystoreVol *corev1.Volume = nil
+	var initdbVol *corev1.Volume = nil
 	for _, vol := range podTemplate.Spec.Volumes {
-		if vol.Name == "keystore" {
-			keystoreVol = &vol
+		if vol.Name == "initdb" {
+			initdbVol = &vol
 			break
 		}
 	}
-	assert.NotNil(t, keystoreVol, fmt.Sprintf("keystore volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
-	assert.NotNil(t, keystoreVol.VolumeSource.Secret, "Didn't find TLS keystore volume in sts config!")
-	assert.Equal(t, tls.PKCS12Secret.Name, keystoreVol.VolumeSource.Secret.SecretName)
+	assert.NotNil(t, initdbVol, fmt.Sprintf("initdb volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
+	assert.NotNil(t, initdbVol.VolumeSource.EmptyDir, "initdb volume should be an emptyDir")
 
-	// check the SOLR_SSL_ related env vars on the sts
 	assert.NotNil(t, podTemplate.Spec.Containers)
 	assert.True(t, len(podTemplate.Spec.Containers) > 0)
 	mainContainer := podTemplate.Spec.Containers[0]
-	assert.NotNil(t, mainContainer, "Didn't find the main solrcloud-node container in the sts!")
-	assert.NotNil(t, mainContainer.Env, "Didn't find the main solrcloud-node container in the sts!")
-
-	// is there a separate truststore?
-	expectedTrustStorePath := ""
-	if tls.TrustStoreSecret != nil {
-		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
-	}
-
-	expectTLSEnvVars(t, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer, expectedTrustStorePath)
-
-	// different trust store?
-	if tls.TrustStoreSecret != nil {
-		var truststoreVol *corev1.Volume = nil
-		for _, vol := range podTemplate.Spec.Volumes {
-			if vol.Name == "truststore" {
-				truststoreVol = &vol
-				break
-			}
+	var initdbMount *corev1.VolumeMount = nil
+	for _, m := range mainContainer.VolumeMounts {
+		if m.Name == "initdb" {
+			initdbMount = &m
+			break
 		}
-		assert.NotNil(t, truststoreVol, fmt.Sprintf("truststore volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
-		assert.NotNil(t, truststoreVol.VolumeSource.Secret, "Didn't find TLS truststore volume in sts config!")
-		assert.Equal(t, tls.TrustStoreSecret.Name, truststoreVol.VolumeSource.Secret.SecretName)
 	}
-
-	// initContainers
-	if needsPkcs12InitContainer {
-		var pkcs12Vol *corev1.Volume = nil
-		for _, vol := range podTemplate.Spec.Volumes {
-			if vol.Name == "pkcs12" {
-				pkcs12Vol = &vol
-				break
-			}
-		}
-
-		assert.NotNil(t, pkcs12Vol, "Didn't find TLS keystore volume in sts config!")
-		assert.NotNil(t, pkcs12Vol.EmptyDir, "pkcs12 vol should by an emptyDir")
-
-		assert.NotNil(t, podTemplate.Spec.InitContainers)
-		var expInitContainer *corev1.Container = nil
-		for _, cnt := range podTemplate.Spec.InitContainers {
-			if cnt.Name == "gen-pkcs12-keystore" {
-				expInitContainer = &cnt
-				break
-			}
-		}
-		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
-		assert.NotNil(t, expInitContainer, "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
-		assert.Equal(t, expCmd, expInitContainer.Command[2])
-	}
-
-	if tls.ClientAuth == solr.Need {
-		// verify the probes use a command with SSL opts
-		tlsProps := "-Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD " +
-			"-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
-		assert.NotNil(t, mainContainer.LivenessProbe, "main container should have a liveness probe defined")
-		assert.NotNil(t, mainContainer.LivenessProbe.Exec, "liveness probe should have an exec when auth is enabled")
-		assert.True(t, strings.Contains(mainContainer.LivenessProbe.Exec.Command[2], tlsProps), "liveness probe should invoke java with SSL opts")
-		assert.NotNil(t, mainContainer.ReadinessProbe, "main container should have a readiness probe defined")
-		assert.NotNil(t, mainContainer.ReadinessProbe.Exec, "readiness probe should have an exec when auth is enabled")
-		assert.True(t, strings.Contains(mainContainer.ReadinessProbe.Exec.Command[2], tlsProps), "readiness probe should invoke java with SSL opts")
-	}
-
-	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+	assert.NotNil(t, initdbMount)
+	assert.Equal(t, util.InitdbPath, initdbMount.MountPath)
 }
 
-// ensure the TLS related env vars are set for the Solr pod
-func expectTLSEnvVars(t *testing.T, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool, expectedTruststorePath string) {
-	assert.NotNil(t, envVars)
-	envVars = filterVarsByName(envVars, func(n string) bool {
-		return strings.HasPrefix(n, "SOLR_SSL_")
-	})
-	assert.True(t, len(envVars) == 9)
-
-	expectedKeystorePath := util.DefaultKeyStorePath + "/keystore.p12"
-	if needsPkcs12InitContainer {
-		expectedKeystorePath = util.DefaultWritableKeyStorePath + "/keystore.p12"
-	}
-
-	if expectedTruststorePath == "" {
-		expectedTruststorePath = expectedKeystorePath
-	}
-
-	for _, envVar := range envVars {
-		if envVar.Name == "SOLR_SSL_ENABLED" {
-			assert.Equal(t, "true", envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_KEY_STORE" {
-			assert.Equal(t, expectedKeystorePath, envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
-			assert.Equal(t, expectedTruststorePath, envVar.Value)
-		}
-
-		if envVar.Name == "SOLR_SSL_KEY_STORE_PASSWORD" {
-			assert.NotNil(t, envVar.ValueFrom)
-			assert.NotNil(t, envVar.ValueFrom.SecretKeyRef)
-			assert.Equal(t, expectedKeystorePasswordSecretName, envVar.ValueFrom.SecretKeyRef.Name)
-			assert.Equal(t, expectedKeystorePasswordSecretKey, envVar.ValueFrom.SecretKeyRef.Key)
+func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expName string, expVolMountName string, expVolMountPath string) *corev1.Container {
+	var expInitContainer *corev1.Container = nil
+	for _, cnt := range podTemplate.Spec.InitContainers {
+		if cnt.Name == expName {
+			expInitContainer = &cnt
+			break
 		}
 	}
+	assert.NotNil(t, expInitContainer, "Didn't find the "+expName+" InitContainer!")
+	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+expName+" init container")
+
+	var volMount *corev1.VolumeMount = nil
+	for _, m := range expInitContainer.VolumeMounts {
+		if m.Name == expVolMountName {
+			volMount = &m
+			break
+		}
+	}
+	assert.NotNil(t, volMount, "No "+expVolMountName+" volumeMount for "+expName+" InitContainer")
+	assert.Equal(t, expVolMountPath, volMount.MountPath, "Wrong mount path "+volMount.MountPath+" for "+expName+" InitContainer")
+
+	return expInitContainer
 }
 
 // filter env vars by name using a supplied match function
@@ -396,6 +275,10 @@ func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, f
 
 func testPodProbe(t *testing.T, expectedProbe *corev1.Probe, foundProbe *corev1.Probe, probeType string) {
 	assert.EqualValuesf(t, expectedProbe, foundProbe, "Incorrect default container %s probe", probeType)
+}
+
+func testPodLifecycle(t *testing.T, expectedLifecycle *corev1.Lifecycle, foundLifecycle *corev1.Lifecycle) {
+	assert.EqualValuesf(t, expectedLifecycle, foundLifecycle, "Expected Lifecycle and found Lifecyle don't match")
 }
 
 func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
@@ -642,6 +525,18 @@ var (
 			},
 		},
 	}
+	testLifecycle = &corev1.Lifecycle{
+		PostStart: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the postStart handler"},
+			},
+		},
+		PreStop: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the preStop handler"},
+			},
+		},
+	}
 	testTolerations = []corev1.Toleration{
 		{
 			Effect:   "NoSchedule",
@@ -751,4 +646,13 @@ var (
 		},
 	}
 	testServiceAccountName = "test-service-account"
+	zkConf                 = zkv1beta1.ZookeeperConfig{
+		InitLimit:            1,
+		SyncLimit:            5,
+		PreAllocSize:         2,
+		CommitLogCount:       10,
+		MaxCnxns:             4,
+		MinSessionTimeout:    6,
+		QuorumListenOnAllIPs: true,
+	}
 )

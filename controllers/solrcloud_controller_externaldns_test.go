@@ -18,8 +18,9 @@
 package controllers
 
 import (
-	"k8s.io/apimachinery/pkg/types"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/stretchr/testify/assert"
@@ -689,6 +690,7 @@ func TestEDSKubeDomainCloudReconcile(t *testing.T) {
 	err = testClient.Create(context.TODO(), instance)
 	g.Expect(err).NotTo(gomega.HaveOccurred())
 	defer testClient.Delete(context.TODO(), instance)
+	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
 
 	// Check the statefulSet

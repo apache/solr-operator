@@ -44,7 +44,7 @@ fi
 
 # Install Kubebuilder
 if ! (which kubebuilder && (kubebuilder version | grep ${kubebuilder_version})); then
-  curl -sL "https://go.kubebuilder.io/dl/${kubebuilder_version}/${os}/${arch}" | tar -xz -C /tmp/
+  curl -sL "https://github.com/kubernetes-sigs/kubebuilder/releases/download/v${kubebuilder_version}/kubebuilder_${kubebuilder_version}_${os}_${arch}.tar.gz" | tar -xz -C /tmp/
   sudo rm -rf /usr/local/kubebuilder
   sudo mv "/tmp/kubebuilder_${kubebuilder_version}_${os}_${arch}" /usr/local/kubebuilder
   export PATH=$PATH:/usr/local/kubebuilder/bin

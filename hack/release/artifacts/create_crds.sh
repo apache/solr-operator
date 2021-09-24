@@ -88,7 +88,7 @@ done
 {
   cat hack/headers/zookeeper-operator-header.yaml.txt;
   printf "\n\n---\n"
-  curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/v0.2.9/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
+  curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/v0.2.12/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
 } > "${ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
 
 # Package all Solr and Dependency CRDs

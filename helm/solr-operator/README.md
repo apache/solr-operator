@@ -19,7 +19,7 @@ There may be breaking changes between the version you are running and the versio
 Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 This is because the Solr Operator, in most instances, relies on the Zookeeper Operator to create the Zookeeper clusters that Solr coordinates through.
 
-The Solr Operator helm chart has a conditional dependency on the [official Zookeeper Operator helm chart](https://github.com/pravega/zookeeper-operator/tree/master/charts/zookeeper-operator#installing-the-chart),
+The Solr Operator helm chart has a conditional dependency on the [official Zookeeper Operator helm chart](https://github.com/pravega/zookeeper-operator/tree/v0.2.12/charts/zookeeper-operator#installing-the-chart),
 which is enabled **by default**.
 
 If you wish to manage the installation of the Zookeeper Operator yourself, set:
@@ -43,8 +43,8 @@ helm repo add apache-solr https://solr.apache.org/charts
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
-helm install solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
+kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
+helm install solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
 ```
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
@@ -57,8 +57,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
 
 ```bash
-kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.4.0-prerelease/all-with-dependencies.yaml
-helm upgrade solr-operator apache-solr/solr-operator --version 0.4.0-prerelease
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
+helm upgrade solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
 ```
 
 #### Namespaces
@@ -163,13 +163,14 @@ The command removes all the Kubernetes components associated with the chart and 
 | mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
 | mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |
 | mTLS.insecureSkipVerify | boolean | `true` | Skip server certificate and hostname verification when connecting to Solr with ClientAuth. |
+| mTLS.watchForUpdates | boolean | `true` | Watch for updates to the mTLS certificate to reload the HTTP client used to call Solr pods with an updated client certificate. |
 
 ### Running the Solr Operator
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"apache/solr-operator"` | The repository of the Solr Operator image |
-| image.tag | string | `"v0.4.0-prerelease"` | The tag/version of the Solr Operator to run |
+| image.tag | string | `"v0.5.0-prerelease"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
@@ -189,7 +190,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### Configuring the Zookeeper Operator
 
-If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.9/charts/zookeeper-operator#configuration).
+If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.12/charts/zookeeper-operator#configuration).
 You must prefix every Zookeeper Operator configuration with `zookeeper-operator.`, in order for it to be used.
 
 For example:

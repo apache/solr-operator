@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] -v VERSION -l LOCATION -g GPG_KEY
 
 Test the release candidate in a Kind cluster
 
@@ -32,11 +32,12 @@ Test the release candidate in a Kind cluster
     -i  Solr Operator docker image to use  (Optional, defaults to apache/solr-operator:<version>)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
+    -k  Kubernetes Version to test with (full tag, e.g. v1.21.2)
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:g: opt; do
+while getopts hv:i:l:g:k: opt; do
     case $opt in
         h)
             show_help
@@ -49,6 +50,8 @@ while getopts hv:i:l:g: opt; do
         l)  LOCATION=$OPTARG
             ;;
         g)  GPG_KEY=$OPTARG
+            ;;
+        k)  KUBERNETES_VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -70,13 +73,17 @@ fi
 if [[ -z "${GPG_KEY:-}" ]]; then
   echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
 fi
+if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
+  KUBERNETES_VERSION="v1.21.2"
+fi
 
 # If LOCATION is not a URL, then get the absolute path
 if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
   LOCATION=${LOCATION%%/}
 
-  HELM_CHART="${LOCATION}/helm-charts/solr-operator-${VERSION#v}.tgz"
+  OP_HELM_CHART="${LOCATION}/helm-charts/solr-operator-${VERSION#v}.tgz"
+  SOLR_HELM_CHART="${LOCATION}/helm-charts/solr-${VERSION#v}.tgz"
 else
   # If LOCATION is a URL, then we want to make sure we have the up-to-date docker image.
   docker pull "${IMAGE}"
@@ -84,12 +91,13 @@ else
   # Add the Test Helm Repo
   helm repo add --force-update "apache-solr-test-${VERSION}" "${LOCATION}/helm-charts"
 
-  HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
+  OP_HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
+  SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
 fi
 
 if ! (which kind); then
   echo "Install Kind (Kubernetes in Docker)"
-  GO111MODULE="on" go install sigs.k8s.io/kind@v0.10.0
+  GO111MODULE="on" go install sigs.k8s.io/kind@v0.11.1
 fi
 
 CLUSTER_NAME="solr-operator-${VERSION}-rc"
@@ -100,8 +108,8 @@ if (kind get clusters | grep "${CLUSTER_NAME}"); then
   kind delete clusters "${CLUSTER_NAME}"
 fi
 
-echo "Create test Kubernetes cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
-kind create cluster --name "${CLUSTER_NAME}"
+echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
+kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}"
 
 # Load the docker image into the cluster
 kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
@@ -116,36 +124,20 @@ fi
 
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
-helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${HELM_CHART}" --set image.tag="${IMAGE##*:}" --set image.repository="${IMAGE%%:*}" --set image.pullPolicy="Never"
+helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${OP_HELM_CHART}" --set image.tag="${IMAGE##*:}" \
+    --set image.repository="${IMAGE%%:*}" \
+    --set image.pullPolicy="Never"
 
 printf "\nInstall a test Solr Cluster\n"
-cat <<EOF | kubectl apply -f -
-apiVersion: solr.apache.org/v1beta1
-kind: SolrCloud
-metadata:
-  name: example
-spec:
-  replicas: 3
-  solrImage:
-    tag: 8.7.0
-  solrJavaMem: "-Xms1g -Xmx3g"
-  customSolrKubeOptions:
-    podOptions:
-      resources:
-        limits:
-          memory: "1G"
-        requests:
-          cpu: "65m"
-          memory: "156Mi"
-  zookeeperRef:
-    provided:
-      persistence:
-        spec:
-          resources:
-            requests:
-              storage: "5Gi"
-      replicas: 1
-EOF
+helm install --kube-context "${KUBE_CONTEXT}" --verify example "${SOLR_HELM_CHART}" \
+    --set replicas=3 \
+    --set solrImage.tag=8.9.0 \
+    --set solrJavaMem="-Xms1g -Xmx3g" \
+    --set customSolrKubeOptions.podOptions.resources.limits.memory="1G" \
+    --set customSolrKubeOptions.podOptions.resources.requests.cpu="300m" \
+    --set customSolrKubeOptions.podOptions.resources.requests.memory="512Mi" \
+    --set zookeeperRef.provided.persistence.spec.resources.requests.storage="5Gi" \
+    --set zookeeperRef.provided.replicas=1
 
 # Wait for solrcloud to be ready
 printf '\nWait for all 3 Solr nodes to become ready.\n\n'

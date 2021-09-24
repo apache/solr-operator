@@ -19,13 +19,14 @@ package controllers
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/apache/solr-operator/controllers/util"
 	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
 	"github.com/pravega/zookeeper-operator/pkg/controller/zookeepercluster"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 
@@ -80,6 +81,7 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 						Resources:          resources,
 						ServiceAccountName: testServiceAccountName,
 					},
+					Config: zkConf,
 					ChRoot: "a-ch/root",
 				},
 			},
@@ -171,6 +173,15 @@ func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, resources, zkCluster.Spec.Pod.Resources, "Incorrect zkCluster resources")
 	assert.EqualValues(t, extraVars, zkCluster.Spec.Pod.Env, "Incorrect zkCluster env vars")
 	assert.EqualValues(t, testServiceAccountName, zkCluster.Spec.Pod.ServiceAccountName, "Incorrect zkCluster serviceAccountName")
+
+	// Check ZK Config Options
+	assert.EqualValues(t, zkConf.InitLimit, zkCluster.Spec.Conf.InitLimit, "Incorrect zkCluster Config InitLimit")
+	assert.EqualValues(t, zkConf.SyncLimit, zkCluster.Spec.Conf.SyncLimit, "Incorrect zkCluster Config SyncLimit")
+	assert.EqualValues(t, zkConf.PreAllocSize, zkCluster.Spec.Conf.PreAllocSize, "Incorrect zkCluster Config PreAllocSize")
+	assert.EqualValues(t, zkConf.CommitLogCount, zkCluster.Spec.Conf.CommitLogCount, "Incorrect zkCluster Config CommitLogCount")
+	assert.EqualValues(t, zkConf.MaxCnxns, zkCluster.Spec.Conf.MaxCnxns, "Incorrect zkCluster Config MaxCnxns")
+	assert.EqualValues(t, zkConf.MinSessionTimeout, zkCluster.Spec.Conf.MinSessionTimeout, "Incorrect zkCluster Config MinSessionTimeout")
+	assert.EqualValues(t, zkConf.QuorumListenOnAllIPs, zkCluster.Spec.Conf.QuorumListenOnAllIPs, "Incorrect zkCluster Config QuorumListenOnAllIPs")
 }
 
 func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
@@ -191,6 +202,7 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 					},
 					Persistence: &zkv1beta1.Persistence{
 						VolumeReclaimPolicy: zkv1beta1.VolumeReclaimPolicyRetain,
+						Annotations:         testDeploymentAnnotations,
 					},
 				},
 			},
@@ -273,11 +285,13 @@ func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
 	assert.EqualValues(t, "persistence", zkCluster.Spec.StorageType, "Incorrect zkCluster storage type")
 	assert.NotNil(t, zkCluster.Spec.Persistence, "ZkCluster.spec.persistence should not be nil")
 	assert.EqualValues(t, zkv1beta1.VolumeReclaimPolicyRetain, zkCluster.Spec.Persistence.VolumeReclaimPolicy, "Incorrect VolumeReclaimPolicy for ZK Cluster persistent storage")
+	assert.EqualValues(t, testDeploymentAnnotations, zkCluster.Spec.Persistence.Annotations, "Incorrect Annotations for ZK Cluster persistent storage")
 
 	// Check ZK Pod Options
 	assert.EqualValues(t, "test-repo", zkCluster.Spec.Image.Repository, "Incorrect zkCluster image repo")
 	assert.EqualValues(t, "test-tag", zkCluster.Spec.Image.Tag, "Incorrect zkCluster image tag")
 	assert.EqualValues(t, corev1.PullNever, zkCluster.Spec.Image.PullPolicy, "Incorrect zkCluster image pull policy")
+	//assert.EqualValues(t, []corev1.LocalObjectReference{{Name: testImagePullSecretName}}, zkCluster.Spec.Pod.ImagePullSecrets, "Incorrect zkCluster image pull policy")
 }
 
 func TestZKACLsCloudReconcile(t *testing.T) {
