@@ -148,6 +148,11 @@ spec:
     {{- end }}
   {{- end }}
 
+  {{- if .Values.backupRepositories }}
+  backupRepositories:
+    {{- toYaml .Values.backupRepositories | nindent 4 }}
+  {{- end }}
+
   {{- if .Values.solrTLS }}
   solrTLS:
     {{- toYaml .Values.solrTLS | nindent 4 }}

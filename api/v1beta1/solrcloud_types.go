@@ -238,6 +238,7 @@ type SolrDataStorageOptions struct {
 
 	// Options required for backups to be enabled for this solrCloud.
 	// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
+	// TODO: Remove in v0.6.0
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }

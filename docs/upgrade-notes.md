@@ -55,7 +55,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ### v0.5.0
 - The legacy way of specifying a backupRepository has been **DEPRECATED**.
-  Instead of using `SolrCloud.spec.dataStorage.backupRestoreOptions`, use `SolrCloud.spec.backupRepositories`.  
+  Instead of using `SolrCloud.spec.dataStorage.backupRestoreOptions`, use `SolrCloud.spec.backupRepositories`.
+  The `SolrCloud.spec.dataStorage.backupRestoreOptions` option **will be removed in `v0.6.0`**.  
   **Note**: Do not take backups while upgrading from the Solr Operator `v0.4.0` to `v0.5.0`.
   Wait for the SolrClouds to be updated, after the Solr Operator is upgraded, and complete their rolling restarts before continuing to use the Backup functionality.
 
