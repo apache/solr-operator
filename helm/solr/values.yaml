@@ -124,6 +124,7 @@ dataStorage:
       storageClassName: ""
 
   # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
+  # DEPRECATED: Please use backupRepositories instead.
   backupRestoreOptions: {}
     # volume: {}
     # directory: ""

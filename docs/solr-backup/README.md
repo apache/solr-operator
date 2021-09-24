@@ -111,6 +111,10 @@ kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore-managed-
 
 ## Supported Repository Types
 
+Note all repositories are defined in the `SolrCloud` specification.
+In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
+All yaml examples below are `SolrCloud` resources, not `SolrBackup` resources.
+
 The Solr-operator currently supports two different backup repository types: managed ("local") and Google Cloud Storage ("GCS")
 
 Multiple repositories can be defined under the `SolrCloud.spec.backupRepositories` field.
