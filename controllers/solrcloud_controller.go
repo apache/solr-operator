@@ -702,7 +702,7 @@ func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solr.SolrCloud) bool {
 	}
 
 	for _, repo := range solrCloud.Spec.BackupRepositories {
-		if !repo.IsBackupVolumePresent(pod) {
+		if !util.IsBackupVolumePresent(&repo, pod) {
 			return false
 		}
 	}

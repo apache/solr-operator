@@ -279,7 +279,7 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 		return err
 	}
 
-	if backupRepository.IsManaged() {
+	if util.IsRepoManaged(backupRepository) {
 		persistenceJob := util.GenerateBackupPersistenceJobForCloud(backupRepository, backup, solrCloud)
 		if err := controllerutil.SetControllerReference(backup, persistenceJob, r.scheme); err != nil {
 			return err

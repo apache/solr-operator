@@ -15,15 +15,16 @@
  * limitations under the License.
  */
 
-package v1beta1
+package util
 
 import (
 	"fmt"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
 )
 
 const (
-	BaseBackupRestoreSecretsPath = "/var/solr/data/backup-restore-secrets"
+	BaseBackupRestorePath = "/var/solr/data/backup-restore"
 
 	GCSCredentialSecretKey = "service-account-key.json"
 
@@ -31,11 +32,11 @@ const (
 	ContribLibs = "/opt/solr/contrib/%s/lib"
 )
 
-func (repo *SolrBackupRepository) VolumeName() string {
+func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("backup-repository-%s", repo.Name)
 }
 
-func (repo *SolrBackupRepository) IsManaged() bool {
+func IsRepoManaged(repo *solrv1beta1.SolrBackupRepository) bool {
 	return repo.Managed != nil
 }
 
@@ -50,20 +51,20 @@ func BackupSubPathForCloud(directoryOverride string, cloud string, backupName st
 	return BackupRestoreSubPathForCloud(directoryOverride, cloud) + "/backups/" + backupName
 }
 
-func (repo *SolrBackupRepository) GcsSecretMountPath() string {
-	return fmt.Sprintf("%s/%s/%s", BaseBackupRestoreSecretsPath, repo.Name, "gcscredential")
+func GcsRepoSecretMountPath(repo *solrv1beta1.SolrBackupRepository) string {
+	return fmt.Sprintf("%s/%s/%s", BaseBackupRestorePath, repo.Name, "gcscredential")
 }
 
-func (repo *SolrBackupRepository) ManagedVolumeMountPath() string {
+func ManagedRepoVolumeMountPath(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("%s/%s", BaseBackupRestorePath, repo.Name)
 }
 
-func (repo *SolrBackupRepository) GetVolumeSourceAndMount(solrCloudName string) (source *corev1.VolumeSource, mount *corev1.VolumeMount) {
+func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudName string) (source *corev1.VolumeSource, mount *corev1.VolumeMount) {
 	f := false
 	if repo.Managed != nil {
 		source = &repo.Managed.Volume
 		mount = &corev1.VolumeMount{
-			MountPath: repo.ManagedVolumeMountPath(),
+			MountPath: ManagedRepoVolumeMountPath(repo),
 			SubPath:   BackupRestoreSubPathForCloud(repo.Managed.Directory, solrCloudName),
 			ReadOnly:  false,
 		}
@@ -76,21 +77,21 @@ func (repo *SolrBackupRepository) GetVolumeSourceAndMount(solrCloudName string) 
 			},
 		}
 		mount = &corev1.VolumeMount{
-			MountPath: repo.GcsSecretMountPath(),
+			MountPath: GcsRepoSecretMountPath(repo),
 			ReadOnly:  true,
 		}
 	}
 	return
 }
 
-func (repo *SolrBackupRepository) GetAdditionalLibs() (libs []string) {
+func AdditionalRepoLibs(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
 	if repo.GCS != nil {
 		libs = []string{DistLibs, fmt.Sprintf(ContribLibs, "gcs-repository")}
 	}
 	return
 }
 
-func (repo *SolrBackupRepository) GetRepoXML() (xml string) {
+func RepoXML(repo *solrv1beta1.SolrBackupRepository) (xml string) {
 	if repo.Managed != nil {
 		xml = fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, repo.Name)
 	} else if repo.GCS != nil {
@@ -98,17 +99,17 @@ func (repo *SolrBackupRepository) GetRepoXML() (xml string) {
 <repository name="%s" class="org.apache.solr.gcs.GCSBackupRepository">
     <str name="gcsBucket">%s</str>
     <str name="gcsCredentialPath">%s/%s</str>
-</repository>`, repo.Name, repo.GCS.Bucket, repo.GcsSecretMountPath(), GCSCredentialSecretKey)
+</repository>`, repo.Name, repo.GCS.Bucket, GcsRepoSecretMountPath(repo), GCSCredentialSecretKey)
 	}
 	return
 }
 
-func (repo *SolrBackupRepository) GetEnvVars() (envVars []corev1.EnvVar) {
+func RepoEnvVars(repo *solrv1beta1.SolrBackupRepository) (envVars []corev1.EnvVar) {
 	return envVars
 }
 
-func (repo *SolrBackupRepository) IsBackupVolumePresent(pod *corev1.Pod) bool {
-	expectedVolumeName := repo.VolumeName()
+func IsBackupVolumePresent(repo *solrv1beta1.SolrBackupRepository, pod *corev1.Pod) bool {
+	expectedVolumeName := RepoVolumeName(repo)
 	for _, volume := range pod.Spec.Volumes {
 		if volume.Name == expectedVolumeName {
 			return true
@@ -117,9 +118,9 @@ func (repo *SolrBackupRepository) IsBackupVolumePresent(pod *corev1.Pod) bool {
 	return false
 }
 
-func (repo *SolrBackupRepository) BackupLocationPath(backupName string) string {
+func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupName string) string {
 	if repo.Managed != nil {
-		return fmt.Sprintf("%s/backups/%s", repo.ManagedVolumeMountPath(), backupName)
+		return fmt.Sprintf("%s/backups/%s", ManagedRepoVolumeMountPath(repo), backupName)
 	} else if repo.GCS != nil {
 		if repo.GCS.BaseLocation != "" {
 			return repo.GCS.BaseLocation

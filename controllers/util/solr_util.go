@@ -215,13 +215,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Add necessary specs for backupRepos
 	for _, repo := range solrCloud.Spec.BackupRepositories {
-		volumeSource, mount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+		volumeSource, mount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
 		if volumeSource != nil {
 			solrVolumes = append(solrVolumes, corev1.Volume{
-				Name:         repo.VolumeName(),
+				Name:         RepoVolumeName(&repo),
 				VolumeSource: *volumeSource,
 			})
-			mount.Name = repo.VolumeName()
+			mount.Name = RepoVolumeName(&repo)
 			volumeMounts = append(volumeMounts, *mount)
 		}
 	}
@@ -601,8 +601,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
 	for _, repo := range solrCloud.Spec.BackupRepositories {
-		if repo.IsManaged() {
-			_, volumeMount := repo.GetVolumeSourceAndMount(solrCloud.Name)
+		if IsRepoManaged(&repo) {
+			_, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
 			volumeMounts = append(volumeMounts, *volumeMount)
 
 			setupCommands = append(setupCommands, fmt.Sprintf(
@@ -638,10 +638,10 @@ func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepositor
 	repoXMLs := make([]string, len(backupRepos))
 
 	for i, repo := range backupRepos {
-		for _, lib := range repo.GetAdditionalLibs() {
+		for _, lib := range AdditionalRepoLibs(&repo) {
 			libs[lib] = true
 		}
-		repoXMLs[i] = repo.GetRepoXML()
+		repoXMLs[i] = RepoXML(&repo)
 	}
 	sort.Strings(repoXMLs)
 

@@ -46,12 +46,12 @@ func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 
 	queryParams := GenerateQueryParamsForBackup(managedRepository, &backupConfig, "col2")
 
-	assert.Equal(t, "BACKUP", queryParams.Get("action"))
-	assert.Equal(t, "col2", queryParams.Get("collection"))
-	assert.Equal(t, "col2", queryParams.Get("name"))
-	assert.Equal(t, "somebackupname-col2", queryParams.Get("async"))
-	assert.Equal(t, "/var/solr/data/backup-restore/somemanagedrepository/backups/somebackupname", queryParams.Get("location"))
-	assert.Equal(t, "somemanagedrepository", queryParams.Get("repository"))
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/var/solr/data/backup-restore/somemanagedrepository/backups/somebackupname", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somemanagedrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
 }
 
 func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
@@ -79,12 +79,12 @@ func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 
 	queryParams := GenerateQueryParamsForBackup(gcsRepository, &backupConfig, "col2")
 
-	assert.Equal(t, "BACKUP", queryParams.Get("action"))
-	assert.Equal(t, "col2", queryParams.Get("collection"))
-	assert.Equal(t, "col2", queryParams.Get("name"))
-	assert.Equal(t, "somebackupname-col2", queryParams.Get("async"))
-	assert.Equal(t, "/some/gcs/path", queryParams.Get("location"))
-	assert.Equal(t, "somegcsrepository", queryParams.Get("repository"))
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/some/gcs/path", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somegcsrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
 }
 
 func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {
@@ -144,7 +144,7 @@ func TestCanLookupManagedRepositoryByName(t *testing.T) {
 	found := GetBackupRepositoryByName(repos, "managedrepository2")
 
 	assert.NotNil(t, found, "Expected GetBackupRepositoryByName to report a found match")
-	assert.Equal(t, repos[2], *found)
+	assert.Equal(t, repos[2], *found, "Wrong repo found")
 }
 
 func TestCanLookupGcsRepositoryByName(t *testing.T) {
@@ -182,7 +182,7 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 	found := GetBackupRepositoryByName(repos, "gcsrepository2")
 
 	assert.NotNil(t, found, "Expected GetBackupRepositoryByName to report a found match")
-	assert.Equal(t, repos[3], *found)
+	assert.Equal(t, repos[3], *found, "Wrong repo found")
 }
 
 func TestCanLookupLegacyRepositoryByName(t *testing.T) {
@@ -224,7 +224,7 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 	found := GetBackupRepositoryByName(repos, "legacy_local_repository")
 
 	assert.NotNil(t, found, "Expected GetBackupRepositoryByName to report a found match")
-	assert.Equal(t, repos[4], *found)
+	assert.Equal(t, repos[4], *found, "Wrong repo found")
 }
 
 // If 'solrcloud' only has 1 repository configured and the backup doesn't specify a name, we still want to choose the
@@ -240,7 +240,7 @@ func TestRepositoryLookupSucceedsIfNoNameProvidedButOnlyOneRepositoryDefined(t *
 	found := GetBackupRepositoryByName(repos, "")
 
 	assert.NotNil(t, found, "Expected GetBackupRepositoryByName to report a found match")
-	assert.Equal(t, repos[0], *found)
+	assert.Equal(t, repos[0], *found, "Wrong repo found")
 }
 
 func TestRepositoryLookupFailsIfNoNameProvidedAndMultipleRepositoriesDefined(t *testing.T) {

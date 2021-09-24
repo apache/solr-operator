@@ -45,7 +45,7 @@ spec:
         gcsCredentialSecret:
           name: "some-secret-name"
           key: "service-account-key.json"
-    - name: "main_collection_backup_repository"
+    - name: "main_collection_backup_repository_log"
       gcs:
         bucket: "log_data"
         gcsCredentialSecret:
