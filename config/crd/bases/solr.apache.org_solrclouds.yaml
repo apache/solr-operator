@@ -4503,7 +4503,7 @@ spec:
                 description: Customize how the cloud data is stored. If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
                 properties:
                   backupRestoreOptions:
-                    description: 'Options required for backups to be enabled for this solrCloud. Deprecated: Use a SolrBackupRepository with a ManagedRepository instead'
+                    description: 'Options required for backups to be enabled for this solrCloud. Deprecated: Use a SolrBackupRepository with a ManagedRepository instead TODO: Remove in v0.6.0'
                     properties:
                       directory:
                         description: 'Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default. Deprecated: Create an explicit ''managedRepositories'' entry instead.'
