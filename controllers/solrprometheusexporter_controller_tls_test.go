@@ -336,8 +336,10 @@ func testReconcileWithTLS(ctx context.Context, solrPrometheusExporter *solrv1bet
 	}
 	mockSecret := createMockTLSSecret(ctx, solrPrometheusExporter, tlsSecretName, tlsKey, keystorePassKey, "")
 
-	deployment := expectDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
-	mainContainer := expectTLSConfigOnPodTemplate(solrPrometheusExporter.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, needsPkcs12InitContainer, true, nil)
+	deployment := expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
+		expectTLSConfigOnPodTemplateWithGomega(g, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, needsPkcs12InitContainer, true, nil)
+	})
+	mainContainer := &deployment.Spec.Template.Spec.Containers[0]
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
@@ -352,7 +354,7 @@ func testReconcileWithTLS(ctx context.Context, solrPrometheusExporter *solrv1bet
 		return
 	}
 
-	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
+	// Check that the hashshum annotations are correct on the pod
 	expectedAnnotations := map[string]string{
 		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[util.TLSCertKey])),
 	}
@@ -407,8 +409,10 @@ func testReconcileWithTruststoreOnly(ctx context.Context, solrPrometheusExporter
 	tlsKey := util.DefaultPkcs12TruststoreFile
 	mockSecret := createMockTLSSecret(ctx, solrPrometheusExporter, tlsSecretName, tlsKey, keystorePassKey, "")
 
-	deployment := expectDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
-	mainContainer := expectTLSConfigOnPodTemplate(solrPrometheusExporter.Spec.SolrReference.SolrTLS, &deployment.Spec.Template, false, true, nil)
+	deployment := expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
+		expectTLSConfigOnPodTemplateWithGomega(g, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, false, true, nil)
+	})
+	mainContainer := &deployment.Spec.Template.Spec.Containers[0]
 
 	// make sure JAVA_OPTS is set correctly with the TLS related sys props
 	envVars := filterVarsByName(mainContainer.Env, func(n string) bool {
@@ -423,7 +427,7 @@ func testReconcileWithTruststoreOnly(ctx context.Context, solrPrometheusExporter
 		return
 	}
 
-	// let's trigger an update to the TLS secret to simulate the cert getting renewed and the pods getting restarted
+	// Check that the hashshum annotations are correct on the pod
 	expectedAnnotations := map[string]string{
 		util.SolrClientTlsCertMd5Annotation: fmt.Sprintf("%x", md5.Sum(mockSecret.Data[tlsKey])),
 	}
