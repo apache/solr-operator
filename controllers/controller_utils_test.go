@@ -39,7 +39,7 @@ import (
 // Add one to an optional offset
 func resolveOffset(additionalOffset []int) (offset int) {
 	if len(additionalOffset) == 0 {
-		offset = 1
+		offset = 0
 	} else {
 		offset = additionalOffset[0]
 	}
