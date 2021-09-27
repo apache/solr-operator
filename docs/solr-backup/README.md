@@ -139,7 +139,7 @@ spec:
 Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
 Managed repositories are so called because with the data stored in and managed by Kubernetes, the operator is able to offer a few advanced post-processing features that are unavailable for other repository types.
 
-The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_local_backup_with_persistence.yaml) for more details.
+The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_backup_managed_with_persistence.yaml) for more details.
 
 An example of a SolrCloud spec with only one backup repository, with type Managed:
 
