@@ -21,9 +21,9 @@ set -o pipefail
 # error on unset variables
 set -u
 
-ZK_OP_VERSION="$(cat go.mod | grep -E 'github.com/pravega/zookeeper-operator' | grep -o 'v[[:digit:]]*\.[[:digit:]]*\.[[:digit:]]*')"
+ZK_OP_VERSION="$(cat versions.props | grep -E 'zookeeper-operator' | grep -o 'v[[:digit:]]*\.[[:digit:]]*\.[[:digit:]]*')"
 
-printf "Zookeeper Operator version is set to %s in go.mod, will check for compliance in all known places.\n\n" "${ZK_OP_VERSION}"
+printf "Zookeeper Operator version is set to %s in versions.props, will check for compliance in all known places.\n\n" "${ZK_OP_VERSION}"
 
 if (grep -E "https://github.com/pravega/zookeeper-operator/tree/" config/dependencies/zookeeper_cluster_crd.yaml | grep -v -E "${ZK_OP_VERSION}"); then
   printf "\nVersion not correct for all locations in file 'config/dependencies/zookeeper_cluster_crd.yaml' ^ \n" >&2 && exit 1

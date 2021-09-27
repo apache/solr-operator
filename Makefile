@@ -167,7 +167,7 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	$(GO_LICENSES) csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
 
 check-zk-op-version: ## Ensure the zookeeper-operator version is standard throughout the codebase
-	#./hack/zk-operator/check-version.sh
+	./hack/zk-operator/check-version.sh
 
 check-manifests: ## Ensure the manifest files (CRDs, RBAC, etc) are up-to-date across the project, including the helm charts
 	rm -rf generated-check
