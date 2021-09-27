@@ -293,7 +293,6 @@ func (tls *TLSConfig) volumeName(baseName string) string {
 // Get a list of volumes for the keystore and optionally a truststore loaded from a TLS secret
 func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount) {
 	optional := false
-	defaultMode := int32(0664)
 	vols := []corev1.Volume{}
 	mounts := []corev1.VolumeMount{}
 	keystoreSecretName := ""
@@ -307,7 +306,7 @@ func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount)
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  opts.PKCS12Secret.Name,
-					DefaultMode: &defaultMode,
+					DefaultMode: &SecretReadOnlyPermissions,
 					Optional:    &optional,
 				},
 			},
@@ -324,7 +323,7 @@ func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount)
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  opts.TrustStoreSecret.Name,
-					DefaultMode: &defaultMode,
+					DefaultMode: &SecretReadOnlyPermissions,
 					Optional:    &optional,
 				},
 			},

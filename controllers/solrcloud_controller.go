@@ -649,7 +649,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-	if allPodsBackupReady && solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil && len(foundPods.Items) > 0 {
+	if allPodsBackupReady && len(foundPods.Items) > 0 {
 		newStatus.BackupRestoreReady = true
 	}
 

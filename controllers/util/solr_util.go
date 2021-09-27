@@ -72,7 +72,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
-	defaultMode := int32(420)
 
 	probeScheme := corev1.URISchemeHTTP
 	if tls != nil {
@@ -136,7 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 							Path: SolrXmlFile,
 						},
 					},
-					DefaultMode: &defaultMode,
+					DefaultMode: &PublicReadOnlyPermissions,
 				},
 			},
 		},
@@ -1077,14 +1076,13 @@ func setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo map[strin
 
 	var vol *corev1.Volume = nil
 	if !appendedToExisting {
-		defaultMode := int32(420)
 		vol = &corev1.Volume{
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{Name: reconcileConfigInfo[fileKey]},
 					Items:                []corev1.KeyToPath{{Key: fileKey, Path: fileKey}},
-					DefaultMode:          &defaultMode,
+					DefaultMode:          &PublicReadOnlyPermissions,
 				},
 			},
 		}
@@ -1316,13 +1314,12 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	var vol *corev1.Volume
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
 		secretName := solrCloud.BasicAuthSecretName()
-		defaultMode := int32(420)
 		vol = &corev1.Volume{
 			Name: strings.ReplaceAll(secretName, ".", "-"),
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  secretName,
-					DefaultMode: &defaultMode,
+					DefaultMode: &SecretReadOnlyPermissions,
 				},
 			},
 		}

@@ -73,6 +73,7 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 			Secret: &corev1.SecretVolumeSource{
 				SecretName: repo.GCS.GcsCredentialSecret.Name,
 				Items:      []corev1.KeyToPath{{Key: repo.GCS.GcsCredentialSecret.Key, Path: GCSCredentialSecretKey}},
+				DefaultMode: &SecretReadOnlyPermissions,
 				Optional:   &f,
 			},
 		}
