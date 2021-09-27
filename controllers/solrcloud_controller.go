@@ -21,6 +21,13 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	"reflect"
+	"sort"
+	"strings"
+	"time"
+
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
@@ -32,23 +39,15 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-	"sort"
-	"strings"
-	"time"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -569,7 +568,6 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	var otherVersions []string
 	nodeNames := make([]string, len(foundPods.Items))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
-	backupRestoreReadyPods := 0
 
 	updateRevision := statefulSetStatus.UpdateRevision
 
@@ -584,6 +582,7 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
 	}
 	newStatus.PodSelector = selector.String()
+	allPodsBackupReady := true
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solrv1beta1.SolrNodeStatus{}
@@ -612,13 +611,9 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 			newStatus.ReadyReplicas += 1
 		}
 
-		// Get Volumes for backup/restore
-		if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-			for _, volume := range p.Spec.Volumes {
-				if volume.Name == util.BackupRestoreVolume {
-					backupRestoreReadyPods += 1
-				}
-			}
+		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
+		if allPodsBackupReady {
+			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(&p, solrCloud)
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
@@ -657,8 +652,7 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-
-	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
+	if allPodsBackupReady && len(foundPods.Items) > 0 {
 		newStatus.BackupRestoreReady = true
 	}
 
@@ -678,6 +672,21 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	}
 
 	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
+}
+
+func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solrv1beta1.SolrCloud) bool {
+	// If solrcloud doesn't request backup support then everything is 'ready' implicitly
+	if len(solrCloud.Spec.BackupRepositories) == 0 {
+		return false
+	}
+
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if !util.IsBackupVolumePresent(&repo, pod) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, nodeName string) (err error, ip string) {

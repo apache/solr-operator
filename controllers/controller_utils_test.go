@@ -18,11 +18,12 @@
 package controllers
 
 import (
-	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/util"
-	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+
+	"github.com/apache/solr-operator/controllers/util"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -777,6 +778,18 @@ var (
 				Command: []string{
 					"ls",
 				},
+			},
+		},
+	}
+	testLifecycle = &corev1.Lifecycle{
+		PostStart: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the postStart handler"},
+			},
+		},
+		PreStop: &corev1.Handler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"/bin/sh", "-c", "echo Hello from the preStop handler"},
 			},
 		},
 	}

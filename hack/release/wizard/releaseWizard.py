@@ -358,9 +358,9 @@ class ReleaseState:
             releases_str = load("https://projects.apache.org/json/foundation/releases.json", "utf-8")
             releases = json.loads(releases_str)
             state.mirrored_versions = []
-            if 'solr-operator' in releases.keys():
-                releases = releases['solr-operator']
-                state.mirrored_versions = [ r for r in list(map(lambda y: y[7:], filter(lambda x: x.startswith('solr-operator-'), list(releases.keys())))) ]
+            if 'solr' in releases.keys():
+                releases = releases['solr']
+                state.mirrored_versions = [ r for r in list(map(lambda y: y[14:], filter(lambda x: x.startswith('solr-operator-v'), list(releases.keys())))) ]
         return state.mirrored_versions
 
     def get_mirrored_versions_to_delete(self):

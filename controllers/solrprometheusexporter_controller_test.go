@@ -159,6 +159,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ImagePullSecrets:              testAdditionalImagePullSecrets,
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
+						Lifecycle:                     testLifecycle,
 					},
 					DeploymentOptions: &solrv1beta1.DeploymentOptions{
 						Annotations: testDeploymentAnnotations,
@@ -229,6 +230,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect tolerations")
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect Pod securityContext")
 			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "Incorrect Pod securityContext")
+			Expect(deployment.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect Container lifecycle")
 
 			// Volumes
 			Expect(deployment.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")

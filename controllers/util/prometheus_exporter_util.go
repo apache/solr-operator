@@ -18,14 +18,15 @@
 package util
 
 import (
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -321,6 +322,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		if customPodOptions.LivenessProbe != nil {
 			metricsContainer.LivenessProbe = customizeProbe(metricsContainer.LivenessProbe, *customPodOptions.LivenessProbe)
+		}
+
+		if customPodOptions.Lifecycle != nil {
+			metricsContainer.Lifecycle = customPodOptions.Lifecycle
 		}
 	}
 

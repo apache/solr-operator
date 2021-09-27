@@ -16,7 +16,6 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-
 version: 0.5.0-prerelease
 appVersion: 8.9.0
 kubeVersion: ">= 1.16.0-0"
@@ -41,27 +40,15 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: added
-      description: Official Solr Helm chart created. Works with the Solr Operator.
+    - kind: deprecated
+      description: The legacy backup options (dataStorage.backupRestoreOptions) have been deprecated. Please use backupRepositories instead.
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/112
+          url: https://github.com/apache/solr-operator/issues/301
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/276
-    - kind: changed
-      description: Default Solr Version upgraded to 8.9, does not affect existing clouds
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/285
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/287
-    - kind: added
-      description: Ability to create serviceAccount for SolrCloud deployment through Helm chart.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/264
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/283
+          url: https://github.com/apache/solr-operator/pull/302
+        - name: Backup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup/
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -76,7 +63,8 @@ annotations:
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
-      image: apache/solr:8.9
+      image: solr:8.9
+      whitelisted: true
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS

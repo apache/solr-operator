@@ -18,6 +18,11 @@
 package util
 
 import (
+	"reflect"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -25,12 +30,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/pointer"
-	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"strconv"
-	"strings"
-	"time"
+)
+
+var (
+	SecretReadOnlyPermissions int32 = 440
+	PublicReadOnlyPermissions int32 = 444
 )
 
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
@@ -416,16 +422,12 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 
 	requireUpdate = CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger) || requireUpdate
 
+	requireUpdate = CopyPodVolumes(&from.Spec.Volumes, &to.Spec.Volumes, basePath+"Spec.Volumes", logger) || requireUpdate
+
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.HostAliases = from.Spec.HostAliases
 		logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
-	}
-
-	if !DeepEqualWithNils(to.Spec.Volumes, from.Spec.Volumes) {
-		requireUpdate = true
-		to.Spec.Volumes = from.Spec.Volumes
-		logger.Info("Update required because field changed", "field", basePath+"Spec.Volumes", "from", to.Spec.Volumes, "to", from.Spec.Volumes)
 	}
 
 	if !DeepEqualWithNils(to.Spec.ImagePullSecrets, from.Spec.ImagePullSecrets) {
@@ -569,6 +571,12 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				to[i].StartupProbe = from[i].StartupProbe
 			}
 
+			if !DeepEqualWithNils(to[i].Lifecycle, from[i].Lifecycle) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"Lifecycle", "from", to[i].Lifecycle, "to", from[i].Lifecycle)
+				to[i].Lifecycle = from[i].Lifecycle
+			}
+
 			if from[i].TerminationMessagePath != "" && !DeepEqualWithNils(to[i].TerminationMessagePath, from[i].TerminationMessagePath) {
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"TerminationMessagePath", "from", to[i].TerminationMessagePath, "to", from[i].TerminationMessagePath)
@@ -579,6 +587,32 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"TerminationMessagePolicy", "from", to[i].TerminationMessagePolicy, "to", from[i].TerminationMessagePolicy)
 				to[i].TerminationMessagePolicy = from[i].TerminationMessagePolicy
+			}
+		}
+	}
+	return requireUpdate
+}
+
+func CopyPodVolumes(fromPtr, toPtr *[]corev1.Volume, basePath string, logger logr.Logger) (requireUpdate bool) {
+	to := *toPtr
+	from := *fromPtr
+	if len(to) != len(from) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
+		*toPtr = from
+	} else {
+		for i := 0; i < len(from); i++ {
+			containerBasePath := basePath + "[" + strconv.Itoa(i) + "]."
+			if !DeepEqualWithNils(to[i].Name, from[i].Name) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"Name", "from", to[i].Name, "to", from[i].Name)
+				to[i].Name = from[i].Name
+			}
+
+			if !DeepEqualWithNils(to[i].VolumeSource, from[i].VolumeSource) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"VolumeSource", "from", to[i].VolumeSource, "to", from[i].VolumeSource)
+				to[i].VolumeSource = from[i].VolumeSource
 			}
 		}
 	}

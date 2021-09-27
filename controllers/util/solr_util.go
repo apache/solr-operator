@@ -22,23 +22,23 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"math/rand"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	solr "github.com/apache/solr-operator/api/v1beta1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	netv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
-	SolrClientPortName  = "solr-client"
-	BackupRestoreVolume = "backup-restore"
+	SolrClientPortName = "solr-client"
 
 	SolrNodeContainer = "solrcloud-node"
 
@@ -72,7 +72,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
-	defaultMode := int32(420)
 
 	probeScheme := corev1.URISchemeHTTP
 	if tls != nil {
@@ -136,7 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 							Path: SolrXmlFile,
 						},
 					},
-					DefaultMode: &defaultMode,
+					DefaultMode: &PublicReadOnlyPermissions,
 				},
 			},
 		},
@@ -201,18 +200,18 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
 	}
-	// Add backup volumes
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		solrVolumes = append(solrVolumes, corev1.Volume{
-			Name:         BackupRestoreVolume,
-			VolumeSource: solrCloud.Spec.StorageOptions.BackupRestoreOptions.Volume,
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: BaseBackupRestorePath,
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+
+	// Add necessary specs for backupRepos
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		volumeSource, mount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
+		if volumeSource != nil {
+			solrVolumes = append(solrVolumes, corev1.Volume{
+				Name:         RepoVolumeName(&repo),
+				VolumeSource: *volumeSource,
+			})
+			mount.Name = RepoVolumeName(&repo)
+			volumeMounts = append(volumeMounts, *mount)
+		}
 	}
 
 	if nil != customPodOptions {
@@ -327,6 +326,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
+	// Default preStop hook
+	preStop := &corev1.Handler{
+		Exec: &corev1.ExecAction{
+			Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
+		},
+	}
+
 	// Add Custom EnvironmentVariables to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
@@ -422,11 +428,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
 				PostStart: postStart,
-				PreStop: &corev1.Handler{
-					Exec: &corev1.ExecAction{
-						Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
-					},
-				},
+				PreStop:   preStop,
 			},
 		},
 	}
@@ -522,6 +524,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
 
+		if customPodOptions.Lifecycle != nil {
+			solrContainer.Lifecycle = customPodOptions.Lifecycle
+		}
+
 		if customPodOptions.Tolerations != nil {
 			stateful.Spec.Template.Spec.Tolerations = customPodOptions.Tolerations
 		}
@@ -574,17 +580,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
 
-	// Add prep for backup-restore volume
+	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
-	if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      BackupRestoreVolume,
-			MountPath: "/backup-restore",
-			SubPath:   BackupRestoreSubPathForCloud(solrCloud.Spec.StorageOptions.BackupRestoreOptions.Directory, solrCloud.Name),
-			ReadOnly:  false,
-		})
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if IsRepoManaged(&repo) {
+			_, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
+			volumeMounts = append(volumeMounts, *volumeMount)
 
-		setupCommands = append(setupCommands, fmt.Sprintf("chown -R %d:%d /backup-restore", DefaultSolrUser, DefaultSolrGroup))
+			setupCommands = append(setupCommands, fmt.Sprintf(
+				"chown -R %d:%d %s",
+				DefaultSolrUser,
+				DefaultSolrGroup,
+				volumeMount.MountPath))
+		}
 	}
 
 	volumePrepInitContainer := corev1.Container{
@@ -602,6 +610,39 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 
 	return containers
+}
+
+func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepository) string {
+	if len(backupRepos) == 0 {
+		return ""
+	}
+	libs := make(map[string]bool, 0)
+	repoXMLs := make([]string, len(backupRepos))
+
+	for i, repo := range backupRepos {
+		for _, lib := range AdditionalRepoLibs(&repo) {
+			libs[lib] = true
+		}
+		repoXMLs[i] = RepoXML(&repo)
+	}
+	sort.Strings(repoXMLs)
+
+	libXml := ""
+	if len(libs) > 0 {
+		libList := make([]string, 0)
+		for lib := range libs {
+			libList = append(libList, lib)
+		}
+		sort.Strings(libList)
+		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	}
+
+	return fmt.Sprintf(
+		`%s 
+		<backup>
+		%s
+		</backup>`, libXml, strings.Join(repoXMLs, `
+`))
 }
 
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
@@ -622,6 +663,7 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
+  %s
 </solr>
 `
 
@@ -637,6 +679,7 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
+	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.ConfigMapName(),
@@ -645,11 +688,15 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			"solr.xml": DefaultSolrXML,
+			"solr.xml": GenerateSolrXMLString(backupSection),
 		},
 	}
 
 	return configMap
+}
+
+func GenerateSolrXMLString(backupSection string) string {
+	return fmt.Sprintf(DefaultSolrXML, backupSection)
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
@@ -1042,14 +1089,13 @@ func setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo map[strin
 
 	var vol *corev1.Volume = nil
 	if !appendedToExisting {
-		defaultMode := int32(420)
 		vol = &corev1.Volume{
 			Name: volName,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{Name: reconcileConfigInfo[fileKey]},
 					Items:                []corev1.KeyToPath{{Key: fileKey, Path: fileKey}},
-					DefaultMode:          &defaultMode,
+					DefaultMode:          &PublicReadOnlyPermissions,
 				},
 			},
 		}
@@ -1281,13 +1327,12 @@ func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetActio
 	var vol *corev1.Volume
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
 		secretName := solrCloud.BasicAuthSecretName()
-		defaultMode := int32(420)
 		vol = &corev1.Volume{
 			Name: strings.ReplaceAll(secretName, ".", "-"),
 			VolumeSource: corev1.VolumeSource{
 				Secret: &corev1.SecretVolumeSource{
 					SecretName:  secretName,
-					DefaultMode: &defaultMode,
+					DefaultMode: &SecretReadOnlyPermissions,
 				},
 			},
 		}

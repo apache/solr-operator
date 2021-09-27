@@ -176,7 +176,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						LivenessProbe:                 testProbeLivenessNonDefaults,
 						ReadinessProbe:                testProbeReadinessNonDefaults,
 						StartupProbe:                  testProbeStartup,
-						PriorityClassName:             testPriorityClass,
+						Lifecycle:                     testLifecycle,PriorityClassName:             testPriorityClass,
 						ImagePullSecrets:              testAdditionalImagePullSecrets,
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
@@ -203,7 +203,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 		FIt("has the correct resources", func() {
 			By("testing the Solr ConfigMap")
-			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.DefaultSolrXML})
+			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLString("")})
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testConfigMapLabels)), "Incorrect configMap labels")
 			Expect(configMap.Annotations).To(Equal(testConfigMapAnnotations), "Incorrect configMap annotations")
 
@@ -238,7 +238,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe, testProbeLivenessNonDefaults, "Incorrect Liveness Probe")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe, testProbeReadinessNonDefaults, "Incorrect Readiness Probe")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].StartupProbe, testProbeStartup, "Incorrect Startup Probe")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect container lifecycle")
 			Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(testTolerations), "Incorrect Tolerations for Pod")
 			Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
 			Expect(statefulSet.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect imagePullSecrets")
@@ -545,14 +545,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
 
-				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.DefaultSolrXML)))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.GenerateSolrXMLString(""))))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.LogXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
 				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
-			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.DefaultSolrXML})
+			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.GenerateSolrXMLString("")})
 
 			By("updating the user-provided log XML to trigger a pod rolling restart")
 			configMap.Data[util.LogXmlFile] = "<Configuration>Updated!</Configuration>"

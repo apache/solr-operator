@@ -78,7 +78,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
-| image.repository | string | `"apache/solr"` | The repository of the Solr image |
+| image.repository | string | `"solr"` | The repository of the Solr image |
 | image.tag | string | `"8.9"` | The tag/version of Solr to run |
 | image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string |  | PullSecret for the Solr image |
@@ -99,6 +99,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit https://apache.github.io/solr-operator/docs/solr-backup or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 
 ### Data Storage Options
 
@@ -115,8 +116,8 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| dataStorage.backupRestoreOptions.volume | object | | A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| dataStorage.backupRestoreOptions.directory | string | | Override the default backup-restore volume location in the Solr container |
+| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
+| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 
@@ -137,7 +138,7 @@ External addressability is disabled by default.
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
 | addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with Solr TLS enabled (not TLS Termination described below). |
-| addressability.external.ingressTLSTerminationSecret | int | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
+| addressability.external.ingressTLSTerminationSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
 
 ### ZK Options
 
@@ -255,6 +256,7 @@ Configure Solr to use a separate TLS certificate for client auth.
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |
 | podOptions.startupProbe | object |  | Custom startup probe for the Solr container |
+| podOptions.lifecycle | object |  | Custom lifecycle for the Solr container |
 | podOptions.imagePullSecrets | []object |  | List of image pull secrets to inject into the Solr pod, in addition to `global.imagePullSecrets` |
 | podOptions.volumes | []object |  | List of additional volumes to attach to the Solr pod, and optionally how to mount them to the Solr container |
 | statefulSetOptions.annotations | map[string]string |  | Custom annotations to add to the Solr statefulSet |
