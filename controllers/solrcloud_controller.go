@@ -565,7 +565,6 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	var otherVersions []string
 	nodeNames := make([]string, len(foundPods.Items))
 	nodeStatusMap := map[string]solr.SolrNodeStatus{}
-	backupRestoreReadyPods := 0
 
 	updateRevision := statefulSetStatus.UpdateRevision
 
@@ -580,6 +579,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
 	}
 	newStatus.PodSelector = selector.String()
+	allPodsBackupReady := true
 	for idx, p := range foundPods.Items {
 		nodeNames[idx] = p.Name
 		nodeStatus := solr.SolrNodeStatus{}
@@ -608,13 +608,9 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 			newStatus.ReadyReplicas += 1
 		}
 
-		// Get Volumes for backup/restore
-		if solrCloud.Spec.StorageOptions.BackupRestoreOptions != nil {
-			for _, volume := range p.Spec.Volumes {
-				if volume.Name == util.BackupRestoreVolume {
-					backupRestoreReadyPods += 1
-				}
-			}
+		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
+		if allPodsBackupReady {
+			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(&p, solrCloud)
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
@@ -653,8 +649,7 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-
-	if backupRestoreReadyPods == int(*solrCloud.Spec.Replicas) && backupRestoreReadyPods > 0 {
+	if allPodsBackupReady && len(foundPods.Items) > 0 {
 		newStatus.BackupRestoreReady = true
 	}
 
@@ -674,6 +669,22 @@ func reconcileCloudStatus(r *SolrCloudReconciler, solrCloud *solr.SolrCloud, log
 	}
 
 	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
+}
+
+func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solr.SolrCloud) bool {
+
+	// If solrcloud doesn't request backup support then everything is 'ready' implicitly
+	if len(solrCloud.Spec.BackupRepositories) == 0 {
+		return false
+	}
+
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		if !util.IsBackupVolumePresent(&repo, pod) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func reconcileNodeService(r *SolrCloudReconciler, logger logr.Logger, instance *solr.SolrCloud, nodeName string) (err error, ip string) {

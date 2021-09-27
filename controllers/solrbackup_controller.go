@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	"reflect"
 	"time"
@@ -89,6 +90,7 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 
 	solrCloud, allCollectionsComplete, collectionActionTaken, err := reconcileSolrCloudBackup(r, backup)
 	if err != nil {
+		// TODO Should we be failing the backup for some sub-set of errors here?
 		r.Log.Error(err, "Error while taking SolrCloud backup")
 	}
 	if allCollectionsComplete && collectionActionTaken {
@@ -98,15 +100,24 @@ func (r *SolrBackupReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) 
 	} else if solrCloud == nil {
 		requeueOrNot = reconcile.Result{}
 	} else {
-		// Only persist if the backup CRD is not finished (something bad happended)
+		// Only persist if the backup CRD is not finished (something bad happened)
 		// and the collection backups are all complete (not necessarily successful)
 		// Do not do this right after the collectionsBackup have been complete, wait till the next cycle
 		if allCollectionsComplete && !backup.Status.Finished {
-			// We will count on the Job updates to be notifified
-			requeueOrNot = reconcile.Result{}
-			err = persistSolrCloudBackups(r, backup, solrCloud)
-			if err != nil {
-				r.Log.Error(err, "Error while persisting SolrCloud backup")
+			if backup.Spec.Persistence != nil {
+				// We will count on the Job updates to be notified
+				requeueOrNot = reconcile.Result{}
+				err = persistSolrCloudBackups(r, backup, solrCloud)
+				if err != nil {
+					r.Log.Error(err, "Error while persisting SolrCloud backup")
+				}
+			} else {
+				// Persistence not configured for this backup, mark as finished.
+				tru := true
+				backup.Status.Finished = true
+				backup.Status.Successful = &tru
+				now := metav1.Now()
+				backup.Status.FinishTime = &now
 			}
 		}
 	}
@@ -159,11 +170,18 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	}
 
 	actionTaken = true
+	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
+	if backupRepository == nil {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
+			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+			backup.Name, backup.Spec.RepositoryName)
+		return solrCloud, collectionBackupsFinished, actionTaken, err
+	}
 
 	// This should only occur before the backup processes have been started
 	if backup.Status.SolrVersion == "" {
 		// Prep the backup directory in the persistentVolume
-		err := util.EnsureDirectoryForBackup(solrCloud, backup.Name, r.config)
+		err := util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup.Name, r.config)
 		if err != nil {
 			return solrCloud, collectionBackupsFinished, actionTaken, err
 		}
@@ -177,11 +195,12 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
 		backup.Status.SolrVersion = solrCloud.Status.Version
+
 	}
 
 	// Go through each collection specified and reconcile the backup.
 	for _, collection := range backup.Spec.Collections {
-		_, err = reconcileSolrCollectionBackup(backup, solrCloud, collection, httpHeaders)
+		_, err = reconcileSolrCollectionBackup(backup, solrCloud, backupRepository, collection, httpHeaders)
 	}
 
 	// First check if the collection backups have been completed
@@ -190,7 +209,7 @@ func reconcileSolrCloudBackup(r *SolrBackupReconciler, backup *solrv1beta1.SolrB
 	return solrCloud, collectionBackupsFinished, actionTaken, err
 }
 
-func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, collection string, httpHeaders map[string]string) (finished bool, err error) {
+func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, httpHeaders map[string]string) (finished bool, err error) {
 	now := metav1.Now()
 	collectionBackupStatus := solrv1beta1.CollectionBackupStatus{}
 	collectionBackupStatus.Collection = collection
@@ -205,9 +224,8 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
-
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(solrCloud, collection, backup.Name, httpHeaders)
+		started, err := util.StartBackupForCollection(solrCloud, backupRepository, backup, collection, httpHeaders)
 		if err != nil {
 			return true, err
 		}
@@ -253,48 +271,60 @@ func persistSolrCloudBackups(r *SolrBackupReconciler, backup *solrv1beta1.SolrBa
 	}
 	now := metav1.Now()
 
-	persistenceJob := util.GenerateBackupPersistenceJobForCloud(backup, solrCloud)
-	if err := controllerutil.SetControllerReference(backup, persistenceJob, r.scheme); err != nil {
+	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
+	if backupRepository == nil {
+		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
+			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
+			backup.Name, backup.Spec.RepositoryName)
 		return err
 	}
 
-	foundPersistenceJob := &batchv1.Job{}
-	err = r.Get(context.TODO(), types.NamespacedName{Name: persistenceJob.Name, Namespace: persistenceJob.Namespace}, foundPersistenceJob)
-	if err == nil && !backup.Status.PersistenceStatus.InProgress {
-
-	}
-	if err != nil && errors.IsNotFound(err) {
-		r.Log.Info("Creating Persistence Job", "namespace", persistenceJob.Namespace, "name", persistenceJob.Name)
-		err = r.Create(context.TODO(), persistenceJob)
-		backup.Status.PersistenceStatus.InProgress = true
-		if backup.Status.PersistenceStatus.StartTime == nil {
-			backup.Status.PersistenceStatus.StartTime = &now
+	if util.IsRepoManaged(backupRepository) {
+		persistenceJob := util.GenerateBackupPersistenceJobForCloud(backupRepository, backup, solrCloud)
+		if err := controllerutil.SetControllerReference(backup, persistenceJob, r.scheme); err != nil {
+			return err
 		}
-	} else if err != nil {
+
+		foundPersistenceJob := &batchv1.Job{}
+		err = r.Get(context.TODO(), types.NamespacedName{Name: persistenceJob.Name, Namespace: persistenceJob.Namespace}, foundPersistenceJob)
+		if err == nil && !backup.Status.PersistenceStatus.InProgress {
+
+		}
+		if err != nil && errors.IsNotFound(err) {
+			r.Log.Info("Creating Persistence Job", "namespace", persistenceJob.Namespace, "name", persistenceJob.Name)
+			err = r.Create(context.TODO(), persistenceJob)
+			backup.Status.PersistenceStatus.InProgress = true
+			if backup.Status.PersistenceStatus.StartTime == nil {
+				backup.Status.PersistenceStatus.StartTime = &now
+			}
+		} else if err != nil {
+			return err
+		} else {
+			backup.Status.PersistenceStatus.FinishTime = foundPersistenceJob.Status.CompletionTime
+			tru := true
+			fals := false
+			numFailLimit := int32(0)
+			if foundPersistenceJob.Spec.BackoffLimit != nil {
+				numFailLimit = *foundPersistenceJob.Spec.BackoffLimit
+			}
+			if foundPersistenceJob.Status.Succeeded > 0 {
+				backup.Status.PersistenceStatus.Successful = &tru
+			} else if foundPersistenceJob.Status.Failed > numFailLimit {
+				backup.Status.PersistenceStatus.Successful = &fals
+			}
+
+			if backup.Status.PersistenceStatus.Successful != nil {
+				backup.Status.PersistenceStatus.InProgress = false
+				backup.Status.PersistenceStatus.Finished = true
+				backup.Status.PersistenceStatus.FinishTime = &now
+				backup.Status.Finished = true
+				backup.Status.Successful = backup.Status.PersistenceStatus.Successful
+			}
+		}
 		return err
 	} else {
-		backup.Status.PersistenceStatus.FinishTime = foundPersistenceJob.Status.CompletionTime
-		tru := true
-		fals := false
-		numFailLimit := int32(0)
-		if foundPersistenceJob.Spec.BackoffLimit != nil {
-			numFailLimit = *foundPersistenceJob.Spec.BackoffLimit
-		}
-		if foundPersistenceJob.Status.Succeeded > 0 {
-			backup.Status.PersistenceStatus.Successful = &tru
-		} else if foundPersistenceJob.Status.Failed > numFailLimit {
-			backup.Status.PersistenceStatus.Successful = &fals
-		}
-
-		if backup.Status.PersistenceStatus.Successful != nil {
-			backup.Status.PersistenceStatus.InProgress = false
-			backup.Status.PersistenceStatus.Finished = true
-			backup.Status.PersistenceStatus.FinishTime = &now
-			backup.Status.Finished = true
-			backup.Status.Successful = backup.Status.PersistenceStatus.Successful
-		}
+		return nil
 	}
-	return err
 }
 
 func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {

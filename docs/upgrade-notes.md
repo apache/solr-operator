@@ -76,6 +76,13 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ## Upgrade Warnings and Notes
 
+### v0.5.0
+- The legacy way of specifying a backupRepository has been **DEPRECATED**.
+  Instead of using `SolrCloud.spec.dataStorage.backupRestoreOptions`, use `SolrCloud.spec.backupRepositories`.
+  The `SolrCloud.spec.dataStorage.backupRestoreOptions` option **will be removed in `v0.6.0`**.  
+  **Note**: Do not take backups while upgrading from the Solr Operator `v0.4.0` to `v0.5.0`.
+  Wait for the SolrClouds to be updated, after the Solr Operator is upgraded, and complete their rolling restarts before continuing to use the Backup functionality.
+
 ### v0.4.0
 - The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.9` to `v0.2.12`.
   If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
@@ -85,11 +92,11 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 - The deprecated Solr Operator Helm chart option `useZkOperator` has been removed, use `zookeeper-operator.use` instead.  
   **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
-  
+
 - The default Solr version for `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `7.7.0` to `8.9`.
   This will not effect any existing resources, as default versions are hard-written to the resources immediately.
   Only new resources created after the Solr Operator is upgraded to `v0.4.0` will be affected.
-  
+
 - In previous versions of the Solr Operator, the provided Zookeeper instances could only use Persistent Storage.
   Now ephemeral storage is enabled, and used by default if Solr is using ephemeral storage.
   The ZK storage type can be explicitly set via `Spec.zookeeperRef.provided.ephemeral` or `Spec.zookeeperRef.provided.persistence`,

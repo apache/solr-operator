@@ -32,6 +32,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
+var (
+	SecretReadOnlyPermissions int32 = 440
+	PublicReadOnlyPermissions int32 = 444
+)
+
 // CopyLabelsAndAnnotations copies the labels and annotations from one object to another.
 // Additional Labels and Annotations in the 'to' object will not be removed.
 // Returns true if there are updates required to the object.
@@ -407,16 +412,12 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 
 	requireUpdate = CopyPodContainers(&from.Spec.InitContainers, &to.Spec.InitContainers, basePath+"Spec.InitContainers", logger) || requireUpdate
 
+	requireUpdate = CopyPodVolumes(&from.Spec.Volumes, &to.Spec.Volumes, basePath+"Spec.Volumes", logger) || requireUpdate
+
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
 		requireUpdate = true
 		to.Spec.HostAliases = from.Spec.HostAliases
 		logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
-	}
-
-	if !DeepEqualWithNils(to.Spec.Volumes, from.Spec.Volumes) {
-		requireUpdate = true
-		to.Spec.Volumes = from.Spec.Volumes
-		logger.Info("Update required because field changed", "field", basePath+"Spec.Volumes", "from", to.Spec.Volumes, "to", from.Spec.Volumes)
 	}
 
 	if !DeepEqualWithNils(to.Spec.ImagePullSecrets, from.Spec.ImagePullSecrets) {
@@ -576,6 +577,32 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				requireUpdate = true
 				logger.Info("Update required because field changed", "field", containerBasePath+"TerminationMessagePolicy", "from", to[i].TerminationMessagePolicy, "to", from[i].TerminationMessagePolicy)
 				to[i].TerminationMessagePolicy = from[i].TerminationMessagePolicy
+			}
+		}
+	}
+	return requireUpdate
+}
+
+func CopyPodVolumes(fromPtr, toPtr *[]corev1.Volume, basePath string, logger logr.Logger) (requireUpdate bool) {
+	to := *toPtr
+	from := *fromPtr
+	if len(to) != len(from) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
+		*toPtr = from
+	} else {
+		for i := 0; i < len(from); i++ {
+			containerBasePath := basePath + "[" + strconv.Itoa(i) + "]."
+			if !DeepEqualWithNils(to[i].Name, from[i].Name) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"Name", "from", to[i].Name, "to", from[i].Name)
+				to[i].Name = from[i].Name
+			}
+
+			if !DeepEqualWithNils(to[i].VolumeSource, from[i].VolumeSource) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"VolumeSource", "from", to[i].VolumeSource, "to", from[i].VolumeSource)
+				to[i].VolumeSource = from[i].VolumeSource
 			}
 		}
 	}

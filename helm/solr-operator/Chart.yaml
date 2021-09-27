@@ -54,6 +54,24 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: deprecated
+      description: The legacy backup options (SolrCloud.spec.dataStorage.backupRestoreOptions) have been deprecated. Please use SolrCloud.spec.backupRepositories instead.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/301
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/302
+        - name: Backup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup/
+    - kind: added
+      description: The ability to use GCS Repositories for the Solr Backup.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/301
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/302
+        - name: Backup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup/
     - kind: added
       description: Customize the Lifecycle for Solr and PrometheusExporter containers
       links:
@@ -108,6 +126,14 @@ annotations:
             replicas: 3
         solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
         solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
+        backupRepositories:
+          - name: default
+            gcs:
+              bucket: solr-gcs-backups
+              gcsCredentialSecret: # Required
+                name: gcs-credentials
+                key: "service-account-key.json"
+              baseLocation: "/solrcloud/backups"
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrPrometheusExporter
       metadata:
@@ -119,4 +145,25 @@ annotations:
         numThreads: 4
         image:
           tag: 8.7.0
+    - apiVersion: solr.apache.org/v1beta1
+      kind: SolrPrometheusExporter
+      metadata:
+        name: example
+      spec:
+        solrReference:
+          cloud:
+            name: "example"
+        numThreads: 4
+        image:
+          tag: 8.7.0
+    - apiVersion: solr.apache.org/v1beta1
+      kind: SolrBackup
+      metadata:
+        name: example
+      spec:
+        repositoryName: solr-gcs-backups
+        solrCloud: example
+        collections:
+          - techproducts
+          - books
   artifacthub.io/containsSecurityUpdates: "false"

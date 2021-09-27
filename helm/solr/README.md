@@ -99,6 +99,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit https://apache.github.io/solr-operator/docs/solr-backup or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 
 ### Data Storage Options
 
@@ -115,8 +116,8 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| dataStorage.backupRestoreOptions.volume | object | | A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| dataStorage.backupRestoreOptions.directory | string | | Override the default backup-restore volume location in the Solr container |
+| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
+| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 
