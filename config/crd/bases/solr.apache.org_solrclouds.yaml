@@ -5562,7 +5562,7 @@ spec:
                 description: Customize how Solr is addressed both internally and externally in Kubernetes.
                 properties:
                   commonServicePort:
-                    description: CommonServicePort defines the port to have the common Solr service listen on. Defaults to 80
+                    description: CommonServicePort defines the port to have the common Solr service listen on. Defaults to 80 (when not using TLS) or 443 (when using TLS)
                     type: integer
                   external:
                     description: External defines the way in which this SolrCloud nodes should be made addressable externally, from outside the Kubernetes cluster. If none is provided, the Solr Cloud will not be made addressable externally.
@@ -5591,7 +5591,7 @@ spec:
                         - ExternalDNS
                         type: string
                       nodePortOverride:
-                        description: "NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer. This overrides the default usage of the podPort. \n This is option is only used when HideNodes=false, otherwise the the port each Solr Node will advertise itself with the podPort. This option is also unavailable with the ExternalDNS method. \n If using method=Ingress, your ingress controller is required to listen on this port. If your ingress controller is not listening on the podPort, then this option is required for solr to be addressable via an Ingress. \n Defaults to 80 if HideNodes=false and method=Ingress, otherwise this is optional."
+                        description: "NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer. This overrides the default usage of the podPort. \n This is option is only used when HideNodes=false, otherwise the the port each Solr Node will advertise itself with the podPort. This option is also unavailable with the ExternalDNS method. \n If using method=Ingress, your ingress controller is required to listen on this port. If your ingress controller is not listening on the podPort, then this option is required for solr to be addressable via an Ingress. \n Defaults to 80 (without TLS) or 443 (with TLS) if HideNodes=false and method=Ingress, otherwise this is optional."
                         type: integer
                       useExternalAddress:
                         description: "Use the external address to advertise the SolrNode, defaults to false. \n If false, the external address will be available, however Solr (and clients using the CloudSolrClient in SolrJ) will only be aware of the internal URLs. If true, Solr will startup with the hostname of the external address. \n NOTE: This option cannot be true when hideNodes is set to true. So it will be auto-set to false if that is the case."
@@ -6050,8 +6050,8 @@ spec:
                           reclaimPolicy:
                             description: VolumeReclaimPolicy is a zookeeper operator configuration. If it's set to Delete, the corresponding PVCs will be deleted by the operator when zookeeper cluster is deleted. The default value is Retain.
                             enum:
-                            - Delete
                             - Retain
+                            - Delete
                             type: string
                           spec:
                             description: PersistentVolumeClaimSpec is the spec to describe PVC for the container This field is optional. If no PVC is specified default persistentvolume will get created.

@@ -18,92 +18,105 @@
 package controllers
 
 import (
-	"fmt"
-	stdlog "log"
-	"os"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"sync"
 	"testing"
 	"time"
 
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/onsi/gomega"
-	zkOp "github.com/pravega/zookeeper-operator/pkg/apis"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	//+kubebuilder:scaffold:imports
 )
 
-var testCfg *rest.Config
-var testClient client.Client
+// These tests use Ginkgo (BDD-style Go testing framework). Refer to
+// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-const timeout = time.Second * 5
+var cfg *rest.Config
+var k8sClient client.Client
+var testEnv *envtest.Environment
 
-var additionalLables = map[string]string{
-	"additional": "label",
-	"another":    "test",
+func TestAPIs(t *testing.T) {
+	RegisterFailHandler(Fail)
+
+	RunSpecs(t, "Controller Suite")
 }
 
-func TestMain(m *testing.M) {
-	// TODO: We can probably remove this once we upgrade our minimum supported version of Kubernetes
-	customApiServerFlags := []string{
-		"--feature-gates=StartupProbe=true",
-	}
+var _ = BeforeSuite(func() {
+	// Define testing timeouts/durations and intervals.
+	const (
+		timeout  = time.Second * 5
+		duration = time.Millisecond * 500
+		interval = time.Millisecond * 250
+	)
+	SetDefaultConsistentlyDuration(duration)
+	SetDefaultConsistentlyPollingInterval(interval)
+	SetDefaultEventuallyTimeout(timeout)
+	SetDefaultEventuallyPollingInterval(interval)
 
-	apiServerFlags := append([]string(nil), envtest.DefaultKubeAPIServerFlags...)
-	apiServerFlags = append(apiServerFlags, customApiServerFlags...)
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
-	ctrl.SetLogger(zap.New(zap.UseDevMode(true)))
-	t := &envtest.Environment{
+	By("bootstrapping test environment")
+	testEnv = &envtest.Environment{
 		CRDDirectoryPaths: []string{
 			filepath.Join("..", "config", "crd", "bases"),
-			filepath.Join("..", "config", "dependencies"),
+			filepath.Join("..", "config", "dependencies"), // Add ZookeeperCluster CRD
 		},
-		AttachControlPlaneOutput: false, // set to true to get more logging from the control plane
-		KubeAPIServerFlags:       apiServerFlags,
-	}
-	solrv1beta1.AddToScheme(scheme.Scheme)
-	zkOp.AddToScheme(scheme.Scheme)
-
-	var err error
-	if testCfg, err = t.Start(); err != nil {
-		stdlog.Fatal(err)
+		ErrorIfCRDPathMissing: true,
 	}
 
-	code := m.Run()
-	t.Stop()
-	os.Exit(code)
-}
+	cfg, err := testEnv.Start()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cfg).NotTo(BeNil())
 
-// SetupTestReconcile returns a reconcile.Reconcile implementation that delegates to inner and
-// writes the request to requests after Reconcile is finished.
-func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan reconcile.Request) {
-	requests := make(chan reconcile.Request)
-	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
-		result, err := inner.Reconcile(req)
-		if err != nil {
-			fmt.Printf("\n\nReconcile Error: %s\n\n", err)
-		}
-		requests <- req
-		return result, err
+	err = solrv1beta1.AddToScheme(scheme.Scheme)
+	err = zk_api.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	//+kubebuilder:scaffold:scheme
+	UseZkCRD(true)
+
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(k8sClient).NotTo(BeNil())
+
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
 	})
-	return fn, requests
-}
+	Expect(err).ToNot(HaveOccurred())
 
-// StartTestManager adds recFn
-func StartTestManager(mgr manager.Manager, g *gomega.GomegaWithT) (chan struct{}, *sync.WaitGroup) {
-	stop := make(chan struct{})
-	wg := &sync.WaitGroup{}
-	wg.Add(1)
+	// Start up Reconcilers
+	By("starting the reconcilers")
+	Expect((&SolrCloudReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
+	Expect((&SolrPrometheusExporterReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
+	Expect((&SolrBackupReconciler{
+		Client: k8sManager.GetClient(),
+		Scheme: k8sManager.GetScheme(),
+	}).SetupWithManager(k8sManager)).To(Succeed())
+
 	go func() {
-		defer wg.Done()
-		g.Expect(mgr.Start(stop)).NotTo(gomega.HaveOccurred())
+		Expect(k8sManager.Start(ctrl.SetupSignalHandler())).To(Succeed())
 	}()
-	return stop, wg
-}
+
+}, 60)
+
+var _ = AfterSuite(func() {
+	By("tearing down the test environment")
+	Expect(testEnv.Stop()).To(Succeed())
+})

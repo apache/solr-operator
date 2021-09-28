@@ -17,8 +17,8 @@ WORKDIR /workspace
 ARG GO111MODULE=on
 
 # Download necessary libraries
-RUN go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0; \
-    go install github.com/google/go-licenses@latest
+RUN GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0; \
+    GOBIN=$(pwd)/bin go install github.com/google/go-licenses@latest
 
 # Copy the Go Modules manifests
 COPY go.mod go.sum ./
@@ -63,6 +63,6 @@ WORKDIR /
 COPY --from=builder workspace/bin/solr-operator .
 COPY --from=builder workspace/LICENSE workspace/NOTICE etc/licenses/
 COPY --from=builder workspace/licenses etc/licenses/dependencies
-USER nonroot:nonroot
+USER 65532:65532
 
 ENTRYPOINT ["/solr-operator"]

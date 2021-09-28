@@ -18,169 +18,425 @@
 package controllers
 
 import (
-	"fmt"
-	"testing"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/onsi/gomega"
-	"github.com/stretchr/testify/assert"
+	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	extv1 "k8s.io/api/extensions/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func emptyRequests(requests chan reconcile.Request) {
-	for len(requests) > 0 {
-		<-requests
+// Add one to an optional offset
+func resolveOffset(additionalOffset []int) (offset int) {
+	if len(additionalOffset) == 0 {
+		offset = 0
+	} else {
+		offset = additionalOffset[0]
 	}
+	return offset + 1
 }
 
-func expectStatefulSet(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, statefulSetKey types.NamespacedName) *appsv1.StatefulSet {
-	stateful := &appsv1.StatefulSet{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
-		Should(gomega.Succeed())
-
-	// Verify the statefulSet Specs
-	testMapContainsOther(t, "StatefulSet pod template selector", stateful.Spec.Template.Labels, stateful.Spec.Selector.MatchLabels)
-	assert.GreaterOrEqual(t, len(stateful.Spec.Selector.MatchLabels), 1, "StatefulSet pod template selector must have at least 1 label")
-
-	// Delete the StatefulSet and expect Reconcile to be called for StatefulSet deletion
-	g.Expect(testClient.Delete(context.TODO(), stateful)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
-		Should(gomega.Succeed())
-
-	// Manually delete StatefulSet since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), stateful) }, timeout).
-		Should(gomega.MatchError("statefulsets.apps \"" + statefulSetKey.Name + "\" not found"))
-
-	return stateful
+func resourceKey(parentResource client.Object, name string) types.NamespacedName {
+	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
 }
 
-func expectNoStatefulSet(g *gomega.GomegaWithT, statefulSetKey types.NamespacedName) {
-	stateful := &appsv1.StatefulSet{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), statefulSetKey, stateful) }, timeout).
-		Should(gomega.MatchError("StatefulSet.apps \"" + statefulSetKey.Name + "\" not found"))
+func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
+	return expectSolrCloudWithChecks(ctx, solrCloud, nil, resolveOffset(additionalOffset))
 }
 
-func expectService(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, serviceKey types.NamespacedName, selectorLables map[string]string) *corev1.Service {
+func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+	}).Should(Succeed())
+
+	return foundSolrCloud
+}
+
+func expectSolrCloudWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+	}).Should(Succeed())
+
+	return foundSolrCloud
+}
+
+func expectSolrCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloudStatus {
+	return expectSolrCloudStatusWithChecks(ctx, solrCloud, nil, resolveOffset(additionalOffset))
+}
+
+func expectSolrCloudStatusWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus), additionalOffset ...int) *solrv1beta1.SolrCloudStatus {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, &foundSolrCloud.Status)
+		}
+	}).Should(Succeed())
+
+	return &foundSolrCloud.Status
+}
+
+func expectSolrCloudStatusConsistentWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloudStatus), additionalOffset ...int) *solrv1beta1.SolrCloudStatus {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, &foundSolrCloud.Status)
+		}
+	}).Should(Succeed())
+
+	return &foundSolrCloud.Status
+}
+
+func expectSolrPrometheusExporter(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, additionalOffset ...int) *solrv1beta1.SolrPrometheusExporter {
+	return expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, nil, resolveOffset(additionalOffset))
+}
+
+func expectSolrPrometheusExporterWithChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, additionalChecks func(Gomega, *solrv1beta1.SolrPrometheusExporter), additionalOffset ...int) *solrv1beta1.SolrPrometheusExporter {
+	foundSolrPrometheusExporter := &solrv1beta1.SolrPrometheusExporter{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, solrPrometheusExporter.Name), foundSolrPrometheusExporter)).To(Succeed(), "Expected SolrPrometheusExporter does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrPrometheusExporter)
+		}
+	}).Should(Succeed())
+
+	return foundSolrPrometheusExporter
+}
+
+func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
+	foundSolrPrometheusExporter := &solrv1beta1.SolrCloud{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, solrPrometheusExporter.Name), foundSolrPrometheusExporter)).To(Succeed(), "Expected SolrPrometheusExporter does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrPrometheusExporter)
+		}
+	}).Should(Succeed())
+
+	return foundSolrPrometheusExporter
+}
+
+func expectSecret(ctx context.Context, parentResource client.Object, secretName string, additionalOffset ...int) *corev1.Secret {
+	return expectSecretWithChecks(ctx, parentResource, secretName, nil, resolveOffset(additionalOffset))
+}
+
+func expectSecretWithChecks(ctx context.Context, parentResource client.Object, secretName string, additionalChecks func(Gomega, *corev1.Secret), additionalOffset ...int) *corev1.Secret {
+	found := &corev1.Secret{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, secretName), found)).To(Succeed(), "Expected Secret does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, found)
+		}
+	}).Should(Succeed())
+
+	return found
+}
+
+func expectStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string, additionalOffset ...int) *appsv1.StatefulSet {
+	return expectStatefulSetWithChecks(ctx, parentResource, statefulSetName, nil, resolveOffset(additionalOffset))
+}
+
+func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Object, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Should(Succeed())
+
+	By("recreating the StatefulSet after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, statefulSet)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &appsv1.StatefulSet{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(statefulSet.UID))), "New StatefulSet, with new UID, not created.")
+
+	return statefulSet
+}
+
+func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource client.Object, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Should(Succeed())
+
+	return statefulSet
+}
+
+func expectNoStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
+	}).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
+}
+
+func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalOffset ...int) *corev1.Service {
+	return expectServiceWithChecks(ctx, parentResource, serviceName, selectorLables, isHeadless, nil, resolveOffset(additionalOffset))
+}
+
+func expectServiceWithChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
-		Should(gomega.Succeed())
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
-	assert.Equal(t, selectorLables, service.Spec.Selector, "Service is not pointing to the correct Pods.")
+		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
-	// Delete the Service and expect Reconcile to be called for Service deletion
-	g.Expect(testClient.Delete(context.TODO(), service)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
-		Should(gomega.Succeed())
+		if isHeadless {
+			g.Expect(service.Spec.ClusterIP).To(Equal("None"), "The clusterIP field of a headless service should be None")
+		} else {
+			g.Expect(service.Spec.ClusterIP).To(Not(Equal("None")), "The clusterIP field of a non-headless service should not be None")
+		}
 
-	// Manually delete Service since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), service) }, timeout).
-		Should(gomega.MatchError("services \"" + serviceKey.Name + "\" not found"))
+		if additionalChecks != nil {
+			additionalChecks(g, service)
+		}
+	}).Should(Succeed())
+
+	By("recreating the Service after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, service)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &corev1.Service{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, serviceName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(service.UID))), "New Service, with new UID, not created.")
 
 	return service
 }
 
-func expectNoService(g *gomega.GomegaWithT, serviceKey types.NamespacedName, message string) {
+func expectServiceWithConsistentChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), serviceKey, service) }, timeout).
-		Should(gomega.MatchError("Service \""+serviceKey.Name+"\" not found"), message)
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
+
+		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
+
+		if isHeadless {
+			g.Expect(service.Spec.ClusterIP).To(Equal("None"), "The clusterIP field of a headless service should be None")
+		} else {
+			g.Expect(service.Spec.ClusterIP).To(Not(Equal("None")), "The clusterIP field of a non-headless service should not be None")
+		}
+
+		if additionalChecks != nil {
+			additionalChecks(g, service)
+		}
+	}).Should(Succeed())
+
+	return service
 }
 
-func expectIngress(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, ingressKey types.NamespacedName) *extv1.Ingress {
-	ingress := &extv1.Ingress{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
-		Should(gomega.Succeed())
+func expectNoService(ctx context.Context, parentResource client.Object, serviceName string, message string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})
+	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
+}
 
-	// Delete the Ingress and expect Reconcile to be called for Ingress deletion
-	g.Expect(testClient.Delete(context.TODO(), ingress)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
-		Should(gomega.Succeed())
+func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames []string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		for _, serviceName := range serviceNames {
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
+		}
+	}).Should(Succeed())
+}
 
-	// Manually delete Ingress since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), ingress) }, timeout).
-		Should(gomega.MatchError("ingresses.extensions \"" + ingressKey.Name + "\" not found"))
+func expectIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) *netv1.Ingress {
+	return expectIngressWithChecks(ctx, parentResource, ingressName, nil, resolveOffset(additionalOffset))
+}
+
+func expectIngressWithChecks(ctx context.Context, parentResource client.Object, ingressName string, additionalChecks func(Gomega, *netv1.Ingress), additionalOffset ...int) *netv1.Ingress {
+	ingress := &netv1.Ingress{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, ingressName), ingress)).To(Succeed(), "Expected Ingress does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, ingress)
+		}
+	}).Should(Succeed())
+
+	By("recreating the Ingress after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, ingress)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &netv1.Ingress{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, ingressName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(ingress.UID))), "New Ingress, with new UID, not created.")
 
 	return ingress
 }
 
-func expectNoIngress(g *gomega.GomegaWithT, ingressKey types.NamespacedName) {
-	ingress := &extv1.Ingress{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), ingressKey, ingress) }, timeout).
-		Should(gomega.MatchError("Ingress.extensions \"" + ingressKey.Name + "\" not found"))
+func expectIngressWithConsistentChecks(ctx context.Context, parentResource client.Object, ingressName string, additionalChecks func(Gomega, *netv1.Ingress), additionalOffset ...int) *netv1.Ingress {
+	ingress := &netv1.Ingress{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, ingressName), ingress)).To(Succeed(), "Expected Ingress does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, ingress)
+		}
+	}).Should(Succeed())
+
+	return ingress
 }
 
-func expectConfigMap(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, configMapKey types.NamespacedName, configMapData map[string]string) *corev1.ConfigMap {
+func expectNoIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
+	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
+func expectConfigMap(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalOffset ...int) *corev1.ConfigMap {
+	return expectConfigMapWithChecks(ctx, parentResource, configMapName, configMapData, nil, resolveOffset(additionalOffset))
+}
+
+func expectConfigMapWithChecks(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap), additionalOffset ...int) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
-		Should(gomega.Succeed())
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, configMapName), configMap)).To(Succeed(), "Expected ConfigMap does not exist")
 
-	// Verify the ConfigMap Specs
-	for k, d := range configMapData {
-		assert.Equal(t, configMap.Data[k], d, "ConfigMap does not have the correct data.")
-	}
+		// Verify the ConfigMap Data
+		g.Expect(configMap.Data).To(Equal(configMapData), "ConfigMap does not have the correct data.")
 
-	// Delete the ConfigMap and expect Reconcile to be called for Deployment deletion
-	g.Expect(testClient.Delete(context.TODO(), configMap)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
-		Should(gomega.Succeed())
+		if additionalChecks != nil {
+			additionalChecks(g, configMap)
+		}
+	}).Should(Succeed())
 
-	// Manually delete ConfigMap since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), configMap) }, timeout).
-		Should(gomega.MatchError("configmaps \"" + configMapKey.Name + "\" not found"))
+	By("recreating the ConfigMap after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, configMap)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &corev1.ConfigMap{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, configMapName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(configMap.UID))), "New ConfigMap, with new UID, not created.")
 
 	return configMap
 }
 
-func expectNoConfigMap(g *gomega.GomegaWithT, configMapKey types.NamespacedName) {
+func expectConfigMapWithConsistentChecks(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalChecks func(Gomega, *corev1.ConfigMap), additionalOffset ...int) *corev1.ConfigMap {
 	configMap := &corev1.ConfigMap{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), configMapKey, configMap) }, timeout).
-		Should(gomega.MatchError("ConfigMap \"" + configMapKey.Name + "\" not found"))
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, configMapName), configMap)).To(Succeed(), "Expected ConfigMap does not exist")
+
+		// Verify the ConfigMap Data
+		g.Expect(configMap.Data).To(Equal(configMapData), "ConfigMap does not have the correct data.")
+
+		if additionalChecks != nil {
+			additionalChecks(g, configMap)
+		}
+	}).Should(Succeed())
+
+	return configMap
 }
 
-func expectDeployment(t *testing.T, g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, deploymentKey types.NamespacedName, configMapName string) *appsv1.Deployment {
-	deploy := &appsv1.Deployment{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), deploymentKey, deploy) }, timeout).
-		Should(gomega.Succeed())
+func expectNoConfigMap(ctx context.Context, parentResource client.Object, configMapName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, configMapName), &corev1.ConfigMap{})
+	}).Should(MatchError("configmaps \""+configMapName+"\" not found"), "ConfigMap exists when it should not")
+}
 
-	// Verify the deployment Specs
-	testMapContainsOther(t, "Deployment pod template selector", deploy.Spec.Template.Labels, deploy.Spec.Selector.MatchLabels)
-	assert.GreaterOrEqual(t, len(deploy.Spec.Selector.MatchLabels), 1, "Deployment pod template selector must have at least 1 label")
+func expectDeployment(ctx context.Context, parentResource client.Object, deploymentName string, additionalOffset ...int) *appsv1.Deployment {
+	return expectDeploymentWithChecks(ctx, parentResource, deploymentName, nil, resolveOffset(additionalOffset))
+}
 
-	if configMapName != "" {
-		if assert.LessOrEqual(t, 1, len(deploy.Spec.Template.Spec.Volumes), "Deployment should have at least 1 volume, the configMap. Less were found.") {
-			assert.Equal(t, configMapName, deploy.Spec.Template.Spec.Volumes[0].ConfigMap.Name, "Deployment configMap volume has the wrong name.")
+func expectDeploymentWithChecks(ctx context.Context, parentResource client.Object, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment), additionalOffset ...int) *appsv1.Deployment {
+	deployment := &appsv1.Deployment{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), deployment)).To(Succeed(), "Expected Deployment does not exist")
+
+		// Verify the Deployment Specs
+		testMapContainsOtherWithGomega(g, "Deployment pod template selector", deployment.Spec.Template.Labels, deployment.Spec.Selector.MatchLabels)
+		g.Expect(len(deployment.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "Deployment pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, deployment)
 		}
-	}
+	}).Should(Succeed())
 
-	// Delete the Deployment and expect Reconcile to be called for Deployment deletion
-	g.Expect(testClient.Delete(context.TODO(), deploy)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), deploymentKey, deploy) }, timeout).
-		Should(gomega.Succeed())
+	By("recreating the Deployment after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, deployment)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &appsv1.Deployment{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(deployment.UID))), "New Deployment, with new UID, not created.")
 
-	// Manually delete Deployment since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), deploy) }, timeout).
-		Should(gomega.MatchError("deployments.apps \"" + deploymentKey.Name + "\" not found"))
+	return deployment
+}
 
-	return deploy
+func expectDeploymentWithConsistentChecks(ctx context.Context, parentResource client.Object, deploymentName string, additionalChecks func(Gomega, *appsv1.Deployment), additionalOffset ...int) *appsv1.Deployment {
+	deployment := &appsv1.Deployment{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), deployment)).To(Succeed(), "Expected Deployment does not exist")
+
+		// Verify the Deployment Specs
+		testMapContainsOtherWithGomega(g, "Deployment pod template selector", deployment.Spec.Template.Labels, deployment.Spec.Selector.MatchLabels)
+		g.Expect(len(deployment.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "Deployment pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, deployment)
+		}
+	}).Should(Succeed())
+
+	return deployment
+}
+
+func expectNoDeployment(ctx context.Context, parentResource client.Object, deploymentName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), &appsv1.Deployment{})
+	}).Should(MatchError("deployments.apps \""+deploymentName+"\" not found"), "Deployment exists when it should not")
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
@@ -188,8 +444,9 @@ func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
 	return &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: secretData, Type: corev1.SecretTypeBasicAuth}
 }
 
-func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) {
-	assert.NotNil(t, podTemplate.Spec.Volumes)
+func expectInitdbVolumeMount(podTemplate *corev1.PodTemplateSpec, additionalOffset ...int) {
+	offset := resolveOffset(additionalOffset)
+	ExpectWithOffset(offset, podTemplate.Spec.Volumes).To(Not(BeNil()), "No volumes given for Pod")
 	var initdbVol *corev1.Volume = nil
 	for _, vol := range podTemplate.Spec.Volumes {
 		if vol.Name == "initdb" {
@@ -197,11 +454,10 @@ func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) 
 			break
 		}
 	}
-	assert.NotNil(t, initdbVol, fmt.Sprintf("initdb volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes))
-	assert.NotNil(t, initdbVol.VolumeSource.EmptyDir, "initdb volume should be an emptyDir")
+	ExpectWithOffset(offset, initdbVol).To(Not(BeNil()), "initdb volume not found in pod template; volumes: %v", podTemplate.Spec.Volumes)
+	ExpectWithOffset(offset, initdbVol.VolumeSource.EmptyDir).To(Not(BeNil()), "initdb volume should be an emptyDir")
 
-	assert.NotNil(t, podTemplate.Spec.Containers)
-	assert.True(t, len(podTemplate.Spec.Containers) > 0)
+	ExpectWithOffset(offset, podTemplate.Spec.Containers).To(Not(BeEmpty()), "No containers specified for Pod")
 	mainContainer := podTemplate.Spec.Containers[0]
 	var initdbMount *corev1.VolumeMount = nil
 	for _, m := range mainContainer.VolumeMounts {
@@ -210,11 +466,12 @@ func expectInitdbVolumeMount(t *testing.T, podTemplate *corev1.PodTemplateSpec) 
 			break
 		}
 	}
-	assert.NotNil(t, initdbMount)
-	assert.Equal(t, util.InitdbPath, initdbMount.MountPath)
+	ExpectWithOffset(offset, initdbMount).To(Not(BeNil()), "No volume mount found for initdb")
+	ExpectWithOffset(offset, initdbMount.MountPath).To(Equal(util.InitdbPath), "Incorrect Mount Path")
 }
 
-func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expName string, expVolMountName string, expVolMountPath string) *corev1.Container {
+func expectInitContainer(podTemplate *corev1.PodTemplateSpec, expName string, expVolMountName string, expVolMountPath string, additionalOffset ...int) *corev1.Container {
+	offset := resolveOffset(additionalOffset)
 	var expInitContainer *corev1.Container = nil
 	for _, cnt := range podTemplate.Spec.InitContainers {
 		if cnt.Name == expName {
@@ -222,8 +479,8 @@ func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expN
 			break
 		}
 	}
-	assert.NotNil(t, expInitContainer, "Didn't find the "+expName+" InitContainer!")
-	assert.Equal(t, 3, len(expInitContainer.Command), "Wrong command length for "+expName+" init container")
+	ExpectWithOffset(offset, expInitContainer).To(Not(BeNil()), "Didn't find the %s InitContainer", expName)
+	ExpectWithOffset(offset, expInitContainer.Command).To(HaveLen(3), "Wrong command length for %s init container", expName)
 
 	var volMount *corev1.VolumeMount = nil
 	for _, m := range expInitContainer.VolumeMounts {
@@ -232,8 +489,8 @@ func expectInitContainer(t *testing.T, podTemplate *corev1.PodTemplateSpec, expN
 			break
 		}
 	}
-	assert.NotNil(t, volMount, "No "+expVolMountName+" volumeMount for "+expName+" InitContainer")
-	assert.Equal(t, expVolMountPath, volMount.MountPath, "Wrong mount path "+volMount.MountPath+" for "+expName+" InitContainer")
+	ExpectWithOffset(offset, volMount).To(Not(BeNil()), "No %s volumeMount for the %s InitContainer", expVolMountName, expName)
+	ExpectWithOffset(offset, volMount.MountPath).To(Equal(expVolMountPath), "Wrong mount path for the %s InitContainer", expName)
 
 	return expInitContainer
 }
@@ -249,62 +506,64 @@ func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.Env
 	return filtered
 }
 
-func testPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
-	testGenericPodEnvVariables(t, expectedEnvVars, foundEnvVars, "SOLR_OPTS")
+func testPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
+	testGenericPodEnvVariables(expectedEnvVars, foundEnvVars, "SOLR_OPTS", resolveOffset(additionalOffset))
 }
 
-func testMetricsPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar) {
-	testGenericPodEnvVariables(t, expectedEnvVars, foundEnvVars, "JAVA_OPTS")
+func testPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
+	testGenericPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnvVars, "SOLR_OPTS", resolveOffset(additionalOffset))
 }
 
-func testGenericPodEnvVariables(t *testing.T, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string) {
+func testMetricsPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
+	testGenericPodEnvVariables(expectedEnvVars, foundEnvVars, "JAVA_OPTS", resolveOffset(additionalOffset))
+}
+
+func testMetricsPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
+	testGenericPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnvVars, "JAVA_OPTS", resolveOffset(additionalOffset))
+}
+
+func testGenericPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string, additionalOffset ...int) {
+	testGenericPodEnvVariablesWithGomega(Default, expectedEnvVars, foundEnvVars, lastVarName, resolveOffset(additionalOffset))
+}
+
+func testGenericPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string, additionalOffset ...int) {
+	offset := resolveOffset(additionalOffset)
 	matchCount := 0
 	for _, envVar := range foundEnvVars {
 		if expectedVal, match := expectedEnvVars[envVar.Name]; match {
 			matchCount += 1
-			assert.Equal(t, expectedVal, envVar.Value, "Wrong value for env variable '%s' in podSpec", envVar.Name)
+			g.ExpectWithOffset(offset, envVar.Value).To(Equal(expectedVal), "Wrong value for env variable '%s' in podSpec", envVar.Name)
 		}
 	}
-	assert.Equal(t, len(expectedEnvVars), matchCount, "Not all expected env variables found in podSpec")
-	assert.Equal(t, lastVarName, foundEnvVars[len(foundEnvVars)-1].Name, lastVarName+" must be the last envVar set, as it uses other envVars.")
+	g.ExpectWithOffset(offset, matchCount).To(Equal(len(expectedEnvVars)), "Not all expected env variables found in podSpec")
+	g.ExpectWithOffset(offset, foundEnvVars[len(foundEnvVars)-1].Name).To(Equal(lastVarName), "%s must be the last envVar set, as it uses other envVars.", lastVarName)
 }
 
-func testPodTolerations(t *testing.T, expectedTolerations []corev1.Toleration, foundTolerations []corev1.Toleration) {
-	assert.EqualValues(t, expectedTolerations, foundTolerations, "Expected tolerations and found tolerations don't match")
+func testMapContainsOther(mapName string, base map[string]string, other map[string]string, additionalOffset ...int) {
+	testMapContainsOtherWithGomega(Default, mapName, base, other, resolveOffset(additionalOffset))
 }
 
-func testPodProbe(t *testing.T, expectedProbe *corev1.Probe, foundProbe *corev1.Probe, probeType string) {
-	assert.EqualValuesf(t, expectedProbe, foundProbe, "Incorrect default container %s probe", probeType)
-}
-
-func testPodLifecycle(t *testing.T, expectedLifecycle *corev1.Lifecycle, foundLifecycle *corev1.Lifecycle) {
-	assert.EqualValuesf(t, expectedLifecycle, foundLifecycle, "Expected Lifecycle and found Lifecyle don't match")
-}
-
-func testMapsEqual(t *testing.T, mapName string, expected map[string]string, found map[string]string) {
-	assert.Equal(t, expected, found, "Expected and found %s are not the same", mapName)
-}
-
-func testMapContainsOther(t *testing.T, mapName string, base map[string]string, other map[string]string) {
+func testMapContainsOtherWithGomega(g Gomega, mapName string, base map[string]string, other map[string]string, additionalOffset ...int) {
+	offset := resolveOffset(additionalOffset)
 	for k, v := range other {
-		foundV, foundExists := base[k]
-		assert.True(t, foundExists, "Expected key '%s' does not exist in found %s", k, mapName)
-		if foundExists {
-			assert.Equal(t, v, foundV, "Wrong value for %s key '%s'", mapName, k)
-		}
+		g.ExpectWithOffset(offset, base).To(HaveKeyWithValue(k, v), "Expected key '%s' is not correct in found %s", k, mapName)
 	}
 }
 
-func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
+func testACLEnvVars(actualEnvVars []corev1.EnvVar, hasReadOnly bool, additionalOffset ...int) {
+	testACLEnvVarsWithGomega(Default, actualEnvVars, hasReadOnly, resolveOffset(additionalOffset))
+}
+
+func testACLEnvVarsWithGomega(g Gomega, actualEnvVars []corev1.EnvVar, hasReadOnly bool, additionalOffset ...int) {
 	/*
 		This test verifies ACL related env vars are set correctly and in the correct order, but expects a very specific config to be used in your test SolrCloud config:
-
-					AllACL: &solr.ZookeeperACL{
+		set hasReadOnly = false if ReadOnlyACL is not provided
+					AllACL: &solrv1beta1.ZookeeperACL{
 						SecretRef:   "secret-name",
 						UsernameKey: "user",
 						PasswordKey: "pass",
 					},
-					ReadOnlyACL: &solr.ZookeeperACL{
+					ReadOnlyACL: &solrv1beta1.ZookeeperACL{
 						SecretRef:   "read-secret-name",
 						UsernameKey: "read-only-user",
 						PasswordKey: "read-only-pass",
@@ -333,71 +592,68 @@ func testACLEnvVars(t *testing.T, actualEnvVars []corev1.EnvVar) {
 				},
 			},
 		},
-		{
-			Name: "ZK_READ_ACL_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-user",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name: "ZK_READ_ACL_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
-					Key:                  "read-only-pass",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name:      "SOLR_ZK_CREDS_AND_ACLS",
-			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
-			ValueFrom: nil,
-		},
 	}
-	assert.Equal(t, zkAclEnvVars, actualEnvVars, "ZK ACL Env Vars are not correct")
+	if hasReadOnly {
+		zkAclEnvVars = append(zkAclEnvVars,
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_USERNAME",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+						Key:                  "read-only-user",
+						Optional:             &f,
+					},
+				},
+			},
+			corev1.EnvVar{
+				Name: "ZK_READ_ACL_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "read-secret-name"},
+						Key:                  "read-only-pass",
+						Optional:             &f,
+					},
+				},
+			},
+			corev1.EnvVar{
+				Name:      "SOLR_ZK_CREDS_AND_ACLS",
+				Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD) -DzkDigestReadonlyUsername=$(ZK_READ_ACL_USERNAME) -DzkDigestReadonlyPassword=$(ZK_READ_ACL_PASSWORD)",
+				ValueFrom: nil,
+			})
+	} else {
+		zkAclEnvVars = append(zkAclEnvVars,
+			corev1.EnvVar{
+				Name:      "SOLR_ZK_CREDS_AND_ACLS",
+				Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)",
+				ValueFrom: nil,
+			})
+	}
+	g.ExpectWithOffset(resolveOffset(additionalOffset), actualEnvVars).To(Equal(zkAclEnvVars), "ZK ACL Env Vars are not correct")
 }
 
-func cleanupTest(g *gomega.GomegaWithT, namespace string) {
-	deleteOpts := []client.DeleteAllOfOption{
-		client.InNamespace(namespace),
-	}
-
-	cleanupObjects := []runtime.Object{
+func cleanupTest(ctx context.Context, parentResource client.Object) {
+	cleanupObjects := []client.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
-		&solr.SolrCloud{}, &solr.SolrBackup{}, &solr.SolrPrometheusExporter{},
-
-		// Dependency CRDs
-		&zkv1beta1.ZookeeperCluster{},
+		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
+		&zk_api.ZookeeperCluster{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
-		&corev1.ConfigMap{}, &batchv1.Job{}, &extv1.Ingress{},
+		&corev1.ConfigMap{}, &batchv1.Job{}, &netv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
 		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
 		&corev1.Secret{},
 	}
-	cleanupTestObjects(g, namespace, deleteOpts, cleanupObjects)
-
-	// Delete all Services separately (https://github.com/kubernetes/kubernetes/pull/85802#issuecomment-561239845)
-	opts := []client.ListOption{
-		client.InNamespace(namespace),
+	By("deleting all managed resources")
+	for _, obj := range cleanupObjects {
+		Expect(k8sClient.DeleteAllOf(ctx, obj, client.InNamespace(parentResource.GetNamespace()))).To(Succeed())
 	}
-	services := &corev1.ServiceList{}
-	g.Eventually(func() error { return testClient.List(context.TODO(), services, opts...) }, timeout).Should(gomega.Succeed())
 
-	for _, item := range services.Items {
-		g.Eventually(func() error { return testClient.Delete(context.TODO(), &item) }, timeout).Should(gomega.Succeed())
-	}
-}
-
-func cleanupTestObjects(g *gomega.GomegaWithT, namespace string, deleteOpts []client.DeleteAllOfOption, objects []runtime.Object) {
-	// Delete all SolrClouds
-	for _, obj := range objects {
-		g.Eventually(func() error { return testClient.DeleteAllOf(context.TODO(), obj, deleteOpts...) }, timeout).Should(gomega.Succeed())
+	By("deleting all services individually")
+	// Clean up Services individually, since they do not support delete collection
+	serviceList := &corev1.ServiceList{}
+	Expect(k8sClient.List(ctx, serviceList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed(), "List all of the services to delete in the namespace")
+	for _, item := range serviceList.Items {
+		Expect(k8sClient.Delete(ctx, &item)).To(Succeed())
 	}
 }
 
@@ -573,15 +829,15 @@ var (
 			},
 		},
 	}
-	one                = int64(1)
-	two                = int64(2)
-	four               = int32(4)
-	five               = int32(5)
-	podSecurityContext = corev1.PodSecurityContext{
+	one                    = int64(1)
+	two                    = int64(2)
+	four                   = int32(4)
+	five                   = int32(5)
+	testPodSecurityContext = corev1.PodSecurityContext{
 		RunAsUser:  &one,
 		RunAsGroup: &two,
 	}
-	extraVolumes = []solr.AdditionalVolume{
+	extraVolumes = []solrv1beta1.AdditionalVolume{
 		{
 			Name: "vol1",
 			Source: corev1.VolumeSource{
@@ -595,7 +851,7 @@ var (
 			},
 		},
 	}
-	affinity = &corev1.Affinity{
+	testAffinity = &corev1.Affinity{
 		PodAffinity: &corev1.PodAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
 				{
@@ -605,7 +861,7 @@ var (
 			PreferredDuringSchedulingIgnoredDuringExecution: nil,
 		},
 	}
-	resources = corev1.ResourceRequirements{
+	testResources = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
 		},
@@ -646,7 +902,7 @@ var (
 		},
 	}
 	testServiceAccountName = "test-service-account"
-	zkConf                 = zkv1beta1.ZookeeperConfig{
+	zkConf                 = solrv1beta1.ZookeeperConfig{
 		InitLimit:            1,
 		SyncLimit:            5,
 		PreAllocSize:         2,

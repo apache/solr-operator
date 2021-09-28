@@ -18,631 +18,425 @@
 package controllers
 
 import (
-	"testing"
-
-	"k8s.io/apimachinery/pkg/types"
-
+	"context"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	"github.com/stretchr/testify/assert"
-
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/onsi/gomega"
-	"golang.org/x/net/context"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var _ reconcile.Reconciler = &SolrCloudReconciler{}
+var _ = FDescribe("SolrCloud controller - External DNS", func() {
+	var (
+		ctx context.Context
 
-func TestEDSCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
+		solrCloud *solrv1beta1.SolrCloud
+	)
 
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
+	BeforeEach(func() {
+		ctx = context.Background()
+
+		replicas := int32(2)
+		solrCloud = &solrv1beta1.SolrCloud{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "default",
+			},
+			Spec: solrv1beta1.SolrCloudSpec{
+				Replicas: &replicas,
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					CommonServiceOptions: &solrv1beta1.ServiceOptions{
+						Annotations: testCommonServiceAnnotations,
+						Labels:      testCommonServiceLabels,
+					},
+					HeadlessServiceOptions: &solrv1beta1.ServiceOptions{
+						Annotations: testHeadlessServiceAnnotations,
+						Labels:      testHeadlessServiceLabels,
+					},
 				},
 			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:             solr.ExternalDNS,
+		}
+	})
+
+	JustBeforeEach(func() {
+		By("creating the SolrCloud")
+		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		By("defaulting the missing SolrCloud values")
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.WithDefaults()).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
+		})
+	})
+
+	AfterEach(func() {
+		cleanupTest(ctx, solrCloud)
+	})
+
+	FContext("Full ExternalDNS", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
 					UseExternalAddress: true,
 					DomainName:         testDomain,
 				},
 				PodPort:           3000,
 				CommonServicePort: 4000,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":      "3000",
+				"SOLR_NODE_PORT": "3000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.Namespace + "." + testDomain,
-		"SOLR_PORT":      "3000",
-		"SOLR_NODE_PORT": "3000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":4000"), "Wrong external common address in status")
+			})
+		})
 	})
-	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
-	})
-	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-}
-
-func TestEDSNoNodesCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:             solr.ExternalDNS,
+	FContext("Hiding Nodes from ExternalDNS", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
 					UseExternalAddress: true,
 					HideNodes:          true,
 					DomainName:         testDomain,
 				},
 				PodPort:           2000,
 				CommonServicePort: 5000,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("ensuring the SolrCloud resource is updated with correct specs")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
+				g.Expect(found.Spec.SolrAddressability.External.UseExternalAddress).To(BeFalse(), "useExternalAddress should be set to 'false' when hideNodes is 'true'")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "2000",
+				"SOLR_NODE_PORT": "2000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace,
-		"SOLR_PORT":      "2000",
-		"SOLR_NODE_PORT": "2000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "2000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":5000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":5000"), "Wrong external common address in status")
+			})
+		})
 	})
-	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 5000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	testMapsEqual(t, "headless service annotations", testHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":5000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":5000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-}
-
-func TestEDSNoCommonCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:             solr.ExternalDNS,
+	FContext("Hiding Common from ExternalDNS", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
 					UseExternalAddress: true,
 					HideCommon:         true,
 					DomainName:         testDomain,
 				},
 				PodPort:           3000,
 				CommonServicePort: 2000,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("ensuring the SolrCloud resource is updated with correct specs")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
+				g.Expect(found.Spec.SolrAddressability.External.UseExternalAddress).To(BeTrue(), "useExternalAddress should not be set to 'false' when hideNodes is 'false'")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":      "3000",
+				"SOLR_NODE_PORT": "3000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			Expect(commonService.Annotations).To(Equal(testCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.Namespace + "." + testDomain,
-		"SOLR_PORT":      "3000",
-		"SOLR_NODE_PORT": "3000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	testMapsEqual(t, "common service annotations", testCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
-
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":2000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
+			})
+		})
 	})
-	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
 
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":2000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.Nil(t, instance.Status.ExternalCommonAddress, "External common address in status should be nil")
-}
-
-func TestEDSUseInternalAddressCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:             solr.ExternalDNS,
+	FContext("Use internal address for addressability in Solr", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
 					UseExternalAddress: false,
 					DomainName:         testDomain,
 					NodePortOverride:   454,
 				},
 				PodPort:           3000,
 				CommonServicePort: 4000,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("ensuring the SolrCloud resource is updated with correct specs")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
+				g.Expect(found.Spec.SolrAddressability.External.NodePortOverride).To(Equal(0), "nodePortOverride should not be set to '0' when used with ExternalDNS")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "3000",
+				"SOLR_NODE_PORT": "3000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace,
-		"SOLR_PORT":      "3000",
-		"SOLR_NODE_PORT": "3000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":4000"), "Wrong external common address in status")
+			})
+		})
 	})
-	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
-	})
-	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-}
-
-func TestEDSExtraDomainsCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:                solr.ExternalDNS,
+	FContext("Use extra domains with ExternalDNS", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:                solrv1beta1.ExternalDNS,
 					UseExternalAddress:    true,
 					DomainName:            testDomain,
 					AdditionalDomainNames: testAdditionalDomains,
 				},
 				PodPort:           3000,
 				CommonServicePort: 4000,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":      "3000",
+				"SOLR_NODE_PORT": "3000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			hostnameAnnotation := solrCloud.Namespace + "." + testDomain
+			for _, domain := range testAdditionalDomains {
+				hostnameAnnotation += "," + solrCloud.Namespace + "." + domain
+			}
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
+			})
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + instance.Namespace + "." + testDomain,
-		"SOLR_PORT":      "3000",
-		"SOLR_NODE_PORT": "3000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "3000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	hostnameAnnotation := instance.Namespace + "." + testDomain
-	for _, domain := range testAdditionalDomains {
-		hostnameAnnotation += "," + instance.Namespace + "." + domain
-	}
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+":4000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":4000"), "Wrong external common address in status")
+			})
+		})
 	})
-	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 4000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": hostnameAnnotation,
-	})
-	testMapsEqual(t, "headless service annotations", expectedHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 3000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+":4000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":4000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-}
-
-func TestEDSKubeDomainCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-				},
-			},
-			SolrAddressability: solr.SolrAddressabilityOptions{
-				External: &solr.ExternalAddressability{
-					Method:             solr.ExternalDNS,
+	FContext("Use explicit kube domain & use internal address for Solr", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
 					UseExternalAddress: true,
 					HideNodes:          true,
 					DomainName:         testDomain,
@@ -650,98 +444,131 @@ func TestEDSKubeDomainCloudReconcile(t *testing.T) {
 				PodPort:           2000,
 				CommonServicePort: 5000,
 				KubeDomain:        testKubeDomain,
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				CommonServiceOptions: &solr.ServiceOptions{
-					Annotations: testCommonServiceAnnotations,
-					Labels:      testCommonServiceLabels,
-				},
-				HeadlessServiceOptions: &solr.ServiceOptions{
-					Annotations: testHeadlessServiceAnnotations,
-					Labels:      testHeadlessServiceLabels,
-				},
-			},
-		},
-	}
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("ensuring the SolrCloud resource is updated with correct specs")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
+				g.Expect(found.Spec.SolrAddressability.External.UseExternalAddress).To(BeFalse(), "useExternalAddress should be set to 'false' when hideNodes is 'true'")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_PORT":      "2000",
+				"SOLR_NODE_PORT": "2000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
 
-	cleanupTest(g, instance.Namespace)
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 
-	// Host Alias Tests
-	assert.Nil(t, statefulSet.Spec.Template.Spec.HostAliases, "There is no need for host aliases because traffic is going directly to pods.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace + ".svc." + testKubeDomain,
-		"SOLR_PORT":      "2000",
-		"SOLR_NODE_PORT": "2000",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-	}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	assert.Equal(t, []string{"solr", "stop", "-p", "2000"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
-		"external-dns.alpha.kubernetes.io/hostname": instance.Namespace + "." + testDomain,
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":5000"), "Wrong external common address in status")
+			})
+		})
 	})
-	testMapsEqual(t, "common service annotations", expectedCommonServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 5000, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
 
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	testMapsEqual(t, "headless service annotations", testHeadlessServiceAnnotations, service.Annotations)
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].Name, "Wrong port name on common Service")
-	assert.EqualValues(t, 2000, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
+	FContext("Use explicit kube domain & use external address for Solr", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
+				External: &solrv1beta1.ExternalAddressability{
+					Method:             solrv1beta1.ExternalDNS,
+					UseExternalAddress: true,
+					DomainName:         testDomain,
+				},
+				PodPort:           2000,
+				CommonServicePort: 5000,
+				KubeDomain:        testKubeDomain,
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
+			// Host Alias Tests
+			Expect(statefulSet.Spec.Template.Spec.HostAliases).To(BeNil(), "There is no need for host aliases because traffic is going directly to pods.")
 
-	// Check that the Addresses in the status are correct
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-	assert.Equal(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+".svc."+testKubeDomain+":5000", instance.Status.InternalCommonAddress, "Wrong internal common address in status")
-	assert.NotNil(t, instance.Status.ExternalCommonAddress, "External common address in Status should not be nil.")
-	assert.EqualValues(t, "http://"+cloudCsKey.Name+"."+instance.Namespace+"."+testDomain+":5000", *instance.Status.ExternalCommonAddress, "Wrong external common address in status")
-}
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":      "2000",
+				"SOLR_NODE_PORT": "2000",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
+
+			By("testing the Solr Common Service")
+			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+			expectedCommonServiceAnnotations := util.MergeLabelsOrAnnotations(testCommonServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(commonService.Annotations).To(Equal(expectedCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(5000)), "Wrong port on common Service")
+			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
+
+			By("testing the Solr Headless Service")
+			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+			expectedHeadlessServiceAnnotations := util.MergeLabelsOrAnnotations(testHeadlessServiceAnnotations, map[string]string{
+				"external-dns.alpha.kubernetes.io/hostname": solrCloud.Namespace + "." + testDomain,
+			})
+			Expect(headlessService.Annotations).To(Equal(expectedHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(2000)), "Wrong port on headless Service")
+			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
+
+			By("making sure no individual Solr Node Services exist")
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
+
+			By("making sure no Ingress was created")
+			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+
+			By("making sure the node addresses in the Status are correct")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in status should not be nil")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+"."+testDomain+":5000"), "Wrong external common address in status")
+			})
+		})
+	})
+})

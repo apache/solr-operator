@@ -20,6 +20,7 @@
 *.so
 *.dylib
 bin
+testbin
 release-artifacts
 .DS_Store
 

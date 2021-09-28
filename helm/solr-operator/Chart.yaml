@@ -18,7 +18,7 @@ name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
 version: 0.5.0-prerelease
 appVersion: v0.5.0-prerelease
-kubeVersion: ">= 1.16.0-0"
+kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org/operator
 sources:
   - https://github.com/apache/solr-operator
@@ -54,6 +54,27 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: The minimum supported version for Kubernetes is now v1.19. The Solr Operator is no longer using deprecated APIs, such as networking.k8s.io/v1beta1 for Ingresses.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/277
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/321
+    - kind: changed
+      description: The Solr Operator has upgraded its Kubebuilder dependency to v3.
+      links:
+        - name: Bug Report Issue
+          url: https://github.com/apache/solr-operator/issues/320
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/321
+    - kind: fixed
+      description: The SolrPrometheusExporter controller now watches for changes in referenced Solr Clouds, so the referenced ZKConnectionString is updated if it changes within the SolrCloud status.
+      links:
+        - name: Bug Report Issue
+          url: https://github.com/apache/solr-operator/issues/325
+        - name: Github PR (Large and almost entirely unrelated)
+          url: https://github.com/apache/solr-operator/pull/321
     - kind: deprecated
       description: The legacy backup options (SolrCloud.spec.dataStorage.backupRestoreOptions) have been deprecated. Please use SolrCloud.spec.backupRepositories instead.
       links:

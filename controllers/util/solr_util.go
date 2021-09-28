@@ -32,7 +32,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	netv1 "k8s.io/api/networking/v1beta1"
+	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -645,20 +645,7 @@ func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepositor
 `))
 }
 
-// GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
-// solrCloud: SolrCloud instance
-func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	var annotations map[string]string
-
-	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
-	if nil != customOptions {
-		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
-		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
-	}
-
-	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
-	solrXml := `<?xml version="1.0" encoding="UTF-8" ?>
+const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   <solrcloud>
     <str name="host">${host:}</str>
@@ -676,9 +663,23 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
-  ` + backupSection + `
+  %s
 </solr>
 `
+
+// GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
+// solrCloud: SolrCloud instance
+func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
+	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
+	var annotations map[string]string
+
+	customOptions := solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions
+	if nil != customOptions {
+		labels = MergeLabelsOrAnnotations(labels, customOptions.Labels)
+		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
+	}
+
+	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.ConfigMapName(),
@@ -687,11 +688,15 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			"solr.xml": solrXml,
+			"solr.xml": GenerateSolrXMLString(backupSection),
 		},
 	}
 
 	return configMap
+}
+
+func GenerateSolrXMLString(backupSection string) string {
+	return fmt.Sprintf(DefaultSolrXML, backupSection)
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
@@ -936,8 +941,12 @@ func CreateCommonIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingr
 				Paths: []netv1.HTTPIngressPath{
 					{
 						Backend: netv1.IngressBackend{
-							ServiceName: solrCloud.CommonServiceName(),
-							ServicePort: intstr.FromInt(solrCloud.Spec.SolrAddressability.CommonServicePort),
+							Service: &netv1.IngressServiceBackend{
+								Name: solrCloud.CommonServiceName(),
+								Port: netv1.ServiceBackendPort{
+									Number: int32(solrCloud.Spec.SolrAddressability.CommonServicePort),
+								},
+							},
 						},
 						PathType: &pathType,
 					},
@@ -961,8 +970,12 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 				Paths: []netv1.HTTPIngressPath{
 					{
 						Backend: netv1.IngressBackend{
-							ServiceName: nodeName,
-							ServicePort: intstr.FromInt(solrCloud.NodePort()),
+							Service: &netv1.IngressServiceBackend{
+								Name: nodeName,
+								Port: netv1.ServiceBackendPort{
+									Number: int32(solrCloud.NodePort()),
+								},
+							},
 						},
 						PathType: &pathType,
 					},

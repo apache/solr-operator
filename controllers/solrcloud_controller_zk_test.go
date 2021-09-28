@@ -18,574 +18,520 @@
 package controllers
 
 import (
-	"fmt"
-	"testing"
-
+	"context"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	zkv1beta1 "github.com/pravega/zookeeper-operator/pkg/apis/zookeeper/v1beta1"
-	"github.com/pravega/zookeeper-operator/pkg/controller/zookeepercluster"
+	zk_crd "github.com/apache/solr-operator/controllers/zk_api"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/stretchr/testify/assert"
-
-	solr "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/onsi/gomega"
-	"golang.org/x/net/context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ reconcile.Reconciler = &SolrCloudReconciler{}
+var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
+	var (
+		ctx context.Context
 
-func expectZookeeperCluster(g *gomega.GomegaWithT, requests chan reconcile.Request, expectedRequest reconcile.Request, zookeeperClusterKey types.NamespacedName) *zkv1beta1.ZookeeperCluster {
-	zk := &zkv1beta1.ZookeeperCluster{}
-	g.Eventually(func() error { return testClient.Get(context.TODO(), zookeeperClusterKey, zk) }, timeout).
-		Should(gomega.Succeed())
+		solrCloud *solrv1beta1.SolrCloud
+	)
 
-	// Delete the ZK and expect Reconcile to be called for ZK deletion
-	g.Expect(testClient.Delete(context.TODO(), zk)).NotTo(gomega.HaveOccurred())
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedRequest)))
-	g.Eventually(func() error { return testClient.Get(context.TODO(), zookeeperClusterKey, zk) }, timeout).
-		Should(gomega.Succeed())
+	BeforeEach(func() {
+		ctx = context.Background()
 
-	// Manually delete ZK since GC isn't enabled in the test control plane
-	g.Eventually(func() error { return testClient.Delete(context.TODO(), zk) }, timeout).
-		Should(gomega.MatchError("zookeeperclusters.zookeeper.pravega.io \"" + zookeeperClusterKey.Name + "\" not found"))
+		solrCloud = &solrv1beta1.SolrCloud{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "default",
+			},
+			Spec: solrv1beta1.SolrCloudSpec{},
+		}
+	})
 
-	return zk
-}
+	JustBeforeEach(func() {
+		By("creating the SolrCloud")
+		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
-func TestCloudWithProvidedEphemeralZookeeperReconcile(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					Replicas: &four,
-					Ephemeral: &zkv1beta1.Ephemeral{
-						EmptyDirVolumeSource: corev1.EmptyDirVolumeSource{
-							Medium: "Memory",
+		By("defaulting the missing SolrCloud values")
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.WithDefaults()).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
+		})
+	})
+
+	AfterEach(func() {
+		cleanupTest(ctx, solrCloud)
+	})
+
+	FContext("ZK Connection String - Admin ACL", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+						AllACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "secret-name",
+							UsernameKey: "user",
+							PasswordKey: "pass",
 						},
 					},
-					ZookeeperPod: solr.ZookeeperPodPolicy{
-						Affinity:           affinity,
-						NodeSelector:       testNodeSelectors,
-						Tolerations:        testTolerations,
-						Env:                extraVars,
-						Resources:          resources,
-						ServiceAccountName: testServiceAccountName,
-					},
-					Config: zkConf,
-					ChRoot: "a-ch/root",
 				},
-			},
-			UpdateStrategy: solr.SolrUpdateStrategy{
-				Method: solr.ManualUpdate,
-			},
-		},
-	}
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables: extraVars,
+					},
+				},
+				SolrOpts: "-Dextra -Dopts",
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal("host:7271"), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(BeNil(), "An internal ZK Connection String was given, so the external connection string in the status should be nil")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Not(BeNil()), "All ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Equal(solrCloud.Spec.ZookeeperRef.ConnectionInfo.AllACL), "Incorrect All ACL in SolrCloud Status")
+				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(BeNil(), "ReadOnly ACL in SolrCloud Status should be nil when not provided in the Spec")
+			})
 
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	// Include ZK Operator since we are creating a ZK Cluster
-	g.Expect(zookeepercluster.AddZookeeperReconciler(mgr)).NotTo(gomega.HaveOccurred())
+			// Check extra containers
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires the solr container only.")
 
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "8983",
+				"SOLR_NODE_PORT": "8983",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+			}
+			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			testACLEnvVars(foundEnv[len(foundEnv)-6:len(foundEnv)-3], false)
+			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
+			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+			// TODO: Make this not invalidate foundEnv
+			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+		})
+	})
 
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
+	FContext("ZK Connection String - Admin & Read ACL", func() {
+		connectionString := "host:7271"
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						ExternalConnectionString: &connectionString,
+						AllACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "secret-name",
+							UsernameKey: "user",
+							PasswordKey: "pass",
+						},
+						ReadOnlyACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "read-secret-name",
+							UsernameKey: "read-only-user",
+							PasswordKey: "read-only-pass",
+						},
+						ChRoot: "a-ch/root",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables: extraVars,
+					},
+				},
+				SolrOpts: "-Dextra -Dopts",
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connectionString), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(Not(BeNil()), "An external connection string was given in the spec, so it should not be nil in the status")
+				g.Expect(*found.ZookeeperConnectionInfo.ExternalConnectionString).To(Equal(connectionString), "Wrong external zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Not(BeNil()), "All ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Equal(solrCloud.Spec.ZookeeperRef.ConnectionInfo.AllACL), "Incorrect All ACL in SolrCloud Status")
+				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(Not(BeNil()), "ReadOnly ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(Equal(solrCloud.Spec.ZookeeperRef.ConnectionInfo.ReadOnlyACL), "Incorrect ReadOnly ACL in SolrCloud Status")
+			})
 
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	cleanupTest(g, instance.Namespace)
+			// Check extra containers
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires the solr container only.")
 
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the zkCluster will have been created
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
+			// Env Variable Tests
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/a-ch/root",
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "8983",
+				"SOLR_NODE_PORT": "8983",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+			}
+			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			testACLEnvVars(foundEnv[len(foundEnv)-8:len(foundEnv)-3], true)
+			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
+			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+			// TODO: Make this not invalidate foundEnv
+			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
 
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
+			By("testing that no ZookeeperCluster is created when using a connection String")
+			expectNoZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
+		})
+	})
 
-	// Check that the ZkConnectionInformation is correct
-	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-3.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
-	assert.Equal(t, expectedZkConnStr, instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
-	assert.Equal(t, "/a-ch/root", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
-	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+	FContext("Provided ZK - Ephemeral", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
+						Replicas: &four,
+						Ephemeral: &solrv1beta1.ZKEphemeral{
+							EmptyDirVolumeSource: corev1.EmptyDirVolumeSource{
+								Medium: "Memory",
+							},
+						},
+						ZookeeperPod: solrv1beta1.ZookeeperPodPolicy{
+							Affinity:           testAffinity,
+							NodeSelector:       testNodeSelectors,
+							Tolerations:        testTolerations,
+							Env:                extraVars,
+							Resources:          testResources,
+							ServiceAccountName: testServiceAccountName,
+						},
+						Config: zkConf,
+						ChRoot: "a-ch/root",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
+						Annotations: testSSAnnotations,
+					},
+				},
+				UpdateStrategy: solrv1beta1.SolrUpdateStrategy{
+					Method: solrv1beta1.ManualUpdate,
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
-	// Check that the statefulSet has been created, using the given chRoot
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(expectedZkConnStr), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(BeNil(), "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(BeNil(), "All ACL for provided Zookeeper in SolrCloud Status should be nil when not provided in Spec")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(BeNil(), "ReadOnly ACL for provided Zookeeper in SolrCloud Status should be nil when not provided in Spec")
+			})
 
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-	expectedZKHost := expectedZkConnStr + "/a-ch/root"
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":   expectedZKHost,
-		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + cloudHsKey.Namespace,
-		"ZK_SERVER": expectedZkConnStr,
-		"ZK_CHROOT": "/a-ch/root",
-		"SOLR_PORT": "8983",
-		"GC_TUNE":   "",
-	}
-	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
-	assert.EqualValues(t, []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command, "Incorrect post-start command")
-	assert.Empty(t, statefulSet.Spec.Template.Spec.ServiceAccountName, "No custom serviceAccountName specified, so the field should be empty.")
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-	// Check the update strategy
-	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
+			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			expectedZKHost := expectedZkConnStr + "/a-ch/root"
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":   expectedZKHost,
+				"SOLR_HOST": "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"ZK_SERVER": expectedZkConnStr,
+				"ZK_CHROOT": "/a-ch/root",
+				"SOLR_PORT": "8983",
+				"GC_TUNE":   "",
+			}
+			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testSSAnnotations, expectedStatefulSetAnnotations)), "Wrong statefulSet annotations")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}), "Incorrect post-start command")
+			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 
-	// Check that the Zookeeper Cluster has been created
-	zkCluster := expectZookeeperCluster(g, requests, expectedCloudRequest, cloudZkKey)
+			// Check the update strategy
+			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType), "Incorrect statefulset update strategy")
+			Expect(statefulSet.Spec.PodManagementPolicy).To(Equal(appsv1.ParallelPodManagement), "Incorrect statefulset pod management policy")
 
-	// Check the settings of the Zookeeper Cluster
-	assert.EqualValues(t, four, zkCluster.Spec.Replicas, "Incorrect zkCluster replicas")
-	assert.EqualValues(t, "ephemeral", zkCluster.Spec.StorageType, "Incorrect zkCluster storage type")
-	assert.NotNil(t, zkCluster.Spec.Ephemeral, "ZkCluster.spec.ephemeral should not be nil")
-	assert.EqualValues(t, "Memory", zkCluster.Spec.Ephemeral.EmptyDirVolumeSource.Medium, "Incorrect EmptyDir medium for ZK Cluster ephemeral storage")
+			zkCluster := expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
 
-	// Check ZK Pod Options
-	assert.EqualValues(t, affinity, zkCluster.Spec.Pod.Affinity, "Incorrect zkCluster affinity")
-	assert.EqualValues(t, testTolerations, zkCluster.Spec.Pod.Tolerations, "Incorrect zkCluster tolerations")
-	assert.EqualValues(t, testNodeSelectors, zkCluster.Spec.Pod.NodeSelector, "Incorrect zkCluster nodeSelectors")
-	assert.EqualValues(t, resources, zkCluster.Spec.Pod.Resources, "Incorrect zkCluster resources")
-	assert.EqualValues(t, extraVars, zkCluster.Spec.Pod.Env, "Incorrect zkCluster env vars")
-	assert.EqualValues(t, testServiceAccountName, zkCluster.Spec.Pod.ServiceAccountName, "Incorrect zkCluster serviceAccountName")
+			By("testing the created ZookeeperCluster")
+			Expect(zkCluster.Spec.Replicas).To(Equal(four), "Incorrect zkCluster replicas")
+			Expect(zkCluster.Spec.StorageType).To(Equal("ephemeral"), "Incorrect zkCluster storage type")
+			Expect(zkCluster.Spec.Ephemeral).To(Not(BeNil()), "ZkCluster.spec.ephemeral should not be nil")
+			Expect(zkCluster.Spec.Ephemeral.EmptyDirVolumeSource.Medium).To(BeEquivalentTo("Memory"), "Incorrect EmptyDir medium for ZK Cluster ephemeral storage")
+			Expect(zkCluster.Spec.Persistence).To(BeNil(), "ZkCluster.spec.persistence should be nil when using ephermeral storage")
 
-	// Check ZK Config Options
-	assert.EqualValues(t, zkConf.InitLimit, zkCluster.Spec.Conf.InitLimit, "Incorrect zkCluster Config InitLimit")
-	assert.EqualValues(t, zkConf.SyncLimit, zkCluster.Spec.Conf.SyncLimit, "Incorrect zkCluster Config SyncLimit")
-	assert.EqualValues(t, zkConf.PreAllocSize, zkCluster.Spec.Conf.PreAllocSize, "Incorrect zkCluster Config PreAllocSize")
-	assert.EqualValues(t, zkConf.CommitLogCount, zkCluster.Spec.Conf.CommitLogCount, "Incorrect zkCluster Config CommitLogCount")
-	assert.EqualValues(t, zkConf.MaxCnxns, zkCluster.Spec.Conf.MaxCnxns, "Incorrect zkCluster Config MaxCnxns")
-	assert.EqualValues(t, zkConf.MinSessionTimeout, zkCluster.Spec.Conf.MinSessionTimeout, "Incorrect zkCluster Config MinSessionTimeout")
-	assert.EqualValues(t, zkConf.QuorumListenOnAllIPs, zkCluster.Spec.Conf.QuorumListenOnAllIPs, "Incorrect zkCluster Config QuorumListenOnAllIPs")
+			// Check ZK Pod Options
+			Expect(zkCluster.Spec.Pod.Affinity).To(Equal(testAffinity), "Incorrect zkCluster affinity")
+			Expect(zkCluster.Spec.Pod.Tolerations).To(Equal(testTolerations), "Incorrect zkCluster tolerations")
+			Expect(zkCluster.Spec.Pod.NodeSelector).To(Equal(testNodeSelectors), "Incorrect zkCluster nodeSelectors")
+			Expect(zkCluster.Spec.Pod.Resources).To(Equal(testResources), "Incorrect zkCluster resources")
+			Expect(zkCluster.Spec.Pod.Env).To(Equal(extraVars), "Incorrect zkCluster env vars")
+			Expect(zkCluster.Spec.Pod.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect zkCluster serviceAccountName")
+
+			// Check ZK Config Options
+			Expect(zkCluster.Spec.Conf.InitLimit).To(Equal(zkConf.InitLimit), "Incorrect zkCluster Config InitLimit")
+			Expect(zkCluster.Spec.Conf.SyncLimit).To(Equal(zkConf.SyncLimit), "Incorrect zkCluster Config SyncLimit")
+			Expect(zkCluster.Spec.Conf.PreAllocSize).To(Equal(zkConf.PreAllocSize), "Incorrect zkCluster Config PreAllocSize")
+			Expect(zkCluster.Spec.Conf.CommitLogCount).To(Equal(zkConf.CommitLogCount), "Incorrect zkCluster Config CommitLogCount")
+			Expect(zkCluster.Spec.Conf.MaxCnxns).To(Equal(zkConf.MaxCnxns), "Incorrect zkCluster Config MaxCnxns")
+			Expect(zkCluster.Spec.Conf.MinSessionTimeout).To(Equal(zkConf.MinSessionTimeout), "Incorrect zkCluster Config MinSessionTimeout")
+			Expect(zkCluster.Spec.Conf.QuorumListenOnAllIPs).To(Equal(zkConf.QuorumListenOnAllIPs), "Incorrect zkCluster Config QuorumListenOnAllIPs")
+		})
+	})
+
+	FContext("Provided ZK - Persistent", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
+						Replicas: &four,
+						Image: &solrv1beta1.ContainerImage{
+							Repository:      "test-repo",
+							Tag:             "test-tag",
+							PullPolicy:      corev1.PullNever,
+							ImagePullSecret: testImagePullSecretName,
+						},
+						Persistence: &solrv1beta1.ZKPersistence{
+							VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyRetain,
+							Annotations:         testDeploymentAnnotations,
+						},
+					},
+				},
+				UpdateStrategy: solrv1beta1.SolrUpdateStrategy{
+					Method: solrv1beta1.ManualUpdate,
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
+
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(expectedZkConnStr), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(BeNil(), "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(BeNil(), "All ACL for provided Zookeeper in SolrCloud Status should be nil when not provided in Spec")
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(BeNil(), "ReadOnly ACL for provided Zookeeper in SolrCloud Status should be nil when not provided in Spec")
+			})
+
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			expectedZKHost := expectedZkConnStr + "/"
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":   expectedZKHost,
+				"SOLR_HOST": "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"ZK_SERVER": expectedZkConnStr,
+				"SOLR_PORT": "8983",
+				"GC_TUNE":   "",
+			}
+			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Wrong statefulSet annotations")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "No post-start command should be provided when no Chroot is used")
+			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
+
+			// Check the update strategy
+			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType), "Incorrect statefulset update strategy")
+			Expect(statefulSet.Spec.PodManagementPolicy).To(Equal(appsv1.ParallelPodManagement), "Incorrect statefulset pod management policy")
+
+			By("testing the created ZookeeperCluster")
+			zkCluster := expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
+
+			By("testing the created ZookeeperCluster")
+			Expect(zkCluster.Spec.Replicas).To(Equal(four), "Incorrect zkCluster replicas")
+			Expect(zkCluster.Spec.StorageType).To(Equal("persistence"), "Incorrect zkCluster storage type")
+			Expect(zkCluster.Spec.Persistence).To(Not(BeNil()), "ZkCluster.spec.persistence should not be nil")
+			Expect(zkCluster.Spec.Persistence.VolumeReclaimPolicy).To(BeEquivalentTo(solrv1beta1.VolumeReclaimPolicyRetain), "Incorrect VolumeReclaimPolicy for ZK Cluster persistent storage")
+			Expect(zkCluster.Spec.Persistence.Annotations).To(Equal(testDeploymentAnnotations), "Incorrect Annotations for ZK Cluster persistent storage")
+			Expect(zkCluster.Spec.Ephemeral).To(BeNil(), "ZkCluster.spec.ephemeral should be nil when using persistence")
+
+			// Check ZK Pod Options
+			Expect(zkCluster.Spec.Image.Repository).To(Equal("test-repo"), "Incorrect zkCluster image repo")
+			Expect(zkCluster.Spec.Image.Tag).To(Equal("test-tag"), "Incorrect zkCluster image tag")
+			Expect(zkCluster.Spec.Image.PullPolicy).To(Equal(corev1.PullNever), "Incorrect zkCluster image pull policy")
+			Expect(zkCluster.Spec.Pod.ImagePullSecrets).To(Equal([]corev1.LocalObjectReference{{Name: testImagePullSecretName}}), "Incorrect zkCluster image pull policy")
+		})
+	})
+
+	FContext("ZK Connection String - Admin ACL", func() {
+		zkReplicas := int32(1)
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
+						Replicas: &zkReplicas,
+						AllACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "secret-name",
+							UsernameKey: "user",
+							PasswordKey: "pass",
+						},
+						ZookeeperPod: solrv1beta1.ZookeeperPodPolicy{
+							Env: extraVars,
+						},
+						ChRoot: "/a-ch/root",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables: extraVars,
+					},
+				},
+				SolrOpts: "-Dextra -Dopts",
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
+
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(expectedZkConnStr), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/a-ch/root"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(BeNil(), "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+				/* Zookeeper Operator does not Support ACLs yet
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Not(BeNil()), "All ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(*found.ZookeeperConnectionInfo.AllACL).To(Equal(solrCloud.Spec.ZookeeperRef.ProvidedZookeeper.AllACL), "Incorrect All ACL in SolrCloud Status")
+				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(BeNil(), "ReadOnly ACL in SolrCloud Status should be nil when not provided in the Spec")
+				*/
+			})
+
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			// Check extra containers
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires the solr container only.")
+
+			// Env Variable Tests
+			expectedZKHost := expectedZkConnStr + "/a-ch/root"
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        expectedZKHost,
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "8983",
+				"SOLR_NODE_PORT": "8983",
+				"ZK_CHROOT":      "/a-ch/root",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+			}
+			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			testACLEnvVars(foundEnv[len(foundEnv)-6:len(foundEnv)-3], false)
+			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
+			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+			// TODO: Make this not invalidate foundEnv
+			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+
+			By("testing the created ZookeeperCluster")
+			expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
+		})
+	})
+
+	FContext("ZK Connection String - Admin & Read ACL", func() {
+		zkReplicas := int32(1)
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
+						Replicas: &zkReplicas,
+						AllACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "secret-name",
+							UsernameKey: "user",
+							PasswordKey: "pass",
+						},
+						ReadOnlyACL: &solrv1beta1.ZookeeperACL{
+							SecretRef:   "read-secret-name",
+							UsernameKey: "read-only-user",
+							PasswordKey: "read-only-pass",
+						},
+						ZookeeperPod: solrv1beta1.ZookeeperPodPolicy{
+							Env: extraVars,
+						},
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables: extraVars,
+					},
+				},
+				SolrOpts: "-Dextra -Dopts",
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
+
+			By("testing the ZK information in the SolrCloud status")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(expectedZkConnStr), "Wrong internal zkConnectionString in status")
+				g.Expect(found.ZookeeperConnectionInfo.ChRoot).To(Equal("/"), "Wrong zk chRoot in status")
+				g.Expect(found.ZookeeperConnectionInfo.ExternalConnectionString).To(BeNil(), "Since a provided zk is used, the externalConnectionString in the status should be Nil")
+
+				/* Zookeeper Operator does not Support ACLs yet
+				g.Expect(found.ZookeeperConnectionInfo.AllACL).To(Not(BeNil()), "All ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(*found.ZookeeperConnectionInfo.AllACL).To(Equal(solrCloud.Spec.ZookeeperRef.ProvidedZookeeper.AllACL), "Incorrect All ACL in SolrCloud Status")
+				g.Expect(found.ZookeeperConnectionInfo.ReadOnlyACL).To(Not(BeNil()), "ReadOnly ACL in SolrCloud Status should not be nil when it is provided in the Spec")
+				g.Expect(*found.ZookeeperConnectionInfo.ReadOnlyACL).To(Equal(solrCloud.Spec.ZookeeperRef.ProvidedZookeeper.ReadOnlyACL), "Incorrect ReadOnly ACL in SolrCloud Status")
+				*/
+			})
+
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			// Check extra containers
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires the solr container only.")
+
+			// Env Variable Tests
+			expectedZKHost := expectedZkConnStr + "/"
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        expectedZKHost,
+				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":      "8983",
+				"SOLR_NODE_PORT": "8983",
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+			}
+			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
+			testACLEnvVars(foundEnv[len(foundEnv)-8:len(foundEnv)-3], true)
+			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
+			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
+			// TODO: Make this not invalidate foundEnv
+			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+
+			By("testing the created ZookeeperCluster")
+			expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
+		})
+	})
+})
+
+func expectZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) *zk_crd.ZookeeperCluster {
+	return expectZookeeperClusterWithChecks(ctx, parentResource, zkName, nil, resolveOffset(additionalOffset))
 }
 
-func TestCloudWithProvidedPersistentZookeeperReconcile(t *testing.T) {
-	UseZkCRD(true)
-	g := gomega.NewGomegaWithT(t)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					Replicas: &four,
-					Image: &solr.ContainerImage{
-						Repository: "test-repo",
-						Tag:        "test-tag",
-						PullPolicy: corev1.PullNever,
-						// TODO: Test when ZK operator v0.2.10 is supported
-						ImagePullSecret: testImagePullSecretName,
-					},
-					Persistence: &zkv1beta1.Persistence{
-						VolumeReclaimPolicy: zkv1beta1.VolumeReclaimPolicyRetain,
-						Annotations:         testDeploymentAnnotations,
-					},
-				},
-			},
-			UpdateStrategy: solr.SolrUpdateStrategy{
-				Method: solr.ManualUpdate,
-			},
-		},
-	}
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	// Include ZK Operator since we are creating a ZK Cluster
-	g.Expect(zookeepercluster.AddZookeeperReconciler(mgr)).NotTo(gomega.HaveOccurred())
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the zkCluster will have been created
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	g.Eventually(func() error { return testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance) }, timeout).Should(gomega.Succeed())
-
-	// Check that the ZkConnectionInformation is correct
-	expectedZkConnStr := "foo-clo-solrcloud-zookeeper-0.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-1.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-2.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-clo-solrcloud-zookeeper-3.foo-clo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
-	assert.Equal(t, expectedZkConnStr, instance.Status.ZookeeperConnectionInfo.InternalConnectionString, "Wrong zkConnectionString in status")
-	assert.Equal(t, "/", instance.Status.ZookeeperConnectionInfo.ChRoot, "Wrong zk chRoot in status")
-	assert.Nil(t, instance.Status.ZookeeperConnectionInfo.ExternalConnectionString, "Since a provided zk is used, the externalConnectionString in the status should be Nil")
-
-	// Check that the statefulSet has been created, using the given chRoot
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-	expectedZKHost := expectedZkConnStr + "/"
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":   expectedZKHost,
-		"SOLR_HOST": "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + cloudHsKey.Namespace,
-		"ZK_SERVER": expectedZkConnStr,
-		"ZK_CHROOT": "/",
-		"SOLR_PORT": "8983",
-		"GC_TUNE":   "",
-	}
-	expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
-	testPodEnvVariables(t, expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-	testMapsEqual(t, "statefulSet annotations", expectedStatefulSetAnnotations, statefulSet.Annotations)
-	assert.Nil(t, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart, "chroot is empty, so there should be no postStart command")
-
-	// Check the update strategy
-	assert.EqualValues(t, appsv1.OnDeleteStatefulSetStrategyType, statefulSet.Spec.UpdateStrategy.Type, "Incorrect statefulset update strategy")
-	assert.EqualValues(t, appsv1.ParallelPodManagement, statefulSet.Spec.PodManagementPolicy, "Incorrect statefulset pod management policy")
-
-	// Check that the Zookeeper Cluster has been created
-	zkCluster := expectZookeeperCluster(g, requests, expectedCloudRequest, cloudZkKey)
-
-	// Check the settings of the Zookeeper Cluster
-	assert.EqualValues(t, four, zkCluster.Spec.Replicas, "Incorrect zkCluster replicas")
-	assert.EqualValues(t, "persistence", zkCluster.Spec.StorageType, "Incorrect zkCluster storage type")
-	assert.NotNil(t, zkCluster.Spec.Persistence, "ZkCluster.spec.persistence should not be nil")
-	assert.EqualValues(t, zkv1beta1.VolumeReclaimPolicyRetain, zkCluster.Spec.Persistence.VolumeReclaimPolicy, "Incorrect VolumeReclaimPolicy for ZK Cluster persistent storage")
-	assert.EqualValues(t, testDeploymentAnnotations, zkCluster.Spec.Persistence.Annotations, "Incorrect Annotations for ZK Cluster persistent storage")
-
-	// Check ZK Pod Options
-	assert.EqualValues(t, "test-repo", zkCluster.Spec.Image.Repository, "Incorrect zkCluster image repo")
-	assert.EqualValues(t, "test-tag", zkCluster.Spec.Image.Tag, "Incorrect zkCluster image tag")
-	assert.EqualValues(t, corev1.PullNever, zkCluster.Spec.Image.PullPolicy, "Incorrect zkCluster image pull policy")
-	//assert.EqualValues(t, []corev1.LocalObjectReference{{Name: testImagePullSecretName}}, zkCluster.Spec.Pod.ImagePullSecrets, "Incorrect zkCluster image pull policy")
-}
-
-func TestZKACLsCloudReconcile(t *testing.T) {
-	UseZkCRD(false)
-	g := gomega.NewGomegaWithT(t)
-
-	replicas := int32(3)
-
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			Replicas: &replicas,
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-					AllACL: &solr.ZookeeperACL{
-						SecretRef:   "secret-name",
-						UsernameKey: "user",
-						PasswordKey: "pass",
-					},
-				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables: extraVars,
-				},
-			},
-			SolrOpts: "-Dextra -Dopts",
-		},
-	}
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        "host:7271/",
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace,
-		"SOLR_PORT":      "8983",
-		"SOLR_NODE_PORT": "8983",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
-	}
-	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-	f := false
-	zkAclEnvVars := []corev1.EnvVar{
-		{
-			Name: "ZK_ALL_ACL_USERNAME",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
-					Key:                  "user",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name: "ZK_ALL_ACL_PASSWORD",
-			ValueFrom: &corev1.EnvVarSource{
-				SecretKeyRef: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "secret-name"},
-					Key:                  "pass",
-					Optional:             &f,
-				},
-			},
-		},
-		{
-			Name:      "SOLR_ZK_CREDS_AND_ACLS",
-			Value:     "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider -DzkDigestUsername=$(ZK_ALL_ACL_USERNAME) -DzkDigestPassword=$(ZK_ALL_ACL_PASSWORD)",
-			ValueFrom: nil,
-		},
-	}
-	assert.Equal(t, zkAclEnvVars, foundEnv[len(foundEnv)-6:len(foundEnv)-3], "ZK ACL Env Vars are not correct")
-	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-3:len(foundEnv)-1], "Extra Env Vars are not the same as the ones provided in podOptions")
-	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-	// TODO: Make this not invalidate foundEnv
-	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
-	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	assert.EqualValues(t, 80, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
-
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	assert.EqualValues(t, 8983, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-}
-
-func TestBothZKACLsCloudReconcile(t *testing.T) {
-	replicas := int32(3)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			Replicas: &replicas,
-			ZookeeperRef: &solr.ZookeeperRef{
-				ConnectionInfo: &solr.ZookeeperConnectionInfo{
-					InternalConnectionString: "host:7271",
-					AllACL: &solr.ZookeeperACL{
-						SecretRef:   "secret-name",
-						UsernameKey: "user",
-						PasswordKey: "pass",
-					},
-					ReadOnlyACL: &solr.ZookeeperACL{
-						SecretRef:   "read-secret-name",
-						UsernameKey: "read-only-user",
-						PasswordKey: "read-only-pass",
-					},
-				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables: extraVars,
-				},
-			},
-			SolrOpts: "-Dextra -Dopts",
-		},
-	}
-	testZkACLsReconcile(t, false, instance, "host:7271/")
-}
-
-func TestZKACLsForProvidedReconcile(t *testing.T) {
-	replicas := int32(3)
-	zkReplicas := int32(1)
-	instance := &solr.SolrCloud{
-		ObjectMeta: metav1.ObjectMeta{Name: expectedCloudRequest.Name, Namespace: expectedCloudRequest.Namespace},
-		Spec: solr.SolrCloudSpec{
-			Replicas: &replicas,
-			ZookeeperRef: &solr.ZookeeperRef{
-				ProvidedZookeeper: &solr.ZookeeperSpec{
-					Replicas: &zkReplicas,
-					AllACL: &solr.ZookeeperACL{
-						SecretRef:   "secret-name",
-						UsernameKey: "user",
-						PasswordKey: "pass",
-					},
-					ReadOnlyACL: &solr.ZookeeperACL{
-						SecretRef:   "read-secret-name",
-						UsernameKey: "read-only-user",
-						PasswordKey: "read-only-pass",
-					},
-				},
-			},
-			CustomSolrKubeOptions: solr.CustomSolrKubeOptions{
-				PodOptions: &solr.PodOptions{
-					EnvVariables: extraVars,
-				},
-			},
-			SolrOpts: "-Dextra -Dopts",
-		},
-	}
-
-	expectedZkHost := fmt.Sprintf("%s-zookeeper-0.%s-zookeeper-headless.%s.svc.cluster.local:2181/",
-		cloudSsKey.Name, cloudSsKey.Name, cloudSsKey.Namespace)
-	testZkACLsReconcile(t, true, instance, expectedZkHost)
-}
-
-func testZkACLsReconcile(t *testing.T, useZkCRD bool, instance *solr.SolrCloud, expectedZkHost string) {
-	UseZkCRD(useZkCRD)
-	g := gomega.NewGomegaWithT(t)
-
-	// Setup the Manager and Controller.  Wrap the Controller Reconcile function so it writes each request to a
-	// channel when it is finished.
-	mgr, err := manager.New(testCfg, manager.Options{})
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	testClient = mgr.GetClient()
-
-	solrCloudReconciler := &SolrCloudReconciler{
-		Client: testClient,
-		Log:    ctrl.Log.WithName("controllers").WithName("SolrCloud"),
-	}
-	newRec, requests := SetupTestReconcile(solrCloudReconciler)
-	g.Expect(solrCloudReconciler.SetupWithManagerAndReconciler(mgr, newRec)).NotTo(gomega.HaveOccurred())
-
-	stopMgr, mgrStopped := StartTestManager(mgr, g)
-
-	defer func() {
-		close(stopMgr)
-		mgrStopped.Wait()
-	}()
-
-	cleanupTest(g, instance.Namespace)
-
-	// Create the SolrCloud object and expect the Reconcile and StatefulSet to be created
-	err = testClient.Create(context.TODO(), instance)
-	g.Expect(err).NotTo(gomega.HaveOccurred())
-	defer testClient.Delete(context.TODO(), instance)
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-	// Add an additional check for reconcile, so that the services will have IP addresses for the hostAliases to use
-	// Otherwise the reconciler will have 'blockReconciliationOfStatefulSet' set to true, and the stateful set will not be created
-	g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-
-	// Check the statefulSet
-	statefulSet := expectStatefulSet(t, g, requests, expectedCloudRequest, cloudSsKey)
-
-	assert.Equal(t, 1, len(statefulSet.Spec.Template.Spec.Containers), "Solr StatefulSet requires a container.")
-
-	// Env Variable Tests
-	expectedEnvVars := map[string]string{
-		"ZK_HOST":        expectedZkHost,
-		"SOLR_HOST":      "$(POD_HOSTNAME)." + cloudHsKey.Name + "." + instance.Namespace,
-		"SOLR_PORT":      "8983",
-		"SOLR_NODE_PORT": "8983",
-		"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
-	}
-	foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-	testACLEnvVars(t, foundEnv[len(foundEnv)-8:len(foundEnv)-3])
-	assert.Equal(t, extraVars, foundEnv[len(foundEnv)-3:len(foundEnv)-1], "Extra Env Vars are not the same as the ones provided in podOptions")
-	// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-	// TODO: Make this not invalidate foundEnv
-	testPodEnvVariables(t, expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
-	assert.Equal(t, []string{"solr", "stop", "-p", "8983"}, statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command, "Incorrect pre-stop command")
-
-	// Check the client Service
-	service := expectService(t, g, requests, expectedCloudRequest, cloudCsKey, statefulSet.Spec.Template.Labels)
-	assert.EqualValues(t, 80, service.Spec.Ports[0].Port, "Wrong port on common Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on common Service")
-
-	// Check the headless Service
-	service = expectService(t, g, requests, expectedCloudRequest, cloudHsKey, statefulSet.Spec.Template.Labels)
-	assert.EqualValues(t, 8983, service.Spec.Ports[0].Port, "Wrong port on headless Service")
-	assert.EqualValues(t, "solr-client", service.Spec.Ports[0].TargetPort.StrVal, "Wrong podPort name on headless Service")
-
-	// Make sure individual Node services don't exist
-	nodeNames := instance.GetAllSolrNodeNames()
-	for _, nodeName := range nodeNames {
-		nodeSKey := types.NamespacedName{Name: nodeName, Namespace: "default"}
-		expectNoService(g, nodeSKey, "Node service shouldn't exist, but it does.")
-	}
-
-	// Check the ingress
-	expectNoIngress(g, cloudIKey)
-
-	// now update the env vars on the zk spec
-	if instance.Spec.ZookeeperRef.ProvidedZookeeper != nil {
-		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, instance)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		updateEnvVars := []corev1.EnvVar{
-			{
-				Name:  "VAR_1",
-				Value: "VAL_1",
-			},
+func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client.Object, zkName string, additionalChecks func(Gomega, *zk_crd.ZookeeperCluster), additionalOffset ...int) *zk_crd.ZookeeperCluster {
+	found := &zk_crd.ZookeeperCluster{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), found)).To(Succeed(), "Expected ZookeeperCluster does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, found)
 		}
-		instance.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod = solr.ZookeeperPodPolicy{Env: updateEnvVars}
-		err = testClient.Update(context.TODO(), instance)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-		g.Eventually(requests, timeout).Should(gomega.Receive(gomega.Equal(expectedCloudRequest)))
-		lookup := &solr.SolrCloud{}
-		err = testClient.Get(context.TODO(), expectedCloudRequest.NamespacedName, lookup)
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		assert.EqualValues(t, updateEnvVars, lookup.Spec.ZookeeperRef.ProvidedZookeeper.ZookeeperPod.Env, "Updated ZK Pod env not reconciled!")
-	}
+	}).Should(Succeed())
+
+	By("recreating the ZookeeperCluster after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, found)).To(Succeed())
+	Eventually(
+		func(g Gomega) types.UID {
+			newResource := &zk_crd.ZookeeperCluster{}
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), newResource)).To(Succeed(), "ZookeeperCluster not recreated after deletion")
+			return newResource.UID
+		}).Should(And(Not(BeEmpty()), Not(Equal(found.UID))), "New ZookeeperCluster, with new UID, not created.")
+	return found
+}
+
+func expectNoZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, zkName), &zk_crd.ZookeeperCluster{})
+	}).Should(MatchError("zookeeperclusters.zookeeper.pravega.io \""+zkName+"\" not found"), "ZookeeperCluster exists when it should not")
 }
