@@ -21,7 +21,7 @@ set -o pipefail
 # error on unset variables
 set -u
 
-ZK_OP_VERSION="$(cat go.mod | grep -E 'github.com/pravega/zookeeper-operator' | grep -o 'v[[:digit:]]*\.[[:digit:]]*\.[[:digit:]]*')"
+ZK_OP_VERSION="$(cat versions.props | grep -E 'zookeeper-operator' | grep -o 'v[[:digit:]]*\.[[:digit:]]*\.[[:digit:]]*')"
 
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
 {

@@ -19,17 +19,22 @@
 
 Please carefully read the entries for all versions between the version you are running and the version you want to upgrade to.
 
+Ensure to read the [Upgrade Warnings and Notes](#upgrade-warnings-and-notes) for the version you are upgrading to as well as the versions you are skipping.
+
+If you want to skip versions when upgrading, be sure to check out the [upgrading minor versions](#upgrading-minor-versions-v_x_) and [upgrading patch versions](#upgrading-patch-versions-v__x) sections.
+
 ## Version Compatibility Matrixes
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.21` | `1.22`+ |
-| :---: | :---: | :---: | :---: |
-| `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.2.7` | :x: | :heavy_check_mark: | :x: |
-| `v0.2.8` | :x: | :heavy_check_mark: | :x: |
-| `v0.3.0` | :x: | :heavy_check_mark: | :x: |
-| `v0.4.0` | :x: | :heavy_check_mark: | :x: |
+| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21` | `1.22`+ |
+| :---: | :---: | :---: | :---: | :---: |
+| `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.7` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.2.8` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.3.0` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.4.0` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+| `v0.5.0` | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -40,19 +45,20 @@ Please carefully read the entries for all versions between the version you are r
 | `v0.2.8` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 | `v0.3.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 | `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| `v0.5.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 
-## Upgrading from `v0.2.x` to `v0.3.x`
+### Upgrading from `v0.2.x` to `v0.3.x`
 If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
 This is a special upgrade that requires different instructions.
 
-## Upgrading minor versions (`v_.X._`)
+### Upgrading minor versions (`v_.X._`)
 
 In order to upgrade minor versions (e.g. `v0.2.5` -> `v0.3.0`), you must upgrade one minor version at a time (e.g. `v0.2.0` -> `v0.3.0` -> `v0.4.0`).
 It is also necessary to upgrade to the latest patch version before upgrading to the next minor version.
 Therefore if you are running `v0.2.5` and you want to upgrade to `v0.3.0`, you must first upgrade to `v0.2.8` before upgrading to `v0.3.0`.
 
-## Upgrading patch versions (`v_._.X`)
+### Upgrading patch versions (`v_._.X`)
 
 You should be able to upgrade from a version to any patch version with the same minor and major versions.
 It is always encouraged to upgrade to the latest patch version of the minor and major version you are running.
