@@ -1205,6 +1205,12 @@ spec:
           spec:
             description: SolrCloudSpec defines the desired state of SolrCloud
             properties:
+              additionalLibs:
+                description: 'List of paths in the Solr Docker image to load in the classpath. Note: Contrib Modules will be auto-loaded if specified in the "contribModules" property.'
+                items:
+                  type: string
+                type: array
+                uniqueItems: true
               backupRepositories:
                 description: Allows specification of multiple different "repositories" for Solr to use when backing up data.
                 items:
@@ -2166,6 +2172,12 @@ spec:
                   tag:
                     type: string
                 type: object
+              contribModules:
+                description: 'List of Solr Contrib Modules to be loaded when starting Solr Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)'
+                items:
+                  type: string
+                type: array
+                uniqueItems: true
               customSolrKubeOptions:
                 description: Provide custom options for kubernetes objects created for the Solr Cloud.
                 properties:

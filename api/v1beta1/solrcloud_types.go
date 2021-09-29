@@ -126,6 +126,20 @@ type SolrCloudSpec struct {
 	//+listType:=map
 	//+listMapKey:=name
 	BackupRepositories []SolrBackupRepository `json:"backupRepositories,omitempty"`
+
+	// List of Solr Contrib Modules to be loaded when starting Solr
+	// Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)
+	//
+	//+optional
+	//+kubebuilder:validation:UniqueItems:=true
+	ContribModules []string `json:"contribModules,omitempty"`
+
+	// List of paths in the Solr Docker image to load in the classpath.
+	// Note: Contrib Modules will be auto-loaded if specified in the "contribModules" property.
+	//
+	//+optional
+	//+kubebuilder:validation:UniqueItems:=true
+	AdditionalLibs []string `json:"additionalLibs,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {
