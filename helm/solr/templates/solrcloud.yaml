@@ -152,6 +152,16 @@ spec:
     {{- end }}
   {{- end }}
 
+  {{- if .Values.solrOptions.contribModules }}
+  contribModules:
+    {{- toYaml .Values.solrOptions.contribModules | nindent 4 }}
+  {{- end }}
+
+  {{- if .Values.solrOptions.additionalLibs }}
+  additionalLibs:
+    {{- toYaml .Values.solrOptions.additionalLibs | nindent 4 }}
+  {{- end }}
+
   {{- if .Values.backupRepositories }}
   backupRepositories:
     {{- toYaml .Values.backupRepositories | nindent 4 }}
