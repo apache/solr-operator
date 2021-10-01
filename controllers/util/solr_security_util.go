@@ -186,7 +186,7 @@ func (security *SecurityConfig) AuthHeader() map[string]string {
 }
 
 func BasicAuthEnvVars(secretName string) []corev1.EnvVar {
-	lor := corev1.LocalObjectReference{secretName}
+	lor := corev1.LocalObjectReference{Name: secretName}
 	usernameRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthUsernameKey}
 	passwordRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthPasswordKey}
 	return []corev1.EnvVar{
