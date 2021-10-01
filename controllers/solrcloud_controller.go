@@ -279,86 +279,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	basicAuthHeader := ""
+	// Holds security config info needed during construction of the StatefulSet
+	var security *util.SecurityConfig = nil
 	if instance.Spec.SolrSecurity != nil {
-		sec := instance.Spec.SolrSecurity
-
-		if sec.AuthenticationType != solrv1beta1.Basic {
-			return requeueOrNot, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator",
-				instance.Spec.SolrSecurity.AuthenticationType)
+		security, err = util.ReconcileSecurityConfig(&r.Client, instance)
+		if err != nil {
+			return requeueOrNot, err
 		}
-
-		// for now, we don't support 'solrSecurity.probesRequireAuth=true' and custom probe paths,
-		// so make the user fix that so there are no surprises later
-		if sec.ProbesRequireAuth && instance.Spec.CustomSolrKubeOptions.PodOptions != nil {
-			for _, path := range util.GetCustomProbePaths(instance) {
-				if path != util.DefaultProbePath {
-					return requeueOrNot, fmt.Errorf(
-						"custom probe path %s not supported when 'solrSecurity.probesRequireAuth=true'; must use 'solrSecurity.probesRequireAuth=false' when using custom probe endpoints", path)
-				}
-			}
-		}
-
-		basicAuthSecret := &corev1.Secret{}
-
-		// user has the option of providing a secret with credentials the operator should use to make requests to Solr
-		if sec.BasicAuthSecret != "" {
-			if err := r.Get(ctx, types.NamespacedName{Name: sec.BasicAuthSecret, Namespace: instance.Namespace}, basicAuthSecret); err != nil {
-				return requeueOrNot, err
-			}
-
-			err = util.ValidateBasicAuthSecret(basicAuthSecret)
-			if err != nil {
-				return requeueOrNot, err
-			}
-
-		} else {
-			// We're supplying a secret with random passwords and a default security.json
-			// since we randomly generate the passwords, we need to lookup the secret first and only create if not exist
-			err = r.Get(ctx, types.NamespacedName{Name: instance.BasicAuthSecretName(), Namespace: instance.Namespace}, basicAuthSecret)
-			if err != nil && errors.IsNotFound(err) {
-				authSecret, bootstrapSecret := util.GenerateBasicAuthSecretWithBootstrap(instance)
-				if err := controllerutil.SetControllerReference(instance, authSecret, r.Scheme); err != nil {
-					return requeueOrNot, err
-				}
-				if err := controllerutil.SetControllerReference(instance, bootstrapSecret, r.Scheme); err != nil {
-					return requeueOrNot, err
-				}
-				err = r.Create(ctx, authSecret)
-				if err != nil {
-					return requeueOrNot, err
-				}
-				err = r.Create(ctx, bootstrapSecret)
-				if err == nil {
-					// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
-					reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
-				}
-
-				basicAuthSecret = authSecret
-			}
-			if err != nil {
-				return requeueOrNot, err
-			}
-
-			if reconcileConfigInfo[util.SecurityJsonFile] == "" {
-				// the bootstrap secret already exists, so just stash the security.json needed for constructing initContainers
-				bootstrapSecret := &corev1.Secret{}
-				err = r.Get(ctx, types.NamespacedName{Name: instance.SecurityBootstrapSecretName(), Namespace: instance.Namespace}, bootstrapSecret)
-				if err != nil {
-					if !errors.IsNotFound(err) {
-						return requeueOrNot, err
-					} // else perhaps the user deleted it after security was bootstrapped ... this is ok but may trigger a restart on the STS
-				} else {
-					// stash this so we can configure the setup-zk initContainer to bootstrap the security.json in ZK
-					reconcileConfigInfo[util.SecurityJsonFile] = string(bootstrapSecret.Data[util.SecurityJsonFile])
-				}
-			}
-		}
-
-		reconcileConfigInfo[corev1.BasicAuthUsernameKey] = string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey])
-
-		// need the creds below for getting CLUSTERSTATUS
-		basicAuthHeader = util.BasicAuthHeader(basicAuthSecret)
 	}
 
 	// Only create stateful set if zkConnectionString can be found (must contain host and port)
@@ -387,7 +314,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls)
+		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
 
 		// Check if the StatefulSet already exists
 		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
@@ -481,10 +408,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
 
-		// If authn enabled on Solr, we need to pass the basic auth header
+		// If authn enabled on Solr, we need to pass the auth header
 		var authHeader map[string]string
-		if basicAuthHeader != "" {
-			authHeader = map[string]string{"Authorization": basicAuthHeader}
+		if security != nil {
+			authHeader = security.AuthHeader()
 		}
 
 		// Pick which pods should be deleted for an update.

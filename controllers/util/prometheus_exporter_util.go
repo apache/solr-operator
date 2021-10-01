@@ -164,11 +164,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	// basic auth enabled?
 	if solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret != "" {
-		lor := corev1.LocalObjectReference{Name: solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret}
-		usernameRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthUsernameKey}
-		passwordRef := &corev1.SecretKeySelector{LocalObjectReference: lor, Key: corev1.BasicAuthPasswordKey}
-		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_USER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: usernameRef}})
-		envVars = append(envVars, corev1.EnvVar{Name: "BASIC_AUTH_PASS", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: passwordRef}})
+		envVars = append(envVars, BasicAuthEnvVars(solrPrometheusExporter.Spec.SolrReference.BasicAuthSecret)...)
 		allJavaOpts = append(allJavaOpts, "-Dbasicauth=$(BASIC_AUTH_USER):$(BASIC_AUTH_PASS)")
 		allJavaOpts = append(allJavaOpts, "-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory")
 	}
