@@ -282,7 +282,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Holds security config info needed during construction of the StatefulSet
 	var security *util.SecurityConfig = nil
 	if instance.Spec.SolrSecurity != nil {
-		security, err = util.ReconcileSecurityConfig(&r.Client, instance)
+		security, err = util.ReconcileSecurityConfig(ctx, &r.Client, instance)
 		if err != nil {
 			return requeueOrNot, err
 		}

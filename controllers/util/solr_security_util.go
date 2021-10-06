@@ -49,8 +49,7 @@ type SecurityConfig struct {
 }
 
 // Given a SolrCloud instance and an API service client, produce a SecurityConfig needed to enable Solr security
-func ReconcileSecurityConfig(client *client.Client, instance *solr.SolrCloud) (*SecurityConfig, error) {
-	ctx := context.TODO()
+func ReconcileSecurityConfig(ctx context.Context, client *client.Client, instance *solr.SolrCloud) (*SecurityConfig, error) {
 	reader := *client
 
 	security := &SecurityConfig{}

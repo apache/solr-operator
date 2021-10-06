@@ -997,7 +997,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		cmd = setUrlSchemeClusterPropCmd()
+		cmd += setUrlSchemeClusterPropCmd()
 	}
 
 	if security != nil && security.SecurityJson != "" {
