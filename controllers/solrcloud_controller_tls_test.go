@@ -54,6 +54,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				Replicas: &replicas,
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						ChRoot:                   "tls-test",
 						InternalConnectionString: "host:7271",
 					},
 				},
@@ -795,6 +796,7 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 			break
 		}
 	}
+	expChrootCmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER};"
 	expCmd := "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https"
 	if solrCloud.Spec.SolrTLS != nil {
 		g.Expect(zkSetupInitContainer).To(Not(BeNil()), "Didn't find the zk-setup InitContainer in the sts!")
@@ -802,6 +804,7 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 			g.Expect(zkSetupInitContainer.Image).To(Equal(statefulSet.Spec.Template.Spec.Containers[0].Image), "The zk-setup init container should use the same image as the Solr container")
 			g.Expect(zkSetupInitContainer.Command).To(HaveLen(3), "Wrong command length for zk-setup init container")
 			g.Expect(zkSetupInitContainer.Command[2]).To(ContainSubstring(expCmd), "ZK Setup command does not set urlScheme")
+			g.Expect(zkSetupInitContainer.Command[2]).To(ContainSubstring(expChrootCmd), "ZK Setup command does init the chroot")
 			expNumVars := 3
 			if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" {
 				expNumVars = 4 // one more for SECURITY_JSON

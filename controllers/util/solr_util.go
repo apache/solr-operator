@@ -18,23 +18,16 @@
 package util
 
 import (
-	"crypto/sha256"
-	b64 "encoding/base64"
-	"encoding/json"
 	"fmt"
-	"math/rand"
-	"regexp"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
-
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -56,9 +49,6 @@ const (
 	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
-	SecurityJsonFile                 = "security.json"
-	BasicAuthMd5Annotation           = "solr.apache.org/basicAuthMd5"
-	DefaultProbePath                 = "/admin/info/system"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 )
@@ -68,7 +58,7 @@ const (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	fsGroup := int64(DefaultSolrGroup)
@@ -357,19 +347,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	if (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) || (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) {
-		probeCommand, vol, volMount := configureSecureProbeCommand(solrCloud, defaultHandler.HTTPGet)
-		if vol != nil {
-			solrVolumes = append(solrVolumes, *vol)
-		}
-		if volMount != nil {
-			volumeMounts = append(volumeMounts, *volMount)
-		}
-		// reset the defaultHandler for the probes to invoke the SolrCLI api action instead of HTTP
-		defaultHandler = corev1.Handler{Exec: &corev1.ExecAction{Command: []string{"sh", "-c", probeCommand}}}
-		defaultProbeTimeout = 5
-	}
-
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
 	// so we get a rolling restart when the configMap changes
 	if reconcileConfigInfo[SolrXmlMd5Annotation] != "" {
@@ -389,7 +366,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, reconcileConfigInfo)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -563,10 +540,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		tls.enableTLSOnSolrCloudStatefulSet(stateful)
 	}
 
+	// If probes require auth is set OR tls is configured to want / need client auth, then reconfigure the probes to use an exec
+	if (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) || (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) {
+		enableSecureProbesOnSolrCloudStatefulSet(solrCloud, stateful)
+	}
+
 	return stateful
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, reconcileConfigInfo map[string]string) (containers []corev1.Container) {
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, security *SecurityConfig) (containers []corev1.Container) {
 	// The setup of the solr.xml will always be necessary
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -605,7 +587,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	containers = append(containers, volumePrepInitContainer)
 
-	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, reconcileConfigInfo); hasZKSetupContainer {
+	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, security); hasZKSetupContainer {
 		containers = append(containers, zkSetupContainer)
 	}
 
@@ -987,11 +969,11 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 }
 
 // TODO: Have this replace the postStart hook for creating the chroot
-func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, reconcileConfigInfo map[string]string) (bool, corev1.Container) {
+func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, security *SecurityConfig) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
 
 	// Add all necessary ZK Info
-	envVars, zkSolrOpt, _ := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
+	envVars, zkSolrOpt, hasChroot := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
 	if zkSolrOpt != "" {
 		allSolrOpts = append(allSolrOpts, zkSolrOpt)
 	}
@@ -1010,21 +992,21 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 
 	cmd := ""
 
-	if solrCloud.Spec.SolrTLS != nil {
-		cmd = setUrlSchemeClusterPropCmd()
+	if hasChroot {
+		cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "
 	}
 
-	if reconcileConfigInfo[SecurityJsonFile] != "" {
+	if solrCloud.Spec.SolrTLS != nil {
+		cmd += setUrlSchemeClusterPropCmd()
+	}
+
+	if security != nil && security.SecurityJson != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: &corev1.EnvVarSource{
 			SecretKeyRef: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: solrCloud.SecurityBootstrapSecretName()},
 				Key:                  SecurityJsonFile}}})
 
-		if cmd == "" {
-			cmd += "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "
-		}
-		cmd += "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); "
-		cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then echo $SECURITY_JSON > /tmp/security.json; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+		cmd += cmdToPutSecurityJsonInZk()
 	}
 
 	if cmd != "" {
@@ -1105,140 +1087,6 @@ func setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo map[strin
 	return &corev1.VolumeMount{Name: volName, MountPath: mountPath}, &corev1.EnvVar{Name: envVar, Value: pathToFile}, vol
 }
 
-func BasicAuthHeader(basicAuthSecret *corev1.Secret) string {
-	creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
-	return "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
-}
-
-func ValidateBasicAuthSecret(basicAuthSecret *corev1.Secret) error {
-	if basicAuthSecret.Type != corev1.SecretTypeBasicAuth {
-		return fmt.Errorf("invalid secret type %v; user-provided secret %s must be of type: %v",
-			basicAuthSecret.Type, basicAuthSecret.Name, corev1.SecretTypeBasicAuth)
-	}
-
-	if _, ok := basicAuthSecret.Data[corev1.BasicAuthUsernameKey]; !ok {
-		return fmt.Errorf("%s key not found in user-provided basic-auth secret %s",
-			corev1.BasicAuthUsernameKey, basicAuthSecret.Name)
-	}
-
-	if _, ok := basicAuthSecret.Data[corev1.BasicAuthPasswordKey]; !ok {
-		return fmt.Errorf("%s key not found in user-provided basic-auth secret %s",
-			corev1.BasicAuthPasswordKey, basicAuthSecret.Name)
-	}
-
-	return nil
-}
-
-func GenerateBasicAuthSecretWithBootstrap(solrCloud *solr.SolrCloud) (*corev1.Secret, *corev1.Secret) {
-
-	securityBootstrapInfo := generateSecurityJson(solrCloud)
-
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	var annotations map[string]string
-	basicAuthSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        solrCloud.BasicAuthSecretName(),
-			Namespace:   solrCloud.GetNamespace(),
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Data: map[string][]byte{
-			corev1.BasicAuthUsernameKey: []byte(solr.DefaultBasicAuthUsername),
-			corev1.BasicAuthPasswordKey: securityBootstrapInfo[solr.DefaultBasicAuthUsername],
-		},
-		Type: corev1.SecretTypeBasicAuth,
-	}
-
-	// this secret holds the admin and solr user credentials and the security.json needed to bootstrap Solr security
-	// once the security.json is created using the setup-zk initContainer, it is not updated by the operator
-	boostrapSecuritySecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        solrCloud.SecurityBootstrapSecretName(),
-			Namespace:   solrCloud.GetNamespace(),
-			Labels:      labels,
-			Annotations: annotations,
-		},
-		Data: map[string][]byte{
-			"admin":          securityBootstrapInfo["admin"],
-			"solr":           securityBootstrapInfo["solr"],
-			SecurityJsonFile: securityBootstrapInfo[SecurityJsonFile],
-		},
-		Type: corev1.SecretTypeOpaque,
-	}
-
-	return basicAuthSecret, boostrapSecuritySecret
-}
-
-func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
-	blockUnknown := true
-
-	probeRole := "\"k8s\"" // probe endpoints are secures
-	if !solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
-		blockUnknown = false
-		probeRole = "null" // a JSON null value here to allow open access
-	}
-
-	probePaths := getProbePaths(solrCloud)
-	probeAuthz := ""
-	for i, p := range probePaths {
-		if i > 0 {
-			probeAuthz += ", "
-		}
-		if strings.HasPrefix(p, "/solr") {
-			p = p[len("/solr"):]
-		}
-		probeAuthz += fmt.Sprintf("{ \"name\": \"k8s-probe-%d\", \"role\":%s, \"collection\": null, \"path\":\"%s\" }", i, probeRole, p)
-	}
-
-	// Create the user accounts for security.json with random passwords
-	// hashed with random salt, just as Solr's hashing works
-	username := solr.DefaultBasicAuthUsername
-	users := []string{"admin", username, "solr"}
-	secretData := make(map[string][]byte, len(users))
-	credentials := make(map[string]string, len(users))
-	for _, u := range users {
-		secretData[u] = randomPassword()
-		credentials[u] = solrPasswordHash(secretData[u])
-	}
-	credentialsJson, _ := json.Marshal(credentials)
-
-	securityJson := fmt.Sprintf(`{
-      "authentication":{
-        "blockUnknown": %t,
-        "class":"solr.BasicAuthPlugin",
-        "credentials": %s,
-        "realm":"Solr Basic Auth",
-        "forwardCredentials": false
-      },
-      "authorization": {
-        "class": "solr.RuleBasedAuthorizationPlugin",
-        "user-role": {
-          "admin": ["admin", "k8s"],
-          "%s": ["k8s"],
-          "solr": ["users", "k8s"]
-        },
-        "permissions": [
-          %s,
-          { "name": "k8s-status", "role":"k8s", "collection": null, "path":"/admin/collections" },
-          { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
-          { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
-          { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "read", "role":["admin","users"] },
-          { "name": "update", "role":["admin"] },
-          { "name": "security-read", "role": ["admin"] },
-          { "name": "security-edit", "role": ["admin"] },
-          { "name": "all", "role":["admin"] }
-        ]
-      }
-    }`, blockUnknown, credentialsJson, username, probeAuthz)
-
-	// we need to store the security.json in the secret, otherwise we'd recompute it for every reconcile loop
-	// but that doesn't work for randomized passwords ...
-	secretData[SecurityJsonFile] = []byte(securityJson)
-
-	return secretData
-}
-
 func GetCustomProbePaths(solrCloud *solr.SolrCloud) []string {
 	probePaths := []string{}
 
@@ -1261,103 +1109,4 @@ func GetCustomProbePaths(solrCloud *solr.SolrCloud) []string {
 	}
 
 	return probePaths
-}
-
-// Gets a list of probe paths we need to setup authz for
-func getProbePaths(solrCloud *solr.SolrCloud) []string {
-	probePaths := []string{DefaultProbePath}
-	probePaths = append(probePaths, GetCustomProbePaths(solrCloud)...)
-	return uniqueProbePaths(probePaths)
-}
-
-func randomPassword() []byte {
-	rand.Seed(time.Now().UnixNano())
-	lower := "abcdefghijklmnpqrstuvwxyz" // no 'o'
-	upper := strings.ToUpper(lower)
-	digits := "0123456789"
-	chars := lower + upper + digits + "()[]%#@-()[]%#@-"
-	pass := make([]byte, 16)
-	// start with a lower char and end with an upper
-	pass[0] = lower[rand.Intn(len(lower))]
-	pass[len(pass)-1] = upper[rand.Intn(len(upper))]
-	perm := rand.Perm(len(chars))
-	for i := 1; i < len(pass)-1; i++ {
-		pass[i] = chars[perm[i]]
-	}
-	return pass
-}
-
-func randomSaltHash() []byte {
-	b := make([]byte, 32)
-	rand.Read(b)
-	salt := sha256.Sum256(b)
-	return salt[:]
-}
-
-// this mimics the password hash generation approach used by Solr
-func solrPasswordHash(passBytes []byte) string {
-	// combine password with salt to create the hash
-	salt := randomSaltHash()
-	passHashBytes := sha256.Sum256(append(salt[:], passBytes...))
-	passHashBytes = sha256.Sum256(passHashBytes[:])
-	passHash := b64.StdEncoding.EncodeToString(passHashBytes[:])
-	return fmt.Sprintf("%s %s", passHash, b64.StdEncoding.EncodeToString(salt))
-}
-
-func uniqueProbePaths(paths []string) []string {
-	keys := make(map[string]bool)
-	var set []string
-	for _, name := range paths {
-		if _, exists := keys[name]; !exists {
-			keys[name] = true
-			set = append(set, name)
-		}
-	}
-	return set
-}
-
-// When running with TLS and clientAuth=Need or if the probe endpoints require auth, we need to use a command instead of HTTP Get
-// This function builds the custom probe command and returns any associated volume / mounts needed for the auth secrets
-func configureSecureProbeCommand(solrCloud *solr.SolrCloud, defaultProbeGetAction *corev1.HTTPGetAction) (string, *corev1.Volume, *corev1.VolumeMount) {
-	// mount the secret in a file so it gets updated; env vars do not see:
-	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-	basicAuthOption := ""
-	enableBasicAuth := ""
-	var volMount *corev1.VolumeMount
-	var vol *corev1.Volume
-	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
-		secretName := solrCloud.BasicAuthSecretName()
-		vol = &corev1.Volume{
-			Name: strings.ReplaceAll(secretName, ".", "-"),
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName:  secretName,
-					DefaultMode: &SecretReadOnlyPermissions,
-				},
-			},
-		}
-		mountPath := fmt.Sprintf("/etc/secrets/%s", vol.Name)
-		volMount = &corev1.VolumeMount{Name: vol.Name, MountPath: mountPath}
-		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
-		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		basicAuthOption = fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile)
-		enableBasicAuth = " -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "
-	}
-
-	// Is TLS enabled? If so we need some additional SSL related props
-	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud)
-	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
-
-	// construct the probe command to invoke the SolrCLI "api" action
-	//
-	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
-	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s %s "+
-		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(false), defaultProbeGetAction.Port.IntVal, defaultProbeGetAction.Path)
-	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
-
-	return probeCommand, vol, volMount
 }
