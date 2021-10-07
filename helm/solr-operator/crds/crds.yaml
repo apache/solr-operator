@@ -1206,7 +1206,7 @@ spec:
             description: SolrCloudSpec defines the desired state of SolrCloud
             properties:
               additionalLibs:
-                description: 'List of paths in the Solr Docker image to load in the classpath. Note: Contrib Modules will be auto-loaded if specified in the "contribModules" property.'
+                description: 'List of paths in the Solr Docker image to load in the classpath. Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.'
                 items:
                   type: string
                 type: array
@@ -2172,12 +2172,6 @@ spec:
                   tag:
                     type: string
                 type: object
-              contribModules:
-                description: 'List of Solr Contrib Modules to be loaded when starting Solr Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)'
-                items:
-                  type: string
-                type: array
-                uniqueItems: true
               customSolrKubeOptions:
                 description: Provide custom options for kubernetes objects created for the Solr Cloud.
                 properties:
@@ -6871,6 +6865,12 @@ spec:
               solrLogLevel:
                 description: Set the Solr Log level, defaults to INFO
                 type: string
+              solrModules:
+                description: 'List of Solr Modules to be loaded when starting Solr Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)'
+                items:
+                  type: string
+                type: array
+                uniqueItems: true
               solrOpts:
                 description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
                 type: string

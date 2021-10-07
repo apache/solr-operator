@@ -152,9 +152,9 @@ spec:
     {{- end }}
   {{- end }}
 
-  {{- if .Values.solrOptions.contribModules }}
-  contribModules:
-    {{- toYaml .Values.solrOptions.contribModules | nindent 4 }}
+  {{- if .Values.solrOptions.solrModules }}
+  solrModules:
+    {{- toYaml .Values.solrOptions.solrModules | nindent 4 }}
   {{- end }}
 
   {{- if .Values.solrOptions.additionalLibs }}

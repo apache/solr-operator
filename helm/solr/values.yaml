@@ -54,7 +54,7 @@ solrOptions:
   javaOpts: ""
   logLevel: ""
   gcTune: ""
-  contribModules: []
+  solrModules: []
   additionalLibs: []
 
   # Enable authentication for the Solr Cloud

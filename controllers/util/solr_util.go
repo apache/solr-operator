@@ -650,8 +650,6 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-
-
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.ConfigMapName(),
@@ -668,25 +666,25 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 }
 
 func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
-	backupSection, contribModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
-	contribModules = append(contribModules, solrCloud.Spec.ContribModules...)
+	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
+	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
 	additionalLibs = append(additionalLibs, solrCloud.Spec.AdditionalLibs...)
-	return GenerateSolrXMLString(backupSection, contribModules, additionalLibs)
+	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs)
 }
 
-func GenerateSolrXMLString(backupSection string, contribModules []string, additionalLibs[]string) string {
-	return fmt.Sprintf(DefaultSolrXML, GenerateAdditionalLibXMLPart(contribModules, additionalLibs), backupSection)
+func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string) string {
+	return fmt.Sprintf(DefaultSolrXML, GenerateAdditionalLibXMLPart(solrModules, additionalLibs), backupSection)
 }
 
-func GenerateAdditionalLibXMLPart(contribModules []string, additionalLibs[]string) string {
+func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
 	libs := make(map[string]bool, 0)
 
 	// Add all contrib library locations
-	if len(contribModules) > 0 {
+	if len(solrModules) > 0 {
 		libs[DistLibs] = true
 	}
-	for _, contrib := range contribModules {
-		libs[fmt.Sprintf(ContribLibs, contrib)] = true
+	for _, module := range solrModules {
+		libs[fmt.Sprintf(ContribLibs, module)] = true
 	}
 
 	// Add all custom library locations

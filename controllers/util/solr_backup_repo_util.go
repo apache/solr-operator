@@ -84,7 +84,7 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 	return
 }
 
-func RepoContribModules(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
+func RepoSolrModules(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
 	if repo.GCS != nil {
 		libs = []string{"gcs-repository"}
 	}
@@ -112,15 +112,15 @@ func RepoEnvVars(repo *solrv1beta1.SolrBackupRepository) (envVars []corev1.EnvVa
 	return envVars
 }
 
-func GenerateBackupRepositoriesForSolrXml(backupRepos []solrv1beta1.SolrBackupRepository) (repoXML string, contribModules []string, additionalLibs []string) {
+func GenerateBackupRepositoriesForSolrXml(backupRepos []solrv1beta1.SolrBackupRepository) (repoXML string, solrModules []string, additionalLibs []string) {
 	if len(backupRepos) == 0 {
 		return
 	}
 	repoXMLs := make([]string, len(backupRepos))
 
 	for i, repo := range backupRepos {
-		contribModules = append(contribModules, RepoContribModules(&repo)...)
-		additionalLibs = append(contribModules, AdditionalRepoLibs(&repo)...)
+		solrModules = append(solrModules, RepoSolrModules(&repo)...)
+		additionalLibs = append(solrModules, AdditionalRepoLibs(&repo)...)
 		repoXMLs[i] = RepoXML(&repo)
 	}
 	sort.Strings(repoXMLs)

@@ -127,15 +127,15 @@ type SolrCloudSpec struct {
 	//+listMapKey:=name
 	BackupRepositories []SolrBackupRepository `json:"backupRepositories,omitempty"`
 
-	// List of Solr Contrib Modules to be loaded when starting Solr
+	// List of Solr Modules to be loaded when starting Solr
 	// Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)
 	//
 	//+optional
 	//+kubebuilder:validation:UniqueItems:=true
-	ContribModules []string `json:"contribModules,omitempty"`
+	SolrModules []string `json:"solrModules,omitempty"`
 
 	// List of paths in the Solr Docker image to load in the classpath.
-	// Note: Contrib Modules will be auto-loaded if specified in the "contribModules" property.
+	// Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.
 	//
 	//+optional
 	//+kubebuilder:validation:UniqueItems:=true
