@@ -128,7 +128,7 @@ type SolrCloudSpec struct {
 	BackupRepositories []SolrBackupRepository `json:"backupRepositories,omitempty"`
 
 	// List of Solr Modules to be loaded when starting Solr
-	// Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)
+	// Note: You do not need to specify a module if it is required by another property (e.g. backupRepositories[].gcs)
 	//
 	//+optional
 	SolrModules []string `json:"solrModules,omitempty"`

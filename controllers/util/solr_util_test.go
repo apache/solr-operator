@@ -78,8 +78,6 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 
 	assert.Contains(t, modules, "gcs-repository", "The modules for the backupRepos should contain gcs-repository")
 	assert.Empty(t, libs, "There should be no libs for the backupRepos")
-	// Since GCS repositories are defined, make sure the contrib is on the classpath
-	//assert.Contains(t, xmlString, "<str name=\"sharedLib\">/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>")
 }
 
 func TestGenerateAdditionalLibXMLPart(t *testing.T) {

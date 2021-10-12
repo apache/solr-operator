@@ -6865,7 +6865,7 @@ spec:
                 description: Set the Solr Log level, defaults to INFO
                 type: string
               solrModules:
-                description: 'List of Solr Modules to be loaded when starting Solr Note: You do not need to specify a contrib module if it is required by another property (e.g. backupRepositories[].gcs)'
+                description: 'List of Solr Modules to be loaded when starting Solr Note: You do not need to specify a module if it is required by another property (e.g. backupRepositories[].gcs)'
                 items:
                   type: string
                 type: array

@@ -679,7 +679,7 @@ func GenerateSolrXMLString(backupSection string, solrModules []string, additiona
 func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
 	libs := make(map[string]bool, 0)
 
-	// Add all contrib library locations
+	// Add all module library locations
 	if len(solrModules) > 0 {
 		libs[DistLibs] = true
 	}
