@@ -120,7 +120,7 @@ func GenerateBackupRepositoriesForSolrXml(backupRepos []solrv1beta1.SolrBackupRe
 
 	for i, repo := range backupRepos {
 		solrModules = append(solrModules, RepoSolrModules(&repo)...)
-		additionalLibs = append(solrModules, AdditionalRepoLibs(&repo)...)
+		additionalLibs = append(additionalLibs, AdditionalRepoLibs(&repo)...)
 		repoXMLs[i] = RepoXML(&repo)
 	}
 	sort.Strings(repoXMLs)
