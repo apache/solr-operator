@@ -110,12 +110,12 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 		Spec: solr.SolrCloudSpec{
 			BackupRepositories: []solr.SolrBackupRepository{
 				{
-					Name:    "test",
-					GCS:     &solr.GcsRepository{},
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
 				},
 			},
 			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
-			SolrModules: []string{"ltr", "analytics"},
+			SolrModules:    []string{"ltr", "analytics"},
 		},
 	}
 	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/analytics/lib,/opt/solr/contrib/gcs-repository/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with a backupRepo, additionalLibs and solrModules")
@@ -124,7 +124,7 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 	solrCloud = &solr.SolrCloud{
 		Spec: solr.SolrCloudSpec{
 			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
-			SolrModules: []string{"ltr", "analytics"},
+			SolrModules:    []string{"ltr", "analytics"},
 		},
 	}
 	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/analytics/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with additionalLibs and solrModules")
@@ -134,8 +134,8 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 		Spec: solr.SolrCloudSpec{
 			BackupRepositories: []solr.SolrBackupRepository{
 				{
-					Name:    "test",
-					GCS:     &solr.GcsRepository{},
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
 				},
 			},
 			SolrModules: []string{"ltr", "analytics"},
@@ -148,8 +148,8 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 		Spec: solr.SolrCloudSpec{
 			BackupRepositories: []solr.SolrBackupRepository{
 				{
-					Name:    "test",
-					GCS:     &solr.GcsRepository{},
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
 				},
 			},
 			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
@@ -170,8 +170,8 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 		Spec: solr.SolrCloudSpec{
 			BackupRepositories: []solr.SolrBackupRepository{
 				{
-					Name:    "test",
-					GCS:     &solr.GcsRepository{},
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
 				},
 			},
 		},

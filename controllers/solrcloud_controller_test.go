@@ -430,8 +430,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				SolrModules: []string{"analytics", "ltr"},
 				BackupRepositories: []solrv1beta1.SolrBackupRepository{
 					{
-						Name:    "test1",
-						GCS:     &solrv1beta1.GcsRepository{},
+						Name: "test1",
+						GCS:  &solrv1beta1.GcsRepository{},
 					},
 				},
 			}
