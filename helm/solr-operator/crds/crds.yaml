@@ -1210,7 +1210,6 @@ spec:
                 items:
                   type: string
                 type: array
-                uniqueItems: true
               backupRepositories:
                 description: Allows specification of multiple different "repositories" for Solr to use when backing up data.
                 items:
@@ -6870,7 +6869,6 @@ spec:
                 items:
                   type: string
                 type: array
-                uniqueItems: true
               solrOpts:
                 description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
                 type: string

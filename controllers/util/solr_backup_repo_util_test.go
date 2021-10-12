@@ -71,7 +71,21 @@ func TestGCSRepoAdditionalLibs(t *testing.T) {
 			},
 		},
 	}
-	assert.EqualValues(t, []string{"/opt/solr/dist", "/opt/solr/contrib/gcs-repository/lib"}, AdditionalRepoLibs(repo), "GCS Repos require no additional libraries for Solr")
+	assert.Empty(t, AdditionalRepoLibs(repo), "GCS Repos require no additional libraries for Solr")
+}
+
+func TestGCSRepoSolrModules(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "gcsrepository1",
+		GCS: &solr.GcsRepository{
+			Bucket: "some-bucket-name1",
+			GcsCredentialSecret: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
+				Key:                  "some-secret-key",
+			},
+		},
+	}
+	assert.EqualValues(t, []string{"gcs-repository"}, RepoSolrModules(repo), "GCS Repos require the gcs-repository solr module")
 }
 
 func TestManagedRepoAdditionalLibs(t *testing.T) {
@@ -82,4 +96,14 @@ func TestManagedRepoAdditionalLibs(t *testing.T) {
 		},
 	}
 	assert.Empty(t, AdditionalRepoLibs(repo), "Managed Repos require no additional libraries for Solr")
+}
+
+func TestManagedRepoSolrModules(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "managedrepository2",
+		Managed: &solr.ManagedRepository{
+			Volume: corev1.VolumeSource{},
+		},
+	}
+	assert.Empty(t, RepoSolrModules(repo), "Managed Repos require no solr modules")
 }
