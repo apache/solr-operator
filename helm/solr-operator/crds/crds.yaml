@@ -2235,6 +2235,7 @@ spec:
                           type: string
                       required:
                       - bucket
+                      - region
                       type: object
                   required:
                   - name

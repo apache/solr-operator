@@ -416,7 +416,7 @@ type GcsRepository struct {
 
 type S3Repository struct {
 	// The S3 region to store the backup data in
-	Region string `json:"region,omitempty"`
+	Region string `json:"region"`
 
 	// The name of the S3 bucket that all backup data will be stored in
 	Bucket string `json:"bucket"`
@@ -429,7 +429,7 @@ type S3Repository struct {
 	// Then use that serviceAccountName for your SolrCloud, and the credentials should be auto-populated.
 	//
 	// +optional
-	Credentials *S3Credentials `json:"credentials"`
+	Credentials *S3Credentials `json:"credentials,omitempty"`
 
 	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
 	// +optional
@@ -447,19 +447,19 @@ type S3Repository struct {
 type S3Credentials struct {
 	// The name & key of a Kubernetes secret holding an AWS Access Key ID
 	// +optional
-	AccessKeyIdSecret *corev1.SecretKeySelector `json:"accessKeyIdSecret"`
+	AccessKeyIdSecret *corev1.SecretKeySelector `json:"accessKeyIdSecret,omitempty"`
 
 	// The name & key of a Kubernetes secret holding an AWS Secret Access Key
 	// +optional
-	SecretAccessKeySecret *corev1.SecretKeySelector `json:"secretAccessKeySecret"`
+	SecretAccessKeySecret *corev1.SecretKeySelector `json:"secretAccessKeySecret,omitempty"`
 
 	// The name & key of a Kubernetes secret holding an AWS Session Token
 	// +optional
-	SessionTokenSecret *corev1.SecretKeySelector `json:"sessionTokenSecret"`
+	SessionTokenSecret *corev1.SecretKeySelector `json:"sessionTokenSecret,omitempty"`
 
 	// The name & key of a Kubernetes secret holding an AWS credentials file
 	// +optional
-	CredentialsFileSecret *corev1.SecretKeySelector `json:"credentialsFileSecret"`
+	CredentialsFileSecret *corev1.SecretKeySelector `json:"credentialsFileSecret,omitempty"`
 }
 
 type ManagedRepository struct {

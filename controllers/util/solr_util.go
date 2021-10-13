@@ -307,17 +307,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	// Add envVars for backupRepos if any are needed
-	if len(backupEnvVars) > 0 {
-		envVars = append(envVars, backupEnvVars...)
-	}
-
 	// Add all necessary information for connection to Zookeeper
 	zkEnvVars, zkSolrOpt, hasChroot := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
 	if zkSolrOpt != "" {
 		allSolrOpts = append(allSolrOpts, zkSolrOpt)
 	}
 	envVars = append(envVars, zkEnvVars...)
+
+	// Add envVars for backupRepos if any are needed
+	if len(backupEnvVars) > 0 {
+		envVars = append(envVars, backupEnvVars...)
+	}
 
 	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
 	var postStart *corev1.Handler
