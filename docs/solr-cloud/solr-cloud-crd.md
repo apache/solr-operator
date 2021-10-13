@@ -20,6 +20,20 @@
 The SolrCloud CRD allows users to spin up a Solr cloud in a very configurable way.
 Those configuration options are laid out on this page.
 
+## Solr Options
+
+The SolrCloud CRD gives users the ability to customize how Solr is run.
+
+### Solr Modules and Additional Libraries
+_Since v0.5.0_
+
+Solr comes packaged with modules that can be loaded optionally, known as either Solr Modules or Solr Contrib Modules.
+By default they are not included in the classpath of Solr, so they have to be explicitly enabled.
+Use the **`SolrCloud.spec.solrModules`** property to add a list of module names, not paths, and they will automatically be enabled for the solrCloud.
+
+However, users might want to include custom code that is not an official Solr Module.
+In order to facilitate this, the **`SolrCloud.spec.additionalLibs`** property takes a list of paths to folders, containing jars to load in the classpath of the SolrCloud.
+
 ## Data Storage
 
 The SolrCloud CRD gives the option for users to use either
