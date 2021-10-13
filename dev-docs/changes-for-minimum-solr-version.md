@@ -6,6 +6,10 @@ So when upgrading the minimum supported Solr Version for the operator, we can th
 
 ## 8.x
 
+### 8.0
+
+- SOLR-11126: Used improved healthcheck handler (`/solr/admin/health`)
+
 ### 8.1
 
 - SOLR-13336: Adding `<int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>` to the default `solr.xml`.
