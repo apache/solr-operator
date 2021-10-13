@@ -6866,13 +6866,44 @@ spec:
                 description: Options to enable Solr security
                 properties:
                   authenticationType:
-                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the Solr operator but support for other authentication plugins may be added in the future.
+                    description: Indicates the authentication plugin type that is being used by Solr; for now only "Basic" or "Oidc" are supported by the Solr operator but support for other authentication plugins may be added in the future.
                     enum:
                     - Basic
+                    - Oidc
                     type: string
                   basicAuthSecret:
                     description: "Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be  locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting). \n If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password for the \"k8s-oper\" user. All API requests from the operator are made as the \"k8s-oper\" user, which is configured with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
                     type: string
+                  bootstrapSecurityJson:
+                    description: Options to configure a user-provided security.json from a configMap to allow for advanced security config. If not specified, the operator bootstraps a security.json with basic auth enabled. This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API. If not using basic auth, such as using Oidc, then you must provide the security.json config as the operator doesn't know how to configure OIDC providers.
+                    properties:
+                      key:
+                        description: The key to select.
+                        type: string
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                      optional:
+                        description: Specify whether the ConfigMap or its key must be defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                  oidc:
+                    description: Options for configuring the operator to authenticate with an OIDC provider using the Oidc 'client_credentials' profile.
+                    properties:
+                      clientCredentialsSecret:
+                        description: 'Name of a secret in the same namespace that holds a `clientId` and `clientSecret` for making `client_credentials` requests to an OIDC provider, see: https://tools.ietf.org/html/rfc6749#section-4.4'
+                        type: string
+                      tokenUrl:
+                        description: The Token URL used for obtaining a token from an Oidc provider; required unless you specify the well known URL
+                        type: string
+                      wellKnownUrl:
+                        description: The well known URL for the OIDC provider; required unless you specify the token URL directly
+                        type: string
+                    required:
+                    - clientCredentialsSecret
+                    type: object
                   probesRequireAuth:
                     description: Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults to false. If you set to true, then probes will use a local command on the main container to hit the secured endpoints with credentials sourced from an env var instead of HTTP directly.
                     type: boolean

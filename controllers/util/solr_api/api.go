@@ -18,14 +18,22 @@
 package solr_api
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/motemen/go-loghttp"
+	"golang.org/x/oauth2"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
+)
+
+const (
+	TOKEN_SOURCE_CONTEXT_KEY = "TOKEN_SOURCE"
+	HTTP_HEADERS_CONTEXT_KEY = "HTTP_HEADERS"
 )
 
 // Used to call a Solr pod over https when using a self-signed cert
@@ -65,12 +73,18 @@ type SolrAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders map[string]string, response interface{}) (err error) {
+func CallCollectionsApi(ctx context.Context, cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := noVerifyTLSHttpClient
 	if mTLSHttpClient != nil {
 		client = mTLSHttpClient
+	}
+
+	// if the supplied Context has a token source, then use that to make our call to Solr
+	if tokenSource, hasTokenSource := ctx.Value(TOKEN_SOURCE_CONTEXT_KEY).(*oauth2.TokenSource); hasTokenSource {
+		// Get an Oidc client but using our existing client as the base
+		client = oauth2.NewClient(context.WithValue(ctx, oauth2.HTTPClient, client), *tokenSource)
 	}
 
 	urlParams.Set("wt", "json")
@@ -81,8 +95,8 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders
 
 	req, err := http.NewRequest("GET", cloudUrl, nil)
 
-	// mainly for doing basic-auth
-	if httpHeaders != nil {
+	// Any custom HTTP headers passed through the Context
+	if httpHeaders, hasHeaders := ctx.Value(HTTP_HEADERS_CONTEXT_KEY).(map[string]string); hasHeaders {
 		for key, header := range httpHeaders {
 			req.Header.Add(key, header)
 		}
@@ -110,5 +124,17 @@ func init() {
 	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
 	customTransport := http.DefaultTransport.(*http.Transport).Clone()
 	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-	SetNoVerifyTLSHttpClient(&http.Client{Transport: customTransport})
+
+	// TODO: nocommit ~ useful for debugging Oidc activity
+	transportWithLogging := &loghttp.Transport{
+		Transport: customTransport,
+		LogRequest: func(req *http.Request) {
+			fmt.Printf("\n\nREQUEST: %s %s %+v\n", req.Method, req.URL, req.Header)
+		},
+		LogResponse: func(resp *http.Response) {
+			fmt.Printf("RESPONSE: %+v\n", resp.Status)
+		},
+	}
+
+	SetNoVerifyTLSHttpClient(&http.Client{Transport: transportWithLogging})
 }

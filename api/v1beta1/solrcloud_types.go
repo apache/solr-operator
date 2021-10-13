@@ -1363,15 +1363,30 @@ type SolrTLSOptions struct {
 	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=Basic
+// +kubebuilder:validation:Enum=Basic;Oidc
 type AuthenticationType string
 
 const (
 	Basic AuthenticationType = "Basic"
+	Oidc  AuthenticationType = "Oidc"
 )
 
+type OidcOptions struct {
+	// Name of a secret in the same namespace that holds a `clientId` and `clientSecret` for making `client_credentials`
+	// requests to an OIDC provider, see: https://tools.ietf.org/html/rfc6749#section-4.4
+	ClientCredentialsSecret string `json:"clientCredentialsSecret"`
+
+	// The well known URL for the OIDC provider; required unless you specify the token URL directly
+	// +optional
+	WellKnownUrl string `json:"wellKnownUrl,omitempty"`
+
+	// The Token URL used for obtaining a token from an Oidc provider; required unless you specify the well known URL
+	// +optional
+	TokenUrl string `json:"tokenUrl,omitempty"`
+}
+
 type SolrSecurityOptions struct {
-	// Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the
+	// Indicates the authentication plugin type that is being used by Solr; for now only "Basic" or "Oidc" are supported by the
 	// Solr operator but support for other authentication plugins may be added in the future.
 	AuthenticationType AuthenticationType `json:"authenticationType,omitempty"`
 
@@ -1395,4 +1410,16 @@ type SolrSecurityOptions struct {
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
+
+	// Options to configure a user-provided security.json from a configMap to allow for advanced security config.
+	// If not specified, the operator bootstraps a security.json with basic auth enabled.
+	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
+	// If not using basic auth, such as using Oidc, then you must provide the security.json config as the operator
+	// doesn't know how to configure OIDC providers.
+	// +optional
+	BootstrapSecurityJson *corev1.ConfigMapKeySelector `json:"bootstrapSecurityJson,omitempty"`
+
+	// Options for configuring the operator to authenticate with an OIDC provider using the Oidc 'client_credentials' profile.
+	// +optional
+	Oidc *OidcOptions `json:"oidc,omitempty"`
 }
