@@ -25,7 +25,10 @@ import (
 )
 
 func TestNoRepositoryXmlGeneratedWhenNoRepositoriesExist(t *testing.T) {
-	assert.Equal(t, "", GenerateBackupRepositoriesForSolrXml(make([]solr.SolrBackupRepository, 0)), "There should be no backup XML when no backupRepos are specified")
+	xmlString, modules, libs := GenerateBackupRepositoriesForSolrXml(make([]solr.SolrBackupRepository, 0))
+	assert.Equal(t, "", xmlString, "There should be no backup XML when no backupRepos are specified")
+	assert.Empty(t, modules, "There should be no modules for the backupRepos when no backupRepos are specified")
+	assert.Empty(t, libs, "There should be no libs for the backupRepos when no backupRepos are specified")
 }
 
 func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
@@ -64,7 +67,7 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			},
 		},
 	}
-	xmlString := GenerateBackupRepositoriesForSolrXml(repos)
+	xmlString, modules, libs := GenerateBackupRepositoriesForSolrXml(repos)
 
 	// These assertions don't fully guarantee valid XML, but they at least make sure each repo is defined and uses the correct class.
 	// If we wanted to bring in an xpath library for assertions we could be a lot more comprehensive here.
@@ -73,6 +76,111 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository1\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository1")
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository2\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository2")
 
-	// Since GCS repositories are defined, make sure the contrib is on the classpath
-	assert.Contains(t, xmlString, "<str name=\"sharedLib\">/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>")
+	assert.Contains(t, modules, "gcs-repository", "The modules for the backupRepos should contain gcs-repository")
+	assert.Empty(t, libs, "There should be no libs for the backupRepos")
+}
+
+func TestGenerateAdditionalLibXMLPart(t *testing.T) {
+	// Just 1 repeated solr module
+	xmlString := GenerateAdditionalLibXMLPart([]string{"gcs-repository", "gcs-repository"}, []string{})
+	assert.EqualValuesf(t, xmlString, "<str name=\"sharedLib\">/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for just 1 repeated solr module")
+
+	// Just 2 different solr modules
+	xmlString = GenerateAdditionalLibXMLPart([]string{"gcs-repository", "analytics"}, []string{})
+	assert.EqualValuesf(t, xmlString, "<str name=\"sharedLib\">/opt/solr/contrib/analytics/lib,/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for just 2 different solr modules")
+
+	// Just 2 repeated libs
+	xmlString = GenerateAdditionalLibXMLPart([]string{}, []string{"/ext/lib", "/ext/lib"})
+	assert.EqualValuesf(t, xmlString, "<str name=\"sharedLib\">/ext/lib</str>", "Wrong sharedLib xml for just 1 repeated additional lib")
+
+	// Just 2 different libs
+	xmlString = GenerateAdditionalLibXMLPart([]string{}, []string{"/ext/lib2", "/ext/lib1"})
+	assert.EqualValuesf(t, xmlString, "<str name=\"sharedLib\">/ext/lib1,/ext/lib2</str>", "Wrong sharedLib xml for just 2 different additional libs")
+
+	// Combination of everything
+	xmlString = GenerateAdditionalLibXMLPart([]string{"gcs-repository", "analytics", "analytics"}, []string{"/ext/lib2", "/ext/lib2", "/ext/lib1"})
+	assert.EqualValuesf(t, xmlString, "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/analytics/lib,/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for mix of additional libs and solr modules")
+}
+
+func TestGenerateSolrXMLStringForCloud(t *testing.T) {
+	// All 3 options that factor into the sharedLib
+	solrCloud := &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			BackupRepositories: []solr.SolrBackupRepository{
+				{
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
+				},
+			},
+			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
+			SolrModules:    []string{"ltr", "analytics"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/analytics/lib,/opt/solr/contrib/gcs-repository/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with a backupRepo, additionalLibs and solrModules")
+
+	// Just SolrModules and AdditionalLibs
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
+			SolrModules:    []string{"ltr", "analytics"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/analytics/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with additionalLibs and solrModules")
+
+	// Just SolrModules and Backups
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			BackupRepositories: []solr.SolrBackupRepository{
+				{
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
+				},
+			},
+			SolrModules: []string{"ltr", "analytics"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/opt/solr/contrib/analytics/lib,/opt/solr/contrib/gcs-repository/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with a backupRepo and solrModules")
+
+	// Just AdditionalLibs and Backups
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			BackupRepositories: []solr.SolrBackupRepository{
+				{
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
+				},
+			},
+			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2,/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with a backupRepo and additionalLibs")
+
+	// Just SolrModules
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			SolrModules: []string{"ltr", "analytics"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/opt/solr/contrib/analytics/lib,/opt/solr/contrib/ltr/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with just solrModules")
+
+	// Just Backups
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			BackupRepositories: []solr.SolrBackupRepository{
+				{
+					Name: "test",
+					GCS:  &solr.GcsRepository{},
+				},
+			},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/opt/solr/contrib/gcs-repository/lib,/opt/solr/dist</str>", "Wrong sharedLib xml for a cloud with just a backupRepo")
+
+	// Just AdditionalLibs
+	solrCloud = &solr.SolrCloud{
+		Spec: solr.SolrCloudSpec{
+			AdditionalLibs: []string{"/ext/lib2", "/ext/lib1"},
+		},
+	}
+	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">/ext/lib1,/ext/lib2</str>", "Wrong sharedLib xml for a cloud with a just additionalLibs")
 }

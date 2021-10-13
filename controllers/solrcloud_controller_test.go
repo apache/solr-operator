@@ -203,7 +203,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 		FIt("has the correct resources", func() {
 			By("testing the Solr ConfigMap")
-			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLString("")})
+			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLString("", []string{}, []string{})})
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testConfigMapLabels)), "Incorrect configMap labels")
 			Expect(configMap.Annotations).To(Equal(testConfigMapAnnotations), "Incorrect configMap annotations")
 
@@ -419,6 +419,46 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
+	FContext("Solr Cloud with changing generated SolrXML", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				SolrModules: []string{"analytics", "ltr"},
+				BackupRepositories: []solrv1beta1.SolrBackupRepository{
+					{
+						Name: "test1",
+						GCS:  &solrv1beta1.GcsRepository{},
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr ConfigMap")
+			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
+
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			Expect(statefulSet.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Wrong solr.xml MD5 annotation in the pod template!")
+
+			By("making sure the solr.xml is updated and a rolling restart happens when libs change")
+			foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.AdditionalLibs = []string{"/ext/lib2", "/ext/lib1"}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Change the additionalLibs for the SolrCloud")
+			})
+
+			newConfigMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(foundSolrCloud)})
+
+			updateSolrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(newConfigMap.Data[util.SolrXmlFile])))
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
+			})
+		})
+	})
+
 	FContext("Solr Cloud with a custom Solr XML ConfigMap", func() {
 		testCustomSolrXmlConfigMap := "my-custom-solr-xml"
 		BeforeEach(func() {
@@ -545,14 +585,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
 
-				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.GenerateSolrXMLString(""))))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.GenerateSolrXMLString("", []string{}, []string{}))))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.LogXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
 				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
-			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.GenerateSolrXMLString("")})
+			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.GenerateSolrXMLString("", []string{}, []string{})})
 
 			By("updating the user-provided log XML to trigger a pod rolling restart")
 			configMap.Data[util.LogXmlFile] = "<Configuration>Updated!</Configuration>"

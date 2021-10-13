@@ -51,6 +51,9 @@ const (
 	LogXmlFile                       = "log4j2.xml"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
+
+	DistLibs    = "/opt/solr/dist"
+	ContribLibs = "/opt/solr/contrib/%s/lib"
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -594,41 +597,9 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
-func GenerateBackupRepositoriesForSolrXml(backupRepos []solr.SolrBackupRepository) string {
-	if len(backupRepos) == 0 {
-		return ""
-	}
-	libs := make(map[string]bool, 0)
-	repoXMLs := make([]string, len(backupRepos))
-
-	for i, repo := range backupRepos {
-		for _, lib := range AdditionalRepoLibs(&repo) {
-			libs[lib] = true
-		}
-		repoXMLs[i] = RepoXML(&repo)
-	}
-	sort.Strings(repoXMLs)
-
-	libXml := ""
-	if len(libs) > 0 {
-		libList := make([]string, 0)
-		for lib := range libs {
-			libList = append(libList, lib)
-		}
-		sort.Strings(libList)
-		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
-	}
-
-	return fmt.Sprintf(
-		`%s 
-		<backup>
-		%s
-		</backup>`, libXml, strings.Join(repoXMLs, `
-`))
-}
-
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
+  %s
   <solrcloud>
     <str name="host">${host:}</str>
     <int name="hostPort">${hostPort:80}</int>
@@ -661,7 +632,6 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
-	backupSection := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrCloud.ConfigMapName(),
@@ -670,15 +640,50 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 			Annotations: annotations,
 		},
 		Data: map[string]string{
-			"solr.xml": GenerateSolrXMLString(backupSection),
+			"solr.xml": GenerateSolrXMLStringForCloud(solrCloud),
 		},
 	}
 
 	return configMap
 }
 
-func GenerateSolrXMLString(backupSection string) string {
-	return fmt.Sprintf(DefaultSolrXML, backupSection)
+func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
+	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
+	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
+	additionalLibs = append(additionalLibs, solrCloud.Spec.AdditionalLibs...)
+	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs)
+}
+
+func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string) string {
+	return fmt.Sprintf(DefaultSolrXML, GenerateAdditionalLibXMLPart(solrModules, additionalLibs), backupSection)
+}
+
+func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
+	libs := make(map[string]bool, 0)
+
+	// Add all module library locations
+	if len(solrModules) > 0 {
+		libs[DistLibs] = true
+	}
+	for _, module := range solrModules {
+		libs[fmt.Sprintf(ContribLibs, module)] = true
+	}
+
+	// Add all custom library locations
+	for _, libPath := range additionalLibs {
+		libs[libPath] = true
+	}
+
+	libXml := ""
+	if len(libs) > 0 {
+		libList := make([]string, 0)
+		for lib := range libs {
+			libList = append(libList, lib)
+		}
+		sort.Strings(libList)
+		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	}
+	return libXml
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
