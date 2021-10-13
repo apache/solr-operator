@@ -126,6 +126,18 @@ type SolrCloudSpec struct {
 	//+listType:=map
 	//+listMapKey:=name
 	BackupRepositories []SolrBackupRepository `json:"backupRepositories,omitempty"`
+
+	// List of Solr Modules to be loaded when starting Solr
+	// Note: You do not need to specify a module if it is required by another property (e.g. backupRepositories[].gcs)
+	//
+	//+optional
+	SolrModules []string `json:"solrModules,omitempty"`
+
+	// List of paths in the Solr Docker image to load in the classpath.
+	// Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.
+	//
+	//+optional
+	AdditionalLibs []string `json:"additionalLibs,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {

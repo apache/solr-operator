@@ -76,6 +76,11 @@ spec:
           spec:
             description: SolrCloudSpec defines the desired state of SolrCloud
             properties:
+              additionalLibs:
+                description: 'List of paths in the Solr Docker image to load in the classpath. Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.'
+                items:
+                  type: string
+                type: array
               backupRepositories:
                 description: Allows specification of multiple different "repositories" for Solr to use when backing up data.
                 items:
@@ -5730,6 +5735,11 @@ spec:
               solrLogLevel:
                 description: Set the Solr Log level, defaults to INFO
                 type: string
+              solrModules:
+                description: 'List of Solr Modules to be loaded when starting Solr Note: You do not need to specify a module if it is required by another property (e.g. backupRepositories[].gcs)'
+                items:
+                  type: string
+                type: array
               solrOpts:
                 description: You can add common system properties to the SOLR_OPTS environment variable SolrOpts is the string interface for these optional settings
                 type: string

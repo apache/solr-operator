@@ -21,15 +21,14 @@ import (
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	"sort"
+	"strings"
 )
 
 const (
 	BaseBackupRestorePath = "/var/solr/data/backup-restore"
 
 	GCSCredentialSecretKey = "service-account-key.json"
-
-	DistLibs    = "/opt/solr/dist"
-	ContribLibs = "/opt/solr/contrib/%s/lib"
 )
 
 func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
@@ -85,10 +84,14 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 	return
 }
 
-func AdditionalRepoLibs(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
+func RepoSolrModules(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
 	if repo.GCS != nil {
-		libs = []string{DistLibs, fmt.Sprintf(ContribLibs, "gcs-repository")}
+		libs = []string{"gcs-repository"}
 	}
+	return
+}
+
+func AdditionalRepoLibs(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
 	return
 }
 
@@ -107,6 +110,27 @@ func RepoXML(repo *solrv1beta1.SolrBackupRepository) (xml string) {
 
 func RepoEnvVars(repo *solrv1beta1.SolrBackupRepository) (envVars []corev1.EnvVar) {
 	return envVars
+}
+
+func GenerateBackupRepositoriesForSolrXml(backupRepos []solrv1beta1.SolrBackupRepository) (repoXML string, solrModules []string, additionalLibs []string) {
+	if len(backupRepos) == 0 {
+		return
+	}
+	repoXMLs := make([]string, len(backupRepos))
+
+	for i, repo := range backupRepos {
+		solrModules = append(solrModules, RepoSolrModules(&repo)...)
+		additionalLibs = append(additionalLibs, AdditionalRepoLibs(&repo)...)
+		repoXMLs[i] = RepoXML(&repo)
+	}
+	sort.Strings(repoXMLs)
+
+	repoXML = fmt.Sprintf(
+		`<backup>
+		%s
+		</backup>`, strings.Join(repoXMLs, `
+`))
+	return
 }
 
 func IsBackupVolumePresent(repo *solrv1beta1.SolrBackupRepository, pod *corev1.Pod) bool {

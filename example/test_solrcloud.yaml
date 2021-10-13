@@ -36,6 +36,9 @@ spec:
   solrImage:
     tag: 8.7.0
   solrJavaMem: "-Xms1g -Xmx3g"
+  solrModules:
+    - jaegertracer-configurator
+    - ltr
   customSolrKubeOptions:
     podOptions:
       resources:
