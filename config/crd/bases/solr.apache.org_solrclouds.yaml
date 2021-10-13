@@ -1022,6 +1022,91 @@ spec:
                     name:
                       description: 'A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'
                       type: string
+                    s3:
+                      description: An S3Repository for Solr to use when backing up and restoring collections.
+                      properties:
+                        baseLocation:
+                          description: An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
+                          type: string
+                        bucket:
+                          description: The name of the S3 bucket that all backup data will be stored in
+                          type: string
+                        credentials:
+                          description: "Options for specifying S3Credentials. This is optional in case you want to mount this information yourself. However, if you do not include these credentials, and you do not load them yourself via a mount or EnvVars, you will likely see errors when taking s3 backups. \n If running in EKS, you can create an IAMServiceAccount that uses a role permissioned for this S3 bucket. Then use that serviceAccountName for your SolrCloud, and the credentials should be auto-populated."
+                          properties:
+                            accessKeyIdSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Access Key ID
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            credentialsFileSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS credentials file
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            secretAccessKeySecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Secret Access Key
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            sessionTokenSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Session Token
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                          type: object
+                        endpoint:
+                          description: The full endpoint URL to use when connecting with S3 (or a supported S3 compatible interface)
+                          type: string
+                        proxyUrl:
+                          description: The full proxy URL to use when connecting with S3
+                          type: string
+                        region:
+                          description: The S3 region to store the backup data in
+                          type: string
+                      required:
+                      - bucket
+                      type: object
                   required:
                   - name
                   type: object

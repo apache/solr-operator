@@ -195,6 +195,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Add necessary specs for backupRepos
+	backupEnvVars := make([]corev1.EnvVar, 0)
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		volumeSource, mount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
 		if volumeSource != nil {
@@ -204,6 +205,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			})
 			mount.Name = RepoVolumeName(&repo)
 			volumeMounts = append(volumeMounts, *mount)
+		}
+		repoEnvVars := RepoEnvVars(&repo)
+		if len(repoEnvVars) > 0 {
+			backupEnvVars = append(backupEnvVars, repoEnvVars...)
 		}
 	}
 
@@ -300,6 +305,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:  "SOLR_STOP_WAIT",
 			Value: strconv.FormatInt(solrStopWait, 10),
 		},
+	}
+
+	// Add envVars for backupRepos if any are needed
+	if len(backupEnvVars) > 0 {
+		envVars = append(envVars, backupEnvVars...)
 	}
 
 	// Add all necessary information for connection to Zookeeper

@@ -50,6 +50,13 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			},
 		},
 		{
+			Name: "s3repository1",
+			S3: &solr.S3Repository{
+				Bucket: "some-bucket-name1",
+				Region: "us-west-2",
+			},
+		},
+		{
 			Name: "managedrepository2",
 			Managed: &solr.ManagedRepository{
 				Volume: corev1.VolumeSource{},
@@ -66,6 +73,13 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 				BaseLocation: "location-2",
 			},
 		},
+		{
+			Name: "s3repository2",
+			S3: &solr.S3Repository{
+				Bucket: "some-bucket-name2",
+				Region: "ap-northeast-2",
+			},
+		},
 	}
 	xmlString, modules, libs := GenerateBackupRepositoriesForSolrXml(repos)
 
@@ -75,8 +89,11 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 	assert.Containsf(t, xmlString, "<repository name=\"managedrepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", "Did not find '%s' in the list of backup repositories", "managedrepository2")
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository1\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository1")
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository2\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository2")
+	assert.Containsf(t, xmlString, "<repository name=\"s3repository1\" class=\"org.apache.solr.s3.S3BackupRepository\">", "Did not find '%s' in the list of backup repositories", "s3repository1")
+	assert.Containsf(t, xmlString, "<repository name=\"s3repository2\" class=\"org.apache.solr.s3.S3BackupRepository\">", "Did not find '%s' in the list of backup repositories", "s3repository2")
 
 	assert.Contains(t, modules, "gcs-repository", "The modules for the backupRepos should contain gcs-repository")
+	assert.Contains(t, modules, "s3-repository", "The modules for the backupRepos should contain s3-repository")
 	assert.Empty(t, libs, "There should be no libs for the backupRepos")
 }
 
