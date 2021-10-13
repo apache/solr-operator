@@ -295,6 +295,12 @@ func CopyZookeeperClusterFields(from, to *zk_api.ZookeeperCluster, logger logr.L
 		to.Spec.Pod.ServiceAccountName = from.Spec.Pod.ServiceAccountName
 	}
 
+	if !DeepEqualWithNils(to.Spec.Pod.ImagePullSecrets, from.Spec.Pod.ImagePullSecrets) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.ImagePullSecrets", "from", to.Spec.Pod.ImagePullSecrets, "to", from.Spec.Pod.ImagePullSecrets)
+		requireUpdate = true
+		to.Spec.Pod.ImagePullSecrets = from.Spec.Pod.ImagePullSecrets
+	}
+
 	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
 		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)
 		requireUpdate = true
