@@ -92,7 +92,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/302
         - name: Backup Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-backup/
+          url: https://apache.github.io/solr-operator/docs/solr-backup#gcs-backup-repositories
     - kind: added
       description: Customize the Lifecycle for Solr and PrometheusExporter containers
       links:
@@ -109,6 +109,17 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/332
         - name: Solr Modules
           url: https://github.com/apache/solr/tree/main/solr/contrib
+    - kind: added
+      description: Add support for using Solr Modules (contrib) and additional libraries
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/328
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/345
+        - name: Solr S3 Repository Documentation
+          url: https://solr.apache.org/guide/8_10/making-and-restoring-backups.html#s3backuprepository
+        - name: Backup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup#s3-backup-repositories
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease

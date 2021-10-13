@@ -30,6 +30,8 @@ This page outlines how to create and delete a Kubernetes SolrBackup
 - [Creation](#creating-an-example-solrbackup)
 - [Deletion](#deleting-an-example-solrbackup)
 - [Repository Types](#supported-repository-types)
+  - [GCS](#gcs-backup-repositories)
+  - [S3](#s3-backup-repositories)
 
 ## Creating an example SolrBackup
 
@@ -127,6 +129,7 @@ kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore-managed-
 ```
 
 ## Supported Repository Types
+_Since v0.5.0_
 
 Note all repositories are defined in the `SolrCloud` specification.
 In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
@@ -152,6 +155,7 @@ spec:
 ```
 
 ### Managed ("Local") Backup Repositories
+_Since v0.5.0_
 
 Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
 Managed repositories are so called because with the data stored in and managed by Kubernetes, the operator is able to offer a few advanced post-processing features that are unavailable for other repository types.
@@ -172,6 +176,7 @@ spec:
 ```
 
 ### GCS Backup Repositories
+_Since v0.5.0_
 
 GCS Repositories store backup data remotely in Google Cloud Storage.
 This repository type is only supported in deployments that use a Solr version >= `8.9.0`.
@@ -197,3 +202,74 @@ spec:
           key: "service-account-key.json"
         baseLocation: "/store/here" # Optional
 ```
+
+
+### S3 Backup Repositories
+_Since v0.5.0_
+
+S3 Repositories store backup data remotely in AWS S3 (or a supported S3 compatible interface).
+This repository type is only supported in deployments that use a Solr version >= `8.10.0`.
+
+Each repository must specify an S3 bucket and region to store data in (the `bucket` and `region` properties).
+Users will want to setup credentials so that the SolrCloud can connect to the S3 bucket and region, more information can be found in the [credentials section](#s3-credentials).
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "s3-backups-1"
+      s3:
+        region: "us-west-2" # Required
+        bucket: "backup-bucket" # Required
+        credentials: {} # Optional
+        proxyUrl: "https://proxy-url-for-s3:3242" # Optional
+        endpoint: "https://custom-s3-endpoint:3242" # Optional
+```
+
+Users can also optionally set a `proxyUrl` or `endpoint` for the S3Repository.
+More information on these settings can be found in the [Ref Guide](https://solr.apache.org/guide/8_10/making-and-restoring-backups.html#s3backuprepository).
+
+#### S3 Credentials
+
+The Solr `S3Repository` module uses the [default credential chain for AWS](https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/credentials.html#credentials-chain).
+All of the options below are designed to be utilized by this credential chain.
+
+There are a few options for giving a SolrCloud the credentials for connecting to S3.
+The two most straightforward ways can be used via the `spec.backupRepositories.s3.credentials` property.
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "s3-backups-1"
+      s3:
+        region: "us-west-2"
+        bucket: "backup-bucket"
+        credentials:
+          accessKeyIdSecret: # Optional
+            name: aws-secrets
+            key: access-key-id
+          secretAccessKeySecret: # Optional
+            name: aws-secrets
+            key: secret-access-key
+          sessionTokenSecret: # Optional
+            name: aws-secrets
+            key: session-token
+          credentialsFileSecret: # Optional
+            name: aws-credentials
+            key: credentials
+```
+
+All options in the `credentials` property are optional, as users can pick and choose which ones to use.
+If you have all of your credentials setup in an [AWS Credentials File](https://docs.aws.amazon.com/sdkref/latest/guide/file-format.html#file-format-creds),
+then `credentialsFileSecret` will be the only property you need to set.
+However, if you don't have a credentials file, you will likely need to set at least the `accessKeyIdSecret` and `secretAccessKeySecret` properties.
+All of these options require the referenced Kuberentes secrets to already exist before creating the SolrCloud resource.
+_(If desired, all options can be combined. e.g. Use `accessKeyIdSecret` and `credentialsFileSecret` together. The ordering of the default credentials chain will determine which options are used.)_
+
+The options in the credentials file above merely set environment variables on the pod, or in the case of `credentialsFileSecret` use an environment variable and a volume mount.
+Users can decide to not use the `credentials` section of the s3 repository config, and instead set these environment variables themselves via `spec.customSolrKubeOptions.podOptions.env`.
+
+Lastly, if running in EKS, it is possible to add [IAM information to Kubernetes serviceAccounts](https://aws.amazon.com/blogs/opensource/introducing-fine-grained-iam-roles-service-accounts/).
+If this is done correctly, you will only need to specify the serviceAccount for the SolrCloud pods via `spec.customSolrKubeOptions.podOptions.serviceAccount`.
+
+_NOTE: Because the Solr S3 Repository is using system-wide settings for AWS credentials, you cannot specify different credentials for different S3 repositories.
+This may be addressed in future Solr versions, but for now use the same credentials for all s3 repos._
