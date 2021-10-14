@@ -1420,6 +1420,8 @@ type SolrSecurityOptions struct {
 	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
 	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
+	// Only works with Basic authentication; if you're using Oidc, then set this to false and ensure the probe endpoints
+	// allow for anonymous access.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 

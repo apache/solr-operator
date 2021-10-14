@@ -297,16 +297,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
 			} // else this ref not using ACLs
 
-			if solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
-				fmt.Println("I HERE, got a user-provided security.json")
-			}
-
-			g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
-			expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
-				"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
-				"echo $SECURITY_JSON > /tmp/security.json; " +
-				"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-			g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
+			expectPutSecurityJsonInZkCmd(g, expInitContainer)
 		} else {
 			g.Expect(expInitContainer).To(Or(
 				BeNil(),
@@ -323,6 +314,15 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) {
+	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
+	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
+		"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
+		"echo $SECURITY_JSON > /tmp/security.json; " +
+		"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 }
 
 func createMockSecurityJsonConfigMap(ctx context.Context, name string, ns string) corev1.ConfigMap {
