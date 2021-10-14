@@ -315,7 +315,7 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	queryParams.Add("collection", collection)
 	queryParams.Add("name", FullCollectionBackupName(collection, backup.Name))
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backup.Name))
-	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location, backup.Name))
+	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location))
 	queryParams.Add("repository", backup.Spec.RepositoryName)
 	return queryParams
 }
@@ -386,7 +386,7 @@ func DeleteAsyncInfoForBackup(cloud *solr.SolrCloud, collection string, backupNa
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, config *rest.Config) (err error) {
 	// Directory creation only required/possible for managed (i.e. local) backups
 	if IsRepoManaged(backupRepository) {
-		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location, backup.Name)
+		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
 		return RunExecForPod(
 			solrCloud.GetAllSolrNodeNames()[0],
 			solrCloud.Namespace,
