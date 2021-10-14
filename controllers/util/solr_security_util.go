@@ -89,8 +89,18 @@ func ReconcileSecurityConfig(ctx context.Context, client *client.Client, instanc
 	return nil, fmt.Errorf("%s not supported! Only 'Basic' or 'Oidc' authentication is supported by the Solr operator", sec.AuthenticationType)
 }
 
+// Reconcile the credentials and supporting config needed to get a JWT token from an OIDC provider
+// to make calls to Solr secured by the JWTAuthPlugin
+// Users must supply their own security.json via a ConfigMap when using OIDC as the operator shouldn't try to support all the various
+// configuration options for the JWTAuthPlugin
 func reconcileForOidc(ctx context.Context, client *client.Client, instance *solr.SolrCloud) (*SecurityConfig, error) {
 	sec := instance.Spec.SolrSecurity
+
+	// TODO: We'd need a fix to SolrCLI to support OIDC, so just don't allow this config for now
+	if sec.ProbesRequireAuth {
+		return nil, fmt.Errorf("spec.solrSecurity.probesRequireAuth=true not supported when using OIDC")
+	}
+
 	if sec.Oidc == nil || sec.Oidc.ClientCredentialsSecret == "" {
 		return nil, fmt.Errorf("must provide a 'oidc' config section containing a 'clientCredentialsSecret' when using AuthenticationType: %s", sec.AuthenticationType)
 	}
@@ -106,29 +116,36 @@ func reconcileForOidc(ctx context.Context, client *client.Client, instance *solr
 		return nil, err
 	}
 
-	securityJson, err := bootstrapSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
-	if err != nil {
-		return nil, err
+	security := &SecurityConfig{SolrSecurity: sec, CredentialsSecret: clientCredsSecret}
+
+	// did the user supply a security.json? if not, we'll trust they are bootstrapping it via some other means
+	if sec.BootstrapSecurityJson != nil {
+		securityJson, err := loadSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		security.SecurityJson = securityJson
+		security.SecurityJsonSrc = &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson}
 	}
 
-	return &SecurityConfig{
-		SolrSecurity:      sec,
-		CredentialsSecret: clientCredsSecret,
-		SecurityJson:      securityJson,
-		SecurityJsonSrc:   &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson},
-	}, nil
+	return security, nil
 }
 
+// Reconcile the credentials and supporting config needed to make calls to Solr secured with basic auth
+// Also, bootstraps an initial security.json config if not supplied by the user
+// However, if users provide their own security.json, then they must also provide the basic auth secret containing
+// credentials the operator should use for making calls to Solr. In other words, we don't try to infuse a new user into
+// the user-provided security.json as that could get messy.
 func reconcileForBasicAuth(ctx context.Context, client *client.Client, instance *solr.SolrCloud) (*SecurityConfig, error) {
 	reader := *client
 
 	sec := instance.Spec.SolrSecurity
 	security := &SecurityConfig{SolrSecurity: sec}
-	basicAuthSecret := &corev1.Secret{}
 
 	// user has the option of providing a secret with credentials the operator should use to make requests to Solr
 	if sec.BasicAuthSecret != "" {
 		// the user supplied their own basic auth secret, make sure it exists and has the expected keys
+		basicAuthSecret := &corev1.Secret{}
 		if err := reader.Get(ctx, types.NamespacedName{Name: sec.BasicAuthSecret, Namespace: instance.Namespace}, basicAuthSecret); err != nil {
 			return nil, err
 		}
@@ -137,13 +154,30 @@ func reconcileForBasicAuth(ctx context.Context, client *client.Client, instance 
 		if err != nil {
 			return nil, err
 		}
+		security.CredentialsSecret = basicAuthSecret
 
-		// since the user supplied us with a basic auth secret, we're assuming they're also bootstrapping the security.json,
-		// so there is no bootstrap secret in this case
+		// is there a user-provided security.json in a ConfigMap?
+		// in this config, we don't need to enforce the user providing a security.json as they can bootstrap the security.json however they want
+		if sec.BootstrapSecurityJson != nil {
+			securityJson, err := loadSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+			if err != nil {
+				return nil, err
+			}
+			security.SecurityJson = securityJson
+			security.SecurityJsonSrc = &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson}
+		} // else no user-provided configMap, no sweat for us
 
 	} else {
+
+		// user didn't provide a basicAuthSecret, so it's invalid for them to provide a security.json as the operator
+		// has no way of authenticating to Solr with a user provided security.json w/o also having the credentials in a secret
+		if sec.BootstrapSecurityJson != nil {
+			return nil, fmt.Errorf("invalid basic auth config, you must also provide the 'basicAuthSecret' when providing your own 'security.json'")
+		}
+
 		// We're supplying a secret with random passwords and a default security.json
 		// since we randomly generate the passwords, we need to lookup the secret first and only create if not exist
+		basicAuthSecret := &corev1.Secret{}
 		err := reader.Get(ctx, types.NamespacedName{Name: instance.BasicAuthSecretName(), Namespace: instance.Namespace}, basicAuthSecret)
 		if err != nil && errors.IsNotFound(err) {
 			authSecret, bootstrapSecret := generateBasicAuthSecretWithBootstrap(instance)
@@ -172,7 +206,6 @@ func reconcileForBasicAuth(ctx context.Context, client *client.Client, instance 
 		if err != nil {
 			return nil, err
 		}
-
 		security.CredentialsSecret = basicAuthSecret
 
 		if security.SecurityJson == "" {
@@ -200,8 +233,10 @@ func enableSecureProbesOnSolrCloudStatefulSet(solrCloud *solr.SolrCloud, statefu
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
 
 	// if probes require auth or Solr wants client auth (mTLS), need to invoke a command on the Solr pod for the probes
+	// but only Basic auth is supported for now as we'll need SolrCLI to support OIDC, so users will need to make sure
+	// the probe endpoints are open when using OIDC
 	mountPath := ""
-	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		vol, volMount := secureProbeVolumeAndMount(solrCloud.BasicAuthSecretName())
 		if vol != nil {
 			stateful.Spec.Template.Spec.Volumes = append(stateful.Spec.Template.Spec.Volumes, *vol)
@@ -231,6 +266,7 @@ func cmdToPutSecurityJsonInZk() string {
 	return fmt.Sprintf(cmd, scriptsDir, scriptsDir)
 }
 
+// Add auth data to the supplied Context using secrets already resolved (stored in the SecurityConfig)
 func (security *SecurityConfig) AddAuthToContext(ctx context.Context, logger logr.Logger) (context.Context, error) {
 	if security.SolrSecurity.AuthenticationType == solr.Basic {
 		return contextWithBasicAuthHeader(ctx, security.CredentialsSecret), nil
@@ -527,7 +563,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
 	basicAuthOption := ""
 	enableBasicAuth := ""
-	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth {
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
 		basicAuthOption = fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile)
@@ -559,23 +595,20 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	}
 }
 
-func bootstrapSecurityJsonFromConfigMap(ctx context.Context, client *client.Client, securityJsonConfigMap *corev1.ConfigMapKeySelector, ns string) (string, error) {
-	if securityJsonConfigMap == nil {
-		return "", fmt.Errorf("required ConfigMap holding a user-provided security.json not configured")
-	}
-
-	providedConfigMap := &corev1.ConfigMap{}
+// Called during reconcile to load the security.json from a user-supplied ConfigMap
+func loadSecurityJsonFromConfigMap(ctx context.Context, client *client.Client, securityJsonConfigMap *corev1.ConfigMapKeySelector, ns string) (string, error) {
+	configMap := &corev1.ConfigMap{}
 	nn := types.NamespacedName{Name: securityJsonConfigMap.Name, Namespace: ns}
 	reader := *client
-	err := reader.Get(ctx, nn, providedConfigMap)
+	err := reader.Get(ctx, nn, configMap)
 	if err != nil {
 		return "", err
 	}
 
-	securityJson, hasSecurityJson := providedConfigMap.Data[securityJsonConfigMap.Key]
+	securityJson, hasSecurityJson := configMap.Data[securityJsonConfigMap.Key]
 	if !hasSecurityJson {
 		return "", fmt.Errorf("required key '%s' not found in the user-supplied configMap %s",
-			securityJsonConfigMap.Key, providedConfigMap.Name)
+			securityJsonConfigMap.Key, configMap.Name)
 	}
 
 	return securityJson, nil

@@ -144,6 +144,34 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, false)
 		})
 	})
+
+	FContext("User Provided Credentials and security.json ConfigMap", func() {
+		BeforeEach(func() {
+			basicAuthSecretName := "my-basic-auth-secret"
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
+				AuthenticationType: solrv1beta1.Basic,
+				BasicAuthSecret:    basicAuthSecretName,
+				BootstrapSecurityJson: &corev1.ConfigMapKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json-cm"},
+					Key:                  util.SecurityJsonFile,
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
+			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("Create the basicAuth secret")
+			basicAuthSecret := createBasicAuthSecret(solrCloud.Spec.SolrSecurity.BasicAuthSecret, solrv1beta1.DefaultBasicAuthUsername, solrCloud.Namespace)
+			Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Could not create the necessary basicAuth secret")
+
+			By("Create the security.json ConfigMap")
+			createMockSecurityJsonConfigMap(ctx, "my-security-json-cm", solrCloud.Namespace)
+
+			By("Make sure the StatefulSet is created and configured correctly")
+			expectStatefulSetBasicAuthConfig(ctx, solrCloud, false)
+		})
+	})
 })
 
 var boostrapedSecretKeys = []string{
@@ -248,7 +276,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	}
 
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
-	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" {
+	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 		// initContainers
 		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "The Solr Pod template requires an init container to bootstrap the security.json")
 		var expInitContainer *corev1.Container = nil
@@ -259,7 +287,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			}
 		}
 
-		if expectBootstrapSecret {
+		if expectBootstrapSecret || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {
@@ -268,6 +296,10 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced the Solr Pod env vars")
 				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
 			} // else this ref not using ACLs
+
+			if solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
+				fmt.Println("I HERE, got a user-provided security.json")
+			}
 
 			g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
 			expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
@@ -291,4 +323,12 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+func createMockSecurityJsonConfigMap(ctx context.Context, name string, ns string) corev1.ConfigMap {
+	cmData := map[string]string{}
+	cmData[util.SecurityJsonFile] = "{}"
+	cm := corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: cmData}
+	Expect(k8sClient.Create(ctx, &cm)).To(Succeed(), "Could not create mock security.json configmap")
+	return cm
 }
