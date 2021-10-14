@@ -85,7 +85,7 @@ annotations:
         - name: Backup Documentation
           url: https://apache.github.io/solr-operator/docs/solr-backup/
     - kind: added
-      description: The ability to use GCS Repositories for the Solr Backup.
+      description:Introduced the ability to use GCS Backup Repositories with SolrCloud and SolrBackup.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/301
@@ -93,6 +93,17 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/302
         - name: Backup Documentation
           url: https://apache.github.io/solr-operator/docs/solr-backup#gcs-backup-repositories
+    - kind: added
+      description: Introduced the ability to use S3 Backup Repositories with SolrCloud and SolrBackup.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/328
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/345
+        - name: Solr S3 Repository Documentation
+          url: https://solr.apache.org/guide/8_10/making-and-restoring-backups.html#s3backuprepository
+        - name: Backup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup#s3-backup-repositories
     - kind: added
       description: Customize the Lifecycle for Solr and PrometheusExporter containers
       links:
@@ -110,16 +121,10 @@ annotations:
         - name: Solr Modules
           url: https://github.com/apache/solr/tree/main/solr/contrib
     - kind: added
-      description: Add support for using Solr Modules (contrib) and additional libraries
+      description: SolrBackups can now have a custom location specified to store the backup
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/328
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/345
-        - name: Solr S3 Repository Documentation
-          url: https://solr.apache.org/guide/8_10/making-and-restoring-backups.html#s3backuprepository
-        - name: Backup Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-backup#s3-backup-repositories
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
