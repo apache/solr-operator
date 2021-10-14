@@ -206,14 +206,27 @@ func IsBackupVolumePresent(repo *solrv1beta1.SolrBackupRepository, pod *corev1.P
 	return false
 }
 
-func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupName string) string {
+func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupLocation string, backupName string) string {
 	if repo.Managed != nil {
-		return fmt.Sprintf("%s/backups/%s", ManagedRepoVolumeMountPath(repo), backupName)
-	} else if repo.GCS != nil {
-		if repo.GCS.BaseLocation != "" {
-			return repo.GCS.BaseLocation
+		if backupLocation != "" {
+			return fmt.Sprintf("%s/%s", ManagedRepoVolumeMountPath(repo), backupLocation)
+		} else {
+			return fmt.Sprintf("%s/backups/%s", ManagedRepoVolumeMountPath(repo), backupName)
 		}
-		return "/"
+	} else if repo.GCS != nil {
+		if backupLocation != "" {
+			return backupLocation
+		} else if repo.GCS.BaseLocation != "" {
+			return repo.GCS.BaseLocation
+		} else {
+			return "/"
+		}
+	} else if repo.S3 != nil {
+		if backupLocation != "" {
+			return backupLocation
+		} else {
+			return "/"
+		}
 	}
-	return ""
+	return backupLocation
 }

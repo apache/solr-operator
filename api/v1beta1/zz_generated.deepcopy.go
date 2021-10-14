@@ -818,7 +818,11 @@ func (in *SolrBackupStatus) DeepCopyInto(out *SolrBackupStatus) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	in.PersistenceStatus.DeepCopyInto(&out.PersistenceStatus)
+	if in.PersistenceStatus != nil {
+		in, out := &in.PersistenceStatus, &out.PersistenceStatus
+		*out = new(BackupPersistenceStatus)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.FinishTime != nil {
 		in, out := &in.FinishTime, &out.FinishTime
 		*out = (*in).DeepCopy()

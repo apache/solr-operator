@@ -135,7 +135,8 @@ Note all repositories are defined in the `SolrCloud` specification.
 In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
 All yaml examples below are `SolrCloud` resources, not `SolrBackup` resources.
 
-The Solr-operator currently supports two different backup repository types: managed ("local") and Google Cloud Storage ("GCS")
+The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and managed ("local").
+The cloud backup solutions (GCS and S3) are strongly suggested over the managed option, though they require newer Solr releases.
 
 Multiple repositories can be defined under the `SolrCloud.spec.backupRepositories` field.
 Specify a unique name and repo type that you want to connect to.
@@ -152,27 +153,6 @@ spec:
     - name: "gcs-collection-backups-1"
       gcs:
         ...
-```
-
-### Managed ("Local") Backup Repositories
-_Since v0.5.0_
-
-Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
-Managed repositories are so called because with the data stored in and managed by Kubernetes, the operator is able to offer a few advanced post-processing features that are unavailable for other repository types.
-
-The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_backup_managed_with_persistence.yaml) for more details.
-
-An example of a SolrCloud spec with only one backup repository, with type Managed:
-
-```yaml
-spec:
-  backupRepositories:
-    - name: "local-collection-backups-1"
-      managed:
-        volume: # Required
-          persistentVolumeClaim:
-            claimName: "collection-backup-pvc"
-        directory: "store/here" # Optional
 ```
 
 ### GCS Backup Repositories
@@ -273,3 +253,24 @@ If this is done correctly, you will only need to specify the serviceAccount for 
 
 _NOTE: Because the Solr S3 Repository is using system-wide settings for AWS credentials, you cannot specify different credentials for different S3 repositories.
 This may be addressed in future Solr versions, but for now use the same credentials for all s3 repos._
+
+### Managed ("Local") Backup Repositories
+_Since v0.5.0_
+
+Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
+Managed repositories are so called because with the data stored in and managed by Kubernetes, the operator is able to offer a few advanced post-processing features that are unavailable for other repository types.
+
+The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_backup_managed_with_persistence.yaml) for more details.
+
+An example of a SolrCloud spec with only one backup repository, with type Managed:
+
+```yaml
+spec:
+  backupRepositories:
+    - name: "local-collection-backups-1"
+      managed:
+        volume: # Required
+          persistentVolumeClaim:
+            claimName: "collection-backup-pvc"
+        directory: "store/here" # Optional
+```

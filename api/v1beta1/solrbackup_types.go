@@ -47,6 +47,10 @@ type SolrBackupSpec struct {
 	// +optional
 	Collections []string `json:"collections,omitempty"`
 
+	// The location to store the backup in the specified backup repository.
+	// +optional
+	Location string `json:"location,omitempty"`
+
 	// Persistence is the specification on how to persist the backup data.
 	// +optional
 	Persistence *PersistenceSource `json:"persistence,omitempty"`
@@ -202,7 +206,8 @@ type SolrBackupStatus struct {
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
 
 	// Whether the backups are in progress of being persisted
-	PersistenceStatus BackupPersistenceStatus `json:"persistenceStatus"`
+	// +optional
+	PersistenceStatus *BackupPersistenceStatus `json:"persistenceStatus,omitempty"`
 
 	// Version of the Solr being backed up
 	// +optional
@@ -220,6 +225,10 @@ type SolrBackupStatus struct {
 type CollectionBackupStatus struct {
 	// Solr Collection name
 	Collection string `json:"collection"`
+
+	// BackupName of this collection's backup in Solr
+	// +optional
+	BackupName string `json:"backupName,omitempty"`
 
 	// Whether the collection is being backed up
 	// +optional
@@ -284,7 +293,7 @@ func (sb *SolrBackup) SharedLabelsWith(labels map[string]string) map[string]stri
 	return newLabels
 }
 
-// HeadlessServiceName returns the name of the headless service for the cloud
+// PersistenceJobName returns the name of the persistence job for the backup
 func (sb *SolrBackup) PersistenceJobName() string {
 	return fmt.Sprintf("%s-solr-backup-persistence", sb.GetName())
 }
