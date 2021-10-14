@@ -20,14 +20,12 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"reflect"
 	"time"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -159,14 +157,12 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		return nil, collectionBackupsFinished, actionTaken, err
 	}
 
+	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
 	if solrCloud.Spec.SolrSecurity != nil {
-		basicAuthSecret := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: solrCloud.BasicAuthSecretName(), Namespace: solrCloud.Namespace}, basicAuthSecret); err != nil {
+		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud.Spec.SolrSecurity, solrCloud.Namespace, logger)
+		if err != nil {
 			return nil, collectionBackupsFinished, actionTaken, err
 		}
-		httpHeaders := map[string]string{"Authorization": util.BasicAuthHeader(basicAuthSecret)}
-		// stash the custom HTTP headers for the API call in the context passed to the Solr API
-		ctx = context.WithValue(ctx, solr_api.HTTP_HEADERS_CONTEXT_KEY, httpHeaders)
 	}
 
 	// First check if the collection backups have been completed

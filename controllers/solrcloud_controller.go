@@ -410,7 +410,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// If authn enabled on Solr, we need to pass the auth header
 		if security != nil {
-			ctx, err = security.AddToContext(ctx, updateLogger)
+			ctx, err = security.AddAuthToContext(ctx, updateLogger)
 			if err != nil {
 				updateLogger.Error(err, "failed to get Bearer token from Oidc provider when reconciling", "SolrCloud", instance.Name)
 				return requeueOrNot, err
