@@ -406,7 +406,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
 			By("making sure no individual Solr Node Services exist")
-			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrPodNames())
 
 			By("making sure no Ingress was created")
 			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())

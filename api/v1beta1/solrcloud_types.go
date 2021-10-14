@@ -1027,17 +1027,17 @@ func (sc *SolrCloud) WithDefaults() bool {
 	return sc.Spec.withDefaults()
 }
 
-func (sc *SolrCloud) GetAllSolrNodeNames() []string {
+func (sc *SolrCloud) GetAllSolrPodNames() []string {
 	replicas := 1
 	if sc.Spec.Replicas != nil {
 		replicas = int(*sc.Spec.Replicas)
 	}
-	nodeNames := make([]string, replicas)
+	podNames := make([]string, replicas)
 	statefulSetName := sc.StatefulSetName()
-	for i := range nodeNames {
-		nodeNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
+	for i := range podNames {
+		podNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
 	}
-	return nodeNames
+	return podNames
 }
 
 func (sc *SolrCloud) BasicAuthSecretName() string {
