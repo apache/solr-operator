@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
@@ -72,6 +73,34 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 
 	FContext("Boostrap Security JSON", func() {
 		BeforeEach(func() {
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
+				AuthenticationType: solrv1beta1.Basic,
+				ProbesRequireAuth:  true,
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+		})
+	})
+
+	FContext("Boostrap Security JSON with Custom Probe Paths", func() {
+		BeforeEach(func() {
+			customHandler := corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTP,
+					Path:   "/solr/readyz",
+					Port:   intstr.FromInt(8983),
+				},
+			}
+
+			// verify users can vary the probe path and the secure probe exec command uses them
+			solrCloud.Spec.CustomSolrKubeOptions = solrv1beta1.CustomSolrKubeOptions{
+				PodOptions: &solrv1beta1.PodOptions{
+					LivenessProbe:  &corev1.Probe{Handler: customHandler},
+					ReadinessProbe: &corev1.Probe{Handler: customHandler},
+				},
+			}
+
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
 				ProbesRequireAuth:  true,
@@ -183,8 +212,13 @@ var boostrapedSecretKeys = []string{
 func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrCloud, expectBootstrapSecret bool) *appsv1.StatefulSet {
 	Expect(sc.Spec.SolrSecurity).To(Not(BeNil()), "solrSecurity is not configured for this SolrCloud instance!")
 
+	expProbePath := "/solr/admin/info/system"
+	if sc.Spec.CustomSolrKubeOptions.PodOptions != nil && sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
+		expProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
+	}
+
 	stateful := expectStatefulSetWithChecks(ctx, sc, sc.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret)
+		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret, expProbePath)
 	})
 
 	expectSecretWithChecks(ctx, sc, sc.BasicAuthSecretName(), func(innerG Gomega, found *corev1.Secret) {
@@ -220,12 +254,7 @@ func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrC
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplate(solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool) *corev1.Container {
-	return expectBasicAuthConfigOnPodTemplateWithGomega(Default, solrCloud, podTemplate, expectBootstrapSecret)
-}
-
-// Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool) *corev1.Container {
+func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool, expProbePath string) *corev1.Container {
 	// check the env vars needed for the probes to work with auth
 	g.Expect(podTemplate.Spec.Containers).To(Not(BeEmpty()), "Solr Pod requires containers")
 	mainContainer := podTemplate.Spec.Containers[0]
@@ -261,8 +290,8 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-			"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system",
-			solrCloud.Name, solrCloud.Name)
+			"org.apache.solr.util.SolrCLI api -get http://localhost:8983%s",
+			solrCloud.Name, solrCloud.Name, expProbePath)
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeEmpty()), "liveness probe command cannot be empty")
