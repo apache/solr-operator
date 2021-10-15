@@ -85,7 +85,7 @@ annotations:
         - name: Backup Documentation
           url: https://apache.github.io/solr-operator/docs/solr-backup/
     - kind: added
-      description:Introduced the ability to use GCS Backup Repositories with SolrCloud and SolrBackup.
+      description: Introduced the ability to use GCS Backup Repositories with SolrCloud and SolrBackup.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/301
