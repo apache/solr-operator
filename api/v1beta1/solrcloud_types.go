@@ -19,6 +19,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -1395,6 +1396,13 @@ type OidcOptions struct {
 	// The Token URL used for obtaining a token from an Oidc provider; required unless you specify the well known URL
 	// +optional
 	TokenUrl string `json:"tokenUrl,omitempty"`
+
+	// Additional query parameters to pass to the OIDC provider's Token endpoint
+	// +optional
+	TokenEndpointParams url.Values `json:"tokenEndpointParams,omitempty"`
+
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
 }
 
 type SolrSecurityOptions struct {

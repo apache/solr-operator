@@ -6905,6 +6905,17 @@ spec:
                       clientCredentialsSecret:
                         description: 'Name of a secret in the same namespace that holds a `clientId` and `clientSecret` for making `client_credentials` requests to an OIDC provider, see: https://tools.ietf.org/html/rfc6749#section-4.4'
                         type: string
+                      scopes:
+                        items:
+                          type: string
+                        type: array
+                      tokenEndpointParams:
+                        additionalProperties:
+                          items:
+                            type: string
+                          type: array
+                        description: Additional query parameters to pass to the OIDC provider's Token endpoint
+                        type: object
                       tokenUrl:
                         description: The Token URL used for obtaining a token from an Oidc provider; required unless you specify the well known URL
                         type: string

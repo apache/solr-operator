@@ -350,6 +350,12 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 	// Use the client credentials grant type, see: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
 	clientSecret := string(clientCredsSecret.Data[ClientSecretKey])
 	oauth2Config := clientcredentials.Config{ClientID: clientId, ClientSecret: clientSecret, TokenURL: tokenUrl}
+	if oidcOpts.TokenEndpointParams != nil {
+		oauth2Config.EndpointParams = oidcOpts.TokenEndpointParams
+	}
+	if oidcOpts.Scopes != nil {
+		oauth2Config.Scopes = oidcOpts.Scopes
+	}
 	tokenSource := oauth2Config.TokenSource(ctx)
 	tokenSourceCache[cacheKey] = &tokenSource
 
