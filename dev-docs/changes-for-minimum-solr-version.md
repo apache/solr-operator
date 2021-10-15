@@ -15,6 +15,7 @@ So when upgrading the minimum supported Solr Version for the operator, we can th
 - SOLR-13336: Adding `<int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>` to the default `solr.xml`.
 
 ### 8.3
+
 - SOLR-13773: Adding SOLR_HEAP, SOLR_JAVA_MEM, GC_TUNE envVar options for the Prometheus Exporter
 
 ### 8.5
@@ -35,9 +36,12 @@ So when upgrading the minimum supported Solr Version for the operator, we can th
 - SOLR-14999: Use SOLR_PORT_ADVERTISE for the hostPort information, instead of using a custom option in the solr.xml
   When we make this upgrade, we will not need to use a custom solr.xml unless the user has specified custom options, such as backup repositories.
 
+### 8.11
+
+- SOLR-7642: Solr will create a chroot if necessary using the ZK_CREATE_CHROOT envVar
+
 ## 9.x
 
-- SOLR-7642: Solr will create a chroot if necessary using the ZK_CREATE_CHROOT envVar (maybe 8.11 after a backport)
 - SOLR-14957: Prometheus exporter bin is now in the PATH for the Solr docker image
 
 ## Future Wishlist
