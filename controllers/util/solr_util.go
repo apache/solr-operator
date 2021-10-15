@@ -548,6 +548,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		enableSecureProbesOnSolrCloudStatefulSet(solrCloud, stateful)
 	}
 
+	// Enrich the StatefulSet config to apply security settings
+	if security != nil {
+		security.applySecurityConfigOnSolrCloudStatefulSet(stateful)
+	}
+
 	return stateful
 }
 

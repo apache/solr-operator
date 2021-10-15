@@ -43,12 +43,13 @@ import (
 )
 
 const (
-	SecurityJsonFile       = "security.json"
-	BasicAuthMd5Annotation = "solr.apache.org/basicAuthMd5"
-	DefaultProbePath       = "/admin/info/system"
-	ClientIdKey            = "clientId"
-	ClientSecretKey        = "clientSecret"
-	OidcWellKnownUrlPath   = "/.well-known/openid-configuration"
+	SecurityJsonFile         = "security.json"
+	BasicAuthMd5Annotation   = "solr.apache.org/basicAuthMd5"
+	DefaultProbePath         = "/admin/info/system"
+	ClientIdKey              = "clientId"
+	ClientSecretKey          = "clientSecret"
+	OidcWellKnownUrlPath     = "/.well-known/openid-configuration"
+	AllowOutboundHttpSysProp = "-Dsolr.auth.jwt.allowOutboundHttp=true"
 )
 
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,
@@ -85,7 +86,15 @@ func reconcileForOidc(ctx context.Context, client *client.Client, instance *solr
 	}
 
 	if sec.Oidc == nil || sec.Oidc.ClientCredentialsSecret == "" {
-		return nil, fmt.Errorf("must provide a 'oidc' config section containing a 'clientCredentialsSecret' when using AuthenticationType: %s", sec.AuthenticationType)
+		return nil, fmt.Errorf("must provide a 'oidc' config section containing a 'clientCredentialsSecret' when using OIDC")
+	}
+
+	if sec.Oidc.WellKnownUrl == "" && sec.Oidc.TokenUrl == "" {
+		return nil, fmt.Errorf("must provide either a 'wellKnownUrl' or 'tokenUrl' when using OIDC")
+	}
+
+	if sec.Oidc.WellKnownUrl != "" && strings.HasPrefix(sec.Oidc.WellKnownUrl, "http://") {
+
 	}
 
 	// for OIDC, we require a secret containing the clientId and clientSecret from the user
@@ -609,4 +618,42 @@ func loadSecurityJsonFromConfigMap(ctx context.Context, client *client.Client, s
 	}
 
 	return securityJson, nil
+}
+
+// Given a configured SolrCloud statefulset that's ready to be deployed, apply any necessary security config
+func (sec *SecurityConfig) applySecurityConfigOnSolrCloudStatefulSet(stateful *appsv1.StatefulSet) {
+	// check the OIDC config and if the supplied provider URL is http vs. https,
+	// then add the -Dsolr.auth.jwt.allowOutboundHttp=true to the SOLR_OPTS env var
+	if sec.SolrSecurity.Oidc != nil {
+		url := sec.SolrSecurity.Oidc.WellKnownUrl
+		if url == "" {
+			url = sec.SolrSecurity.Oidc.TokenUrl
+		}
+
+		if !strings.HasPrefix(url, "https://") {
+			mainContainer := &stateful.Spec.Template.Spec.Containers[0]
+			// find the SOLR_OPTS envVar
+			solrOpts := ""
+			matchAt := -1
+			for i, envVar := range mainContainer.Env {
+				if envVar.Name == "SOLR_OPTS" {
+					solrOpts = envVar.Value
+					matchAt = i
+					break
+				}
+			}
+			if matchAt != -1 {
+				// replace the existing SOLR_OPTS with a new EnvVar (just updating the Value doesn't seem to work)
+				if !strings.Contains(solrOpts, AllowOutboundHttpSysProp) {
+					envVars := mainContainer.Env[0:matchAt]
+					envVars = append(envVars, corev1.EnvVar{Name: "SOLR_OPTS", Value: solrOpts + " " + AllowOutboundHttpSysProp})
+					envVars = append(envVars, mainContainer.Env[matchAt+1:]...)
+					mainContainer.Env = envVars
+				}
+			} else {
+				// no SOLR_OPTS set, add a new one to the mainContainer
+				mainContainer.Env = append(mainContainer.Env, corev1.EnvVar{Name: "SOLR_OPTS", Value: AllowOutboundHttpSysProp})
+			}
+		}
+	}
 }

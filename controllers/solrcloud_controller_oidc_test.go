@@ -135,5 +135,16 @@ func expectOidcConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.So
 	}
 	expectPutSecurityJsonInZkCmd(g, expInitContainer)
 
+	var solrOptsEnvVar *corev1.EnvVar = nil
+	for _, envVar := range mainContainer.Env {
+		if envVar.Name == "SOLR_OPTS" {
+			solrOptsEnvVar = &envVar
+			break
+		}
+	}
+	g.Expect(solrOptsEnvVar).To(Not(BeNil()))
+	g.Expect(solrOptsEnvVar.Value).To(Not(BeNil()))
+	g.Expect(solrOptsEnvVar.Value).To(ContainSubstring(util.AllowOutboundHttpSysProp), "SOLR_OPTS env var for main container is missing expected value")
+
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
 }
