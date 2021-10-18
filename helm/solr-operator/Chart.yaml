@@ -173,13 +173,24 @@ annotations:
         solrOpts: "-Dsolr.autoSoftCommit.maxTime=10000"
         solrGCTune: "-XX:SurvivorRatio=4 -XX:TargetSurvivorRatio=90 -XX:MaxTenuringThreshold=8"
         backupRepositories:
-          - name: default
+          - name: default-gcs
             gcs:
               bucket: solr-gcs-backups
               gcsCredentialSecret: # Required
                 name: gcs-credentials
                 key: "service-account-key.json"
               baseLocation: "/solrcloud/backups"
+          - name: default-s3
+            s3:
+              region: us-west-2
+              bucket: solr-s3-backups
+              credentials:
+                accessKeyIdSecret: # Optional
+                  name: aws-secrets
+                  key: access-key-id
+                secretAccessKeySecret: # Optional
+                  name: aws-secrets
+                  key: secret-access-key
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrPrometheusExporter
       metadata:
@@ -212,4 +223,5 @@ annotations:
         collections:
           - techproducts
           - books
+        location: "/this/location"
   artifacthub.io/containsSecurityUpdates: "false"
