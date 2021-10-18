@@ -45,6 +45,29 @@ spec:
         gcsCredentialSecret:
           name: "some-secret-name"
           key: "service-account-key.json"
+
+    # Creates repositories that backup data to AWS S3.
+    #
+    # Requires Solr >= 8.9.
+    - name: "s3-backup-repo"
+      s3:
+        region: "us-west-2"
+        bucket: "product-catalog"
+        credentials:
+          credentials:
+            accessKeyIdSecret: # Optional
+              name: aws-secrets
+              key: access-key-id
+            secretAccessKeySecret: # Optional
+              name: aws-secrets
+              key: secret-access-key
+            sessionTokenSecret: # Optional
+              name: aws-secrets
+              key: session-token
+            credentialsFileSecret: # Optional
+              name: aws-credentials
+              key: credentials
+
     - name: "main_collection_backup_repository_log"
       gcs:
         bucket: "log_data"

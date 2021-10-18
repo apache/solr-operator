@@ -391,6 +391,10 @@ type SolrBackupRepository struct {
 	//+optional
 	GCS *GcsRepository `json:"gcs,omitempty"`
 
+	// An S3Repository for Solr to use when backing up and restoring collections.
+	//+optional
+	S3 *S3Repository `json:"s3,omitempty"`
+
 	// Allows specification of a "repository" for Solr to use when backing up data "locally".
 	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
 	// post-backup compression.
@@ -408,6 +412,54 @@ type GcsRepository struct {
 	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
 	// +optional
 	BaseLocation string `json:"baseLocation,omitempty"`
+}
+
+type S3Repository struct {
+	// The S3 region to store the backup data in
+	Region string `json:"region"`
+
+	// The name of the S3 bucket that all backup data will be stored in
+	Bucket string `json:"bucket"`
+
+	// Options for specifying S3Credentials. This is optional in case you want to mount this information yourself.
+	// However, if you do not include these credentials, and you do not load them yourself via a mount or EnvVars,
+	// you will likely see errors when taking s3 backups.
+	//
+	// If running in EKS, you can create an IAMServiceAccount that uses a role permissioned for this S3 bucket.
+	// Then use that serviceAccountName for your SolrCloud, and the credentials should be auto-populated.
+	//
+	// +optional
+	Credentials *S3Credentials `json:"credentials,omitempty"`
+
+	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
+	// +optional
+	BaseLocation string `json:"baseLocation,omitempty"`
+
+	// The full endpoint URL to use when connecting with S3 (or a supported S3 compatible interface)
+	// +optional
+	Endpoint string `json:"endpoint,omitempty"`
+
+	// The full proxy URL to use when connecting with S3
+	// +optional
+	ProxyUrl string `json:"proxyUrl,omitempty"`
+}
+
+type S3Credentials struct {
+	// The name & key of a Kubernetes secret holding an AWS Access Key ID
+	// +optional
+	AccessKeyIdSecret *corev1.SecretKeySelector `json:"accessKeyIdSecret,omitempty"`
+
+	// The name & key of a Kubernetes secret holding an AWS Secret Access Key
+	// +optional
+	SecretAccessKeySecret *corev1.SecretKeySelector `json:"secretAccessKeySecret,omitempty"`
+
+	// The name & key of a Kubernetes secret holding an AWS Session Token
+	// +optional
+	SessionTokenSecret *corev1.SecretKeySelector `json:"sessionTokenSecret,omitempty"`
+
+	// The name & key of a Kubernetes secret holding an AWS credentials file
+	// +optional
+	CredentialsFileSecret *corev1.SecretKeySelector `json:"credentialsFileSecret,omitempty"`
 }
 
 type ManagedRepository struct {
