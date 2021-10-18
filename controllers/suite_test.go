@@ -71,7 +71,6 @@ var _ = BeforeSuite(func() {
 			filepath.Join("..", "config", "dependencies"), // Add ZookeeperCluster CRD
 		},
 		ErrorIfCRDPathMissing: true,
-		ControlPlane:          envtest.ControlPlane{},
 	}
 
 	cfg, err := testEnv.Start()
