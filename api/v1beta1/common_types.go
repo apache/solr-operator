@@ -143,6 +143,11 @@ type PodOptions struct {
 	//
 	// Note: There is no need to provide a "labelSelector", as the operator will inject the labels for you if not provided.
 	//
+	// +patchMergeKey=topologyKey
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=topologyKey
+	// +listMapKey=whenUnsatisfiable
 	// +optional
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 }

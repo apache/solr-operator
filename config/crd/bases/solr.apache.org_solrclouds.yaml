@@ -3686,6 +3686,10 @@ spec:
                           - whenUnsatisfiable
                           type: object
                         type: array
+                        x-kubernetes-list-map-keys:
+                        - topologyKey
+                        - whenUnsatisfiable
+                        x-kubernetes-list-type: map
                       volumes:
                         description: Additional non-data volumes to load into the default container.
                         items:
