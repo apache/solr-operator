@@ -50,16 +50,6 @@ func TestGCSRepoXML(t *testing.T) {
 </repository>`, RepoXML(repo), "Wrong SolrXML entry for the GCS Repo with a base location set")
 }
 
-func TestManagedRepoXML(t *testing.T) {
-	repo := &solr.SolrBackupRepository{
-		Name: "managedrepository2",
-		Managed: &solr.ManagedRepository{
-			Volume: corev1.VolumeSource{},
-		},
-	}
-	assert.EqualValuesf(t, "<repository name=\"managedrepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", RepoXML(repo), "Wrong SolrXML entry for the Managed Repo")
-}
-
 func TestGCSRepoAdditionalLibs(t *testing.T) {
 	repo := &solr.SolrBackupRepository{
 		Name: "gcsrepository1",
@@ -86,6 +76,74 @@ func TestGCSRepoSolrModules(t *testing.T) {
 		},
 	}
 	assert.EqualValues(t, []string{"gcs-repository"}, RepoSolrModules(repo), "GCS Repos require the gcs-repository solr module")
+}
+
+func TestS3RepoXML(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "repo1",
+		S3: &solr.S3Repository{
+			Bucket: "some-bucket-name1",
+			Region: "ap-northeast-2",
+		},
+	}
+	assert.EqualValuesf(t, `
+<repository name="repo1" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">some-bucket-name1</str>
+    <str name="s3.region">ap-northeast-2</str>
+    
+</repository>`, RepoXML(repo), "Wrong SolrXML entry for the S3 Repo")
+
+	// Test with an endpoint
+	repo.S3.Endpoint = "http://other.s3.location:3242"
+	assert.EqualValuesf(t, `
+<repository name="repo1" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">some-bucket-name1</str>
+    <str name="s3.region">ap-northeast-2</str>
+    <str name="s3.endpoint">http://other.s3.location:3242</str>
+</repository>`, RepoXML(repo), "Wrong SolrXML entry for the S3 Repo with an endpoint set")
+
+	// Test with a proxy url and endpoint
+	repo.S3.Endpoint = "http://other.s3.location:3242"
+	repo.S3.ProxyUrl = "https://proxy.url:3242"
+	assert.EqualValuesf(t, `
+<repository name="repo1" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">some-bucket-name1</str>
+    <str name="s3.region">ap-northeast-2</str>
+    <str name="s3.endpoint">http://other.s3.location:3242</str>
+    <str name="s3.proxy.url">https://proxy.url:3242</str>
+</repository>`, RepoXML(repo), "Wrong SolrXML entry for the S3 Repo with an endpoint and proxy url set")
+}
+
+func TestS3RepoAdditionalLibs(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "repo1",
+		S3: &solr.S3Repository{
+			Bucket: "some-bucket-name1",
+			Region: "us-west-2",
+		},
+	}
+	assert.Empty(t, AdditionalRepoLibs(repo), "S3 Repos require no additional libraries for Solr")
+}
+
+func TestS3RepoSolrModules(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "repo1",
+		S3: &solr.S3Repository{
+			Bucket: "some-bucket-name1",
+			Region: "us-west-2",
+		},
+	}
+	assert.EqualValues(t, []string{"s3-repository"}, RepoSolrModules(repo), "S3 Repos require the s3-repository solr module")
+}
+
+func TestManagedRepoXML(t *testing.T) {
+	repo := &solr.SolrBackupRepository{
+		Name: "managedrepository2",
+		Managed: &solr.ManagedRepository{
+			Volume: corev1.VolumeSource{},
+		},
+	}
+	assert.EqualValuesf(t, "<repository name=\"managedrepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", RepoXML(repo), "Wrong SolrXML entry for the Managed Repo")
 }
 
 func TestManagedRepoAdditionalLibs(t *testing.T) {

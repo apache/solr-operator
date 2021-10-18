@@ -130,15 +130,17 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if backup.Status.Finished && backup.Status.FinishTime == nil {
 		now := metav1.Now()
 		backup.Status.FinishTime = &now
-		backup.Status.Successful = backup.Status.PersistenceStatus.Successful
+		if backup.Spec.Persistence != nil {
+			backup.Status.Successful = backup.Status.PersistenceStatus.Successful
+		}
 	}
 
-	if !reflect.DeepEqual(oldStatus, backup.Status) {
+	if !reflect.DeepEqual(oldStatus, &backup.Status) {
 		logger.Info("Updating status for solr-backup")
 		err = r.Status().Update(ctx, backup)
 	}
 
-	if backup.Status.Finished {
+	if err != nil && backup.Status.Finished {
 		requeueOrNot = reconcile.Result{}
 	}
 
@@ -185,12 +187,13 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 	// This should only occur before the backup processes have been started
 	if backup.Status.SolrVersion == "" {
 		// Prep the backup directory in the persistentVolume
-		err := util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup.Name, r.config)
+		err = util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup, r.config)
 		if err != nil {
 			return solrCloud, collectionBackupsFinished, actionTaken, err
 		}
 
 		// Make sure that all solr nodes are active and have the backupRestore shared volume mounted
+		// TODO: we do not need all replicas to be healthy. We should just check that leaders exist for all shards. (or just let Solr do that)
 		cloudReady := solrCloud.Status.BackupRestoreReady && (solrCloud.Status.Replicas == solrCloud.Status.ReadyReplicas)
 		if !cloudReady {
 			logger.Info("Cloud not ready for backup backup", "solrCloud", solrCloud.Name)
@@ -236,11 +239,12 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		if started && collectionBackupStatus.StartTime == nil {
 			collectionBackupStatus.StartTime = &now
 		}
+		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
 		// Check the state of the backup, when it is in progress, and update the state accordingly
-		finished, successful, asyncStatus, checkErr := util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
-		if checkErr != nil {
-			return false, checkErr
+		finished, successful, asyncStatus, err := util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
+		if err != nil {
+			return false, err
 		}
 		collectionBackupStatus.Finished = finished
 		if finished {
@@ -269,6 +273,9 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 }
 
 func (r *SolrBackupReconciler) persistSolrCloudBackups(ctx context.Context, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger) (err error) {
+	if backup.Status.PersistenceStatus == nil {
+		backup.Status.PersistenceStatus = &solrv1beta1.BackupPersistenceStatus{}
+	}
 	if backup.Status.PersistenceStatus.Finished {
 		return nil
 	}

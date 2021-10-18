@@ -26,12 +26,6 @@ spec:
           resources:
             requests:
               storage: "5Gi"
-    backupRestoreOptions:
-      managedRepositories:
-        - name: "local_backup_repo"
-          volume:
-            persistentVolumeClaim:
-              claimName: "pvc-test"
   replicas: 3
   solrImage:
     tag: 8.7.0

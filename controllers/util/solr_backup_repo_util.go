@@ -29,6 +29,7 @@ const (
 	BaseBackupRestorePath = "/var/solr/data/backup-restore"
 
 	GCSCredentialSecretKey = "service-account-key.json"
+	S3CredentialFileName   = "credentials"
 )
 
 func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
@@ -52,6 +53,10 @@ func BackupSubPathForCloud(directoryOverride string, cloud string, backupName st
 
 func GcsRepoSecretMountPath(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("%s/%s/%s", BaseBackupRestorePath, repo.Name, "gcscredential")
+}
+
+func S3RepoSecretMountPath(repo *solrv1beta1.SolrBackupRepository) string {
+	return fmt.Sprintf("%s/%s/%s", BaseBackupRestorePath, repo.Name, "s3credential")
 }
 
 func ManagedRepoVolumeMountPath(repo *solrv1beta1.SolrBackupRepository) string {
@@ -80,6 +85,19 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 			MountPath: GcsRepoSecretMountPath(repo),
 			ReadOnly:  true,
 		}
+	} else if repo.S3 != nil && repo.S3.Credentials != nil && repo.S3.Credentials.CredentialsFileSecret != nil {
+		source = &corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  repo.S3.Credentials.CredentialsFileSecret.Name,
+				Items:       []corev1.KeyToPath{{Key: repo.S3.Credentials.CredentialsFileSecret.Key, Path: S3CredentialFileName}},
+				DefaultMode: &SecretReadOnlyPermissions,
+				Optional:    &f,
+			},
+		}
+		mount = &corev1.VolumeMount{
+			MountPath: S3RepoSecretMountPath(repo),
+			ReadOnly:  true,
+		}
 	}
 	return
 }
@@ -87,6 +105,8 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 func RepoSolrModules(repo *solrv1beta1.SolrBackupRepository) (libs []string) {
 	if repo.GCS != nil {
 		libs = []string{"gcs-repository"}
+	} else if repo.S3 != nil {
+		libs = []string{"s3-repository"}
 	}
 	return
 }
@@ -104,11 +124,54 @@ func RepoXML(repo *solrv1beta1.SolrBackupRepository) (xml string) {
     <str name="gcsBucket">%s</str>
     <str name="gcsCredentialPath">%s/%s</str>
 </repository>`, repo.Name, repo.GCS.Bucket, GcsRepoSecretMountPath(repo), GCSCredentialSecretKey)
+	} else if repo.S3 != nil {
+		s3Extras := make([]string, 0)
+		if repo.S3.Endpoint != "" {
+			s3Extras = append(s3Extras, fmt.Sprintf("<str name=\"s3.endpoint\">%s</str>", repo.S3.Endpoint))
+		}
+		if repo.S3.ProxyUrl != "" {
+			s3Extras = append(s3Extras, fmt.Sprintf("<str name=\"s3.proxy.url\">%s</str>", repo.S3.ProxyUrl))
+		}
+		xml = fmt.Sprintf(`
+<repository name="%s" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">%s</str>
+    <str name="s3.region">%s</str>
+    %s
+</repository>`, repo.Name, repo.S3.Bucket, repo.S3.Region, strings.Join(s3Extras, `
+    `))
 	}
 	return
 }
 
 func RepoEnvVars(repo *solrv1beta1.SolrBackupRepository) (envVars []corev1.EnvVar) {
+	if repo.S3 != nil && repo.S3.Credentials != nil {
+		// Env Var names sourced from: https://docs.aws.amazon.com/sdk-for-java/v2/developer-guide/credentials.html
+		if repo.S3.Credentials.AccessKeyIdSecret != nil {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:      "AWS_ACCESS_KEY_ID",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: repo.S3.Credentials.AccessKeyIdSecret},
+			})
+		}
+		if repo.S3.Credentials.SecretAccessKeySecret != nil {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:      "AWS_SECRET_ACCESS_KEY",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: repo.S3.Credentials.SecretAccessKeySecret},
+			})
+		}
+		if repo.S3.Credentials.SessionTokenSecret != nil {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:      "AWS_SESSION_TOKEN",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: repo.S3.Credentials.SessionTokenSecret},
+			})
+		}
+		// Env Var name sourced from: https://docs.aws.amazon.com/sdkref/latest/guide/file-location.html
+		if repo.S3.Credentials.CredentialsFileSecret != nil {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "AWS_SHARED_CREDENTIALS_FILE",
+				Value: fmt.Sprintf("%s/%s", S3RepoSecretMountPath(repo), S3CredentialFileName),
+			})
+		}
+	}
 	return envVars
 }
 
@@ -143,14 +206,26 @@ func IsBackupVolumePresent(repo *solrv1beta1.SolrBackupRepository, pod *corev1.P
 	return false
 }
 
-func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupName string) string {
+func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupLocation string) string {
 	if repo.Managed != nil {
-		return fmt.Sprintf("%s/backups/%s", ManagedRepoVolumeMountPath(repo), backupName)
-	} else if repo.GCS != nil {
-		if repo.GCS.BaseLocation != "" {
-			return repo.GCS.BaseLocation
+		if backupLocation == "" {
+			backupLocation = "backups"
 		}
-		return "/"
+		return fmt.Sprintf("%s/%s", ManagedRepoVolumeMountPath(repo), backupLocation)
+	} else if repo.GCS != nil {
+		if backupLocation != "" {
+			return backupLocation
+		} else if repo.GCS.BaseLocation != "" {
+			return repo.GCS.BaseLocation
+		} else {
+			return "/"
+		}
+	} else if repo.S3 != nil {
+		if backupLocation != "" {
+			return backupLocation
+		} else {
+			return "/"
+		}
 	}
-	return ""
+	return backupLocation
 }

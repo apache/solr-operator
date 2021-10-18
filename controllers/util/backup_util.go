@@ -58,6 +58,10 @@ func GetBackupRepositoryByName(backupRepos []solr.SolrBackupRepository, reposito
 	return nil
 }
 
+func FullCollectionBackupName(collection string, backupName string) string {
+	return fmt.Sprintf("%s-%s", backupName, collection)
+}
+
 func AsyncIdForCollectionBackup(collection string, backupName string) string {
 	return fmt.Sprintf("%s-%s", backupName, collection)
 }
@@ -310,9 +314,9 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	queryParams := url.Values{}
 	queryParams.Add("action", "BACKUP")
 	queryParams.Add("collection", collection)
-	queryParams.Add("name", collection)
+	queryParams.Add("name", FullCollectionBackupName(collection, backup.Name))
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backup.Name))
-	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Name))
+	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location))
 	queryParams.Add("repository", backup.Spec.RepositoryName)
 	return queryParams
 }
@@ -380,10 +384,10 @@ func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collec
 	return err
 }
 
-func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backupName string, config *rest.Config) (err error) {
+func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, config *rest.Config) (err error) {
 	// Directory creation only required/possible for managed (i.e. local) backups
 	if IsRepoManaged(backupRepository) {
-		backupPath := BackupLocationPath(backupRepository, backupName)
+		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
 		return RunExecForPod(
 			solrCloud.GetAllSolrNodeNames()[0],
 			solrCloud.Namespace,
