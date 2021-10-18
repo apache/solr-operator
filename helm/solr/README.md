@@ -248,6 +248,7 @@ Configure Solr to use a separate TLS certificate for client auth.
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
+| podOptions.topologySpreadConstraints | []object |  | Specify a list of Kubernetes topologySpreadConstraints for the Solr pod. No need to provide a `labelSelector`, as the Solr Operator will default that for you. More information can be found in [the documentation](https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/). |
 | podOptions.serviceAccountName | string |  | Optional serviceAccount to run the Solr pods under |
 | podOptions.priorityClassName | string | | Optional priorityClassName for the Solr pod |
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |

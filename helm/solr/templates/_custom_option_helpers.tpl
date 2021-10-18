@@ -94,6 +94,10 @@ sidecarContainers:
 initContainers:
   {{- toYaml .Values.podOptions.initContainers | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.topologySpreadConstraints -}}
+topologySpreadConstraints:
+  {{- toYaml .Values.podOptions.topologySpreadConstraints | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*

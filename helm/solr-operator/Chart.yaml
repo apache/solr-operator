@@ -125,6 +125,15 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/345
+    - kind: added
+      description: Ability to use topologySpreadConstraints for SolrCloud and SolrPrometheusExporter
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/53
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/350
+        - name: Topology Spread Constraints Documentation
+          url: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease

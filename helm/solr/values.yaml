@@ -258,14 +258,22 @@ podOptions:
 
   priorityClassName: ""
   envVars: []
-  affinity: {}
-  tolerations: []
-  nodeSelector: {}
   podSecurityContext: {}
   terminationGracePeriodSeconds: null
 
   # Set Solr service account individually instead of the global "serviceAccount.name"
   serviceAccountName: ""
+
+  # Manage where the Solr pods are scheduled
+  affinity: {}
+  tolerations: []
+  nodeSelector: {}
+  # Documentation available at https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+  # If a labelSelector is not provided, it will be auto-populated by the Solr Operator to match the statefulSet labels
+  topologySpreadConstraints: []
+    # - maxSkew: 1
+    #   topologyKey: zone
+    #   whenUnsatisfiable: DoNotSchedule
 
   # Probes for the Solr pods
   livenessProbe: {}
