@@ -27,7 +27,8 @@ import (
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/go-logr/logr"
-	"golang.org/x/oauth2"
+	cache "github.com/shaj13/libcache"
+	_ "github.com/shaj13/libcache/lru"
 	"golang.org/x/oauth2/clientcredentials"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -39,6 +40,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -51,6 +53,12 @@ const (
 	OidcWellKnownUrlPath     = "/.well-known/openid-configuration"
 	AllowOutboundHttpSysProp = "-Dsolr.auth.jwt.allowOutboundHttp=true"
 )
+
+// Caches reusable TokenSources keyed by clientId + (wellKnownUrl | tokenUrl)
+// Once initialized a TokenSource will provide the Bearer token for requests to Solr and will refresh the JWT token if it expires
+// The Cache provides a TTL on cached entries, so they get cleaned up if SolrClouds get deleted
+var cacheMux = sync.Mutex{}
+var tokenSourceCache *cache.Cache = nil // lazyily loaded as needed (most times it won't be needed)
 
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,
 // such as the secret holding credentials the operator should use to make calls to secure Solr
@@ -307,10 +315,17 @@ func contextWithBasicAuthHeader(ctx context.Context, basicAuthSecret *corev1.Sec
 	return context.WithValue(ctx, solr_api.HTTP_HEADERS_CONTEXT_KEY, map[string]string{"Authorization": headerValue})
 }
 
-// Caches reusable TokenSources keyed by clientId + (wellKnownUrl | tokenUrl)
-// Once initialized a TokenSource will provide the Bearer token for requests to Solr and will refresh the JWT token if it expires
-// It's unlikely there will be very many of these in a live operator, so don't think we need an LRU cache or anything that sophisticated right now
-var tokenSourceCache = make(map[string]*oauth2.TokenSource)
+// Gets the TokenSource cache, initializing it if needed, given most SolrCloud deploys will use Basic auth, no need to create this cache until it's needed
+func getTokenSourceCache() *cache.Cache {
+	cacheMux.Lock()
+	if tokenSourceCache == nil {
+		lruCache := cache.LRU.New(20)
+		lruCache.SetTTL(240 * time.Minute) // hold for up to 4 hours just so cache doesn't build up but also don't go back to the provider too often either
+		tokenSourceCache = &lruCache
+	}
+	cacheMux.Unlock()
+	return tokenSourceCache
+}
 
 // Get an OAuth2 TokenSource for supplying a JWT as a Bearer token when making calls to Solr secured using the JWTAuthPlugin
 func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1.Secret, oidcOpts *solr.OidcOptions, logger logr.Logger) (context.Context, error) {
@@ -328,14 +343,23 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 		return nil, fmt.Errorf("must specify either a 'wellKnownUrl' or 'tokenUrl' for the OIDC config")
 	}
 
+	// include the params into the cacheKey to be safe
+	if oidcOpts.TokenEndpointParams != nil {
+		cacheKey += "|" + oidcOpts.TokenEndpointParams.Encode()
+	}
+
+	// Get the lazily init'd cache for TokenSource objects
+	lruCache := *getTokenSourceCache()
+
 	// it's expensive to initialize a tokenSource, so cache it using the clientId and provider URL so we can re-use
-	if cachedTokenSource, ok := tokenSourceCache[cacheKey]; ok {
-		// TODO: nocommit ... don't need this log msg once we've finished testing
-		logger.Info("Re-using cached TokenSource", "cacheKey", cacheKey)
+	if cachedTokenSource, ok := lruCache.Peek(cacheKey); ok {
 		return context.WithValue(ctx, solr_api.TOKEN_SOURCE_CONTEXT_KEY, cachedTokenSource), nil
 	}
 
 	logger.Info("No OAuth2 TokenSource cached, creating new", "cacheKey", cacheKey)
+
+	// note, not locking the cache key while loading as it's not that expensive if we do it more than once in parallel
+	// and we don't want to hold up other providers if one is slow, i.e. not worth the extra effort to save a call
 
 	// use the wellKnownUrl to get the oauth2 TokenURL, which allows you to get an Access Token using a client ID & secret
 	if tokenUrl == "" {
@@ -357,9 +381,10 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 		oauth2Config.Scopes = oidcOpts.Scopes
 	}
 	tokenSource := oauth2Config.TokenSource(ctx)
-	tokenSourceCache[cacheKey] = &tokenSource
+	cached := &tokenSource
+	lruCache.Store(cacheKey, cached)
 
-	return context.WithValue(ctx, solr_api.TOKEN_SOURCE_CONTEXT_KEY, tokenSourceCache[cacheKey]), nil
+	return context.WithValue(ctx, solr_api.TOKEN_SOURCE_CONTEXT_KEY, cached), nil
 }
 
 func ValidateBasicAuthSecret(basicAuthSecret *corev1.Secret) error {

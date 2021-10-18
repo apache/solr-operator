@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/motemen/go-loghttp"
 	"golang.org/x/oauth2"
 	"io/ioutil"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -124,17 +123,5 @@ func init() {
 	// setup an http client that can talk to Solr pods using untrusted, self-signed certs
 	customTransport := http.DefaultTransport.(*http.Transport).Clone()
 	customTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-
-	// TODO: nocommit ~ useful for debugging Oidc activity
-	transportWithLogging := &loghttp.Transport{
-		Transport: customTransport,
-		LogRequest: func(req *http.Request) {
-			fmt.Printf("\n\nREQUEST: %s %s %+v\n", req.Method, req.URL, req.Header)
-		},
-		LogResponse: func(resp *http.Response) {
-			fmt.Printf("RESPONSE: %+v\n", resp.Status)
-		},
-	}
-
-	SetNoVerifyTLSHttpClient(&http.Client{Transport: transportWithLogging})
+	SetNoVerifyTLSHttpClient(&http.Client{Transport: customTransport})
 }

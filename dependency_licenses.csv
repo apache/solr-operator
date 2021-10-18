@@ -27,8 +27,6 @@ github.com/json-iterator/go,https://github.com/json-iterator/go/blob/master/LICE
 github.com/matttproud/golang_protobuf_extensions/pbutil,https://github.com/matttproud/golang_protobuf_extensions/blob/master/pbutil/LICENSE,Apache-2.0
 github.com/modern-go/concurrent,https://github.com/modern-go/concurrent/blob/master/LICENSE,Apache-2.0
 github.com/modern-go/reflect2,https://github.com/modern-go/reflect2/blob/master/LICENSE,Apache-2.0
-github.com/motemen/go-loghttp,https://github.com/motemen/go-loghttp/blob/master/LICENSE,MIT
-github.com/motemen/go-nuts/roundtime,https://github.com/motemen/go-nuts/blob/master/roundtime/LICENSE,MIT
 github.com/pkg/errors,https://github.com/pkg/errors/blob/master/LICENSE,BSD-2-Clause
 github.com/prometheus/client_golang/prometheus,https://github.com/prometheus/client_golang/blob/master/prometheus/LICENSE,Apache-2.0
 github.com/prometheus/client_model/go,https://github.com/prometheus/client_model/blob/master/go/LICENSE,Apache-2.0
@@ -36,6 +34,7 @@ github.com/prometheus/common,https://github.com/prometheus/common/blob/master/LI
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg,https://github.com/prometheus/common/blob/master/internal/bitbucket.org/ww/goautoneg/README.txt,BSD-3-Clause
 github.com/prometheus/procfs,https://github.com/prometheus/procfs/blob/master/LICENSE,Apache-2.0
 github.com/robfig/cron/v3,https://github.com/robfig/cron/blob/master/v3/LICENSE,MIT
+github.com/shaj13/libcache,https://github.com/shaj13/libcache/blob/master/LICENSE,MIT
 github.com/spf13/pflag,https://github.com/spf13/pflag/blob/master/LICENSE,BSD-3-Clause
 go.uber.org/atomic,Unknown,MIT
 go.uber.org/multierr,Unknown,MIT
