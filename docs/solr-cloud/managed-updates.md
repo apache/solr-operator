@@ -55,3 +55,19 @@ This maximum is calculated by taking the given, or default, [`maxPodsUnavailable
         - Some replicas in the shard may already be in a non-active state, or may reside on Solr Nodes that are not "live".
         The `maxShardReplicasUnavailable` calculation will take these replicas into account, as a starting point.
         - If a pod contains non-active replicas, and the pod is chosen to be updated, then the pods that are already non-active will not be double counted for the `maxShardReplicasUnavailable` calculation.
+
+## Triggering a Manual Rolling Restart
+
+Given these complex requirements, `kubectl rollout restart statefulset` will generally not work on a SolrCloud.
+
+One option to trigger a manual restart is to change one of the podOptions annotations. For example you could set this to the date and time of the manual restart.
+
+```
+apiVersion: solr.apache.org/v1beta1
+kind: SolrCloud
+spec:
+  customSolrKubeOptions:
+    podOptions:
+          annotations:
+            manualrestart: "2021-10-20T08:37:00Z"
+```
