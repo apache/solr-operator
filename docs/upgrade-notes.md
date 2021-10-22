@@ -106,6 +106,14 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   **Note**: Do not take backups while upgrading from the Solr Operator `v0.4.0` to `v0.5.0`.
   Wait for the SolrClouds to be updated, after the Solr Operator is upgraded, and complete their rolling restarts before continuing to use the Backup functionality.
 
+- The location of Solr backup data as well as the name of the Solr backups have been changed, when using managed repositories.
+  Previously the name of the backup (in solr) was set to the name of the collection.
+  Now the name given to the backup in Solr will be set to `<backup-resource-name>-<collection-name>`, without the `<` or `>` characters, where the `backup-resource-name` is the name of the SolrBackup resource.
+
+  The directory in the Read-Write-Many Volume, required for managed repositories, that backups are written to is now `/backups` by default, instead of `/backups/<backup-name>`.
+  Because the backup name in Solr uses both the SolrBackup resource name and the collection name, there should be no collisions in this directory.
+  However, this can be overridden using the `SolrBackup.spec.location` option.
+
 - Default ports when using TLS are now set to 443 instead of 80.
   This affects `solrCloud.Spec.SolrAddressability.CommonServicePort` and `solrCloud.Spec.SolrAddressability.CommonServicePort` field defaulting.
   Users already explicitly setting these values will not be affected.

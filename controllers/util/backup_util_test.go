@@ -48,9 +48,39 @@ func TestSolrBackupApiParamsForManagedRepositoryBackup(t *testing.T) {
 
 	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
 	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
-	assert.Equalf(t, "col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
 	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
-	assert.Equalf(t, "/var/solr/data/backup-restore/somemanagedrepository/backups/somebackupname", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "/var/solr/data/backup-restore/somemanagedrepository/backups", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somemanagedrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
+}
+
+func TestSolrBackupApiParamsForManagedRepositoryBackupWithLocation(t *testing.T) {
+	managedRepository := &solr.SolrBackupRepository{
+		Name: "somemanagedrepository",
+		Managed: &solr.ManagedRepository{
+			Volume:    corev1.VolumeSource{}, // Actual volume info doesn't matter here
+			Directory: "/somedirectory",
+		},
+	}
+	backupConfig := solr.SolrBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "somebackupname",
+		},
+		Spec: solr.SolrBackupSpec{
+			SolrCloud:      "solrcloudcluster",
+			RepositoryName: "somemanagedrepository",
+			Collections:    []string{"col1", "col2"},
+			Location:       "test/location",
+		},
+	}
+
+	queryParams := GenerateQueryParamsForBackup(managedRepository, &backupConfig, "col2")
+
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/var/solr/data/backup-restore/somemanagedrepository/test/location", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
 	assert.Equalf(t, "somemanagedrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
 }
 
@@ -81,10 +111,135 @@ func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 
 	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
 	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
-	assert.Equalf(t, "col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
 	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
 	assert.Equalf(t, "/some/gcs/path", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
 	assert.Equalf(t, "somegcsrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
+}
+
+func TestSolrBackupApiParamsForGcsRepositoryBackupWithLocation(t *testing.T) {
+	gcsRepository := &solr.SolrBackupRepository{
+		Name: "somegcsrepository",
+		GCS: &solr.GcsRepository{
+			Bucket: "some-gcs-bucket",
+			GcsCredentialSecret: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
+				Key:                  "some-secret-key",
+			},
+			BaseLocation: "/some/gcs/path",
+		},
+	}
+	backupConfig := solr.SolrBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "somebackupname",
+		},
+		Spec: solr.SolrBackupSpec{
+			SolrCloud:      "solrcloudcluster",
+			RepositoryName: "somegcsrepository",
+			Collections:    []string{"col1", "col2"},
+			Location:       "/another/gcs/path/test",
+		},
+	}
+
+	queryParams := GenerateQueryParamsForBackup(gcsRepository, &backupConfig, "col2")
+
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/another/gcs/path/test", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somegcsrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
+}
+
+func TestSolrBackupApiParamsForGcsRepositoryBackupWithNoLocations(t *testing.T) {
+	gcsRepository := &solr.SolrBackupRepository{
+		Name: "somegcsrepository",
+		GCS: &solr.GcsRepository{
+			Bucket: "some-gcs-bucket",
+			GcsCredentialSecret: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
+				Key:                  "some-secret-key",
+			},
+		},
+	}
+	backupConfig := solr.SolrBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "somebackupname",
+		},
+		Spec: solr.SolrBackupSpec{
+			SolrCloud:      "solrcloudcluster",
+			RepositoryName: "somegcsrepository",
+			Collections:    []string{"col1", "col2"},
+		},
+	}
+
+	queryParams := GenerateQueryParamsForBackup(gcsRepository, &backupConfig, "col2")
+
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somegcsrepository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
+}
+
+func TestSolrBackupApiParamsForS3RepositoryBackup(t *testing.T) {
+	s3Repository := &solr.SolrBackupRepository{
+		Name: "somes3repository",
+		S3: &solr.S3Repository{
+			Bucket: "some-s3-bucket",
+			Region: "us-west-2",
+		},
+	}
+	backupConfig := solr.SolrBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "somebackupname",
+		},
+		Spec: solr.SolrBackupSpec{
+			SolrCloud:      "solrcloudcluster",
+			RepositoryName: "somes3repository",
+			Collections:    []string{"col1", "col2"},
+		},
+	}
+
+	queryParams := GenerateQueryParamsForBackup(s3Repository, &backupConfig, "col2")
+
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somes3repository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
+}
+
+func TestSolrBackupApiParamsForS3RepositoryBackupWithLocation(t *testing.T) {
+	s3Repository := &solr.SolrBackupRepository{
+		Name: "somes3repository",
+		S3: &solr.S3Repository{
+			Bucket: "some-gcs-bucket",
+			Region: "us-west-2",
+		},
+	}
+	backupConfig := solr.SolrBackup{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "somebackupname",
+		},
+		Spec: solr.SolrBackupSpec{
+			SolrCloud:      "solrcloudcluster",
+			RepositoryName: "somes3repository",
+			Collections:    []string{"col1", "col2"},
+			Location:       "/another/path",
+		},
+	}
+
+	queryParams := GenerateQueryParamsForBackup(s3Repository, &backupConfig, "col2")
+
+	assert.Equalf(t, "BACKUP", queryParams.Get("action"), "Wrong %s for Collections API Call", "action")
+	assert.Equalf(t, "col2", queryParams.Get("collection"), "Wrong %s for Collections API Call", "collection name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("name"), "Wrong %s for Collections API Call", "backup name")
+	assert.Equalf(t, "somebackupname-col2", queryParams.Get("async"), "Wrong %s for Collections API Call", "async id")
+	assert.Equalf(t, "/another/path", queryParams.Get("location"), "Wrong %s for Collections API Call", "backup location")
+	assert.Equalf(t, "somes3repository", queryParams.Get("repository"), "Wrong %s for Collections API Call", "repository")
 }
 
 func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {

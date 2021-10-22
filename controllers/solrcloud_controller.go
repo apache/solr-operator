@@ -580,6 +580,8 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	}
 	if allPodsBackupReady && len(foundPods.Items) > 0 {
 		newStatus.BackupRestoreReady = true
+	} else {
+		newStatus.BackupRestoreReady = false
 	}
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
@@ -606,12 +608,9 @@ func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solrv1beta1.SolrCloud) bool
 		return false
 	}
 
-	for _, repo := range solrCloud.Spec.BackupRepositories {
-		if !util.IsBackupVolumePresent(&repo, pod) {
-			return false
-		}
-	}
-
+	// TODO: There is no way to possibly do this with the new S3 option.
+	// This is wrong, but not the end of the world.
+	// Replace with new functionality in https://github.com/apache/solr-operator/issues/326
 	return true
 }
 
