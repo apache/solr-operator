@@ -26,7 +26,6 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -160,13 +159,12 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		return nil, collectionBackupsFinished, actionTaken, err
 	}
 
-	var httpHeaders map[string]string
+	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
 	if solrCloud.Spec.SolrSecurity != nil {
-		basicAuthSecret := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: solrCloud.BasicAuthSecretName(), Namespace: solrCloud.Namespace}, basicAuthSecret); err != nil {
+		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud.Spec.SolrSecurity, solrCloud.Namespace)
+		if err != nil {
 			return nil, collectionBackupsFinished, actionTaken, err
 		}
-		httpHeaders = map[string]string{"Authorization": util.BasicAuthHeader(basicAuthSecret)}
 	}
 
 	// First check if the collection backups have been completed
@@ -208,7 +206,7 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 
 	// Go through each collection specified and reconcile the backup.
 	for _, collection := range backup.Spec.Collections {
-		_, err = reconcileSolrCollectionBackup(backup, solrCloud, backupRepository, collection, httpHeaders, logger)
+		_, err = reconcileSolrCollectionBackup(ctx, backup, solrCloud, backupRepository, collection, logger)
 	}
 
 	// First check if the collection backups have been completed
@@ -217,7 +215,7 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 	return solrCloud, collectionBackupsFinished, actionTaken, err
 }
 
-func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, httpHeaders map[string]string, logger logr.Logger) (finished bool, err error) {
+func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, logger logr.Logger) (finished bool, err error) {
 	now := metav1.Now()
 	collectionBackupStatus := solrv1beta1.CollectionBackupStatus{}
 	collectionBackupStatus.Collection = collection
@@ -233,7 +231,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(solrCloud, backupRepository, backup, collection, httpHeaders, logger)
+		started, err := util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
 		if err != nil {
 			return true, err
 		}
@@ -244,7 +242,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
 		// Check the state of the backup, when it is in progress, and update the state accordingly
-		finished, successful, asyncStatus, err := util.CheckBackupForCollection(solrCloud, collection, backup.Name, httpHeaders, logger)
+		finished, successful, asyncStatus, err := util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
 		if err != nil {
 			return false, err
 		}
@@ -259,7 +257,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 				collectionBackupStatus.FinishTime = &now
 			}
 
-			err = util.DeleteAsyncInfoForBackup(solrCloud, collection, backup.Name, httpHeaders, logger)
+			err = util.DeleteAsyncInfoForBackup(ctx, solrCloud, collection, backup.Name, logger)
 		} else {
 			collectionBackupStatus.AsyncBackupStatus = asyncStatus
 		}

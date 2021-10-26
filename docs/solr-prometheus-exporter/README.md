@@ -125,9 +125,17 @@ This user account will need access to the following endpoints in Solr:
         "collection": "*",
         "path": "/admin/ping"
       },
+      { 
+         "name": "k8s-zk", 
+         "role":"k8s", 
+         "collection": null, 
+         "path":"/admin/zookeeper/status" 
+      },
 ```
 
 For more details on configuring Solr security with the operator, see [Authentication and Authorization](../solr-cloud/solr-cloud-crd.md#authentication-and-authorization)
+
+**IMPORTANT**: Prometheus exporter does not support Solr's `JWTAuthPlugin` so you must allow anonymous access to the aforementioned endpoints when using the `JWTAuthPlugin`.
 
 ## Prometheus Stack
 

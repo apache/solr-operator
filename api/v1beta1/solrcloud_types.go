@@ -1457,6 +1457,13 @@ type SolrSecurityOptions struct {
 	// Flag to indicate if the configured HTTP endpoint(s) used for the probes require authentication; defaults
 	// to false. If you set to true, then probes will use a local command on the main container to hit the secured
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
+	// Only works with Basic authentication
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
+
+	// Options to configure a user-provided security.json from a configMap to allow for advanced security config.
+	// If not specified, the operator bootstraps a security.json with basic auth enabled.
+	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
+	// +optional
+	BootstrapSecurityJson *corev1.ConfigMapKeySelector `json:"bootstrapSecurityJson,omitempty"`
 }
