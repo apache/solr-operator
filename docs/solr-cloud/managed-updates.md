@@ -86,7 +86,6 @@ kind: SolrCloud
 spec:
   customSolrKubeOptions:
     podOptions:
-          annotations:
-
-            manualrestart: "2021-10-20T08:37:00Z"
+      annotations:
+        manualrestart: "2021-10-20T08:37:00Z"
 ```
