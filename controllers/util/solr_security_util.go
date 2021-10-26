@@ -25,7 +25,6 @@ import (
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
-	_ "github.com/shaj13/libcache/lru"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
