@@ -798,7 +798,7 @@ basic authentication with TLS to ensure credentials are never passed in clear te
 
 For background on Solr security, please refer to the [Reference Guide](https://solr.apache.org/guide) for your version of Solr.
 
-The Solr operator only supports the `Basic` authentication schemes. In general, you have two primary options for configuring authentication with the Solr operator:
+The Solr operator only supports the `Basic` authentication scheme. In general, you have two primary options for configuring authentication with the Solr operator:
 1. Let the Solr operator bootstrap the `security.json` to configure *basic authentication* for Solr.
 2. Supply your own `security.json` to Solr, which must define a user account that the operator can use to make API requests to secured Solr pods.
 
