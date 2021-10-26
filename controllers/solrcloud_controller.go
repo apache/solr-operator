@@ -146,7 +146,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, err
 	}
 
-	solrNodeNames := instance.GetAllSolrNodeNames()
+	solrNodeNames := instance.GetAllSolrPodNames()
 
 	hostNameIpMap := make(map[string]string)
 	// Generate a service for every Node
@@ -397,7 +397,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
-	totalPodCount := int(*instance.Spec.Replicas)
 	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods)+len(outOfDatePodsNotStarted) > 0 {
 		updateLogger := logger.WithName("ManagedUpdateSelector")
 
@@ -419,7 +418,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, totalPodCount, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {

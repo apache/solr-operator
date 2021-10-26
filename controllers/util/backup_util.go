@@ -389,7 +389,7 @@ func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.
 	if IsRepoManaged(backupRepository) {
 		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
 		return RunExecForPod(
-			solrCloud.GetAllSolrNodeNames()[0],
+			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
 			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
 			*config,

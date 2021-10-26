@@ -125,6 +125,13 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/345
+    - kind: fixed
+      description: Fix for managed restarts across connected SolrCloud resources.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/348
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/349
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
