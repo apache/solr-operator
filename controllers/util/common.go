@@ -483,6 +483,12 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		to.Spec.ServiceAccountName = from.Spec.ServiceAccountName
 	}
 
+	if !DeepEqualWithNils(to.Spec.TopologySpreadConstraints, from.Spec.TopologySpreadConstraints) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.TopologySpreadConstraints", "from", to.Spec.TopologySpreadConstraints, "to", from.Spec.TopologySpreadConstraints)
+		to.Spec.TopologySpreadConstraints = from.Spec.TopologySpreadConstraints
+	}
+
 	return requireUpdate
 }
 
