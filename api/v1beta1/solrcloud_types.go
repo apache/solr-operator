@@ -987,16 +987,16 @@ type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
-	// Replicas is the number of number of desired replicas in the cluster
+	// Replicas is the number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
 
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
-	// ReadyReplicas is the number of number of ready replicas in the cluster
+	// ReadyReplicas is the number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
 
-	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+	// UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -1021,6 +1021,10 @@ type SolrCloudStatus struct {
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
 	BackupRestoreReady bool `json:"backupRestoreReady"`
+
+	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
+	// +optional
+	BackupRepositoriesAvailable map[string]bool `json:"backupRepositoriesAvailable,omitempty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status

@@ -6796,6 +6796,11 @@ spec:
           status:
             description: SolrCloudStatus defines the observed state of SolrCloud
             properties:
+              backupRepositoriesAvailable:
+                additionalProperties:
+                  type: boolean
+                description: BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
+                type: object
               backupRestoreReady:
                 description: BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods and therefore is ready for backups and restores.
                 type: boolean
@@ -6809,11 +6814,11 @@ spec:
                 description: PodSelector for SolrCloud pods, required by the HPA
                 type: string
               readyReplicas:
-                description: ReadyReplicas is the number of number of ready replicas in the cluster
+                description: ReadyReplicas is the number of ready replicas in the cluster
                 format: int32
                 type: integer
               replicas:
-                description: Replicas is the number of number of desired replicas in the cluster
+                description: Replicas is the number of desired replicas in the cluster
                 format: int32
                 type: integer
               solrNodes:
@@ -6855,7 +6860,7 @@ spec:
                 description: The version of solr that the cloud is meant to be running. Will only be provided when the cloud is migrating between versions
                 type: string
               upToDateNodes:
-                description: UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+                description: UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
                 format: int32
                 type: integer
               version:

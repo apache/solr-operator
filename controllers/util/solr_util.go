@@ -211,6 +211,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			backupEnvVars = append(backupEnvVars, repoEnvVars...)
 		}
 	}
+	// Add annotation specifying the backupRepositories available with this version of the Pod.
+	podAnnotations = SetAvailableBackupRepos(solrCloud, podAnnotations)
 
 	if nil != customPodOptions {
 		// Add Custom Volumes to pod

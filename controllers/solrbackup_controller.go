@@ -194,12 +194,10 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 			return solrCloud, collectionBackupsFinished, actionTaken, err
 		}
 
-		// Make sure that all solr nodes are active and have the backupRestore shared volume mounted
-		// TODO: we do not need all replicas to be healthy. We should just check that leaders exist for all shards. (or just let Solr do that)
-		cloudReady := solrCloud.Status.BackupRestoreReady && (solrCloud.Status.Replicas == solrCloud.Status.ReadyReplicas)
-		if !cloudReady {
-			logger.Info("Cloud not ready for backup backup", "solrCloud", solrCloud.Name)
-			return solrCloud, collectionBackupsFinished, actionTaken, errors.NewServiceUnavailable("Cloud is not ready for backups or restores")
+		// Make sure that all solr living Solr pods have the backupRepo configured
+		if !solrCloud.Status.BackupRepositoriesAvailable[backupRepository.Name] {
+			logger.Info("Cloud not ready for backup", "solrCloud", solrCloud.Name, "repository", backupRepository.Name)
+			return solrCloud, collectionBackupsFinished, actionTaken, errors.NewServiceUnavailable(fmt.Sprintf("Cloud is not ready for backups in the %s repository", backupRepository.Name))
 		}
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
