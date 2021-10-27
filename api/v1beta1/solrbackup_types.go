@@ -52,13 +52,17 @@ type SolrBackupSpec struct {
 	Location string `json:"location,omitempty"`
 
 	// Persistence is the specification on how to persist the backup data.
+	// This feature has been removed as of v0.5.0. Any options specified here will not be used.
+	// TODO: Remove this field entirely in v0.6.0
 	// +optional
 	Persistence *PersistenceSource `json:"persistence,omitempty"`
 }
 
-func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
+func (spec *SolrBackupSpec) withDefaults() (changed bool) {
+	// Remove any Persistence specs, since this feature was removed.
 	if spec.Persistence != nil {
-		changed = spec.Persistence.withDefaults(backupName) || changed
+		changed = true
+		spec.Persistence = nil
 	}
 
 	return changed
@@ -206,6 +210,8 @@ type SolrBackupStatus struct {
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
 
 	// Whether the backups are in progress of being persisted
+	// This feature has been removed as of v0.5.0.
+	// TODO: Remove this field entirely in v0.6.0
 	// +optional
 	PersistenceStatus *BackupPersistenceStatus `json:"persistenceStatus,omitempty"`
 
@@ -319,7 +325,7 @@ type SolrBackup struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sb *SolrBackup) WithDefaults() bool {
-	return sb.Spec.withDefaults(sb.Name)
+	return sb.Spec.withDefaults()
 }
 
 //+kubebuilder:object:root=true

@@ -100,7 +100,7 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders
 	}
 
 	if err == nil {
-		json.NewDecoder(resp.Body).Decode(&response)
+		err = json.NewDecoder(resp.Body).Decode(&response)
 	}
 
 	return err
