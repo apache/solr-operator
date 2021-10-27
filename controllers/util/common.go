@@ -39,6 +39,11 @@ var (
 	PublicReadOnlyPermissions int32 = 444
 )
 
+func Replicas(num int) *int32 {
+	num32 := int32(num)
+	return &num32
+}
+
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
 func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
 	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {

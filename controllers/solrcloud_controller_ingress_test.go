@@ -135,7 +135,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
@@ -218,7 +218,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 
 			By("making sure no individual Solr Node Services exist")
-			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrNodeNames())
+			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrPodNames())
 
 			By("making sure Ingress was created correctly")
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
@@ -283,7 +283,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
@@ -353,7 +353,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
@@ -428,7 +428,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
@@ -499,7 +499,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
@@ -573,7 +573,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 			By("making sure the individual Solr Node Services exist and route correctly")
-			nodeNames := solrCloud.GetAllSolrNodeNames()
+			nodeNames := solrCloud.GetAllSolrPodNames()
 			Expect(nodeNames).To(HaveLen(replicas), "SolrCloud has incorrect number of nodeNames.")
 			for _, nodeName := range nodeNames {
 				service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(statefulSet.Spec.Selector.MatchLabels, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)

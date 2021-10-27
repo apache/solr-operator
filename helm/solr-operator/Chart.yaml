@@ -125,6 +125,13 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/345
+    - kind: fixed
+      description: Fix for managed restarts across connected SolrCloud resources.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/348
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/349
     - kind: added
       description: Ability to use topologySpreadConstraints for SolrCloud and SolrPrometheusExporter
       links:
