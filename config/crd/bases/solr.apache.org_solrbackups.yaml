@@ -1106,7 +1106,7 @@ spec:
                 description: Whether the backup has finished
                 type: boolean
               persistenceStatus:
-                description: 'Whether the backups are in progress of being persisted This feature has been removed as of v0.5.0. TODO: Remove this field entirely in v0.6.0'
+                description: 'Whether the backups are in progress of being persisted. This feature has been removed as of v0.5.0. TODO: Remove this field entirely in v0.6.0'
                 properties:
                   finishTimestamp:
                     description: Time that the collection backup finished at

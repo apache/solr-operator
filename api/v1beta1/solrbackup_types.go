@@ -24,15 +24,6 @@ import (
 	"strings"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-const (
-	DefaultAWSCliImageRepo    = "infrastructureascode/aws-cli"
-	DefaultAWSCliImageVersion = "1.16.204"
-	DefaultS3Retries          = 5
-)
-
 // SolrBackupSpec defines the desired state of SolrBackup
 type SolrBackupSpec struct {
 	// A reference to the SolrCloud to create a backup for
@@ -80,18 +71,6 @@ type PersistenceSource struct {
 	Volume *VolumePersistenceSource `json:"volume,omitempty"`
 }
 
-func (spec *PersistenceSource) withDefaults(backupName string) (changed bool) {
-	if spec.Volume != nil {
-		changed = spec.Volume.withDefaults(backupName) || changed
-	}
-
-	if spec.S3 != nil {
-		changed = spec.S3.withDefaults(backupName) || changed
-	}
-
-	return changed
-}
-
 // S3PersistenceSource defines the specs for connecting to s3 for persistence
 type S3PersistenceSource struct {
 	// The S3 compatible endpoint URL
@@ -122,25 +101,6 @@ type S3PersistenceSource struct {
 	// Image containing the AWS Cli
 	// +optional
 	AWSCliImage ContainerImage `json:"AWSCliImage,omitempty"`
-}
-
-func (spec *S3PersistenceSource) withDefaults(backupName string) (changed bool) {
-	changed = spec.AWSCliImage.withDefaults(DefaultAWSCliImageRepo, DefaultAWSCliImageVersion, DefaultPullPolicy) || changed
-
-	if spec.Key == "" {
-		spec.Key = backupName + ".tgz"
-		changed = true
-	} else if strings.HasPrefix(spec.Key, "/") {
-		spec.Key = strings.TrimPrefix(spec.Key, "/")
-		changed = true
-	}
-	if spec.Retries == nil {
-		retries := int32(DefaultS3Retries)
-		spec.Retries = &retries
-		changed = true
-	}
-
-	return changed
 }
 
 // S3Secrets describes the secrets provided for accessing s3.
@@ -209,7 +169,7 @@ type SolrBackupStatus struct {
 	// +optional
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
 
-	// Whether the backups are in progress of being persisted
+	// Whether the backups are in progress of being persisted.
 	// This feature has been removed as of v0.5.0.
 	// TODO: Remove this field entirely in v0.6.0
 	// +optional
