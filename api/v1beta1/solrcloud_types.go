@@ -385,6 +385,8 @@ type SolrBackupRestoreOptions struct {
 type SolrBackupRepository struct {
 	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
+	//
+	// +kubebuilder:validation:Pattern:=[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?
 	Name string `json:"name"`
 
 	// A GCSRepository for Solr to use when backing up and restoring collections.

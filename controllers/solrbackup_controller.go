@@ -20,7 +20,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/fields"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	"github.com/apache/solr-operator/controllers/util"
@@ -336,11 +341,63 @@ func (r *SolrBackupReconciler) persistSolrCloudBackups(ctx context.Context, back
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
 	r.config = mgr.GetConfig()
 
-	return ctrl.NewControllerManagedBy(mgr).
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrBackup{}).
-		Owns(&batchv1.Job{}).
-		Complete(r)
+		Owns(&batchv1.Job{})
+
+	ctrlBuilder, err = r.indexAndWatchForSolrClouds(mgr, ctrlBuilder)
+	if err != nil {
+		return err
+	}
+
+	return ctrlBuilder.Complete(r)
+}
+
+func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	solrCloudField := ".spec.solrCloud"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrBackup{}, solrCloudField, func(rawObj client.Object) []string {
+		// grab the SolrBackup object, extract the used SolrCloud...
+		return []string{rawObj.(*solrv1beta1.SolrBackup).Spec.SolrCloud}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+			solrCloud := obj.(*solrv1beta1.SolrCloud)
+			foundBackups := &solrv1beta1.SolrBackupList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
+				Namespace:     obj.GetNamespace(),
+			}
+			err := r.List(context.Background(), foundBackups, listOps)
+			if err != nil {
+				// if no exporters found, just no-op this
+				return []reconcile.Request{}
+			}
+
+			requests := make([]reconcile.Request, 0)
+			for _, item := range foundBackups.Items {
+				// Only queue the request if the Cloud is ready.
+				cloudIsReady := solrCloud.Status.BackupRestoreReady
+				if item.Spec.RepositoryName != "" {
+					cloudIsReady = solrCloud.Status.BackupRepositoriesAvailable[item.Spec.RepositoryName]
+				}
+				if cloudIsReady {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					})
+				}
+			}
+			return requests
+		}),
+		builder.WithPredicates(predicate.GenerationChangedPredicate{})), nil
 }

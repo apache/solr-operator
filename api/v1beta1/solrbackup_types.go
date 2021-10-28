@@ -36,10 +36,16 @@ const (
 // SolrBackupSpec defines the desired state of SolrBackup
 type SolrBackupSpec struct {
 	// A reference to the SolrCloud to create a backup for
+	//
+	// +kubebuilder:validation:Pattern:=[a-z0-9]([-a-z0-9]*[a-z0-9])?
+	// +kubebuilder:validation:MinLength:=1
+	// +kubebuilder:validation:MinLength:=63
 	SolrCloud string `json:"solrCloud"`
 
 	// The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the
 	// auto-configured repository for legacy singleton volumes).
+	//
+	// +kubebuilder:validation:Pattern:=[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?
 	// +optional
 	RepositoryName string `json:"repositoryName,omitempty"`
 
