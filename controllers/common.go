@@ -24,6 +24,9 @@ import (
 
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
 func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
+	if newWait <= 0 {
+		requeueOrNot.RequeueAfter = 0
+	}
 	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {
 		requeueOrNot.RequeueAfter = newWait
 	}

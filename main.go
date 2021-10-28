@@ -23,7 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
-	zk_api "github.com/apache/solr-operator/controllers/zk_api"
+	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	"io/ioutil"
@@ -203,6 +203,7 @@ func main() {
 	if err = (&controllers.SolrBackupReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Config: mgr.GetConfig(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrBackup")
 		os.Exit(1)

@@ -51,6 +51,13 @@ type SolrBackupSpec struct {
 	// +optional
 	Location string `json:"location,omitempty"`
 
+	// Set this backup to be taken recurrently, with options for scheduling and storage.
+	//
+	// NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API.
+	//
+	// +optional
+	Recurrence *BackupRecurrence `json:"recurrence,omitempty"`
+
 	// Persistence is the specification on how to persist the backup data.
 	// +optional
 	Persistence *PersistenceSource `json:"persistence,omitempty"`
@@ -62,6 +69,29 @@ func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
 	}
 
 	return changed
+}
+
+// BackupRecurrence defines the recurrence of the incremental backup
+type BackupRecurrence struct {
+	// Perform a backup on the given schedule, in CRON format.
+	//
+	// Multiple CRON syntaxes are supported
+	//   - Standard CRON (e.g. "CRON_TZ=Asia/Seoul 0 6 * * ?")
+	//   - Predefined Schedules (e.g. "@yearly", "@weekly", "@daily", etc.)
+	//   - Intervals (e.g. "@every 10h30m")
+	//
+	// For more information please check this reference:
+	// https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
+	Schedule string `json:"schedule"`
+
+	// Define the number of backup points to save for this backup at any given time.
+	// The oldest backups will be deleted if too many exist when a backup is taken.
+	// If not provided, this defaults to 10.
+	//
+	// +kubebuilder:default:=10
+	// +kubebuilder:validation:Minimum:=1
+	// +optional
+	MaxSaved int `json:"maxSaved,omitempty"`
 }
 
 // PersistenceSource defines the location and method of persisting the backup data.
@@ -198,8 +228,26 @@ func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bo
 
 // SolrBackupStatus defines the observed state of SolrBackup
 type SolrBackupStatus struct {
+	// The current Backup Status, which all fields are added to this struct
+	Current IndividualSolrBackupStatus `json:",inline"`
+
+	// The scheduled time for the next backup to occur
+	// +optional
+	NextScheduledTime *metav1.Time `json:"nextScheduledTime,omitempty"`
+
+	// The status history of recurring backups
+	// +optional
+	History []IndividualSolrBackupStatus `json:"history,omitempty"`
+}
+
+// IndividualSolrBackupStatus defines the observed state of a single issued SolrBackup
+type IndividualSolrBackupStatus struct {
 	// Version of the Solr being backed up
 	SolrVersion string `json:"solrVersion"`
+
+	// The time that this backup was initiated
+	// +optional
+	StartTime metav1.Time `json:"startTimestamp,omitempty"`
 
 	// The status of each collection's backup progress
 	// +optional
