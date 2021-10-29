@@ -77,3 +77,7 @@ mTLS:
   caCertSecretKey: ca-cert.pem
   insecureSkipVerify: true
   watchForUpdates: true
+
+# Enable metrics for the Solr Operator
+metrics:
+  enable: true
