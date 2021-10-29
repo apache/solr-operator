@@ -160,6 +160,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
 						Lifecycle:                     testLifecycle,
+						TopologySpreadConstraints:     testTopologySpreadConstraints,
 					},
 					DeploymentOptions: &solrv1beta1.DeploymentOptions{
 						Annotations: testDeploymentAnnotations,
@@ -231,6 +232,12 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect Pod securityContext")
 			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "Incorrect Pod securityContext")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect Container lifecycle")
+
+			Expect(deployment.Spec.Template.Spec.TopologySpreadConstraints).To(HaveLen(len(testTopologySpreadConstraints)), "Wrong number of topologySpreadConstraints")
+			Expect(deployment.Spec.Template.Spec.TopologySpreadConstraints[0]).To(Equal(testTopologySpreadConstraints[0]), "Wrong first topologySpreadConstraint")
+			expectedSecondTopologyConstraint := testTopologySpreadConstraints[1].DeepCopy()
+			expectedSecondTopologyConstraint.LabelSelector = deployment.Spec.Selector
+			Expect(deployment.Spec.Template.Spec.TopologySpreadConstraints[1]).To(Equal(*expectedSecondTopologyConstraint), "Wrong second topologySpreadConstraint")
 
 			// Volumes
 			Expect(deployment.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")

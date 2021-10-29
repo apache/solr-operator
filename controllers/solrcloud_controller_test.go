@@ -180,6 +180,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						ImagePullSecrets:              testAdditionalImagePullSecrets,
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
+						TopologySpreadConstraints:     testTopologySpreadConstraints,
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,
@@ -244,6 +245,11 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect imagePullSecrets")
 			Expect(statefulSet.Spec.Template.Spec.TerminationGracePeriodSeconds).To(Equal(&testTerminationGracePeriodSeconds), "Incorrect terminationGracePeriodSeconds")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect serviceAccountName")
+			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints).To(HaveLen(len(testTopologySpreadConstraints)), "Wrong number of topologySpreadConstraints")
+			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[0]).To(Equal(testTopologySpreadConstraints[0]), "Wrong first topologySpreadConstraint")
+			expectedSecondTopologyConstraint := testTopologySpreadConstraints[1].DeepCopy()
+			expectedSecondTopologyConstraint.LabelSelector = statefulSet.Spec.Selector
+			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[1]).To(Equal(*expectedSecondTopologyConstraint), "Wrong second topologySpreadConstraint")
 
 			// Check the update strategy
 			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.RollingUpdateStatefulSetStrategyType), "Incorrect statefulset update strategy")

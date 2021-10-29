@@ -70,7 +70,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		annotations = customDeploymentOptions.Annotations
 	}
 
-	customPodOptions := solrPrometheusExporter.Spec.CustomKubeOptions.PodOptions
+	customPodOptions := solrPrometheusExporter.Spec.CustomKubeOptions.PodOptions.DeepCopy()
 	if nil != customPodOptions {
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
 		podAnnotations = customPodOptions.Annotations
@@ -322,6 +322,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		if customPodOptions.Lifecycle != nil {
 			metricsContainer.Lifecycle = customPodOptions.Lifecycle
+		}
+
+		if len(customPodOptions.TopologySpreadConstraints) > 0 {
+			deployment.Spec.Template.Spec.TopologySpreadConstraints = customPodOptions.TopologySpreadConstraints
+
+			// Set the label selector for constraints to the statefulSet label selector, if none is provided
+			for i := range deployment.Spec.Template.Spec.TopologySpreadConstraints {
+				if deployment.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector == nil {
+					deployment.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector = deployment.Spec.Selector.DeepCopy()
+				}
+			}
 		}
 	}
 
