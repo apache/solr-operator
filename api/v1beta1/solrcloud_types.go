@@ -980,6 +980,27 @@ type ZookeeperPodPolicy struct {
 	// Optional Service Account to run the zookeeper pods under.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Labels specifies the labels to attach to pods the operator creates for
+	// the zookeeper cluster.
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations specifies the annotations to attach to zookeeper pods
+	// creates.
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// SecurityContext specifies the security context for the entire zookeeper pod
+	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
+
+	// +kubebuilder:validation:Minimum=0
+	// TerminationGracePeriodSeconds is the amount of time that kubernetes will
+	// give for a zookeeper pod instance to shutdown normally.
+	// The default value is 30.
+	TerminationGracePeriodSeconds int64 `json:"terminationGracePeriodSeconds,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud

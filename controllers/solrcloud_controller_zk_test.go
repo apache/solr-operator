@@ -194,18 +194,24 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
 						Replicas: &four,
+						Image:    &solrv1beta1.ContainerImage{ImagePullSecret: testImagePullSecretName},
 						Ephemeral: &solrv1beta1.ZKEphemeral{
 							EmptyDirVolumeSource: corev1.EmptyDirVolumeSource{
 								Medium: "Memory",
 							},
 						},
 						ZookeeperPod: solrv1beta1.ZookeeperPodPolicy{
-							Affinity:           testAffinity,
-							NodeSelector:       testNodeSelectors,
-							Tolerations:        testTolerations,
-							Env:                extraVars,
-							Resources:          testResources,
-							ServiceAccountName: testServiceAccountName,
+							Affinity:                      testAffinity,
+							NodeSelector:                  testNodeSelectors,
+							Tolerations:                   testTolerations,
+							Env:                           extraVars,
+							Resources:                     testResources,
+							ServiceAccountName:            testServiceAccountName,
+							Labels:                        testSSLabels,
+							Annotations:                   testSSAnnotations,
+							SecurityContext:               &testPodSecurityContext,
+							TerminationGracePeriodSeconds: testTerminationGracePeriodSeconds,
+							ImagePullSecrets:              testAdditionalImagePullSecrets,
 						},
 						Config: zkConf,
 						ChRoot: "a-ch/root",
@@ -272,6 +278,11 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(zkCluster.Spec.Pod.Resources).To(Equal(testResources), "Incorrect zkCluster resources")
 			Expect(zkCluster.Spec.Pod.Env).To(Equal(extraVars), "Incorrect zkCluster env vars")
 			Expect(zkCluster.Spec.Pod.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect zkCluster serviceAccountName")
+			Expect(zkCluster.Spec.Pod.Labels).To(Equal(util.MergeLabelsOrAnnotations(testSSLabels, map[string]string{"app": "foo-solrcloud-zookeeper", "release": "foo-solrcloud-zookeeper"})), "Incorrect zkCluster pod labels")
+			Expect(zkCluster.Spec.Pod.Annotations).To(Equal(testSSAnnotations), "Incorrect zkCluster pod annotations")
+			Expect(zkCluster.Spec.Pod.SecurityContext).To(Equal(&testPodSecurityContext), "Incorrect zkCluster pod securityContext")
+			Expect(zkCluster.Spec.Pod.TerminationGracePeriodSeconds).To(Equal(testTerminationGracePeriodSeconds), "Incorrect zkCluster pod terminationGracePeriodSeconds")
+			Expect(zkCluster.Spec.Pod.ImagePullSecrets).To(Equal(append(append(make([]corev1.LocalObjectReference, 0), testAdditionalImagePullSecrets...), corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect zkCluster imagePullSecrets")
 
 			// Check ZK Config Options
 			Expect(zkCluster.Spec.Conf.InitLimit).To(Equal(zkConf.InitLimit), "Incorrect zkCluster Config InitLimit")
