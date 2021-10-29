@@ -798,13 +798,12 @@ basic authentication with TLS to ensure credentials are never passed in clear te
 
 For background on Solr security, please refer to the [Reference Guide](https://solr.apache.org/guide) for your version of Solr.
 
-Basic authentication is the only authentication scheme supported by the Solr operator at this time. In general, you have 
-two basic options for configuring basic authentication with the Solr operator:
+The Solr operator only supports the `Basic` authentication scheme. In general, you have two primary options for configuring authentication with the Solr operator:
 1. Let the Solr operator bootstrap the `security.json` to configure *basic authentication* for Solr.
 2. Supply your own `security.json` to Solr, which must define a user account that the operator can use to make API requests to secured Solr pods.
 
-If you choose option 2, then you need to provide the credentials to the Solr operator using a Kubernetes [Basic Authentication Secret](https://kubernetes.io/docs/concepts/configuration/secret/#basic-authentication-secret).
-With option 1, the operator creates the Basic Authentication Secret for you.
+If you choose option 2, then you need to provide the credentials the Solr operator should use to make requests to Solr via a Kubernetes secret. 
+With option 1, the operator creates a Basic Authentication Secret for you, which contains the username and password for the `k8s-oper` user.
 
 ### Option 1: Bootstrap Security
 
@@ -1009,6 +1008,12 @@ The exporter also hits the `/admin/ping` endpoint for every collection, which re
         "collection": "*",
         "path": "/admin/ping"
       },
+      { 
+         "name": "k8s-zk", 
+         "role":"k8s", 
+         "collection": null, 
+         "path":"/admin/zookeeper/status" 
+      },
 ```
 The `"collection":"*"` setting indicates this path applies to all collections, which maps to endpoint `/collections/<COLL>/admin/ping` at runtime.
 
@@ -1016,9 +1021,33 @@ The initial authorization config grants the `read` permission to the `users` rol
 For instance, the `solr` user is mapped to the `users` role, so the `solr` user can send query requests only. 
 In general, please verify the initial authorization rules for each role before sharing user credentials.
 
-### Option 2: User-provided Basic Auth Secret
+### Option 2: User-provided `security.json` and credentials secret
 
-Alternatively, if users want full control over their cluster's security config, then they can provide a `kubernetes.io/basic-auth` secret containing the credentials for the user they want the operator to make API requests as:
+If users want full control over their cluster's security config, then they can provide the Solr `security.json` via a Secret and the credentials the operator should use
+to make requests to Solr in a Secret.
+
+#### Custom `security.json` Secret
+_Since v0.5.0_
+
+For full control over the Solr security configuration, supply a `security.json` in a Secret. The following example illustrates how to point the operator to a Secret containing a custom `security.json`:
+
+```yaml
+spec:
+  ...
+  solrSecurity:
+    authenticationType: Basic
+    bootstrapSecurityJson:
+      name: my-custom-security-json
+      key: security.json
+```
+For `Basic` authentication, if you don't supply a `security.json` Secret, then the operator assumes you are bootstrapping the security configuration via some other means.
+
+Refer to the example `security.json` shown in the Authorization section above to help you get started crafting your own custom configuration. 
+
+#### Basic Authentication 
+
+For `Basic` authentication, the supplied secret must be of type [Basic Authentication Secret](https://kubernetes.io/docs/concepts/configuration/secret/#basic-authentication-secret) and define both a `username` and `password`.
+ 
 ```yaml
 spec:
   ...
@@ -1026,7 +1055,7 @@ spec:
     authenticationType: Basic
     basicAuthSecret: user-provided-secret
 ```
-The supplied secret must be of type [Basic Authentication Secret](https://kubernetes.io/docs/concepts/configuration/secret/#basic-authentication-secret) and define both a `username` and `password`.
+
 Here is an example of how to define a basic auth secret using YAML:
 ```yaml
 apiVersion: v1
@@ -1041,25 +1070,23 @@ stringData:
 With this config, the operator will make API requests to secured Solr pods as the `k8s-oper` user. 
 _Note: be sure to use a stronger password for real deployments_
 
-If users supply their own basic auth secret, then the operator *does not* bootstrap the `security.json`; 
-the reasoning is that if you're supplying your own basic auth credentials then you're also assuming the responsibility for configuring the desired access for this user.
-
-Users need to ensure their `security.json` contains the user supplied in the `basicAuthSecret` with read access to:
+Users need to ensure their `security.json` contains the user supplied in the `basicAuthSecret` has read access to the following endpoints:
 ```
 /admin/info/system
 /admin/info/health
 /admin/collections
 /admin/metrics
 /admin/ping (for collection="*")
+/admin/zookeeper/status
 ```
 _Tip: see the authorization rules defined by the default `security.json` as a guide for configuring access for the operator user_
 
-#### Changing the Password
+##### Changing the Password
 
 If you change the password for the user configured in your `basicAuthSecret` using the Solr security API, then you **must** update the secret with the new password or the operator will be locked out.
 Also, changing the password for this user in the K8s secret will not update Solr! You're responsible for changing the password in both places.
 
-### Prometheus Exporter with Basic Auth
+##### Prometheus Exporter with Basic Auth
 
 If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret; 
 refer to [Prometheus Exporter with Basic Auth](../solr-prometheus-exporter/README.md#prometheus-exporter-with-basic-auth) for more details.

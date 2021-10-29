@@ -95,6 +95,8 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
+| solrOptions.security.bootstrapSecurityJson.name | string | | Name of a Secret in the same namespace that stores a user-provided `security.json` to bootstrap the Solr security config |
+| solrOptions.security.bootstrapSecurityJson.key | string | | Key holding the user-provided `security.json` in the bootstrap security Secret |
 | updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
