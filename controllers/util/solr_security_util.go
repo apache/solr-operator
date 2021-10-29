@@ -162,7 +162,7 @@ func reconcileForBasicAuthWithUserProvidedSecret(ctx context.Context, client *cl
 	}
 	security.CredentialsSecret = basicAuthSecret
 
-	// is there a user-provided security.json in a ConfigMap?
+	// is there a user-provided security.json in a secret?
 	// in this config, we don't need to enforce the user providing a security.json as they can bootstrap the security.json however they want
 	if sec.BootstrapSecurityJson != nil {
 		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
@@ -171,7 +171,7 @@ func reconcileForBasicAuthWithUserProvidedSecret(ctx context.Context, client *cl
 		}
 		security.SecurityJson = securityJson
 		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson}
-	} // else no user-provided configMap, no sweat for us
+	} // else no user-provided secret, no sweat for us
 
 	return security, nil
 }
@@ -484,7 +484,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	}
 }
 
-// Called during reconcile to load the security.json from a user-supplied ConfigMap
+// Called during reconcile to load the security.json from a user-supplied secret
 func loadSecurityJsonFromSecret(ctx context.Context, client *client.Client, securityJsonSecret *corev1.SecretKeySelector, ns string) (string, error) {
 	sec := &corev1.Secret{}
 	nn := types.NamespacedName{Name: securityJsonSecret.Name, Namespace: ns}

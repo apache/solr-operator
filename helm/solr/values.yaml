@@ -64,6 +64,9 @@ solrOptions:
     # authenticationType: Basic
     # basicAuthSecret: secret-name
     # probesRequireAuth: false
+    # bootstrapSecurityJson:
+    #   name: my-custom-security-json-secret
+    #   key: security.json
 
 
 # Specify how the SolrCloud should be addressable

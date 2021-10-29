@@ -174,7 +174,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		})
 	})
 
-	FContext("User Provided Credentials and security.json ConfigMap", func() {
+	FContext("User Provided Credentials and security.json secret", func() {
 		BeforeEach(func() {
 			basicAuthSecretName := "my-basic-auth-secret"
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
