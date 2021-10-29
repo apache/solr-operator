@@ -1460,7 +1460,7 @@ type SolrSecurityOptions struct {
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 
-	// Options to configure a user-provided security.json from a configMap to allow for advanced security config.
+	// Options to configure a user-provided security.json from a secret to allow for advanced security config.
 	// If not specified, the operator bootstraps a security.json with basic auth enabled.
 	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
 	// +optional
