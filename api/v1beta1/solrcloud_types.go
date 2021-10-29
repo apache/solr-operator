@@ -1465,5 +1465,5 @@ type SolrSecurityOptions struct {
 	// If not specified, the operator bootstraps a security.json with basic auth enabled.
 	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
 	// +optional
-	BootstrapSecurityJson *corev1.ConfigMapKeySelector `json:"bootstrapSecurityJson,omitempty"`
+	BootstrapSecurityJson *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
 }

@@ -165,12 +165,12 @@ func reconcileForBasicAuthWithUserProvidedSecret(ctx context.Context, client *cl
 	// is there a user-provided security.json in a ConfigMap?
 	// in this config, we don't need to enforce the user providing a security.json as they can bootstrap the security.json however they want
 	if sec.BootstrapSecurityJson != nil {
-		securityJson, err := loadSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		security.SecurityJson = securityJson
-		security.SecurityJsonSrc = &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson}
+		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson}
 	} // else no user-provided configMap, no sweat for us
 
 	return security, nil
@@ -485,20 +485,20 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 }
 
 // Called during reconcile to load the security.json from a user-supplied ConfigMap
-func loadSecurityJsonFromConfigMap(ctx context.Context, client *client.Client, securityJsonConfigMap *corev1.ConfigMapKeySelector, ns string) (string, error) {
-	configMap := &corev1.ConfigMap{}
-	nn := types.NamespacedName{Name: securityJsonConfigMap.Name, Namespace: ns}
+func loadSecurityJsonFromSecret(ctx context.Context, client *client.Client, securityJsonSecret *corev1.SecretKeySelector, ns string) (string, error) {
+	sec := &corev1.Secret{}
+	nn := types.NamespacedName{Name: securityJsonSecret.Name, Namespace: ns}
 	reader := *client
-	err := reader.Get(ctx, nn, configMap)
+	err := reader.Get(ctx, nn, sec)
 	if err != nil {
 		return "", err
 	}
 
-	securityJson, hasSecurityJson := configMap.Data[securityJsonConfigMap.Key]
+	securityJson, hasSecurityJson := sec.Data[securityJsonSecret.Key]
 	if !hasSecurityJson {
-		return "", fmt.Errorf("required key '%s' not found in the user-supplied configMap %s",
-			securityJsonConfigMap.Key, configMap.Name)
+		return "", fmt.Errorf("required key '%s' not found in the user-supplied secret %s",
+			securityJsonSecret.Key, sec.Name)
 	}
 
-	return securityJson, nil
+	return string(securityJson), nil
 }

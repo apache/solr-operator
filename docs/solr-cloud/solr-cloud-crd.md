@@ -1023,13 +1023,13 @@ In general, please verify the initial authorization rules for each role before s
 
 ### Option 2: User-provided `security.json` and credentials secret
 
-If users want full control over their cluster's security config, then they can provide the Solr `security.json` via a ConfigMap and the credentials the operator should use
+If users want full control over their cluster's security config, then they can provide the Solr `security.json` via a Secret and the credentials the operator should use
 to make requests to Solr in a Secret.
 
-#### Custom `security.json` ConfigMap
+#### Custom `security.json` Secret
 _Since v0.5.0_
 
-For full control over the Solr security configuration, supply a `security.json` in a ConfigMap. The following example illustrates how to point the operator to a ConfigMap containing a custom `security.json`:
+For full control over the Solr security configuration, supply a `security.json` in a Secret. The following example illustrates how to point the operator to a Secret containing a custom `security.json`:
 
 ```yaml
 spec:
@@ -1040,7 +1040,7 @@ spec:
       name: my-custom-security-json
       key: security.json
 ```
-For `Basic` authentication, if you don't supply a `security.json` ConfigMap, then the operator assumes you are bootstrapping the security configuration via some other means.
+For `Basic` authentication, if you don't supply a `security.json` Secret, then the operator assumes you are bootstrapping the security configuration via some other means.
 
 Refer to the example `security.json` shown in the Authorization section above to help you get started crafting your own custom configuration. 
 

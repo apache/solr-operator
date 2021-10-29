@@ -1242,7 +1242,7 @@ func (in *SolrSecurityOptions) DeepCopyInto(out *SolrSecurityOptions) {
 	*out = *in
 	if in.BootstrapSecurityJson != nil {
 		in, out := &in.BootstrapSecurityJson, &out.BootstrapSecurityJson
-		*out = new(v1.ConfigMapKeySelector)
+		*out = new(v1.SecretKeySelector)
 		(*in).DeepCopyInto(*out)
 	}
 }

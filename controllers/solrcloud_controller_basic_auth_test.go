@@ -180,8 +180,8 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
 				BasicAuthSecret:    basicAuthSecretName,
-				BootstrapSecurityJson: &corev1.ConfigMapKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json-cm"},
+				BootstrapSecurityJson: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json"},
 					Key:                  util.SecurityJsonFile,
 				},
 			}
@@ -194,8 +194,8 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			basicAuthSecret := createBasicAuthSecret(solrCloud.Spec.SolrSecurity.BasicAuthSecret, solrv1beta1.DefaultBasicAuthUsername, solrCloud.Namespace)
 			Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Could not create the necessary basicAuth secret")
 
-			By("Create the security.json ConfigMap")
-			createMockSecurityJsonConfigMap(ctx, "my-security-json-cm", solrCloud.Namespace)
+			By("Create the security.json Secret")
+			createMockSecurityJsonSecret(ctx, "my-security-json", solrCloud.Namespace)
 
 			By("Make sure the StatefulSet is created and configured correctly")
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, false)
@@ -354,10 +354,10 @@ func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) 
 	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 }
 
-func createMockSecurityJsonConfigMap(ctx context.Context, name string, ns string) corev1.ConfigMap {
-	cmData := map[string]string{}
-	cmData[util.SecurityJsonFile] = "{}"
-	cm := corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Data: cmData}
-	Expect(k8sClient.Create(ctx, &cm)).To(Succeed(), "Could not create mock security.json configmap")
-	return cm
+func createMockSecurityJsonSecret(ctx context.Context, name string, ns string) corev1.Secret {
+	secData := map[string]string{}
+	secData[util.SecurityJsonFile] = "{}"
+	sec := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, StringData: secData}
+	Expect(k8sClient.Create(ctx, &sec)).To(Succeed(), "Could not create mock security.json secret")
+	return sec
 }
