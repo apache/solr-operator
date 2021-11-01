@@ -926,4 +926,5 @@ var (
 			WhenUnsatisfiable: corev1.ScheduleAnyway,
 		},
 	}
+	testIngressClass = "test-ingress-class"
 )

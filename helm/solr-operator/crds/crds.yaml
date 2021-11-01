@@ -2318,6 +2318,9 @@ spec:
                           type: string
                         description: Annotations to be added for the Ingress.
                         type: object
+                      ingressClassName:
+                        description: IngressClassName is the name of the IngressClass cluster resource. The associated IngressClass defines which controller will implement the resource.
+                        type: string
                       labels:
                         additionalProperties:
                           type: string

@@ -148,6 +148,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/355
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/356
+    - kind: added
+      description: Ability to set the IngressClassName for v1 Ingress resources.
+      links:
+        - name: Github Issue (Ingress v1)
+          url: https://github.com/apache/solr-operator/issues/277
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/363
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease

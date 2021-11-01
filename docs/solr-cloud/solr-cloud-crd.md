@@ -123,6 +123,9 @@ Under `SolrCloud.Spec.solrAddressability`:
 **Note:** Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
 If both of those criteria are met, then an individual ClusterIP Service will be created for each Solr Node/Pod.
 
+If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
+Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
+
 ## Zookeeper Reference
 
 Solr Clouds require an Apache Zookeeper to connect to.

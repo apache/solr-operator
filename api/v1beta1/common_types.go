@@ -172,6 +172,12 @@ type IngressOptions struct {
 	// Labels to be added for the Ingress.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// IngressClassName is the name of the IngressClass cluster resource. The
+	// associated IngressClass defines which controller will implement the resource.
+	//
+	// +optional
+	IngressClassName *string `json:"ingressClassName,omitempty"`
 }
 
 // ConfigMapOptions defines custom options for configMaps

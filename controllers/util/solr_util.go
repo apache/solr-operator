@@ -910,6 +910,11 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			TLS:   ingressTLS,
 		},
 	}
+
+	if nil != customOptions && customOptions.IngressClassName != nil {
+		ingress.Spec.IngressClassName = customOptions.IngressClassName
+	}
+
 	return ingress
 }
 

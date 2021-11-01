@@ -58,8 +58,9 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 						Labels:      testCommonServiceLabels,
 					},
 					IngressOptions: &solrv1beta1.IngressOptions{
-						Annotations: testIngressAnnotations,
-						Labels:      testIngressLabels,
+						Annotations:      testIngressAnnotations,
+						Labels:           testIngressLabels,
+						IngressClassName: &testIngressClass,
 					},
 					NodeServiceOptions: &solrv1beta1.ServiceOptions{
 						Annotations: testNodeServiceAnnotations,
@@ -151,6 +152,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, true, replicas, 4000, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -175,6 +178,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				PodPort:           3000,
 				CommonServicePort: 4000,
 			}
+			solrCloud.Spec.CustomSolrKubeOptions.IngressOptions.IngressClassName = nil
 		})
 		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
@@ -224,6 +228,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(BeNil(), "Ingress class name should be nil when none is provided in custom ingress options")
 			testIngressRules(solrCloud, ingress, true, 0, 4000, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -299,6 +304,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, false, replicas, 4000, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -369,6 +376,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, true, replicas, 4000, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -444,6 +453,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, true, replicas, 4000, 100, append([]string{testDomain}, testAdditionalDomains...)...)
 
 			By("making sure the node addresses in the Status are correct")
@@ -515,6 +526,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, true, replicas, 80, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -589,6 +602,8 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
+			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
 			testIngressRules(solrCloud, ingress, true, replicas, 80, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
