@@ -3635,6 +3635,61 @@ spec:
                               type: string
                           type: object
                         type: array
+                      topologySpreadConstraints:
+                        description: "Optional PodSpreadTopologyConstraints to use when scheduling pods. More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/ \n Note: There is no need to provide a \"labelSelector\", as the operator will inject the labels for you if not provided."
+                        items:
+                          description: TopologySpreadConstraint specifies how to spread matching pods among the given topology.
+                          properties:
+                            labelSelector:
+                              description: LabelSelector is used to find matching pods. Pods that match this label selector are counted to determine the number of pods in their corresponding topology domain.
+                              properties:
+                                matchExpressions:
+                                  description: matchExpressions is a list of label selector requirements. The requirements are ANDed.
+                                  items:
+                                    description: A label selector requirement is a selector that contains values, a key, and an operator that relates the key and values.
+                                    properties:
+                                      key:
+                                        description: key is the label key that the selector applies to.
+                                        type: string
+                                      operator:
+                                        description: operator represents a key's relationship to a set of values. Valid operators are In, NotIn, Exists and DoesNotExist.
+                                        type: string
+                                      values:
+                                        description: values is an array of string values. If the operator is In or NotIn, the values array must be non-empty. If the operator is Exists or DoesNotExist, the values array must be empty. This array is replaced during a strategic merge patch.
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - key
+                                    - operator
+                                    type: object
+                                  type: array
+                                matchLabels:
+                                  additionalProperties:
+                                    type: string
+                                  description: matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels map is equivalent to an element of matchExpressions, whose key field is "key", the operator is "In", and the values array contains only "value". The requirements are ANDed.
+                                  type: object
+                              type: object
+                            maxSkew:
+                              description: 'MaxSkew describes the degree to which pods may be unevenly distributed. When `whenUnsatisfiable=DoNotSchedule`, it is the maximum permitted difference between the number of matching pods in the target topology and the global minimum. For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same labelSelector spread as 1/1/0: | zone1 | zone2 | zone3 | |   P   |   P   |       | - if MaxSkew is 1, incoming pod can only be scheduled to zone3 to become 1/1/1; scheduling it onto zone1(zone2) would make the ActualSkew(2-0) on zone1(zone2) violate MaxSkew(1). - if MaxSkew is 2, incoming pod can be scheduled onto any zone. When `whenUnsatisfiable=ScheduleAnyway`, it is used to give higher precedence to topologies that satisfy it. It''s a required field. Default value is 1 and 0 is not allowed.'
+                              format: int32
+                              type: integer
+                            topologyKey:
+                              description: TopologyKey is the key of node labels. Nodes that have a label with this key and identical values are considered to be in the same topology. We consider each <key, value> as a "bucket", and try to put balanced number of pods into each bucket. It's a required field.
+                              type: string
+                            whenUnsatisfiable:
+                              description: 'WhenUnsatisfiable indicates how to deal with a pod if it doesn''t satisfy the spread constraint. - DoNotSchedule (default) tells the scheduler not to schedule it. - ScheduleAnyway tells the scheduler to schedule the pod in any location,   but giving higher precedence to topologies that would help reduce the   skew. A constraint is considered "Unsatisfiable" for an incoming pod if and only if every possible node assigment for that pod would violate "MaxSkew" on some topology. For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same labelSelector spread as 3/1/1: | zone1 | zone2 | zone3 | | P P P |   P   |   P   | If WhenUnsatisfiable is set to DoNotSchedule, incoming pod can only be scheduled to zone2(zone3) to become 3/2/1(3/1/2) as ActualSkew(2-1) on zone2(zone3) satisfies MaxSkew(1). In other words, the cluster can still be imbalanced, but scheduler won''t make it *more* imbalanced. It''s a required field.'
+                              type: string
+                          required:
+                          - maxSkew
+                          - topologyKey
+                          - whenUnsatisfiable
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - topologyKey
+                        - whenUnsatisfiable
+                        x-kubernetes-list-type: map
                       volumes:
                         description: Additional non-data volumes to load into the default container.
                         items:
@@ -5842,16 +5897,16 @@ spec:
                     description: "Secret (kubernetes.io/basic-auth) containing credentials the operator should use for API requests to secure Solr pods. If you provide this secret, then the operator assumes you've also configured your own security.json file and uploaded it to Solr. If you change the password for this user using the Solr security API, then you *must* update the secret with the new password or the operator will be  locked out of Solr and API requests will fail, ultimately causing a CrashBackoffLoop for all pods if probe endpoints are secured (see 'probesRequireAuth' setting). \n If you don't supply this secret, then the operator creates a kubernetes.io/basic-auth secret containing the password for the \"k8s-oper\" user. All API requests from the operator are made as the \"k8s-oper\" user, which is configured with read-only access to a minimal set of endpoints. In addition, the operator bootstraps a default security.json file and credentials for two additional users: admin and solr. The 'solr' user has basic read access to Solr resources. Once the security.json is bootstrapped, the operator will not update it! You're expected to use the 'admin' user to access the Security API to make further changes. It's strictly a bootstrapping operation."
                     type: string
                   bootstrapSecurityJson:
-                    description: Options to configure a user-provided security.json from a configMap to allow for advanced security config. If not specified, the operator bootstraps a security.json with basic auth enabled. This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API. If not using basic auth, such as using Oidc, then you must provide the security.json config as the operator doesn't know how to configure OIDC providers.
+                    description: Configure a user-provided security.json from a secret to allow for advanced security config. If not specified, the operator bootstraps a security.json with basic auth enabled. This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
                     properties:
                       key:
-                        description: The key to select.
+                        description: The key of the secret to select from.  Must be a valid secret key.
                         type: string
                       name:
                         description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                       optional:
-                        description: Specify whether the ConfigMap or its key must be defined
+                        description: Specify whether the Secret or its key must be defined
                         type: boolean
                     required:
                     - key

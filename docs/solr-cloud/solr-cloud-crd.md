@@ -798,7 +798,7 @@ basic authentication with TLS to ensure credentials are never passed in clear te
 
 For background on Solr security, please refer to the [Reference Guide](https://solr.apache.org/guide) for your version of Solr.
 
-The Solr operator supports `Basic` and `Oidc` authentication schemes. In general, you have two primary options for configuring authentication with the Solr operator:
+The Solr operator only supports the `Basic` authentication scheme. In general, you have two primary options for configuring authentication with the Solr operator:
 1. Let the Solr operator bootstrap the `security.json` to configure *basic authentication* for Solr.
 2. Supply your own `security.json` to Solr, which must define a user account that the operator can use to make API requests to secured Solr pods.
 
@@ -1023,13 +1023,13 @@ In general, please verify the initial authorization rules for each role before s
 
 ### Option 2: User-provided `security.json` and credentials secret
 
-If users want full control over their cluster's security config, then they can provide the Solr `security.json` via a ConfigMap and the credentials the operator should use
+If users want full control over their cluster's security config, then they can provide the Solr `security.json` via a Secret and the credentials the operator should use
 to make requests to Solr in a Secret.
 
-#### Custom `security.json` ConfigMap
+#### Custom `security.json` Secret
 _Since v0.5.0_
 
-For full control over the Solr security configuration, supply a `security.json` in a ConfigMap. The following example illustrates how to point the operator to a ConfigMap containing a custom `security.json`:
+For full control over the Solr security configuration, supply a `security.json` in a Secret. The following example illustrates how to point the operator to a Secret containing a custom `security.json`:
 
 ```yaml
 spec:
@@ -1040,8 +1040,7 @@ spec:
       name: my-custom-security-json
       key: security.json
 ```
-When using `Oidc` authentication (more details below), you **must** provide the `security.json` in a ConfigMap, as the operator does not expose settings for configuring an OIDC provider.
-For `Basic` authentication, if you don't supply a `security.json` ConfigMap, then the operator assumes you are bootstrapping the security configuration via some other means.
+For `Basic` authentication, if you don't supply a `security.json` Secret, then the operator assumes you are bootstrapping the security configuration via some other means.
 
 Refer to the example `security.json` shown in the Authorization section above to help you get started crafting your own custom configuration. 
 
@@ -1094,28 +1093,23 @@ refer to [Prometheus Exporter with Basic Auth](../solr-prometheus-exporter/READM
 
 #### OIDC Authentication
 _Since v0.5.0_
-
 If you use Solr's [JWT Authentication Plugin](https://solr.apache.org/guide/jwt-authentication-plugin.html) to authenticate users via OIDC, 
 then you'll also need to configure the Solr operator to authenticate to your OIDC provider before making requests to Solr. Behind the scenes,
 the operator obtains a JWT token from the configured OIDC provider using the `client_credentials` grant type and 
 then includes the JWT as a `Bearer` token in the `Authorization` header when making requests to Solr. 
 You'll need to configure your OIDC provider to allow the `client_credentials` grant type.
 For more information about the `client_credentails` grant type, see: [OAuth 2.0 RFC 6749, section 4.4](https://tools.ietf.org/html/rfc6749#section-4.4).
-
 For `Oidc`, you must supply a generic secret containing the `clientId` and `clientSecret` keys; these will come from your OIDC provider.
 You also need to configure access to your OIDC provider as shown in the example below:
-
 ```yaml
 spec:
   ...
   solrSecurity:
     authenticationType: Oidc
     probesRequireAuth: false
-
     bootstrapSecurityJson:
       name: my-oidc-security-json
       key: security.json
-
     oidc:
       clientCredentialsSecret: oidc-client-creds
       wellKnownUrl: https://oidc-provider-url/
@@ -1125,15 +1119,12 @@ spec:
 ```
 Refer to your OIDC provider's documentation for the correct `wellKnownUrl` and any additional `scopes` 
 and `tokenEndpointParams` that need to be passed to obtain a `Bearer` token using the `clientId` and `clientSecret` credentials.
-
 When using `Oidc`, you must set `probesRequireAuth` to `false` as the `bin/solr` script does not support authenticating to an OIDC provider.
 Moreover, since the command runs frequently and starts in a new process for every request, you would not want to make requests to your OIDC provider
 for every liveness and readiness check. This implies that you'll need to configure Solr's `JWTAuthPlugin` with `blockUnknown=false` so that Kubernetes
 can hit the probe endpoints without providing a `Bearer` token.
-
 If your OIDC provider endpoint uses `http` (which is uncommon for production environments but may be the case in a dev environment), 
 then the Solr operator adds the `solr.auth.jwt.allowOutboundHttp=true` Java system property to your Solr pod config.
-
 The Prometheus exporter does not support Solr's `JWTAuthPlugin`, so if you plan to use the exporter, then you'll need to make sure the following endpoints allow for anonymous access:
 ```
 /admin/metrics

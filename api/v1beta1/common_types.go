@@ -137,6 +137,19 @@ type PodOptions struct {
 	// Optional Service Account to run the pod under.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
+	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
+	//
+	// Note: There is no need to provide a "labelSelector", as the operator will inject the labels for you if not provided.
+	//
+	// +patchMergeKey=topologyKey
+	// +patchStrategy=merge
+	// +listType=map
+	// +listMapKey=topologyKey
+	// +listMapKey=whenUnsatisfiable
+	// +optional
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

@@ -1485,13 +1485,11 @@ type SolrSecurityOptions struct {
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
 
-	// Options to configure a user-provided security.json from a configMap to allow for advanced security config.
+	// Configure a user-provided security.json from a secret to allow for advanced security config.
 	// If not specified, the operator bootstraps a security.json with basic auth enabled.
 	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
-	// If not using basic auth, such as using Oidc, then you must provide the security.json config as the operator
-	// doesn't know how to configure OIDC providers.
 	// +optional
-	BootstrapSecurityJson *corev1.ConfigMapKeySelector `json:"bootstrapSecurityJson,omitempty"`
+	BootstrapSecurityJson *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
 
 	// Options for configuring the operator to authenticate with an OIDC provider using the Oidc 'client_credentials' profile.
 	// +optional

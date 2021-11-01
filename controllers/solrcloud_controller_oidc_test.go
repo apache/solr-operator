@@ -78,7 +78,7 @@ var _ = FDescribe("SolrCloud controller - OIDC", func() {
 					ClientCredentialsSecret: "test-oauth2-secret",
 					WellKnownUrl:            "http://example.com",
 				},
-				BootstrapSecurityJson: &corev1.ConfigMapKeySelector{
+				BootstrapSecurityJson: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "user-provided-security-json"},
 					Key:                  "security.json",
 				},
@@ -94,7 +94,7 @@ var _ = FDescribe("SolrCloud controller - OIDC", func() {
 func expectStatefulSetOidcConfig(ctx context.Context, sc *solrv1beta1.SolrCloud) *appsv1.StatefulSet {
 	Expect(sc.Spec.SolrSecurity).To(Not(BeNil()), "solrSecurity is not configured for this SolrCloud instance!")
 
-	createMockSecurityJsonConfigMap(ctx, sc.Spec.SolrSecurity.BootstrapSecurityJson.Name, sc.Namespace)
+	createMockSecurityJsonSecret(ctx, sc.Spec.SolrSecurity.BootstrapSecurityJson.Name, sc.Namespace)
 	createMockOidcSecret(ctx, sc.Spec.SolrSecurity.Oidc.ClientCredentialsSecret, sc.Namespace)
 
 	stateful := expectStatefulSetWithChecks(ctx, sc, sc.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {

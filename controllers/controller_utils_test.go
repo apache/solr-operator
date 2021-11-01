@@ -911,4 +911,19 @@ var (
 		MinSessionTimeout:    6,
 		QuorumListenOnAllIPs: true,
 	}
+	testTopologySpreadConstraints = []corev1.TopologySpreadConstraint{
+		{
+			MaxSkew:           3,
+			TopologyKey:       "zone",
+			WhenUnsatisfiable: corev1.DoNotSchedule,
+			LabelSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"test": "label"},
+			},
+		},
+		{
+			MaxSkew:           3,
+			TopologyKey:       "region",
+			WhenUnsatisfiable: corev1.ScheduleAnyway,
+		},
+	}
 )

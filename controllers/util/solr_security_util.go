@@ -26,7 +26,6 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/coreos/go-oidc/v3/oidc"
-	"github.com/go-logr/logr"
 	cache "github.com/shaj13/libcache"
 	_ "github.com/shaj13/libcache/lru"
 	"golang.org/x/oauth2/clientcredentials"
@@ -79,7 +78,7 @@ func ReconcileSecurityConfig(ctx context.Context, client *client.Client, instanc
 	}
 
 	// shouldn't ever get here since the YAML would be validated against the enum before this, but keeping it here for human readers to grok the overall flow
-	return nil, fmt.Errorf("%s not supported! Only 'Basic' or 'Oidc' authentication is supported by the Solr operator", sec.AuthenticationType)
+	return nil, fmt.Errorf("%s not supported! Only 'Basic' authentication is supported by the Solr operator", sec.AuthenticationType)
 }
 
 // Reconcile the credentials and supporting config needed to get a JWT token from an OIDC provider
@@ -120,12 +119,12 @@ func reconcileForOidc(ctx context.Context, client *client.Client, instance *solr
 
 	// did the user supply a security.json? if not, we'll trust they are bootstrapping it via some other means
 	if sec.BootstrapSecurityJson != nil {
-		securityJson, err := loadSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		security.SecurityJson = securityJson
-		security.SecurityJsonSrc = &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson}
+		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson}
 	}
 
 	return security, nil
@@ -229,16 +228,16 @@ func reconcileForBasicAuthWithUserProvidedSecret(ctx context.Context, client *cl
 	}
 	security.CredentialsSecret = basicAuthSecret
 
-	// is there a user-provided security.json in a ConfigMap?
+	// is there a user-provided security.json in a secret?
 	// in this config, we don't need to enforce the user providing a security.json as they can bootstrap the security.json however they want
 	if sec.BootstrapSecurityJson != nil {
-		securityJson, err := loadSecurityJsonFromConfigMap(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		security.SecurityJson = securityJson
-		security.SecurityJsonSrc = &corev1.EnvVarSource{ConfigMapKeyRef: sec.BootstrapSecurityJson}
-	} // else no user-provided configMap, no sweat for us
+		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson}
+	} // else no user-provided secret, no sweat for us
 
 	return security, nil
 }
@@ -247,8 +246,7 @@ func enableSecureProbesOnSolrCloudStatefulSet(solrCloud *solr.SolrCloud, statefu
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
 
 	// if probes require auth or Solr wants client auth (mTLS), need to invoke a command on the Solr pod for the probes
-	// but only Basic auth is supported for now as we'll need SolrCLI to support OIDC, so users will need to make sure
-	// the probe endpoints are open when using OIDC
+	// but only Basic auth is supported for now
 	mountPath := ""
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		vol, volMount := secureProbeVolumeAndMount(solrCloud.BasicAuthSecretName())
@@ -281,17 +279,17 @@ func cmdToPutSecurityJsonInZk() string {
 }
 
 // Add auth data to the supplied Context using secrets already resolved (stored in the SecurityConfig)
-func (security *SecurityConfig) AddAuthToContext(ctx context.Context, logger logr.Logger) (context.Context, error) {
+func (security *SecurityConfig) AddAuthToContext(ctx context.Context) (context.Context, error) {
 	if security.SolrSecurity.AuthenticationType == solr.Basic {
 		return contextWithBasicAuthHeader(ctx, security.CredentialsSecret), nil
 	} else if security.SolrSecurity.AuthenticationType == solr.Oidc {
-		return contextWithOAuth2TokenSource(ctx, security.CredentialsSecret, security.SolrSecurity.Oidc, logger)
+		return contextWithOAuth2TokenSource(ctx, security.CredentialsSecret, security.SolrSecurity.Oidc)
 	}
 	return ctx, nil
 }
 
 // Similar to security.AddAuthToContext but we need to lookup the secret containing the authn credentials first
-func AddAuthToContext(ctx context.Context, client *client.Client, solrSecurity *solr.SolrSecurityOptions, ns string, logger logr.Logger) (context.Context, error) {
+func AddAuthToContext(ctx context.Context, client *client.Client, solrSecurity *solr.SolrSecurityOptions, ns string) (context.Context, error) {
 	reader := *client
 	if solrSecurity.AuthenticationType == solr.Basic {
 		basicAuthSecret := &corev1.Secret{}
@@ -304,15 +302,9 @@ func AddAuthToContext(ctx context.Context, client *client.Client, solrSecurity *
 		if err := reader.Get(ctx, types.NamespacedName{Name: solrSecurity.Oidc.ClientCredentialsSecret, Namespace: ns}, clientCredsSecret); err != nil {
 			return nil, err
 		}
-		return contextWithOAuth2TokenSource(ctx, clientCredsSecret, solrSecurity.Oidc, logger)
+		return contextWithOAuth2TokenSource(ctx, clientCredsSecret, solrSecurity.Oidc)
 	}
 	return ctx, nil
-}
-
-func contextWithBasicAuthHeader(ctx context.Context, basicAuthSecret *corev1.Secret) context.Context {
-	creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
-	headerValue := "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
-	return context.WithValue(ctx, solr_api.HTTP_HEADERS_CONTEXT_KEY, map[string]string{"Authorization": headerValue})
 }
 
 // Gets the TokenSource cache, initializing it if needed, given most SolrCloud deploys will use Basic auth, no need to create this cache until it's needed
@@ -328,7 +320,7 @@ func getTokenSourceCache() *cache.Cache {
 }
 
 // Get an OAuth2 TokenSource for supplying a JWT as a Bearer token when making calls to Solr secured using the JWTAuthPlugin
-func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1.Secret, oidcOpts *solr.OidcOptions, logger logr.Logger) (context.Context, error) {
+func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1.Secret, oidcOpts *solr.OidcOptions) (context.Context, error) {
 	clientId := string(clientCredsSecret.Data[ClientIdKey])
 	tokenUrl := ""
 	wellKnownUrl := ""
@@ -356,8 +348,6 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 		return context.WithValue(ctx, solr_api.TOKEN_SOURCE_CONTEXT_KEY, cachedTokenSource), nil
 	}
 
-	logger.Info("No OAuth2 TokenSource cached, creating new", "cacheKey", cacheKey)
-
 	// note, not locking the cache key while loading as it's not that expensive if we do it more than once in parallel
 	// and we don't want to hold up other providers if one is slow, i.e. not worth the extra effort to save a call
 
@@ -368,7 +358,6 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 			return nil, err
 		}
 		tokenUrl = provider.Endpoint().TokenURL
-		logger.Info("Created new OIDC provider", "TokenURL", tokenUrl)
 	}
 
 	// Use the client credentials grant type, see: https://datatracker.ietf.org/doc/html/rfc6749#section-4.4
@@ -385,6 +374,12 @@ func contextWithOAuth2TokenSource(ctx context.Context, clientCredsSecret *corev1
 	lruCache.Store(cacheKey, cached)
 
 	return context.WithValue(ctx, solr_api.TOKEN_SOURCE_CONTEXT_KEY, cached), nil
+}
+
+func contextWithBasicAuthHeader(ctx context.Context, basicAuthSecret *corev1.Secret) context.Context {
+	creds := fmt.Sprintf("%s:%s", basicAuthSecret.Data[corev1.BasicAuthUsernameKey], basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+	headerValue := "Basic " + b64.StdEncoding.EncodeToString([]byte(creds))
+	return context.WithValue(ctx, solr_api.HTTP_HEADERS_CONTEXT_KEY, map[string]string{"Authorization": headerValue})
 }
 
 func ValidateBasicAuthSecret(basicAuthSecret *corev1.Secret) error {
@@ -632,23 +627,23 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	}
 }
 
-// Called during reconcile to load the security.json from a user-supplied ConfigMap
-func loadSecurityJsonFromConfigMap(ctx context.Context, client *client.Client, securityJsonConfigMap *corev1.ConfigMapKeySelector, ns string) (string, error) {
-	configMap := &corev1.ConfigMap{}
-	nn := types.NamespacedName{Name: securityJsonConfigMap.Name, Namespace: ns}
+// Called during reconcile to load the security.json from a user-supplied secret
+func loadSecurityJsonFromSecret(ctx context.Context, client *client.Client, securityJsonSecret *corev1.SecretKeySelector, ns string) (string, error) {
+	sec := &corev1.Secret{}
+	nn := types.NamespacedName{Name: securityJsonSecret.Name, Namespace: ns}
 	reader := *client
-	err := reader.Get(ctx, nn, configMap)
+	err := reader.Get(ctx, nn, sec)
 	if err != nil {
 		return "", err
 	}
 
-	securityJson, hasSecurityJson := configMap.Data[securityJsonConfigMap.Key]
+	securityJson, hasSecurityJson := sec.Data[securityJsonSecret.Key]
 	if !hasSecurityJson {
-		return "", fmt.Errorf("required key '%s' not found in the user-supplied configMap %s",
-			securityJsonConfigMap.Key, configMap.Name)
+		return "", fmt.Errorf("required key '%s' not found in the user-supplied secret %s",
+			securityJsonSecret.Key, sec.Name)
 	}
 
-	return securityJson, nil
+	return string(securityJson), nil
 }
 
 // Given a configured SolrCloud statefulset that's ready to be deployed, apply any necessary security config

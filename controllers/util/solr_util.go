@@ -98,7 +98,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		annotations = MergeLabelsOrAnnotations(annotations, customSSOptions.Annotations)
 	}
 
-	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
+	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.DeepCopy()
 	var podAnnotations map[string]string
 	if nil != customPodOptions {
 		podLabels = MergeLabelsOrAnnotations(podLabels, customPodOptions.Labels)
@@ -545,6 +545,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.PriorityClassName != "" {
 			stateful.Spec.Template.Spec.PriorityClassName = customPodOptions.PriorityClassName
+		}
+
+		if len(customPodOptions.TopologySpreadConstraints) > 0 {
+			stateful.Spec.Template.Spec.TopologySpreadConstraints = customPodOptions.TopologySpreadConstraints
+
+			// Set the label selector for constraints to the statefulSet label selector, if none is provided
+			for i := range stateful.Spec.Template.Spec.TopologySpreadConstraints {
+				if stateful.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector == nil {
+					stateful.Spec.Template.Spec.TopologySpreadConstraints[i].LabelSelector = stateful.Spec.Selector.DeepCopy()
+				}
+			}
 		}
 	}
 
