@@ -325,6 +325,7 @@ nodeServiceOptions:
 ingressOptions:
   annotations: {}
   labels: {}
+  ingressClassName: ""
 
 configMapOptions:
   annotations: {}

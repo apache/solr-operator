@@ -273,8 +273,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 | headlessServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr headless service |
 | nodeServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr node service(s) |
 | nodeServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr node service(s) |
-| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if it exists |
-| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if it exists |
+| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.ingressClassName | string |  | Set the name of the IngressClass to use, if an Ingress is created/used |
 | configMapOptions.annotations | map[string]string |  | Custom annotations to add to the Solr configMap |
 | configMapOptions.labels | map[string]string |  | Custom labels to add to the Solr configMap |
 | configMapOptions.providedConfigMap | string |  | Provide an existing configMap for the Solr XML and/or Solr log4j files. *ADVANCED* |
