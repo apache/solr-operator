@@ -100,6 +100,15 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.5.0
+- Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
+
+  **This means that Kubernetes support is now limited to 1.19+.**  
+  If you are unable to use a newer version of Kubernetes, please install the `v0.4.0` version of the Solr Operator for use with Kubernetes 1.18 and below.
+  See the [version compatibility matrix](#kubernetes-versions) for more information.
+
+  This also means that if you specify a custom `ingressClass` via an annotation, you should change to use the `SolrCloud.spec.customSolrKubeOptions.ingressOptions.ingressClassName` instead.
+  The ability to set the class through annotations is now deprecated in Kubernetes and will be removed in future versions.
+
 - The legacy way of specifying a backupRepository has been **DEPRECATED**.
   Instead of using `SolrCloud.spec.dataStorage.backupRestoreOptions`, use `SolrCloud.spec.backupRepositories`.
   The `SolrCloud.spec.dataStorage.backupRestoreOptions` option **will be removed in `v0.6.0`**.  
@@ -151,7 +160,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
 
 ### v0.2.7
-- Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
+- Due to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
 
   **This means that Kubernetes support is now limited to 1.16+.**  
   If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.
