@@ -387,6 +387,8 @@ type SolrBackupRepository struct {
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
 	//
 	// +kubebuilder:validation:Pattern:=[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?
+	// +kubebuilder:validation:MinLength:=1
+	// +kubebuilder:validation:MaxLength:=100
 	Name string `json:"name"`
 
 	// A GCSRepository for Solr to use when backing up and restoring collections.

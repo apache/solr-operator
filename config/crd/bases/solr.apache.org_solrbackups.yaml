@@ -1053,11 +1053,14 @@ spec:
                 type: object
               repositoryName:
                 description: The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the auto-configured repository for legacy singleton volumes).
+                maxLength: 100
+                minLength: 1
                 pattern: '[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?'
                 type: string
               solrCloud:
                 description: A reference to the SolrCloud to create a backup for
-                minLength: 63
+                maxLength: 63
+                minLength: 1
                 pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?'
                 type: string
             required:
