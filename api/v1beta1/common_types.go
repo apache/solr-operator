@@ -176,6 +176,9 @@ type IngressOptions struct {
 	// IngressClassName is the name of the IngressClass cluster resource. The
 	// associated IngressClass defines which controller will implement the resource.
 	//
+	// +kubebuilder:validation:Pattern:=[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*
+	// +kubebuilder:validation:MinLength:=1
+	// +kubebuilder:validation:MaxLength:=63
 	// +optional
 	IngressClassName *string `json:"ingressClassName,omitempty"`
 }

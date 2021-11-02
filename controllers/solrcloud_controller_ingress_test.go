@@ -165,7 +165,18 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	FContext("Hide Nodes from external connections", func() {
+	FContext("Hide Nodes from external connections - Using default ingress class", func() {
+		ingressClass := &netv1.IngressClass{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "example",
+				Annotations: map[string]string{
+					"ingressclass.kubernetes.io/is-default-class": "true",
+				},
+			},
+			Spec: netv1.IngressClassSpec{
+				Controller: "acme.io/foo",
+			},
+		}
 		BeforeEach(func() {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
@@ -179,6 +190,13 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 			solrCloud.Spec.CustomSolrKubeOptions.IngressOptions.IngressClassName = nil
+
+			By("Create a default ingress class, so that the ingress is defaulted with this ingress class name")
+			Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed(), "Create a default ingress class for the ingress")
+		})
+		AfterEach(func() {
+			By("Deleting the ingress class, so other tests do not use the default")
+			Expect(k8sClient.Delete(ctx, ingressClass)).To(Succeed(), "Delete the default ingress class")
 		})
 		FIt("has the correct resources", func() {
 			By("ensuring the SolrCloud resource is updated with correct specs")
@@ -224,12 +242,14 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			By("making sure no individual Solr Node Services exist")
 			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrPodNames())
 
-			By("making sure Ingress was created correctly")
-			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
-			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
-			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
-			Expect(ingress.Spec.IngressClassName).To(BeNil(), "Ingress class name should be nil when none is provided in custom ingress options")
-			testIngressRules(solrCloud, ingress, true, 0, 4000, 100, testDomain)
+			By("making sure Ingress was created correctly with a defaulted ingress class name")
+			expectIngressWithConsistentChecks(ctx, solrCloud, solrCloud.CommonIngressName(), func(g Gomega, ingress *netv1.Ingress) {
+				g.Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
+				g.Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
+				g.Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil when none is provided in custom ingress options, but a default ingressClass exists")
+				g.Expect(*ingress.Spec.IngressClassName).To(Equal(ingressClass.Name), "The wrong ingressClass was defaulted")
+				testIngressRulesWithGomega(g, solrCloud, ingress, true, 0, 4000, 100, testDomain)
+			})
 
 			By("making sure the node addresses in the Status are correct")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
@@ -253,6 +273,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				PodPort:           3000,
 				CommonServicePort: 4000,
 			}
+			solrCloud.Spec.CustomSolrKubeOptions.IngressOptions.IngressClassName = nil
 		})
 		FIt("has the correct resources", func() {
 			By("testing the Solr StatefulSet")
@@ -304,8 +325,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 			Expect(ingress.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testIngressLabels)), "Incorrect ingress labels")
 			Expect(ingress.Annotations).To(Equal(ingressLabelsWithDefaults(testIngressAnnotations)), "Incorrect ingress annotations")
-			Expect(ingress.Spec.IngressClassName).To(Not(BeNil()), "Ingress class name should not be nil")
-			Expect(*ingress.Spec.IngressClassName).To(Equal(testIngressClass), "Incorrect ingress class name")
+			Expect(ingress.Spec.IngressClassName).To(BeNil(), "Ingress class name should not be nil when none is provided in custom ingress options")
 			testIngressRules(solrCloud, ingress, false, replicas, 4000, 100, testDomain)
 
 			By("making sure the node addresses in the Status are correct")
@@ -617,6 +637,10 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 })
 
 func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, withCommon bool, withNodes int, commonPort int, nodePort int, domainNames ...string) {
+	testIngressRulesWithGomega(Default, solrCloud, ingress, withCommon, withNodes, commonPort, nodePort, domainNames...)
+}
+
+func testIngressRulesWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, withCommon bool, withNodes int, commonPort int, nodePort int, domainNames ...string) {
 	expected := 0
 	if withCommon {
 		expected += 1
@@ -627,7 +651,7 @@ func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, 
 	perDomain := expected
 	numDomains := len(domainNames)
 	expected *= numDomains
-	Expect(ingress.Spec.Rules).To(HaveLen(expected), "Wrong number of ingress rules.")
+	g.Expect(ingress.Spec.Rules).To(HaveLen(expected), "Wrong number of ingress rules.")
 	for i := 0; i < perDomain; i++ {
 		// Common Rules
 		ruleName := "common"
@@ -650,14 +674,14 @@ func testIngressRules(solrCloud *solrv1beta1.SolrCloud, ingress *netv1.Ingress, 
 			ruleIndex := j + i*numDomains
 			rule := ingress.Spec.Rules[ruleIndex]
 			expectedHost := solrCloud.Namespace + "-" + solrCloud.Name + "-solrcloud" + hostAppend + "." + domainName
-			Expect(rule.Host).To(Equal(expectedHost), "Wrong host for ingress rule: "+ruleName)
-			Expect(rule.HTTP.Paths).To(HaveLen(1), "Wrong number of path rules in ingress host: "+ruleName)
+			g.Expect(rule.Host).To(Equal(expectedHost), "Wrong host for ingress rule: "+ruleName)
+			g.Expect(rule.HTTP.Paths).To(HaveLen(1), "Wrong number of path rules in ingress host: "+ruleName)
 			path := rule.HTTP.Paths[0]
-			Expect(path.Path).To(Equal(""), "There should be no path value for ingress rule: "+ruleName)
-			Expect(path.Backend.Service).To(Not(BeNil()), "Backend Service should not be nil")
-			Expect(path.Backend.Service.Name).To(Equal(solrCloud.Name+"-solrcloud-"+serviceSuffix), "Wrong service name for ingress rule: "+ruleName)
-			Expect(path.Backend.Service.Port.Number).To(Equal(int32(port)), "Wrong port name for ingress rule: "+ruleName)
-			Expect(path.Backend.Service.Port.Name).To(BeEmpty(), "Port name should not be used in ingress rules")
+			g.Expect(path.Path).To(Equal(""), "There should be no path value for ingress rule: "+ruleName)
+			g.Expect(path.Backend.Service).To(Not(BeNil()), "Backend Service should not be nil")
+			g.Expect(path.Backend.Service.Name).To(Equal(solrCloud.Name+"-solrcloud-"+serviceSuffix), "Wrong service name for ingress rule: "+ruleName)
+			g.Expect(path.Backend.Service.Port.Number).To(Equal(int32(port)), "Wrong port name for ingress rule: "+ruleName)
+			g.Expect(path.Backend.Service.Port.Name).To(BeEmpty(), "Port name should not be used in ingress rules")
 		}
 	}
 }

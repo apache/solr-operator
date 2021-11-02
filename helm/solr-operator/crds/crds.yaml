@@ -2320,6 +2320,9 @@ spec:
                         type: object
                       ingressClassName:
                         description: IngressClassName is the name of the IngressClass cluster resource. The associated IngressClass defines which controller will implement the resource.
+                        maxLength: 63
+                        minLength: 1
+                        pattern: '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*'
                         type: string
                       labels:
                         additionalProperties:
