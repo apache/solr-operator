@@ -149,6 +149,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/356
     - kind: added
+      description: Export default Solr Operator metrics, and enable when using the Helm chart
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/307
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/360
+    - kind: added
       description: Ability to set the IngressClassName for v1 Ingress resources.
       links:
         - name: Github Issue (Ingress v1)

@@ -71,6 +71,11 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 
 ## Chart Values
 
+Please note that there is not a 1-1 mapping from SolrCloud CRD options to Solr Helm options.
+All options should be supported, but they might be slightly renamed in some scenarios, such as `customSolrKubeOptions`.
+Please read below to see what the Helm chart values are for the options you need.
+Descriptions on how to use these options can be found in the [SolrCloud documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html).
+
 ### Running Solr
 
 | Key | Type | Default | Description |
@@ -240,6 +245,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 | global.clusterDomain | string |  | The cluster domain the Kubernetes is addressed under. |
 
 ### Custom Kubernetes Options
+
+Note: In the `SolrCloud` Spec, all of these options all fall under `customSolrKubeOptions`.
+When using the helm chart, omit `customSolrKubeOptions.`
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
