@@ -18,6 +18,7 @@
 package solr_api
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,10 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
+)
+
+const (
+	HTTP_HEADERS_CONTEXT_KEY = "HTTP_HEADERS"
 )
 
 // Used to call a Solr pod over https when using a self-signed cert
@@ -65,7 +70,7 @@ type SolrAsyncStatus struct {
 	Message string `json:"msg"`
 }
 
-func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders map[string]string, response interface{}) (err error) {
+func CallCollectionsApi(ctx context.Context, cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := noVerifyTLSHttpClient
@@ -81,8 +86,8 @@ func CallCollectionsApi(cloud *solr.SolrCloud, urlParams url.Values, httpHeaders
 
 	req, err := http.NewRequest("GET", cloudUrl, nil)
 
-	// mainly for doing basic-auth
-	if httpHeaders != nil {
+	// Any custom HTTP headers passed through the Context
+	if httpHeaders, hasHeaders := ctx.Value(HTTP_HEADERS_CONTEXT_KEY).(map[string]string); hasHeaders {
 		for key, header := range httpHeaders {
 			req.Header.Add(key, header)
 		}

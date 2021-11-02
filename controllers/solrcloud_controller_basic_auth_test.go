@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
@@ -72,6 +73,34 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 
 	FContext("Boostrap Security JSON", func() {
 		BeforeEach(func() {
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
+				AuthenticationType: solrv1beta1.Basic,
+				ProbesRequireAuth:  true,
+			}
+		})
+		FIt("has the correct resources", func() {
+			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+		})
+	})
+
+	FContext("Boostrap Security JSON with Custom Probe Paths", func() {
+		BeforeEach(func() {
+			customHandler := corev1.Handler{
+				HTTPGet: &corev1.HTTPGetAction{
+					Scheme: corev1.URISchemeHTTP,
+					Path:   "/solr/readyz",
+					Port:   intstr.FromInt(8983),
+				},
+			}
+
+			// verify users can vary the probe path and the secure probe exec command uses them
+			solrCloud.Spec.CustomSolrKubeOptions = solrv1beta1.CustomSolrKubeOptions{
+				PodOptions: &solrv1beta1.PodOptions{
+					LivenessProbe:  &corev1.Probe{Handler: customHandler},
+					ReadinessProbe: &corev1.Probe{Handler: customHandler},
+				},
+			}
+
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
 				ProbesRequireAuth:  true,
@@ -144,6 +173,34 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, false)
 		})
 	})
+
+	FContext("User Provided Credentials and security.json secret", func() {
+		BeforeEach(func() {
+			basicAuthSecretName := "my-basic-auth-secret"
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
+				AuthenticationType: solrv1beta1.Basic,
+				BasicAuthSecret:    basicAuthSecretName,
+				BootstrapSecurityJson: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json"},
+					Key:                  util.SecurityJsonFile,
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
+			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("Create the basicAuth secret")
+			basicAuthSecret := createBasicAuthSecret(solrCloud.Spec.SolrSecurity.BasicAuthSecret, solrv1beta1.DefaultBasicAuthUsername, solrCloud.Namespace)
+			Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Could not create the necessary basicAuth secret")
+
+			By("Create the security.json Secret")
+			createMockSecurityJsonSecret(ctx, "my-security-json", solrCloud.Namespace)
+
+			By("Make sure the StatefulSet is created and configured correctly")
+			expectStatefulSetBasicAuthConfig(ctx, solrCloud, false)
+		})
+	})
 })
 
 var boostrapedSecretKeys = []string{
@@ -155,8 +212,13 @@ var boostrapedSecretKeys = []string{
 func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrCloud, expectBootstrapSecret bool) *appsv1.StatefulSet {
 	Expect(sc.Spec.SolrSecurity).To(Not(BeNil()), "solrSecurity is not configured for this SolrCloud instance!")
 
+	expProbePath := "/solr/admin/info/system"
+	if sc.Spec.CustomSolrKubeOptions.PodOptions != nil && sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
+		expProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
+	}
+
 	stateful := expectStatefulSetWithChecks(ctx, sc, sc.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret)
+		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret, expProbePath)
 	})
 
 	expectSecretWithChecks(ctx, sc, sc.BasicAuthSecretName(), func(innerG Gomega, found *corev1.Secret) {
@@ -192,12 +254,7 @@ func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrC
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplate(solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool) *corev1.Container {
-	return expectBasicAuthConfigOnPodTemplateWithGomega(Default, solrCloud, podTemplate, expectBootstrapSecret)
-}
-
-// Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool) *corev1.Container {
+func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool, expProbePath string) *corev1.Container {
 	// check the env vars needed for the probes to work with auth
 	g.Expect(podTemplate.Spec.Containers).To(Not(BeEmpty()), "Solr Pod requires containers")
 	mainContainer := podTemplate.Spec.Containers[0]
@@ -233,8 +290,8 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
 			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
 			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-			"org.apache.solr.util.SolrCLI api -get http://localhost:8983/solr/admin/info/system",
-			solrCloud.Name, solrCloud.Name)
+			"org.apache.solr.util.SolrCLI api -get http://localhost:8983%s",
+			solrCloud.Name, solrCloud.Name, expProbePath)
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeEmpty()), "liveness probe command cannot be empty")
@@ -248,7 +305,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	}
 
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
-	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" {
+	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 		// initContainers
 		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "The Solr Pod template requires an init container to bootstrap the security.json")
 		var expInitContainer *corev1.Container = nil
@@ -259,7 +316,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			}
 		}
 
-		if expectBootstrapSecret {
+		if expectBootstrapSecret || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {
@@ -269,12 +326,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
 			} // else this ref not using ACLs
 
-			g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
-			expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
-				"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
-				"echo $SECURITY_JSON > /tmp/security.json; " +
-				"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-			g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
+			expectPutSecurityJsonInZkCmd(g, expInitContainer)
 		} else {
 			g.Expect(expInitContainer).To(Or(
 				BeNil(),
@@ -291,4 +343,21 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
+}
+
+func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) {
+	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
+	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
+		"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
+		"echo $SECURITY_JSON > /tmp/security.json; " +
+		"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
+}
+
+func createMockSecurityJsonSecret(ctx context.Context, name string, ns string) corev1.Secret {
+	secData := map[string]string{}
+	secData[util.SecurityJsonFile] = "{}"
+	sec := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, StringData: secData}
+	Expect(k8sClient.Create(ctx, &sec)).To(Succeed(), "Could not create mock security.json secret")
+	return sec
 }

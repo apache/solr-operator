@@ -71,6 +71,11 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 
 ## Chart Values
 
+Please note that there is not a 1-1 mapping from SolrCloud CRD options to Solr Helm options.
+All options should be supported, but they might be slightly renamed in some scenarios, such as `customSolrKubeOptions`.
+Please read below to see what the Helm chart values are for the options you need.
+Descriptions on how to use these options can be found in the [SolrCloud documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html).
+
 ### Running Solr
 
 | Key | Type | Default | Description |
@@ -95,6 +100,8 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
+| solrOptions.security.bootstrapSecurityJson.name | string | | Name of a Secret in the same namespace that stores a user-provided `security.json` to bootstrap the Solr security config |
+| solrOptions.security.bootstrapSecurityJson.key | string | | Key holding the user-provided `security.json` in the bootstrap security Secret |
 | updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
@@ -239,6 +246,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 
 ### Custom Kubernetes Options
 
+Note: In the `SolrCloud` Spec, all of these options all fall under `customSolrKubeOptions`.
+When using the helm chart, omit `customSolrKubeOptions.`
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | podOptions.annotations | map[string]string |  | Custom annotations to add to the Solr pod |
@@ -271,8 +281,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 | headlessServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr headless service |
 | nodeServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr node service(s) |
 | nodeServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr node service(s) |
-| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if it exists |
-| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if it exists |
+| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.ingressClassName | string |  | Set the name of the IngressClass to use, if an Ingress is created/used |
 | configMapOptions.annotations | map[string]string |  | Custom annotations to add to the Solr configMap |
 | configMapOptions.labels | map[string]string |  | Custom labels to add to the Solr configMap |
 | configMapOptions.providedConfigMap | string |  | Provide an existing configMap for the Solr XML and/or Solr log4j files. *ADVANCED* |

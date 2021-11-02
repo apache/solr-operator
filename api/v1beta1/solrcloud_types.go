@@ -1459,4 +1459,10 @@ type SolrSecurityOptions struct {
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
+
+	// Configure a user-provided security.json from a secret to allow for advanced security config.
+	// If not specified, the operator bootstraps a security.json with basic auth enabled.
+	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
+	// +optional
+	BootstrapSecurityJson *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
 }
