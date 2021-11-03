@@ -983,23 +983,28 @@ type ZookeeperPodPolicy struct {
 
 	// Labels specifies the labels to attach to pods the operator creates for
 	// the zookeeper cluster.
+	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 
 	// Annotations specifies the annotations to attach to zookeeper pods
 	// creates.
+	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
 
 	// SecurityContext specifies the security context for the entire zookeeper pod
 	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context
+	// +optional
 	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
 
-	// +kubebuilder:validation:Minimum=0
 	// TerminationGracePeriodSeconds is the amount of time that kubernetes will
 	// give for a zookeeper pod instance to shutdown normally.
 	// The default value is 30.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
 	TerminationGracePeriodSeconds int64 `json:"terminationGracePeriodSeconds,omitempty"`
 
 	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
+	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
