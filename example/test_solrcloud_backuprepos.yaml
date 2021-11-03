@@ -20,7 +20,7 @@ metadata:
 spec:
   replicas: 1
   solrImage:
-    tag: 8.9.0
+    tag: 8.10
   backupRepositories:
     # "Managed" repositories store backup data in a Kubernetes volume, This
     # allows the operator to make several advanced features available, such as
@@ -48,7 +48,7 @@ spec:
 
     # Creates repositories that backup data to AWS S3.
     #
-    # Requires Solr >= 8.9.
+    # Requires Solr >= 8.10.
     - name: "s3-backup-repo"
       s3:
         region: "us-west-2"

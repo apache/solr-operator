@@ -24,15 +24,6 @@ import (
 	"strings"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-const (
-	DefaultAWSCliImageRepo    = "infrastructureascode/aws-cli"
-	DefaultAWSCliImageVersion = "1.16.204"
-	DefaultS3Retries          = 5
-)
-
 // SolrBackupSpec defines the desired state of SolrBackup
 type SolrBackupSpec struct {
 	// A reference to the SolrCloud to create a backup for
@@ -52,13 +43,17 @@ type SolrBackupSpec struct {
 	Location string `json:"location,omitempty"`
 
 	// Persistence is the specification on how to persist the backup data.
+	// This feature has been removed as of v0.5.0. Any options specified here will not be used.
+	//
 	// +optional
 	Persistence *PersistenceSource `json:"persistence,omitempty"`
 }
 
-func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
+func (spec *SolrBackupSpec) withDefaults() (changed bool) {
+	// Remove any Persistence specs, since this feature was removed.
 	if spec.Persistence != nil {
-		changed = spec.Persistence.withDefaults(backupName) || changed
+		changed = true
+		spec.Persistence = nil
 	}
 
 	return changed
@@ -66,6 +61,8 @@ func (spec *SolrBackupSpec) withDefaults(backupName string) (changed bool) {
 
 // PersistenceSource defines the location and method of persisting the backup data.
 // Exactly one member must be specified.
+//
+// Deprecated: Will be unused as of v0.5.0
 type PersistenceSource struct {
 	// Persist to an s3 compatible endpoint
 	// +optional
@@ -76,19 +73,9 @@ type PersistenceSource struct {
 	Volume *VolumePersistenceSource `json:"volume,omitempty"`
 }
 
-func (spec *PersistenceSource) withDefaults(backupName string) (changed bool) {
-	if spec.Volume != nil {
-		changed = spec.Volume.withDefaults(backupName) || changed
-	}
-
-	if spec.S3 != nil {
-		changed = spec.S3.withDefaults(backupName) || changed
-	}
-
-	return changed
-}
-
 // S3PersistenceSource defines the specs for connecting to s3 for persistence
+//
+// Deprecated: Will be unused as of v0.5.0
 type S3PersistenceSource struct {
 	// The S3 compatible endpoint URL
 	// +optional
@@ -120,26 +107,9 @@ type S3PersistenceSource struct {
 	AWSCliImage ContainerImage `json:"AWSCliImage,omitempty"`
 }
 
-func (spec *S3PersistenceSource) withDefaults(backupName string) (changed bool) {
-	changed = spec.AWSCliImage.withDefaults(DefaultAWSCliImageRepo, DefaultAWSCliImageVersion, DefaultPullPolicy) || changed
-
-	if spec.Key == "" {
-		spec.Key = backupName + ".tgz"
-		changed = true
-	} else if strings.HasPrefix(spec.Key, "/") {
-		spec.Key = strings.TrimPrefix(spec.Key, "/")
-		changed = true
-	}
-	if spec.Retries == nil {
-		retries := int32(DefaultS3Retries)
-		spec.Retries = &retries
-		changed = true
-	}
-
-	return changed
-}
-
 // S3Secrets describes the secrets provided for accessing s3.
+//
+// Deprecated: Will be unused as of v0.5.0
 type S3Secrets struct {
 	// The name of the secrets object to use
 	Name string `json:"fromSecret"`
@@ -162,6 +132,8 @@ type S3Secrets struct {
 }
 
 // UploadSpec defines the location and method of uploading the backup data
+//
+// Deprecated: Will be unused as of v0.5.0
 type VolumePersistenceSource struct {
 	// The volume for persistence
 	VolumeSource corev1.VolumeSource `json:"source"`
@@ -180,6 +152,7 @@ type VolumePersistenceSource struct {
 	BusyBoxImage ContainerImage `json:"busyBoxImage,omitempty"`
 }
 
+// Deprecated: Will be unused as of v0.5.0
 func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
@@ -205,7 +178,9 @@ type SolrBackupStatus struct {
 	// +optional
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
 
-	// Whether the backups are in progress of being persisted
+	// Whether the backups are in progress of being persisted.
+	// This feature has been removed as of v0.5.0.
+	//
 	// +optional
 	PersistenceStatus *BackupPersistenceStatus `json:"persistenceStatus,omitempty"`
 
@@ -255,6 +230,8 @@ type CollectionBackupStatus struct {
 }
 
 // BackupPersistenceStatus defines the status of persisting Solr backup data
+//
+// Deprecated: Will be unused as of v0.5.0
 type BackupPersistenceStatus struct {
 	// Whether the collection is being backed up
 	// +optional
@@ -319,7 +296,7 @@ type SolrBackup struct {
 
 // WithDefaults set default values when not defined in the spec.
 func (sb *SolrBackup) WithDefaults() bool {
-	return sb.Spec.withDefaults(sb.Name)
+	return sb.Spec.withDefaults()
 }
 
 //+kubebuilder:object:root=true

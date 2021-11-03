@@ -162,6 +162,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/277
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/363
+    - kind: removed
+      description: Removed "persistence" option for SolrBackups. Instead please use the S3 or GCP Backup Repositories (Solr 8.9+)
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/347
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/357
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
