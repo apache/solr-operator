@@ -169,6 +169,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/347
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/357
+    - kind: added
+      description: Support for more Zookeeper Pod customization options
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/352
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/361
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
