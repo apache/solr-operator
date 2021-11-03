@@ -44,7 +44,7 @@ type SolrBackupSpec struct {
 
 	// Persistence is the specification on how to persist the backup data.
 	// This feature has been removed as of v0.5.0. Any options specified here will not be used.
-	// TODO: Remove this field entirely in v0.6.0
+	//
 	// +optional
 	Persistence *PersistenceSource `json:"persistence,omitempty"`
 }
@@ -61,6 +61,8 @@ func (spec *SolrBackupSpec) withDefaults() (changed bool) {
 
 // PersistenceSource defines the location and method of persisting the backup data.
 // Exactly one member must be specified.
+//
+// Deprecated: Will be unused as of v0.5.0
 type PersistenceSource struct {
 	// Persist to an s3 compatible endpoint
 	// +optional
@@ -72,6 +74,8 @@ type PersistenceSource struct {
 }
 
 // S3PersistenceSource defines the specs for connecting to s3 for persistence
+//
+// Deprecated: Will be unused as of v0.5.0
 type S3PersistenceSource struct {
 	// The S3 compatible endpoint URL
 	// +optional
@@ -104,6 +108,8 @@ type S3PersistenceSource struct {
 }
 
 // S3Secrets describes the secrets provided for accessing s3.
+//
+// Deprecated: Will be unused as of v0.5.0
 type S3Secrets struct {
 	// The name of the secrets object to use
 	Name string `json:"fromSecret"`
@@ -126,6 +132,8 @@ type S3Secrets struct {
 }
 
 // UploadSpec defines the location and method of uploading the backup data
+//
+// Deprecated: Will be unused as of v0.5.0
 type VolumePersistenceSource struct {
 	// The volume for persistence
 	VolumeSource corev1.VolumeSource `json:"source"`
@@ -144,6 +152,7 @@ type VolumePersistenceSource struct {
 	BusyBoxImage ContainerImage `json:"busyBoxImage,omitempty"`
 }
 
+// Deprecated: Will be unused as of v0.5.0
 func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bool) {
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
@@ -171,7 +180,7 @@ type SolrBackupStatus struct {
 
 	// Whether the backups are in progress of being persisted.
 	// This feature has been removed as of v0.5.0.
-	// TODO: Remove this field entirely in v0.6.0
+	//
 	// +optional
 	PersistenceStatus *BackupPersistenceStatus `json:"persistenceStatus,omitempty"`
 
@@ -221,6 +230,8 @@ type CollectionBackupStatus struct {
 }
 
 // BackupPersistenceStatus defines the status of persisting Solr backup data
+//
+// Deprecated: Will be unused as of v0.5.0
 type BackupPersistenceStatus struct {
 	// Whether the collection is being backed up
 	// +optional
