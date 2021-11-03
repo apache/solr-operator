@@ -123,8 +123,32 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
 	}
 
+	if len(zkSpec.ZookeeperPod.Labels) > 0 {
+		zkCluster.Spec.Pod.Labels = zkSpec.ZookeeperPod.Labels
+	}
+
+	if len(zkSpec.ZookeeperPod.Annotations) > 0 {
+		zkCluster.Spec.Pod.Annotations = zkSpec.ZookeeperPod.Annotations
+	}
+
+	if zkSpec.ZookeeperPod.SecurityContext != nil {
+		zkCluster.Spec.Pod.SecurityContext = zkSpec.ZookeeperPod.SecurityContext
+	}
+
+	if zkSpec.ZookeeperPod.TerminationGracePeriodSeconds != 0 {
+		zkCluster.Spec.Pod.TerminationGracePeriodSeconds = zkSpec.ZookeeperPod.TerminationGracePeriodSeconds
+	}
+
+	if len(zkSpec.ZookeeperPod.ImagePullSecrets) > 0 {
+		zkCluster.Spec.Pod.ImagePullSecrets = zkSpec.ZookeeperPod.ImagePullSecrets
+	}
+
 	if zkSpec.Image.ImagePullSecret != "" {
-		zkCluster.Spec.Pod.ImagePullSecrets = []corev1.LocalObjectReference{{Name: zkSpec.Image.ImagePullSecret}}
+		if len(zkSpec.ZookeeperPod.ImagePullSecrets) > 0 {
+			zkCluster.Spec.Pod.ImagePullSecrets = append(zkCluster.Spec.Pod.ImagePullSecrets, corev1.LocalObjectReference{Name: zkSpec.Image.ImagePullSecret})
+		} else {
+			zkCluster.Spec.Pod.ImagePullSecrets = []corev1.LocalObjectReference{{Name: zkSpec.Image.ImagePullSecret}}
+		}
 	}
 
 	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.
@@ -293,6 +317,30 @@ func CopyZookeeperClusterFields(from, to *zk_api.ZookeeperCluster, logger logr.L
 		logger.Info("Update required because field changed", "field", "Spec.Pod.ServiceAccountName", "from", to.Spec.Pod.ServiceAccountName, "to", from.Spec.Pod.ServiceAccountName)
 		requireUpdate = true
 		to.Spec.Pod.ServiceAccountName = from.Spec.Pod.ServiceAccountName
+	}
+
+	if !DeepEqualWithNils(to.Spec.Pod.Labels, from.Spec.Pod.Labels) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Labels", "from", to.Spec.Pod.Labels, "to", from.Spec.Pod.Labels)
+		requireUpdate = true
+		to.Spec.Pod.Labels = from.Spec.Pod.Labels
+	}
+
+	if !DeepEqualWithNils(to.Spec.Pod.Annotations, from.Spec.Pod.Annotations) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.Annotations", "from", to.Spec.Pod.Annotations, "to", from.Spec.Pod.Annotations)
+		requireUpdate = true
+		to.Spec.Pod.Annotations = from.Spec.Pod.Annotations
+	}
+
+	if !DeepEqualWithNils(to.Spec.Pod.SecurityContext, from.Spec.Pod.SecurityContext) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.SecurityContext", "from", to.Spec.Pod.SecurityContext, "to", from.Spec.Pod.SecurityContext)
+		requireUpdate = true
+		to.Spec.Pod.SecurityContext = from.Spec.Pod.SecurityContext
+	}
+
+	if !DeepEqualWithNils(to.Spec.Pod.TerminationGracePeriodSeconds, from.Spec.Pod.TerminationGracePeriodSeconds) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.TerminationGracePeriodSeconds", "from", to.Spec.Pod.TerminationGracePeriodSeconds, "to", from.Spec.Pod.TerminationGracePeriodSeconds)
+		requireUpdate = true
+		to.Spec.Pod.TerminationGracePeriodSeconds = from.Spec.Pod.TerminationGracePeriodSeconds
 	}
 
 	if !DeepEqualWithNils(to.Spec.Pod.ImagePullSecrets, from.Spec.Pod.ImagePullSecrets) {

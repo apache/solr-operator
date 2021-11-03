@@ -170,6 +170,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/357
     - kind: added
+      description: Support for more Zookeeper Pod customization options
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/352
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/361
+    - kind: added
       description: Separate SolrCloud backup ready status by backup repository
       links:
         - name: Github Issue

@@ -174,6 +174,8 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.persistence.annotations | object | | Annotations to use for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
 | zk.provided.config | object | | Zookeeper Config Options to set for the provided cluster. For all possible options, run: `kubectl explain solrcloud.spec.zookeeperRef.provided.config` |
+| zk.provided.zookeeperPodPolicy.labels | map[string]string |  | List of additional labels to add to the Zookeeper pod |
+| zk.provided.zookeeperPodPolicy.annotations | map[string]string |  | List of additional annotations to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
@@ -182,6 +184,9 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.affinity | object |  | Add Kubernetes affinity information for the ZooKeeper pod |
 | zk.provided.zookeeperPodPolicy.tolerations | []object |  | Specify a list of Kubernetes tolerations for the ZooKeeper pod |
 | zk.provided.zookeeperPodPolicy.envVars | []object |  | List of additional environment variables for the ZooKeeper container |
+| zk.provided.zookeeperPodPolicy.securityContext | object |  | Security context for the entire ZooKeeper pod. More information can be found in the [Kubernetes docs](More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context). |
+| zk.provided.zookeeperPodPolicy.terminationGracePeriodSeconds | int | `30` | The amount of time that Kubernetes will give for a zookeeper pod instance to shutdown normally. |
+| zk.provided.zookeeperPodPolicy.imagePullSecrets | []object |  | List of image pull secrets to inject into the Zookeeper pod. |
 | zk.acl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK admin ACL information |
 | zk.acl.usernameKey | string |  | Key in the Admin ACL Secret that stores the ACL username |
 | zk.acl.passwordKey | string |  | Key in the Admin ACL Secret that stores the ACL password |

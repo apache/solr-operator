@@ -187,6 +187,11 @@ each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
 
+To find all Provided zookeeper options, run `kubectl explain solrcloud.spec.zookeeperRef.provided`.
+Zookeeper Conf and PodOptions provided in the linked Zookeeper Operator version should be supported in the SolrCloud CRD.
+However, this is a manual task, so not all options might be available.
+If there is an option available in the ZookeeperCluster CRD that is not exposed via the SolrCloud CRD, please create a Github Issue.
+
 #### Zookeeper Storage Options
 _Since v0.4.0_
 
