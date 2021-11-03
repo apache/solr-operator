@@ -123,6 +123,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Because the backup name in Solr uses both the SolrBackup resource name and the collection name, there should be no collisions in this directory.
   However, this can be overridden using the `SolrBackup.spec.location` option.
 
+- The SolrBackup persistence option has been removed as of `v0.5.0`.
+  Users should plan to keep their backup data in the shared volume if using a MountedVolume Backup repository.
+  If `SolrBackup.spec.persistence` is provided, it will be removed and written back to Kubernetes.
+
+  Users using the S3 persistence option should try to use the [S3 backup repository](solr-backup/README.md#s3-backup-repositories) instead. This requires Solr 8.10 or higher.
+
 - Default ports when using TLS are now set to 443 instead of 80.
   This affects `solrCloud.Spec.SolrAddressability.CommonServicePort` and `solrCloud.Spec.SolrAddressability.CommonServicePort` field defaulting.
   Users already explicitly setting these values will not be affected.
