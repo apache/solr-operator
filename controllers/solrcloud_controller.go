@@ -408,14 +408,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		// If authn enabled on Solr, we need to pass the auth header
-		var authHeader map[string]string
 		if security != nil {
-			authHeader = security.AuthHeader()
+			ctx, err = security.AddAuthToContext(ctx)
+			if err != nil {
+				updateLogger.Error(err, "failed to create Authorization header when reconciling", "SolrCloud", instance.Name)
+				return requeueOrNot, err
+			}
 		}
 
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger, authHeader)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {

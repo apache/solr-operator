@@ -300,7 +300,7 @@ func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 		to.Spec.TLS = from.Spec.TLS
 	}
 
-	if !DeepEqualWithNils(to.Spec.IngressClassName, from.Spec.IngressClassName) {
+	if from.Spec.IngressClassName != nil && !DeepEqualWithNils(to.Spec.IngressClassName, from.Spec.IngressClassName) {
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", "Spec.IngressClassName", "from", to.Spec.IngressClassName, "to", from.Spec.IngressClassName)
 		to.Spec.IngressClassName = from.Spec.IngressClassName

@@ -142,6 +142,34 @@ annotations:
         - name: Topology Spread Constraints Documentation
           url: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
     - kind: added
+      description: Ability to bootstrap security configuration from a security.json in a user-supplied secret
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/355
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/356
+    - kind: added
+      description: Export default Solr Operator metrics, and enable when using the Helm chart
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/307
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/360
+    - kind: added
+      description: Ability to set the IngressClassName for v1 Ingress resources.
+      links:
+        - name: Github Issue (Ingress v1)
+          url: https://github.com/apache/solr-operator/issues/277
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/363
+    - kind: removed
+      description: Removed "persistence" option for SolrBackups. Instead please use the S3 or GCP Backup Repositories (Solr 8.9+)
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/347
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/357
+    - kind: added
       description: Separate SolrCloud backup ready status by backup repository
       links:
         - name: Github Issue
