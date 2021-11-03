@@ -7468,7 +7468,7 @@ spec:
                         format: int32
                         type: integer
                       zookeeperPodPolicy:
-                        description: Pod resources for zookeeper pod
+                        description: Customization options for the Zookeeper Pod
                         properties:
                           affinity:
                             description: The scheduling constraints on pods.

@@ -764,7 +764,7 @@ type ZookeeperSpec struct {
 	// +optional
 	Ephemeral *ZKEphemeral `json:"ephemeral,omitempty"`
 
-	// Pod resources for zookeeper pod
+	// Customization options for the Zookeeper Pod
 	// +optional
 	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
 
