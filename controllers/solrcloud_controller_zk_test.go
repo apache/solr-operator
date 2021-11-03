@@ -48,6 +48,8 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			},
 			Spec: solrv1beta1.SolrCloudSpec{},
 		}
+
+		cleanupTest(ctx, solrCloud)
 	})
 
 	JustBeforeEach(func() {
