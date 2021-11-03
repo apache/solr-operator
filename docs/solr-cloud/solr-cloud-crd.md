@@ -24,6 +24,11 @@ Those configuration options are laid out on this page.
 
 The SolrCloud CRD gives users the ability to customize how Solr is run.
 
+Please note that the options described below are shown using the base SolrCloud resource, not the helm chart.
+Most options will have the same name and path, however there are differences such as `customSolrKubeOptions`.
+If using Helm, refer to the [Helm Chart documentation](https://artifacthub.io/packages/helm/apache-solr/solr#chart-values) to see the names for the options you are looking to use.
+This document should still be used to see how the SolrCloud options can be used.
+
 ### Solr Modules and Additional Libraries
 _Since v0.5.0_
 
@@ -122,6 +127,9 @@ Under `SolrCloud.Spec.solrAddressability`:
 
 **Note:** Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
 If both of those criteria are met, then an individual ClusterIP Service will be created for each Solr Node/Pod.
+
+If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
+Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
 
 ## Zookeeper Reference
 
