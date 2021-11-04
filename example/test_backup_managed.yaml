@@ -21,6 +21,6 @@ metadata:
   namespace: default
 spec:
   repositoryName: "managed_repository_1"
-  solrCloud: multiple-backup-repositories-solr
+  solrCloud: multiple-backup-repos
   collections:
     - example

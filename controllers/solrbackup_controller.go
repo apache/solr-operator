@@ -176,7 +176,9 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 	// Go through each collection specified and reconcile the backup.
 	for _, collection := range backup.Spec.Collections {
 		// This will in-place update the CollectionBackupStatus in the backup object
-		_, err = reconcileSolrCollectionBackup(ctx, backup, solrCloud, backupRepository, collection, logger)
+		if _, err = reconcileSolrCollectionBackup(ctx, backup, solrCloud, backupRepository, collection, logger); err != nil {
+			break
+		}
 	}
 
 	// First check if the collection backups have been completed
@@ -201,7 +203,8 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
+		var started bool
+		started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
 		if err != nil {
 			return true, err
 		}
@@ -211,8 +214,10 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		}
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
+		var successful bool
+		var asyncStatus string
 		// Check the state of the backup, when it is in progress, and update the state accordingly
-		finished, successful, asyncStatus, err := util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
+		finished, successful, asyncStatus, err = util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
 		if err != nil {
 			return false, err
 		}

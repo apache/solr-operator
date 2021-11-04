@@ -115,7 +115,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	newStatus := solrv1beta1.SolrCloudStatus{}
 
 	blockReconciliationOfStatefulSet := false
-	if err := r.reconcileZk(ctx, logger, instance, &newStatus); err != nil {
+	if err = r.reconcileZk(ctx, logger, instance, &newStatus); err != nil {
 		return requeueOrNot, err
 	}
 
@@ -585,15 +585,17 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-	newStatus.BackupRepositoriesAvailable = backupReposAvailable
-	allPodsBackupReady := len(backupReposAvailable) > 0
-	for _, backupRepo := range solrCloud.Spec.BackupRepositories {
-		allPodsBackupReady = allPodsBackupReady && backupReposAvailable[backupRepo.Name]
-		if !allPodsBackupReady {
-			break
+	if len(backupReposAvailable) > 0 {
+		newStatus.BackupRepositoriesAvailable = backupReposAvailable
+		allPodsBackupReady := len(backupReposAvailable) > 0
+		for _, backupRepo := range solrCloud.Spec.BackupRepositories {
+			allPodsBackupReady = allPodsBackupReady && backupReposAvailable[backupRepo.Name]
+			if !allPodsBackupReady {
+				break
+			}
 		}
+		newStatus.BackupRestoreReady = allPodsBackupReady
 	}
-	newStatus.BackupRestoreReady = allPodsBackupReady
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
 	if len(otherVersions) > 0 {

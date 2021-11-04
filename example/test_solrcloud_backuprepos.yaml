@@ -16,7 +16,7 @@
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
-  name: multiple-backup-repositories-solr
+  name: multiple-backup-repos
 spec:
   replicas: 1
   solrImage:
@@ -54,19 +54,18 @@ spec:
         region: "us-west-2"
         bucket: "product-catalog"
         credentials:
-          credentials:
-            accessKeyIdSecret: # Optional
-              name: aws-secrets
-              key: access-key-id
-            secretAccessKeySecret: # Optional
-              name: aws-secrets
-              key: secret-access-key
-            sessionTokenSecret: # Optional
-              name: aws-secrets
-              key: session-token
-            credentialsFileSecret: # Optional
-              name: aws-credentials
-              key: credentials
+          accessKeyIdSecret: # Optional
+            name: aws-secrets
+            key: access-key-id
+          secretAccessKeySecret: # Optional
+            name: aws-secrets
+            key: secret-access-key
+          sessionTokenSecret: # Optional
+            name: aws-secrets
+            key: session-token
+          credentialsFileSecret: # Optional
+            name: aws-credentials
+            key: credentials
 
     - name: "main_collection_backup_repository_log"
       gcs:
