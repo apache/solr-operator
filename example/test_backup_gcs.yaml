@@ -21,7 +21,7 @@ metadata:
   name: test
   namespace: default
 spec:
-  repositoryName: s3-backup-repo
+  repositoryName: "main_collection_backup_repository"
   solrCloud: multiple-backup-repos
   collections:
     - test
