@@ -18,12 +18,10 @@
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:
-  name: test
+  name: main-collection-gcs-backups
   namespace: default
 spec:
   repositoryName: "main_collection_backup_repository"
   solrCloud: multiple-backup-repos
   collections:
-    - test
-    - test2
-  location: "temp/"
+    - example
