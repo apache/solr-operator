@@ -21,7 +21,7 @@ metadata:
   name: main-collection-gcs-backups
   namespace: default
 spec:
-  repositoryName: main_collection_backup_repository
-  solrCloud: multiple-backup-repositories-solr
+  repositoryName: "main_collection_backup_repository"
+  solrCloud: multiple-backup-repos
   collections:
     - example

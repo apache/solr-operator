@@ -190,8 +190,9 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testDeploymentLabels)), "Incorrect deployment labels")
 			Expect(deployment.Annotations).To(Equal(testDeploymentAnnotations), "Incorrect deployment annotations")
 			Expect(deployment.Spec.Template.ObjectMeta.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedDeploymentLabels, testPodLabels)), "Incorrect pod labels")
-			testPodAnnotations[util.PrometheusExporterConfigXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig)))
-			Expect(deployment.Spec.Template.ObjectMeta.Annotations).To(Equal(testPodAnnotations), "Incorrect pod annotations")
+			Expect(deployment.Spec.Template.ObjectMeta.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testPodAnnotations, map[string]string{
+				util.PrometheusExporterConfigXmlMd5Annotation: fmt.Sprintf("%x", md5.Sum([]byte(testExporterConfig))),
+			})), "Incorrect pod annotations")
 
 			Expect(deployment.Spec.Template.Spec.Containers).To(HaveLen(len(extraContainers1)+1), "Wrong number of containers for the Deployment")
 			Expect(deployment.Spec.Template.Spec.Containers[1:]).To(Equal(extraContainers1), "Incorrect sidecar containers")

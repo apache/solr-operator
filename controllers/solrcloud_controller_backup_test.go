@@ -75,6 +75,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 					PodOptions: &solrv1beta1.PodOptions{
 						EnvVariables: extraVars,
 						Volumes:      extraVolumes,
+						Annotations:  testPodAnnotations,
 					},
 				},
 				BackupRepositories: []solrv1beta1.SolrBackupRepository{
@@ -98,7 +99,10 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 			// Annotations for the solrxml configMap
 			solrXmlMd5 := fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))
-			Expect(statefulSet.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, solrXmlMd5), "Wrong solr.xml MD5 annotation in the pod template!")
+			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testPodAnnotations, map[string]string{
+				"solr.apache.org/solrXmlMd5":          solrXmlMd5,
+				util.SolrBackupRepositoriesAnnotation: "test-repo",
+			})), "Incorrect pod annotations")
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
@@ -271,6 +275,54 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
 			})
+		})
+	})
+
+	FContext("Multiple Repositories - Annotations", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						EnvVariables: extraVars,
+						Volumes:      extraVolumes,
+					},
+				},
+				BackupRepositories: []solrv1beta1.SolrBackupRepository{
+					{
+						Name: "test-repo",
+						S3: &solrv1beta1.S3Repository{
+							Region: "test-region",
+							Bucket: "test-bucket",
+						},
+					},
+					{
+						Name: "another",
+						S3: &solrv1beta1.S3Repository{
+							Region: "test-region-2",
+							Bucket: "test-bucket-2",
+						},
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr ConfigMap")
+			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
+
+			By("testing the Solr StatefulSet with explicit volumes and envVars before adding S3Repo credentials")
+			// Make sure envVars and Volumes are correct be
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			// Annotations for the solrxml configMap
+			Expect(statefulSet.Spec.Template.Annotations).To(Equal(map[string]string{
+				"solr.apache.org/solrXmlMd5":          fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"]))),
+				util.SolrBackupRepositoriesAnnotation: "another,test-repo",
+			}), "Incorrect pod annotations")
 		})
 	})
 })
