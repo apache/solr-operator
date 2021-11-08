@@ -1055,8 +1055,8 @@ spec:
                 description: "Set this backup to be taken recurrently, with options for scheduling and storage. \n NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API."
                 properties:
                   maxSaved:
-                    default: 10
-                    description: Define the number of backup points to save for this backup at any given time. The oldest backups will be deleted if too many exist when a backup is taken. If not provided, this defaults to 10.
+                    default: 5
+                    description: Define the number of backup points to save for this backup at any given time. The oldest backups will be deleted if too many exist when a backup is taken. If not provided, this defaults to 5.
                     minimum: 1
                     type: integer
                   schedule:

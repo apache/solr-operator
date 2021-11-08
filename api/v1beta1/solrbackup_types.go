@@ -89,9 +89,9 @@ type BackupRecurrence struct {
 
 	// Define the number of backup points to save for this backup at any given time.
 	// The oldest backups will be deleted if too many exist when a backup is taken.
-	// If not provided, this defaults to 10.
+	// If not provided, this defaults to 5.
 	//
-	// +kubebuilder:default:=10
+	// +kubebuilder:default:=5
 	// +kubebuilder:validation:Minimum:=1
 	// +optional
 	MaxSaved int `json:"maxSaved,omitempty"`
