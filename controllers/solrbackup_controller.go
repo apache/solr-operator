@@ -30,7 +30,6 @@ import (
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -108,55 +107,54 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Do backup work if a nextScheduledTime is not set and there is no current finish time.
 	// The nextScheduledTime is only set when the last backup is finished and we are waiting to do the next
 	if backup.Status.NextScheduledTime == nil && backup.Status.Current.FinishTime == nil {
-    requeueOrNot := reconcile.Result{}
-    
+		requeueOrNot = reconcile.Result{}
+
 		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, logger)
 		if err1 != nil {
 			// TODO Should we be failing the backup for some sub-set of errors here?
 			logger.Error(err1, "Error while taking SolrCloud backup")
-      
-      // Requeue after 10 seconds for errors.
-      requeueOrNot = reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}
+
+			// Requeue after 10 seconds for errors.
+			requeueOrNot = reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}
 		} else if backup.Status.Current.Finished {
-      // Set finish time
-      now := metav1.Now()
-      backup.Status.Current.FinishTime = &now
-      
-      if backup.Spec.Recurrence != nil {
-        // Add the current backup to the front of the history.
-        // If there is no max
-        backup.Status.History = append([]solrv1beta1.IndividualSolrBackupStatus{backup.Status.Current}, backup.Status.History...)
+			// Set finish time
+			now := metav1.Now()
+			backup.Status.Current.FinishTime = &now
 
-        // Remove history if we have too much saved
-        if len(backup.Status.History) > backup.Spec.Recurrence.MaxSaved {
-          backup.Status.History = backup.Status.History[:backup.Spec.Recurrence.MaxSaved]
-        }
+			if backup.Spec.Recurrence != nil {
+				// Add the current backup to the front of the history.
+				// If there is no max
+				backup.Status.History = append([]solrv1beta1.IndividualSolrBackupStatus{backup.Status.Current}, backup.Status.History...)
 
-        if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.Current.FinishTime.Time); err1 != nil {
-          logger.Error(err1, "Could not schedule new backup due to back schedule")
-        } else {
-          convTime := metav1.NewTime(nextRestartTime)
-          backup.Status.NextScheduledTime = &convTime
-        }
+				// Remove history if we have too much saved
+				if len(backup.Status.History) > backup.Spec.Recurrence.MaxSaved {
+					backup.Status.History = backup.Status.History[:backup.Spec.Recurrence.MaxSaved]
+				}
 
-        // Reset Current, which is fine since it is now in the history.
-        backup.Status.Current = solrv1beta1.IndividualSolrBackupStatus{}
+				if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.Current.FinishTime.Time); err1 != nil {
+					logger.Error(err1, "Could not schedule new backup due to back schedule")
+				} else {
+					convTime := metav1.NewTime(nextRestartTime)
+					backup.Status.NextScheduledTime = &convTime
+				}
+
+				// Reset Current, which is fine since it is now in the history.
+				backup.Status.Current = solrv1beta1.IndividualSolrBackupStatus{}
 			}
-    } else if solrCloud != nil {
-      // When working with the collection backups, auto-requeue after 5 seconds
-      // to check on the status of the async solr backup calls
-      updateRequeueAfter(&requeueOrNot, time.Second*5)
-    }
+		} else if solrCloud != nil {
+			// When working with the collection backups, auto-requeue after 5 seconds
+			// to check on the status of the async solr backup calls
+			updateRequeueAfter(&requeueOrNot, time.Second*5)
+		}
 	}
 
-		if !reflect.DeepEqual(oldStatus, &backup.Status) {
-			logger.Info("Updating status for solr-backup")
-			err = r.Status().Update(ctx, backup)
-		}
+	if !reflect.DeepEqual(oldStatus, &backup.Status) {
+		logger.Info("Updating status for solr-backup")
+		err = r.Status().Update(ctx, backup)
+	}
 
-		if backup.Status.NextScheduledTime != nil {
-			updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.Sub(time.Now()))
-		}
+	if backup.Status.NextScheduledTime != nil {
+		updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.Sub(time.Now()))
 	}
 
 	return requeueOrNot, err
@@ -294,7 +292,7 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
-	r.config = mgr.GetConfig()
+	r.Config = mgr.GetConfig()
 
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrBackup{})
@@ -307,7 +305,6 @@ func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
 	return ctrlBuilder.Complete(r)
 }
 
-
 func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	solrCloudField := ".spec.solrCloud"
 
@@ -317,7 +314,7 @@ func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrl
 	}); err != nil {
 		return ctrlBuilder, err
 	}
-  
+
 	return ctrlBuilder.Watches(
 		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
 		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {

@@ -61,13 +61,13 @@ func UpdateStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool)
 	// Check if all collection backups have been completed, this is updated in the loop
 	allFinished = len(backup.Status.Current.CollectionBackupStatuses) > 0
 
-	allSuccessful := len(backup.Status.CollectionBackupStatuses) > 0
+	allSuccessful := len(backup.Status.Current.CollectionBackupStatuses) > 0
 
 	for _, collectionStatus := range backup.Status.Current.CollectionBackupStatuses {
 		allFinished = allFinished && collectionStatus.Finished
 		allSuccessful = allSuccessful && (collectionStatus.Successful != nil && *collectionStatus.Successful)
 	}
-  
+
 	backup.Status.Current.Finished = allFinished
 	if allFinished && backup.Status.Current.Successful == nil {
 		backup.Status.Current.Successful = &allSuccessful
