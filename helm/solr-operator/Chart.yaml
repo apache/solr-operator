@@ -41,7 +41,7 @@ dependencies:
     condition: zookeeper-operator.install
 annotations:
   artifacthub.io/operator: "true"
-  artifacthub.io/operatorCapabilities: Seamless Upgrades
+  artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
@@ -183,6 +183,15 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/326
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/358
+    - kind: added
+      description: Scheduled/Recurring SolrBackup support
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/303
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/359
+        - name: SolrBackup Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-backup#recurring-backups
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
