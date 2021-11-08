@@ -57,20 +57,20 @@ func AsyncIdForCollectionBackup(collection string, backupName string) string {
 	return fmt.Sprintf("%s-%s", backupName, collection)
 }
 
-func UpdateStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) {
+func UpdateStatusOfCollectionBackups(backupStatus *solr.IndividualSolrBackupStatus) (allFinished bool) {
 	// Check if all collection backups have been completed, this is updated in the loop
-	allFinished = len(backup.Status.Current.CollectionBackupStatuses) > 0
+	allFinished = len(backupStatus.CollectionBackupStatuses) > 0
 
-	allSuccessful := len(backup.Status.Current.CollectionBackupStatuses) > 0
+	allSuccessful := len(backupStatus.CollectionBackupStatuses) > 0
 
-	for _, collectionStatus := range backup.Status.Current.CollectionBackupStatuses {
+	for _, collectionStatus := range backupStatus.CollectionBackupStatuses {
 		allFinished = allFinished && collectionStatus.Finished
 		allSuccessful = allSuccessful && (collectionStatus.Successful != nil && *collectionStatus.Successful)
 	}
 
-	backup.Status.Current.Finished = allFinished
-	if allFinished && backup.Status.Current.Successful == nil {
-		backup.Status.Current.Successful = &allSuccessful
+	backupStatus.Finished = allFinished
+	if allFinished && backupStatus.Successful == nil {
+		backupStatus.Successful = &allSuccessful
 	}
 	return
 }

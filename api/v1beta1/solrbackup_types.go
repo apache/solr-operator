@@ -21,7 +21,6 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 // SolrBackupSpec defines the desired state of SolrBackup
@@ -190,23 +189,6 @@ type VolumePersistenceSource struct {
 	BusyBoxImage ContainerImage `json:"busyBoxImage,omitempty"`
 }
 
-// Deprecated: Will be unused as of v0.5.0
-func (spec *VolumePersistenceSource) withDefaults(backupName string) (changed bool) {
-	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
-
-	if spec.Path != "" && strings.HasPrefix(spec.Path, "/") {
-		spec.Path = strings.TrimPrefix(spec.Path, "/")
-		changed = true
-	}
-
-	if spec.Filename == "" {
-		spec.Filename = backupName + ".tgz"
-		changed = true
-	}
-
-	return changed
-}
-
 // SolrBackupStatus defines the observed state of SolrBackup
 type SolrBackupStatus struct {
 	// The current Backup Status, which all fields are added to this struct
@@ -224,7 +206,8 @@ type SolrBackupStatus struct {
 // IndividualSolrBackupStatus defines the observed state of a single issued SolrBackup
 type IndividualSolrBackupStatus struct {
 	// Version of the Solr being backed up
-	SolrVersion string `json:"solrVersion"`
+	// +optional
+	SolrVersion string `json:"solrVersion,omitempty"`
 
 	// The time that this backup was initiated
 	// +optional
@@ -339,6 +322,7 @@ func (sb *SolrBackup) PersistenceJobName() string {
 //+kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
 //+kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
 //+kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"
+//+kubebuilder:printcolumn:name="NextBackup",type="boolean",JSONPath=".status.nextScheduledTime",description="Next scheduled time for a recurrent backup"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SolrBackup is the Schema for the solrbackups API

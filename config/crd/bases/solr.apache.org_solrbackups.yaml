@@ -43,6 +43,10 @@ spec:
       jsonPath: .status.successful
       name: Successful
       type: boolean
+    - description: Next scheduled time for a recurrent backup
+      jsonPath: .status.nextScheduledTime
+      name: NextBackup
+      type: boolean
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -1203,8 +1207,6 @@ spec:
                     successful:
                       description: Whether the backup was successful
                       type: boolean
-                  required:
-                  - solrVersion
                   type: object
                 type: array
               nextScheduledTime:
@@ -1242,8 +1244,6 @@ spec:
               successful:
                 description: Whether the backup was successful
                 type: boolean
-            required:
-            - solrVersion
             type: object
         type: object
     served: true
