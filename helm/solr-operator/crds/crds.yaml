@@ -35,18 +35,23 @@ spec:
       jsonPath: .spec.solrCloud
       name: Cloud
       type: string
-    - description: Whether the backup has finished
+    - description: Most recent time the backup started
+      jsonPath: .status.startTimestamp
+      name: Started
+      type: date
+    - description: Whether the most recent backup has finished
       jsonPath: .status.finished
       name: Finished
       type: boolean
-    - description: Whether the backup was successful
+    - description: Whether the most recent backup was successful
       jsonPath: .status.successful
       name: Successful
       type: boolean
     - description: Next scheduled time for a recurrent backup
+      format: date-time
       jsonPath: .status.nextScheduledTime
       name: NextBackup
-      type: boolean
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date

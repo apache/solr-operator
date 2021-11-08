@@ -96,7 +96,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Check if we should start the next backup
 	if backup.Status.NextScheduledTime != nil {
-		if backup.Status.NextScheduledTime.UTC().After(time.Now().UTC()) {
+		if backup.Status.NextScheduledTime.UTC().Before(time.Now().UTC()) {
 			// We have hit the next scheduled restart time.
 			backupNeedsToWait = false
 			backup.Status.NextScheduledTime = nil
@@ -143,11 +143,11 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Schedule the next backupTime, if it doesn't have a next scheduled time, it has recurrence and the current backup is finished
 	if backup.Status.NextScheduledTime == nil && backup.Spec.Recurrence != nil && backup.Status.IndividualSolrBackupStatus.Finished {
-		if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.FinishTime.Time); err1 != nil {
+		if nextBackupTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.StartTime.Time); err1 != nil {
 			logger.Error(err1, "Could not schedule new backup due to back schedule")
 		} else {
-			logger.Info("Scheduling Next Backup for time %v", nextRestartTime)
-			convTime := metav1.NewTime(nextRestartTime)
+			logger.Info("Scheduling Next Backup", "time", nextBackupTime)
+			convTime := metav1.NewTime(nextBackupTime)
 			backup.Status.NextScheduledTime = &convTime
 			updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.Sub(time.Now()))
 		}

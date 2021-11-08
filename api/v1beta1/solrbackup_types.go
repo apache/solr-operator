@@ -320,9 +320,10 @@ func (sb *SolrBackup) PersistenceJobName() string {
 //+kubebuilder:categories=all
 //+kubebuilder:subresource:status
 //+kubebuilder:printcolumn:name="Cloud",type="string",JSONPath=".spec.solrCloud",description="Solr Cloud"
-//+kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the backup has finished"
-//+kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the backup was successful"
-//+kubebuilder:printcolumn:name="NextBackup",type="boolean",JSONPath=".status.nextScheduledTime",description="Next scheduled time for a recurrent backup"
+//+kubebuilder:printcolumn:name="Started",type="date",JSONPath=".status.startTimestamp",description="Most recent time the backup started"
+//+kubebuilder:printcolumn:name="Finished",type="boolean",JSONPath=".status.finished",description="Whether the most recent backup has finished"
+//+kubebuilder:printcolumn:name="Successful",type="boolean",JSONPath=".status.successful",description="Whether the most recent backup was successful"
+//+kubebuilder:printcolumn:name="NextBackup",type="string",JSONPath=".status.nextScheduledTime",description="Next scheduled time for a recurrent backup",format="date-time"
 //+kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // SolrBackup is the Schema for the solrbackups API
