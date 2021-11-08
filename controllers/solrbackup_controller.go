@@ -96,7 +96,11 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Check if we should start the next backup
 	if backup.Status.NextScheduledTime != nil {
-		if backup.Status.NextScheduledTime.UTC().Before(time.Now().UTC()) {
+		// If the backup no longer has a recurrence specified, remove the next scheduled time
+		if backup.Spec.Recurrence == nil {
+			backup.Status.NextScheduledTime = nil
+			backupNeedsToWait = false
+		} else if backup.Status.NextScheduledTime.UTC().Before(time.Now().UTC()) {
 			// We have hit the next scheduled restart time.
 			backupNeedsToWait = false
 			backup.Status.NextScheduledTime = nil
