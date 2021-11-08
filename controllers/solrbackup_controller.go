@@ -144,7 +144,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Schedule the next backupTime, if it doesn't have a next scheduled time, it has recurrence and the current backup is finished
 	if backup.Status.NextScheduledTime == nil && backup.Spec.Recurrence != nil && backup.Status.IndividualSolrBackupStatus.Finished {
 		if nextBackupTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.StartTime.Time); err1 != nil {
-			logger.Error(err1, "Could not schedule new backup due to back schedule")
+			logger.Error(err1, "Could not schedule new backup due to bad cron schedule", "cron", backup.Spec.Recurrence.Schedule)
 		} else {
 			logger.Info("Scheduling Next Backup", "time", nextBackupTime)
 			convTime := metav1.NewTime(nextBackupTime)

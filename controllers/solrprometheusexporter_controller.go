@@ -217,7 +217,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 
 	// Set the annotation for a scheduled restart, if necessary.
 	if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(prometheusExporter.Spec.RestartSchedule, foundDeploy.Spec.Template.Annotations); err != nil {
-		logger.Error(err, "Cannot parse restartSchedule cron: %s", prometheusExporter.Spec.RestartSchedule)
+		logger.Error(err, "Cannot parse restartSchedule cron", "cron", prometheusExporter.Spec.RestartSchedule)
 	} else {
 		if nextRestartAnnotation != "" {
 			if deploy.Spec.Template.Annotations == nil {
