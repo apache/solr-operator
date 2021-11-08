@@ -84,7 +84,7 @@ Now that there's a backup repository available to use, a backup can be triggered
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:
-  name: local-backup-without-persistence
+  name: local-backup
   namespace: default
 spec:
   repositoryName: "local-collection-backups-1"
@@ -100,7 +100,7 @@ The status of our triggered backup can be checked with the command below.
 ```bash
 $ kubectl get solrbackups
 NAME                               CLOUD     FINISHED   SUCCESSFUL   AGE
-local-backup-without-persistence   example   true       true         72s
+local-backup   example   true       true         72s
 ```
 
 ## Deleting an example SolrBackup
@@ -108,7 +108,7 @@ local-backup-without-persistence   example   true       true         72s
 Once the operator completes a backup, the SolrBackup instance can be safely deleted.
 
 ```bash
-$ kubectl delete solrbackup local-backup-without-persistence
+$ kubectl delete solrbackup local-backup
 TODO command output
 ```
 
@@ -116,16 +116,17 @@ Note that deleting SolrBackup instances doesn't delete the backed up data, which
 In our example this data can still be found on the volume we created earlier
 
 ```bash
-$ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/local-backup-without-persistence
+$ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/
 total 8K
-drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 books
-drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 techproducts
+drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-books
+drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-techproducts
 ```
 
 Managed backup data, as in our example, can always be deleted using standard shell commands if desired:
 
 ```bash
-kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/local-backup-without-persistence
+kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore/local-collection-backups-1/backups/local-backup-books
+kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore/local-collection-backups-1/backups/local-backup-techproducts
 ```
 
 ## Supported Repository Types
@@ -258,10 +259,6 @@ This may be addressed in future Solr versions, but for now use the same credenti
 _Since v0.5.0_
 
 Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
-Managed repositories are so called because with the data stored in and managed by Kubernetes, the operator is able to offer a few advanced post-processing features that are unavailable for other repository types.
-
-The main example of this currently is the operator's "persistence" feature, which upon completion of the backup will compress the backup files and optionally relocate the archive to a more permanent volume.  See [the example here](../../example/test_backup_managed_with_persistence.yaml) for more details.
-
 An example of a SolrCloud spec with only one backup repository, with type Managed:
 
 ```yaml

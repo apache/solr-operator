@@ -211,6 +211,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			backupEnvVars = append(backupEnvVars, repoEnvVars...)
 		}
 	}
+	// Add annotation specifying the backupRepositories available with this version of the Pod.
+	podAnnotations = SetAvailableBackupRepos(solrCloud, podAnnotations)
 
 	if nil != customPodOptions {
 		// Add Custom Volumes to pod
@@ -910,6 +912,11 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			TLS:   ingressTLS,
 		},
 	}
+
+	if nil != customOptions && customOptions.IngressClassName != nil {
+		ingress.Spec.IngressClassName = customOptions.IngressClassName
+	}
+
 	return ingress
 }
 
@@ -1027,11 +1034,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if security != nil && security.SecurityJson != "" {
-		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: solrCloud.SecurityBootstrapSecretName()},
-				Key:                  SecurityJsonFile}}})
-
+		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: security.SecurityJsonSrc})
 		cmd += cmdToPutSecurityJsonInZk()
 	}
 

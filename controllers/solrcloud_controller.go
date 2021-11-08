@@ -115,7 +115,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	newStatus := solrv1beta1.SolrCloudStatus{}
 
 	blockReconciliationOfStatefulSet := false
-	if err := r.reconcileZk(ctx, logger, instance, &newStatus); err != nil {
+	if err = r.reconcileZk(ctx, logger, instance, &newStatus); err != nil {
 		return requeueOrNot, err
 	}
 
@@ -408,14 +408,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 
 		// If authn enabled on Solr, we need to pass the auth header
-		var authHeader map[string]string
 		if security != nil {
-			authHeader = security.AuthHeader()
+			ctx, err = security.AddAuthToContext(ctx)
+			if err != nil {
+				updateLogger.Error(err, "failed to create Authorization header when reconciling", "SolrCloud", instance.Name)
+				return requeueOrNot, err
+			}
 		}
 
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger, authHeader)
+		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
 		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 
 		for _, pod := range podsToUpdate {
@@ -508,9 +511,12 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
 	}
 	newStatus.PodSelector = selector.String()
-	allPodsBackupReady := true
-	for idx, p := range foundPods.Items {
-		nodeNames[idx] = p.Name
+	backupReposAvailable := make(map[string]bool, len(solrCloud.Spec.BackupRepositories))
+	for _, repo := range solrCloud.Spec.BackupRepositories {
+		backupReposAvailable[repo.Name] = false
+	}
+	for podIdx, p := range foundPods.Items {
+		nodeNames[podIdx] = p.Name
 		nodeStatus := solrv1beta1.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
 		nodeStatus.NodeName = p.Spec.NodeName
@@ -537,9 +543,10 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 			newStatus.ReadyReplicas += 1
 		}
 
-		// Skip "backup-readiness" check for pod if we've already found a pod that's not ready
-		if allPodsBackupReady {
-			allPodsBackupReady = allPodsBackupReady && isPodReadyForBackup(&p, solrCloud)
+		// Merge BackupRepository availability for this pod
+		backupReposAvailableForPod := util.GetAvailableBackupRepos(&p)
+		for repo, availableSoFar := range backupReposAvailable {
+			backupReposAvailable[repo] = (availableSoFar || podIdx == 0) && backupReposAvailableForPod[repo]
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
@@ -578,10 +585,16 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	for idx, nodeName := range nodeNames {
 		newStatus.SolrNodes[idx] = nodeStatusMap[nodeName]
 	}
-	if allPodsBackupReady && len(foundPods.Items) > 0 {
-		newStatus.BackupRestoreReady = true
-	} else {
-		newStatus.BackupRestoreReady = false
+	if len(backupReposAvailable) > 0 {
+		newStatus.BackupRepositoriesAvailable = backupReposAvailable
+		allPodsBackupReady := len(backupReposAvailable) > 0
+		for _, backupRepo := range solrCloud.Spec.BackupRepositories {
+			allPodsBackupReady = allPodsBackupReady && backupReposAvailable[backupRepo.Name]
+			if !allPodsBackupReady {
+				break
+			}
+		}
+		newStatus.BackupRestoreReady = allPodsBackupReady
 	}
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
@@ -600,18 +613,6 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	}
 
 	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
-}
-
-func isPodReadyForBackup(pod *corev1.Pod, solrCloud *solrv1beta1.SolrCloud) bool {
-	// If solrcloud doesn't request backup support then everything is 'ready' implicitly
-	if len(solrCloud.Spec.BackupRepositories) == 0 {
-		return false
-	}
-
-	// TODO: There is no way to possibly do this with the new S3 option.
-	// This is wrong, but not the end of the world.
-	// Replace with new functionality in https://github.com/apache/solr-operator/issues/326
-	return true
 }
 
 func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, nodeName string) (err error, ip string) {

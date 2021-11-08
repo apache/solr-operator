@@ -30,6 +30,8 @@ const (
 
 	GCSCredentialSecretKey = "service-account-key.json"
 	S3CredentialFileName   = "credentials"
+
+	SolrBackupRepositoriesAnnotation = "solr.apache.org/backupRepositories"
 )
 
 func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
@@ -228,4 +230,30 @@ func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupLocation s
 		}
 	}
 	return backupLocation
+}
+
+func GetAvailableBackupRepos(pod *corev1.Pod) (repos map[string]bool) {
+	if availableRepos, hasAny := pod.Annotations[SolrBackupRepositoriesAnnotation]; hasAny {
+		repoNames := strings.Split(availableRepos, ",")
+		repos = make(map[string]bool, len(repoNames))
+		for _, repoName := range repoNames {
+			repos[repoName] = true
+		}
+	}
+	return
+}
+
+func SetAvailableBackupRepos(solrCloud *solrv1beta1.SolrCloud, podAnnotations map[string]string) map[string]string {
+	if len(solrCloud.Spec.BackupRepositories) > 0 {
+		if podAnnotations == nil {
+			podAnnotations = make(map[string]string, 1)
+		}
+		repoNames := make([]string, len(solrCloud.Spec.BackupRepositories))
+		for idx, repo := range solrCloud.Spec.BackupRepositories {
+			repoNames[idx] = repo.Name
+		}
+		sort.Strings(repoNames)
+		podAnnotations[SolrBackupRepositoriesAnnotation] = strings.Join(repoNames, ",")
+	}
+	return podAnnotations
 }

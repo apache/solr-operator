@@ -17,73 +17,75 @@
 
 package solr_api
 
+import "k8s.io/apimachinery/pkg/util/intstr"
+
 type SolrOverseerStatusResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
 	// +optional
-	Leader string `json:"leader"`
+	Leader string `json:"leader,omitempty"`
 
 	// +optional
-	QueueSize int `json:"overseer_queue_size"`
+	QueueSize int `json:"overseer_queue_size,omitempty"`
 
 	// +optional
-	WorkQueueSize int `json:"overseer_work_queue_size"`
+	WorkQueueSize int `json:"overseer_work_queue_size,omitempty"`
 
 	// +optional
-	CollectionQueueSize int `json:"overseer_collection_queue_size"`
+	CollectionQueueSize int `json:"overseer_collection_queue_size,omitempty"`
 }
 
 type SolrClusterStatusResponse struct {
 	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
 	// +optional
-	ClusterStatus SolrClusterStatus `json:"cluster"`
+	ClusterStatus SolrClusterStatus `json:"cluster,omitempty"`
 }
 
 type SolrClusterStatus struct {
 	// +optional
-	Collections map[string]SolrCollectionStatus `json:"collections"`
+	Collections map[string]SolrCollectionStatus `json:"collections,omitempty"`
 
 	// +optional
-	Aliases map[string]string `json:"aliases"`
+	Aliases map[string]string `json:"aliases,omitempty"`
 
 	// +optional
-	Roles map[string][]string `json:"roles"`
+	Roles map[string][]string `json:"roles,omitempty"`
 
 	// +optional
-	LiveNodes []string `json:"live_nodes"`
+	LiveNodes []string `json:"live_nodes,omitempty"`
 }
 
 type SolrCollectionStatus struct {
 	// +optional
-	Shards map[string]SolrShardStatus `json:"shards"`
+	Shards map[string]SolrShardStatus `json:"shards,omitempty"`
 
 	// +optional
-	ConfigName string `json:"configName"`
+	ConfigName string `json:"configName,omitempty"`
 
 	// +optional
-	ZnodeVersion string `json:"znodeVersion"`
+	ZnodeVersion intstr.IntOrString `json:"znodeVersion,omitempty"`
 
 	// +optional
-	AutoAddReplicas string `json:"autoAddReplicas"`
+	AutoAddReplicas string `json:"autoAddReplicas,omitempty"`
 
 	// +optional
-	NrtReplicas int `json:"nrtReplicas"`
+	NrtReplicas intstr.IntOrString `json:"nrtReplicas,omitempty"`
 
 	// +optional
-	TLogReplicas int `json:"tlogReplicas"`
+	TLogReplicas intstr.IntOrString `json:"tlogReplicas,omitempty"`
 
 	// +optional
-	PullReplicas int `json:"pullReplicas"`
+	PullReplicas intstr.IntOrString `json:"pullReplicas,omitempty"`
 
 	// +optional
-	MaxShardsPerNode string `json:"maxShardsPerNode"`
+	MaxShardsPerNode intstr.IntOrString `json:"maxShardsPerNode,omitempty"`
 
 	// +optional
-	ReplicationFactor string `json:"replicationFactor"`
+	ReplicationFactor intstr.IntOrString `json:"replicationFactor,omitempty"`
 
 	// +optional
-	Router SolrCollectionRouter `json:"router"`
+	Router SolrCollectionRouter `json:"router,omitempty"`
 }
 
 type SolrCollectionRouter struct {
@@ -92,13 +94,13 @@ type SolrCollectionRouter struct {
 
 type SolrShardStatus struct {
 	// +optional
-	Replicas map[string]SolrReplicaStatus `json:"replicas"`
+	Replicas map[string]SolrReplicaStatus `json:"replicas,omitempty"`
 
 	// +optional
-	Range string `json:"range"`
+	Range string `json:"range,omitempty"`
 
 	// +optional
-	State SolrShardState `json:"state"`
+	State SolrShardState `json:"state,omitempty"`
 }
 
 type SolrShardState string
@@ -120,7 +122,7 @@ type SolrReplicaStatus struct {
 	Leader bool `json:"leader,string"`
 
 	// +optional
-	Type SolrReplicaType `json:"type"`
+	Type SolrReplicaType `json:"type,omitempty"`
 }
 
 type SolrReplicaState string

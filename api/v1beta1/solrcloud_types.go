@@ -384,6 +384,10 @@ type SolrBackupRestoreOptions struct {
 type SolrBackupRepository struct {
 	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
+	//
+	// +kubebuilder:validation:Pattern:=[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?
+	// +kubebuilder:validation:MinLength:=1
+	// +kubebuilder:validation:MaxLength:=100
 	Name string `json:"name"`
 
 	// A GCSRepository for Solr to use when backing up and restoring collections.
@@ -763,7 +767,7 @@ type ZookeeperSpec struct {
 	// +optional
 	Ephemeral *ZKEphemeral `json:"ephemeral,omitempty"`
 
-	// Pod resources for zookeeper pod
+	// Customization options for the Zookeeper Pod
 	// +optional
 	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
 
@@ -979,6 +983,32 @@ type ZookeeperPodPolicy struct {
 	// Optional Service Account to run the zookeeper pods under.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Labels specifies the labels to attach to pods the operator creates for
+	// the zookeeper cluster.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations specifies the annotations to attach to zookeeper pods
+	// creates.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// SecurityContext specifies the security context for the entire zookeeper pod
+	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context
+	// +optional
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
+
+	// TerminationGracePeriodSeconds is the amount of time that kubernetes will
+	// give for a zookeeper pod instance to shutdown normally.
+	// The default value is 30.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	TerminationGracePeriodSeconds int64 `json:"terminationGracePeriodSeconds,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud
@@ -986,16 +1016,16 @@ type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
-	// Replicas is the number of number of desired replicas in the cluster
+	// Replicas is the number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
 
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
-	// ReadyReplicas is the number of number of ready replicas in the cluster
+	// ReadyReplicas is the number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
 
-	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+	// UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -1020,6 +1050,10 @@ type SolrCloudStatus struct {
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
 	BackupRestoreReady bool `json:"backupRestoreReady"`
+
+	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
+	// +optional
+	BackupRepositoriesAvailable map[string]bool `json:"backupRepositoriesAvailable,omitempty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
@@ -1458,4 +1492,10 @@ type SolrSecurityOptions struct {
 	// endpoints with credentials sourced from an env var instead of HTTP directly.
 	// +optional
 	ProbesRequireAuth bool `json:"probesRequireAuth,omitempty"`
+
+	// Configure a user-provided security.json from a secret to allow for advanced security config.
+	// If not specified, the operator bootstraps a security.json with basic auth enabled.
+	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
+	// +optional
+	BootstrapSecurityJson *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
 }

@@ -20,13 +20,17 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/fields"
 	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,7 +38,6 @@ import (
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -50,8 +53,6 @@ type SolrBackupReconciler struct {
 
 //+kubebuilder:rbac:groups="",resources=pods/exec,verbs=create
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list
-//+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=batch,resources=jobs/status,verbs=get
 //+kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds,verbs=get;list;watch
 //+kubebuilder:rbac:groups=solr.apache.org,resources=solrclouds/status,verbs=get
 //+kubebuilder:rbac:groups=solr.apache.org,resources=solrbackups,verbs=get;list;watch;create;update;patch;delete
@@ -107,71 +108,46 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Do backup work if a nextScheduledTime is not set and there is no current finish time.
 	// The nextScheduledTime is only set when the last backup is finished and we are waiting to do the next
 	if backup.Status.NextScheduledTime == nil && backup.Status.Current.FinishTime == nil {
-		// When working with the collection backups, auto-requeue after 5 seconds
-		// to check on the status of the async solr backup calls
-		updateRequeueAfter(&requeueOrNot, time.Second*5)
-
-		solrCloud, allCollectionsComplete, collectionActionTaken, err1 := r.reconcileSolrCloudBackup(ctx, backup, logger)
+    requeueOrNot := reconcile.Result{}
+    
+		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, logger)
 		if err1 != nil {
 			// TODO Should we be failing the backup for some sub-set of errors here?
 			logger.Error(err1, "Error while taking SolrCloud backup")
-		}
-		if allCollectionsComplete && collectionActionTaken {
-			// Requeue immediately to start the persisting job
-			// From here on in the backup lifecycle, requeueing will not happen for the backup.
-			updateRequeueAfter(&requeueOrNot, time.Second*10)
-		} else if solrCloud == nil {
-			requeueOrNot = reconcile.Result{}
-		} else {
-			// Only persist if the backup CRD is not finished (something bad happened)
-			// and the collection backups are all complete (not necessarily successful)
-			// Do not do this right after the collectionsBackup have been complete, wait till the next cycle
-			if allCollectionsComplete && !backup.Status.Current.Finished {
-				if backup.Spec.Persistence != nil {
-					// We will count on the Job updates to be notified
-					requeueOrNot = reconcile.Result{}
-					err = r.persistSolrCloudBackups(ctx, backup, solrCloud, logger)
-					if err != nil {
-						logger.Error(err, "Error while persisting SolrCloud backup")
-					}
-				} else {
-					tru := true
-					backup.Status.Current.Successful = &tru
-					now := metav1.Now()
-					backup.Status.Current.FinishTime = &now
-					// No need to requeue for backup purposes (unless for the next backup, handled at the end of the reconcile)
-					requeueOrNot = reconcile.Result{}
-					if backup.Spec.Recurrence != nil {
-						// Add the current backup to the front of the history.
-						// If there is no max
-						backup.Status.History = append([]solrv1beta1.IndividualSolrBackupStatus{backup.Status.Current}, backup.Status.History...)
+      
+      // Requeue after 10 seconds for errors.
+      requeueOrNot = reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}
+		} else if backup.Status.Current.Finished {
+      // Set finish time
+      now := metav1.Now()
+      backup.Status.Current.FinishTime = &now
+      
+      if backup.Spec.Recurrence != nil {
+        // Add the current backup to the front of the history.
+        // If there is no max
+        backup.Status.History = append([]solrv1beta1.IndividualSolrBackupStatus{backup.Status.Current}, backup.Status.History...)
 
-						// Remove history if we have too much saved
-						if len(backup.Status.History) > backup.Spec.Recurrence.MaxSaved {
-							backup.Status.History = backup.Status.History[:backup.Spec.Recurrence.MaxSaved]
-						}
+        // Remove history if we have too much saved
+        if len(backup.Status.History) > backup.Spec.Recurrence.MaxSaved {
+          backup.Status.History = backup.Status.History[:backup.Spec.Recurrence.MaxSaved]
+        }
 
-						if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.Current.FinishTime.Time); err1 != nil {
-							logger.Error(err1, "Could not schedule new backup due to back schedule")
-						} else {
-							convTime := metav1.NewTime(nextRestartTime)
-							backup.Status.NextScheduledTime = &convTime
-						}
+        if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.Current.FinishTime.Time); err1 != nil {
+          logger.Error(err1, "Could not schedule new backup due to back schedule")
+        } else {
+          convTime := metav1.NewTime(nextRestartTime)
+          backup.Status.NextScheduledTime = &convTime
+        }
 
-						// Reset Current, which is fine since it is now in the history.
-						backup.Status.Current = solrv1beta1.IndividualSolrBackupStatus{}
-					}
-				}
+        // Reset Current, which is fine since it is now in the history.
+        backup.Status.Current = solrv1beta1.IndividualSolrBackupStatus{}
 			}
-		}
-
-		if backup.Status.Current.Finished && backup.Status.Current.FinishTime == nil {
-			now := metav1.Now()
-			backup.Status.Current.FinishTime = &now
-			if backup.Spec.Persistence != nil {
-				backup.Status.Current.Successful = backup.Status.Current.PersistenceStatus.Successful
-			}
-		}
+    } else if solrCloud != nil {
+      // When working with the collection backups, auto-requeue after 5 seconds
+      // to check on the status of the async solr backup calls
+      updateRequeueAfter(&requeueOrNot, time.Second*5)
+    }
+	}
 
 		if !reflect.DeepEqual(oldStatus, &backup.Status) {
 			logger.Info("Updating status for solr-backup")
@@ -186,33 +162,32 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return requeueOrNot, err
 }
 
-func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, logger logr.Logger) (solrCloud *solrv1beta1.SolrCloud, collectionBackupsFinished bool, actionTaken bool, err error) {
+func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, logger logr.Logger) (solrCloud *solrv1beta1.SolrCloud, actionTaken bool, err error) {
 	// Get the solrCloud that this backup is for.
 	solrCloud = &solrv1beta1.SolrCloud{}
 
 	err = r.Get(ctx, types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.SolrCloud}, solrCloud)
 	if err != nil && errors.IsNotFound(err) {
 		logger.Error(err, "Could not find cloud to backup", "solrCloud", backup.Spec.SolrCloud)
-		return nil, collectionBackupsFinished, actionTaken, err
+		return nil, actionTaken, err
 	} else if err != nil {
-		return nil, collectionBackupsFinished, actionTaken, err
+		return nil, actionTaken, err
 	}
 
-	var httpHeaders map[string]string
+	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
 	if solrCloud.Spec.SolrSecurity != nil {
-		basicAuthSecret := &corev1.Secret{}
-		if err := r.Get(ctx, types.NamespacedName{Name: solrCloud.BasicAuthSecretName(), Namespace: solrCloud.Namespace}, basicAuthSecret); err != nil {
-			return nil, collectionBackupsFinished, actionTaken, err
+		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud.Spec.SolrSecurity, solrCloud.Namespace)
+		if err != nil {
+			return nil, actionTaken, err
 		}
-		httpHeaders = map[string]string{"Authorization": util.BasicAuthHeader(basicAuthSecret)}
 	}
 
 	// First check if the collection backups have been completed
-	collectionBackupsFinished = util.CheckStatusOfCollectionBackups(backup)
+	collectionBackupsFinished := util.UpdateStatusOfCollectionBackups(backup)
 
 	// If the collectionBackups are complete, then nothing else has to be done here
 	if collectionBackupsFinished {
-		return solrCloud, collectionBackupsFinished, actionTaken, nil
+		return solrCloud, actionTaken, nil
 	}
 
 	actionTaken = true
@@ -221,7 +196,7 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
-		return solrCloud, collectionBackupsFinished, actionTaken, err
+		return solrCloud, actionTaken, err
 	}
 
 	// This should only occur before the backup processes have been started
@@ -229,15 +204,13 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		// Prep the backup directory in the persistentVolume
 		err = util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup, r.Config)
 		if err != nil {
-			return solrCloud, collectionBackupsFinished, actionTaken, err
+			return solrCloud, actionTaken, err
 		}
 
-		// Make sure that all solr nodes are active and have the backupRestore shared volume mounted
-		// TODO: we do not need all replicas to be healthy. We should just check that leaders exist for all shards. (or just let Solr do that)
-		cloudReady := solrCloud.Status.BackupRestoreReady && (solrCloud.Status.Replicas == solrCloud.Status.ReadyReplicas)
-		if !cloudReady {
-			logger.Info("Cloud not ready for backup backup", "solrCloud", solrCloud.Name)
-			return solrCloud, collectionBackupsFinished, actionTaken, errors.NewServiceUnavailable("Cloud is not ready for backups or restores")
+		// Make sure that all solr living Solr pods have the backupRepo configured
+		if !solrCloud.Status.BackupRepositoriesAvailable[backupRepository.Name] {
+			logger.Info("Cloud not ready for backup", "solrCloud", solrCloud.Name, "repository", backupRepository.Name)
+			return solrCloud, actionTaken, errors.NewServiceUnavailable(fmt.Sprintf("Cloud is not ready for backups in the %s repository", backupRepository.Name))
 		}
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
@@ -247,16 +220,19 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 
 	// Go through each collection specified and reconcile the backup.
 	for _, collection := range backup.Spec.Collections {
-		_, err = reconcileSolrCollectionBackup(backup, solrCloud, backupRepository, collection, httpHeaders, logger)
+		// This will in-place update the CollectionBackupStatus in the backup object
+		if _, err = reconcileSolrCollectionBackup(ctx, backup, solrCloud, backupRepository, collection, logger); err != nil {
+			break
+		}
 	}
 
 	// First check if the collection backups have been completed
-	collectionBackupsFinished = util.CheckStatusOfCollectionBackups(backup)
+	util.UpdateStatusOfCollectionBackups(backup)
 
-	return solrCloud, collectionBackupsFinished, actionTaken, err
+	return solrCloud, actionTaken, err
 }
 
-func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, httpHeaders map[string]string, logger logr.Logger) (finished bool, err error) {
+func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, logger logr.Logger) (finished bool, err error) {
 	now := metav1.Now()
 	collectionBackupStatus := solrv1beta1.CollectionBackupStatus{}
 	collectionBackupStatus.Collection = collection
@@ -272,7 +248,8 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 	// If the collection backup hasn't started, start it
 	if !collectionBackupStatus.InProgress && !collectionBackupStatus.Finished {
 		// Start the backup by calling solr
-		started, err := util.StartBackupForCollection(solrCloud, backupRepository, backup, collection, httpHeaders, logger)
+		var started bool
+		started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
 		if err != nil {
 			return true, err
 		}
@@ -282,8 +259,10 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 		}
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
+		var successful bool
+		var asyncStatus string
 		// Check the state of the backup, when it is in progress, and update the state accordingly
-		finished, successful, asyncStatus, err := util.CheckBackupForCollection(solrCloud, collection, backup.Name, httpHeaders, logger)
+		finished, successful, asyncStatus, err = util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
 		if err != nil {
 			return false, err
 		}
@@ -298,7 +277,7 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 				collectionBackupStatus.FinishTime = &now
 			}
 
-			err = util.DeleteAsyncInfoForBackup(solrCloud, collection, backup.Name, httpHeaders, logger)
+			err = util.DeleteAsyncInfoForBackup(ctx, solrCloud, collection, backup.Name, logger)
 		} else {
 			collectionBackupStatus.AsyncBackupStatus = asyncStatus
 		}
@@ -313,73 +292,64 @@ func reconcileSolrCollectionBackup(backup *solrv1beta1.SolrBackup, solrCloud *so
 	return collectionBackupStatus.Finished, err
 }
 
-func (r *SolrBackupReconciler) persistSolrCloudBackups(ctx context.Context, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger) (err error) {
-	if backup.Status.Current.PersistenceStatus == nil {
-		backup.Status.Current.PersistenceStatus = &solrv1beta1.BackupPersistenceStatus{}
-	}
-	if backup.Status.Current.PersistenceStatus.Finished {
-		return nil
-	}
-	now := metav1.Now()
+// SetupWithManager sets up the controller with the Manager.
+func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
+	r.config = mgr.GetConfig()
 
-	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
-	if backupRepository == nil {
-		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
-			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
-			backup.Name, backup.Spec.RepositoryName)
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
+		For(&solrv1beta1.SolrBackup{})
+
+	ctrlBuilder, err = r.indexAndWatchForSolrClouds(mgr, ctrlBuilder)
+	if err != nil {
 		return err
 	}
 
-	if util.IsRepoManaged(backupRepository) {
-		persistenceJob := util.GenerateBackupPersistenceJobForCloud(backupRepository, backup, solrCloud)
-		if err := controllerutil.SetControllerReference(backup, persistenceJob, r.Scheme); err != nil {
-			return err
-		}
-
-		foundPersistenceJob := &batchv1.Job{}
-		err = r.Get(ctx, types.NamespacedName{Name: persistenceJob.Name, Namespace: persistenceJob.Namespace}, foundPersistenceJob)
-		if err == nil && !backup.Status.Current.PersistenceStatus.InProgress {
-		} else if err != nil && errors.IsNotFound(err) {
-			logger.Info("Creating Persistence Job", "job", persistenceJob.Name)
-			err = r.Create(ctx, persistenceJob)
-			backup.Status.Current.PersistenceStatus.InProgress = true
-			if backup.Status.Current.PersistenceStatus.StartTime == nil {
-				backup.Status.Current.PersistenceStatus.StartTime = &now
-			}
-		} else if err != nil {
-			return err
-		} else {
-			backup.Status.Current.PersistenceStatus.FinishTime = foundPersistenceJob.Status.CompletionTime
-			tru := true
-			fals := false
-			numFailLimit := int32(0)
-			if foundPersistenceJob.Spec.BackoffLimit != nil {
-				numFailLimit = *foundPersistenceJob.Spec.BackoffLimit
-			}
-			if foundPersistenceJob.Status.Succeeded > 0 {
-				backup.Status.Current.PersistenceStatus.Successful = &tru
-			} else if foundPersistenceJob.Status.Failed > numFailLimit {
-				backup.Status.Current.PersistenceStatus.Successful = &fals
-			}
-
-			if backup.Status.Current.PersistenceStatus.Successful != nil {
-				backup.Status.Current.PersistenceStatus.InProgress = false
-				backup.Status.Current.PersistenceStatus.Finished = true
-				backup.Status.Current.PersistenceStatus.FinishTime = &now
-				backup.Status.Current.Finished = true
-				backup.Status.Current.Successful = backup.Status.Current.PersistenceStatus.Successful
-			}
-		}
-		return err
-	} else {
-		return nil
-	}
+	return ctrlBuilder.Complete(r)
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&solrv1beta1.SolrBackup{}).
-		Owns(&batchv1.Job{}).
-		Complete(r)
+
+func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
+	solrCloudField := ".spec.solrCloud"
+
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrBackup{}, solrCloudField, func(rawObj client.Object) []string {
+		// grab the SolrBackup object, extract the used SolrCloud...
+		return []string{rawObj.(*solrv1beta1.SolrBackup).Spec.SolrCloud}
+	}); err != nil {
+		return ctrlBuilder, err
+	}
+  
+	return ctrlBuilder.Watches(
+		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
+		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+			solrCloud := obj.(*solrv1beta1.SolrCloud)
+			foundBackups := &solrv1beta1.SolrBackupList{}
+			listOps := &client.ListOptions{
+				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
+				Namespace:     obj.GetNamespace(),
+			}
+			err := r.List(context.Background(), foundBackups, listOps)
+			if err != nil {
+				// if no exporters found, just no-op this
+				return []reconcile.Request{}
+			}
+
+			requests := make([]reconcile.Request, 0)
+			for _, item := range foundBackups.Items {
+				// Only queue the request if the Cloud is ready.
+				cloudIsReady := solrCloud.Status.BackupRestoreReady
+				if item.Spec.RepositoryName != "" {
+					cloudIsReady = solrCloud.Status.BackupRepositoriesAvailable[item.Spec.RepositoryName]
+				}
+				if cloudIsReady {
+					requests = append(requests, reconcile.Request{
+						NamespacedName: types.NamespacedName{
+							Name:      item.GetName(),
+							Namespace: item.GetNamespace(),
+						},
+					})
+				}
+			}
+			return requests
+		}),
+		builder.WithPredicates(predicate.GenerationChangedPredicate{})), nil
 }

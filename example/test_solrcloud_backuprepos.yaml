@@ -16,11 +16,11 @@
 apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
-  name: multiple-backup-repositories-solr
+  name: multiple-backup-repos
 spec:
   replicas: 1
   solrImage:
-    tag: 8.9.0
+    tag: 8.10
   backupRepositories:
     # "Managed" repositories store backup data in a Kubernetes volume, This
     # allows the operator to make several advanced features available, such as
@@ -48,25 +48,24 @@ spec:
 
     # Creates repositories that backup data to AWS S3.
     #
-    # Requires Solr >= 8.9.
+    # Requires Solr >= 8.10.
     - name: "s3-backup-repo"
       s3:
         region: "us-west-2"
         bucket: "product-catalog"
         credentials:
-          credentials:
-            accessKeyIdSecret: # Optional
-              name: aws-secrets
-              key: access-key-id
-            secretAccessKeySecret: # Optional
-              name: aws-secrets
-              key: secret-access-key
-            sessionTokenSecret: # Optional
-              name: aws-secrets
-              key: session-token
-            credentialsFileSecret: # Optional
-              name: aws-credentials
-              key: credentials
+          accessKeyIdSecret: # Optional
+            name: aws-secrets
+            key: access-key-id
+          secretAccessKeySecret: # Optional
+            name: aws-secrets
+            key: secret-access-key
+          sessionTokenSecret: # Optional
+            name: aws-secrets
+            key: session-token
+          credentialsFileSecret: # Optional
+            name: aws-credentials
+            key: credentials
 
     - name: "main_collection_backup_repository_log"
       gcs:
