@@ -88,33 +88,33 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	newStatus := backup.Status.DeepCopy()
+	oldStatus := backup.Status.DeepCopy()
 
 	requeueOrNot := reconcile.Result{}
 
 	var backupNeedsToWait bool
 
 	// Check if we should start the next backup
-	if newStatus.NextScheduledTime != nil {
-		if newStatus.NextScheduledTime.UTC().After(time.Now().UTC()) {
+	if backup.Status.NextScheduledTime != nil {
+		if backup.Status.NextScheduledTime.UTC().After(time.Now().UTC()) {
 			// We have hit the next scheduled restart time.
 			backupNeedsToWait = false
-			newStatus.NextScheduledTime = nil
+			backup.Status.NextScheduledTime = nil
 
 			// Add the current backup to the front of the history.
 			// If there is no max
-			newStatus.History = append([]solrv1beta1.IndividualSolrBackupStatus{newStatus.Current}, newStatus.History...)
+			backup.Status.History = append([]solrv1beta1.IndividualSolrBackupStatus{backup.Status.IndividualSolrBackupStatus}, backup.Status.History...)
 
 			// Remove history if we have too much saved
-			if len(newStatus.History) > backup.Spec.Recurrence.MaxSaved {
-				newStatus.History = newStatus.History[:backup.Spec.Recurrence.MaxSaved]
+			if len(backup.Status.History) > backup.Spec.Recurrence.MaxSaved {
+				backup.Status.History = backup.Status.History[:backup.Spec.Recurrence.MaxSaved]
 			}
 
 			// Reset Current, which is fine since it is now in the history.
-			newStatus.Current = solrv1beta1.IndividualSolrBackupStatus{}
+			backup.Status.IndividualSolrBackupStatus = solrv1beta1.IndividualSolrBackupStatus{}
 		} else {
 			// If we have not hit the next scheduled restart, wait to requeue until that is true.
-			updateRequeueAfter(&requeueOrNot, newStatus.NextScheduledTime.UTC().Sub(time.Now().UTC()))
+			updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.UTC().Sub(time.Now().UTC()))
 			backupNeedsToWait = true
 		}
 	} else {
@@ -122,20 +122,18 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Do backup work if we are not waiting and the current backup is not finished
-	if !backupNeedsToWait && !newStatus.Current.Finished {
-		requeueOrNot = reconcile.Result{}
-
-		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, &newStatus.Current, logger)
+	if !backupNeedsToWait && !backup.Status.IndividualSolrBackupStatus.Finished {
+		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, &backup.Status.IndividualSolrBackupStatus, logger)
 		if err1 != nil {
 			// TODO Should we be failing the backup for some sub-set of errors here?
 			logger.Error(err1, "Error while taking SolrCloud backup")
 
 			// Requeue after 10 seconds for errors.
-			requeueOrNot = reconcile.Result{Requeue: true, RequeueAfter: time.Second * 10}
-		} else if newStatus.Current.Finished {
+			updateRequeueAfter(&requeueOrNot, time.Second*10)
+		} else if backup.Status.IndividualSolrBackupStatus.Finished {
 			// Set finish time
 			now := metav1.Now()
-			newStatus.Current.FinishTime = &now
+			backup.Status.IndividualSolrBackupStatus.FinishTime = &now
 		} else if solrCloud != nil {
 			// When working with the collection backups, auto-requeue after 5 seconds
 			// to check on the status of the async solr backup calls
@@ -144,27 +142,20 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Schedule the next backupTime, if it doesn't have a next scheduled time, it has recurrence and the current backup is finished
-	if newStatus.NextScheduledTime == nil && backup.Spec.Recurrence != nil && newStatus.Current.Finished {
-		if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, newStatus.Current.FinishTime.Time); err1 != nil {
+	if backup.Status.NextScheduledTime == nil && backup.Spec.Recurrence != nil && backup.Status.IndividualSolrBackupStatus.Finished {
+		if nextRestartTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.FinishTime.Time); err1 != nil {
 			logger.Error(err1, "Could not schedule new backup due to back schedule")
 		} else {
 			logger.Info("Scheduling Next Backup for time %v", nextRestartTime)
 			convTime := metav1.NewTime(nextRestartTime)
-			newStatus.NextScheduledTime = &convTime
+			backup.Status.NextScheduledTime = &convTime
+			updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.Sub(time.Now()))
 		}
 	}
 
-	if !reflect.DeepEqual(*newStatus, backup.Status) {
-		backup.Status = *newStatus
-		logger.Info("Updating status for solr-backup", "status", backup.Status)
+	if !reflect.DeepEqual(*oldStatus, backup.Status) {
+		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", oldStatus)
 		err = r.Status().Update(ctx, backup)
-		if err != nil {
-			logger.Error(err, "Could not update Status for solr-backup")
-		}
-	}
-
-	if newStatus.NextScheduledTime != nil {
-		updateRequeueAfter(&requeueOrNot, newStatus.NextScheduledTime.Sub(time.Now()))
 	}
 
 	return requeueOrNot, err

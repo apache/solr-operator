@@ -192,7 +192,7 @@ type VolumePersistenceSource struct {
 // SolrBackupStatus defines the observed state of SolrBackup
 type SolrBackupStatus struct {
 	// The current Backup Status, which all fields are added to this struct
-	Current IndividualSolrBackupStatus `json:",inline"`
+	IndividualSolrBackupStatus `json:",inline"`
 
 	// The scheduled time for the next backup to occur
 	// +optional

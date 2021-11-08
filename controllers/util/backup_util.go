@@ -110,45 +110,34 @@ func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backup
 }
 
 func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (finished bool, success bool, asyncStatus string, err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "REQUESTSTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to check on collection backup", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+
+	var message string
+	asyncStatus, message, err = solr_api.CheckAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
 
 	if err == nil {
-		if resp.ResponseHeader.Status == 0 {
-			asyncStatus = resp.Status.AsyncState
-			if resp.Status.AsyncState == "completed" {
-				finished = true
-				success = true
-			}
-			if resp.Status.AsyncState == "failed" {
-				finished = true
-				success = false
-			}
+		if asyncStatus == "completed" {
+			finished = true
+			success = true
+		}
+		if asyncStatus == "failed" {
+			finished = true
+			success = false
 		}
 	} else {
-		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return finished, success, asyncStatus, err
 }
 
 func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "DELETESTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to delete async info for backup command.", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+	var message string
+	message, err = solr_api.DeleteAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
+
 	if err != nil {
-		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return err
@@ -179,7 +168,7 @@ func RunExecForPod(podName string, namespace string, command []string, config *r
 		Namespace(namespace).
 		SubResource("exec")
 	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
+	if err = corev1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("error adding to scheme: %v", err)
 	}
 
@@ -193,7 +182,8 @@ func RunExecForPod(podName string, namespace string, command []string, config *r
 		TTY:       false,
 	}, parameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	var exec remotecommand.Executor
+	exec, err = remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return fmt.Errorf("error while creating Executor: %v", err)
 	}
