@@ -15,19 +15,14 @@
  * limitations under the License.
  */
 
-package controllers
+package solr_api
 
-import (
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"time"
-)
+type SolrReplaceNodeResponse struct {
+	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
-// Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
-func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
-	if newWait <= 0 {
-		requeueOrNot.RequeueAfter = 0
-	}
-	if requeueOrNot.RequeueAfter <= 0 || requeueOrNot.RequeueAfter > newWait {
-		requeueOrNot.RequeueAfter = newWait
-	}
+	// +optional
+	Success string `json:"success,omitempty"`
+
+	// +optional
+	Failure string `json:"failure,omitempty"`
 }

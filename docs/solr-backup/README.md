@@ -28,6 +28,7 @@ For detailed information on how to best configure backups for your use case, ple
 This page outlines how to create and delete a Kubernetes SolrBackup
 
 - [Creation](#creating-an-example-solrbackup)
+- [Recurring/Scheduled Backups](#recurring-backups)
 - [Deletion](#deleting-an-example-solrbackup)
 - [Repository Types](#supported-repository-types)
   - [GCS](#gcs-backup-repositories)
@@ -99,9 +100,90 @@ The status of our triggered backup can be checked with the command below.
 
 ```bash
 $ kubectl get solrbackups
-NAME                               CLOUD     FINISHED   SUCCESSFUL   AGE
-local-backup   example   true       true         72s
+NAME   CLOUD     STARTED   FINISHED   SUCCESSFUL   NEXTBACKUP  AGE
+test   example   123m      true       false                     161m
 ```
+
+## Recurring Backups
+_Since v0.5.0_
+
+The Solr Operator enables taking recurring updates, at a set interval.
+Note that this feature requires a SolrCloud running Solr `8.9.0` or older, because it relies on `Incremental` backups.
+
+By default the Solr Operator will save a maximum of **5** backups at a time, however users can override this using `SolrBackup.spec.recurrence.maxSaved`.
+When using `recurrence`, users must provide a Cron-style `schedule` for the interval at which backups should be taken.
+Please refer to the [GoLang cron-spec](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for more information on allowed syntax.
+
+```yaml
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+  recurrence: # Store one backup daily, and keep a week at a time.
+    schedule: "@daily"
+    maxSaved: 7
+```
+
+If using `kubectl`, the standard `get` command will return the time the backup was last started and when the next backup will occur.
+
+```bash
+$ kubectl get solrbackups
+NAME   CLOUD     STARTED   FINISHED   SUCCESSFUL   NEXTBACKUP             AGE
+test   example   123m      true       true         2021-11-09T00:00:00Z   161m
+```
+
+Much like when not taking a recurring backup, `SolrBackup.status` will contain the information from the latest, or currently running, backup.
+The results of previous backup attempts are stored under `SolrBackup.status.history` (sorted from most recent to oldest).
+
+You are able to **add or remove** `recurrence` to/from an existing `SolrBackup` object, no matter what stage that `SolrBackup` object is in.
+If you add recurrence, then a new backup will be scheduled based on the `startTimestamp` of the last backup.
+If you remove recurrence, then the `nextBackupTime` will be removed.
+However, if the recurrent backup is already underway, it will not be stopped.
+
+### Backup Scheduling
+
+Backups are scheduled based on the `startTimestamp` of the last backup.
+Therefore if a interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
+If the interval is shorter than the time it takes to complete a backup, then the next backup will started directly after the previous backup completes (even though it is delayed from its given schedule).
+And the next backup will be scheduled based on the `startTimestamp` of the delayed backup.
+So there is a possibility of skew overtime if backups take longer than the allotted schedule.
+
+If a guaranteed schedule is important, it is recommended to use intervals that are guaranteed to be longer than the time it takes to complete a backup.
+
+### Temporarily Disabling Recurring Backups
+
+It is also easy to temporarily disable backups for a time.
+Merely add `disabled: true` under the `recurrence` section of the `SolrBackup` resource.
+And set `disabled: false`, or just remove the property to re-enable backups.
+
+Since backups are scheduled based on the `startTimestamp` of the last backup, a new backup may start immediately after you re-enable the recurrence.
+
+```yaml
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+  recurrence: # Store one backup daily, and keep a week at a time.
+    schedule: "@daily"
+    maxSaved: 7
+    disabled: true
+```
+
+**Note: this will not stop any backups running at the time that `disabled: true` is set, it will only affect scheduling future backups.**
 
 ## Deleting an example SolrBackup
 
@@ -109,7 +191,6 @@ Once the operator completes a backup, the SolrBackup instance can be safely dele
 
 ```bash
 $ kubectl delete solrbackup local-backup
-TODO command output
 ```
 
 Note that deleting SolrBackup instances doesn't delete the backed up data, which the operator views as already persisted and outside its control.

@@ -103,7 +103,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	changed := instance.WithDefaults()
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
-		if err := r.Update(ctx, instance); err != nil {
+		if err = r.Update(ctx, instance); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
@@ -323,7 +323,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Set the annotation for a scheduled restart, if necessary.
 		if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); err != nil {
-			logger.Error(err, "Cannot parse restartSchedule cron: %s", instance.Spec.UpdateStrategy.RestartSchedule)
+			logger.Error(err, "Cannot parse restartSchedule cron", "cron", instance.Spec.UpdateStrategy.RestartSchedule)
 		} else {
 			if nextRestartAnnotation != "" {
 				// Set the new restart time annotation

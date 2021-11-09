@@ -24,12 +24,15 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"net/url"
+	"strconv"
+	"time"
 )
 
 func GetBackupRepositoryByName(backupRepos []solr.SolrBackupRepository, repositoryName string) *solr.SolrBackupRepository {
@@ -54,19 +57,20 @@ func AsyncIdForCollectionBackup(collection string, backupName string) string {
 	return fmt.Sprintf("%s-%s", backupName, collection)
 }
 
-func UpdateStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) {
+func UpdateStatusOfCollectionBackups(backupStatus *solr.IndividualSolrBackupStatus) (allFinished bool) {
 	// Check if all collection backups have been completed, this is updated in the loop
-	allFinished = len(backup.Status.CollectionBackupStatuses) > 0
+	allFinished = len(backupStatus.CollectionBackupStatuses) > 0
 
-	allSuccessful := len(backup.Status.CollectionBackupStatuses) > 0
+	allSuccessful := len(backupStatus.CollectionBackupStatuses) > 0
 
-	for _, collectionStatus := range backup.Status.CollectionBackupStatuses {
+	for _, collectionStatus := range backupStatus.CollectionBackupStatuses {
 		allFinished = allFinished && collectionStatus.Finished
 		allSuccessful = allSuccessful && (collectionStatus.Successful != nil && *collectionStatus.Successful)
 	}
-	backup.Status.Finished = allFinished
-	if allFinished && backup.Status.Successful == nil {
-		backup.Status.Successful = &allSuccessful
+
+	backupStatus.Finished = allFinished
+	if allFinished && backupStatus.Successful == nil {
+		backupStatus.Successful = &allSuccessful
 	}
 	return
 }
@@ -79,6 +83,11 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backup.Name))
 	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location))
 	queryParams.Add("repository", backup.Spec.RepositoryName)
+
+	if backup.Spec.Recurrence.IsEnabled() {
+		queryParams.Add("maxNumBackupPoints", strconv.Itoa(backup.Spec.Recurrence.MaxSaved))
+	}
+
 	return queryParams
 }
 
@@ -101,45 +110,34 @@ func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backup
 }
 
 func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (finished bool, success bool, asyncStatus string, err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "REQUESTSTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to check on collection backup", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+
+	var message string
+	asyncStatus, message, err = solr_api.CheckAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
 
 	if err == nil {
-		if resp.ResponseHeader.Status == 0 {
-			asyncStatus = resp.Status.AsyncState
-			if resp.Status.AsyncState == "completed" {
-				finished = true
-				success = true
-			}
-			if resp.Status.AsyncState == "failed" {
-				finished = true
-				success = false
-			}
+		if asyncStatus == "completed" {
+			finished = true
+			success = true
+		}
+		if asyncStatus == "failed" {
+			finished = true
+			success = false
 		}
 	} else {
-		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return finished, success, asyncStatus, err
 }
 
 func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "DELETESTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to delete async info for backup command.", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+	var message string
+	message, err = solr_api.DeleteAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
+
 	if err != nil {
-		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return err
@@ -153,15 +151,15 @@ func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.
 			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
 			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
-			*config,
+			config,
 		)
 	}
 	return nil
 }
 
-func RunExecForPod(podName string, namespace string, command []string, config rest.Config) (err error) {
+func RunExecForPod(podName string, namespace string, command []string, config *rest.Config) (err error) {
 	client := &kubernetes.Clientset{}
-	if client, err = kubernetes.NewForConfig(&config); err != nil {
+	if client, err = kubernetes.NewForConfig(config); err != nil {
 		return err
 	}
 	req := client.CoreV1().RESTClient().Post().
@@ -170,7 +168,7 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 		Namespace(namespace).
 		SubResource("exec")
 	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
+	if err = corev1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("error adding to scheme: %v", err)
 	}
 
@@ -184,7 +182,8 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 		TTY:       false,
 	}, parameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(&config, "POST", req.URL())
+	var exec remotecommand.Executor
+	exec, err = remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return fmt.Errorf("error while creating Executor: %v", err)
 	}
@@ -201,4 +200,13 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 	}
 
 	return nil
+}
+
+func ScheduleNextBackup(restartSchedule string, lastBackupTime time.Time) (nextBackup time.Time, err error) {
+	if parsedSchedule, parseErr := cron.ParseStandard(restartSchedule); parseErr != nil {
+		err = parseErr
+	} else {
+		nextBackup = parsedSchedule.Next(lastBackupTime)
+	}
+	return
 }

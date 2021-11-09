@@ -217,7 +217,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 
 	// Set the annotation for a scheduled restart, if necessary.
 	if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(prometheusExporter.Spec.RestartSchedule, foundDeploy.Spec.Template.Annotations); err != nil {
-		logger.Error(err, "Cannot parse restartSchedule cron: %s", prometheusExporter.Spec.RestartSchedule)
+		logger.Error(err, "Cannot parse restartSchedule cron", "cron", prometheusExporter.Spec.RestartSchedule)
 	} else {
 		if nextRestartAnnotation != "" {
 			if deploy.Spec.Template.Annotations == nil {
@@ -383,7 +383,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.M
 	solrCloudField := ".spec.solrReference.cloud.name"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, solrCloudField, func(rawObj client.Object) []string {
-		// grab the SolrCloud object, extract the used configMap...
+		// grab the SolrPrometheusExporter object, extract the used SolrCloud...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
 		if exporter.Spec.SolrReference.Cloud == nil {
 			return nil
@@ -429,7 +429,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 	providedConfigMapField := ".spec.customKubeOptions.configMapOptions.providedConfigMap"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, providedConfigMapField, func(rawObj client.Object) []string {
-		// grab the SolrCloud object, extract the used configMap...
+		// grab the SolrPrometheusExporter object, extract the used configMap...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
 		if exporter.Spec.CustomKubeOptions.ConfigMapOptions == nil {
 			return nil
@@ -475,7 +475,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForKeystoreSecret(mgr ct
 	tlsSecretField := ".spec.solrReference.solrTLS.pkcs12Secret"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj client.Object) []string {
-		// grab the SolrCloud object, extract the referenced TLS secret...
+		// grab the SolrPrometheusExporter object, extract the referenced TLS secret...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
 		if exporter.Spec.SolrReference.SolrTLS == nil || exporter.Spec.SolrReference.SolrTLS.PKCS12Secret == nil {
 			return nil
@@ -493,7 +493,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForTruststoreSecret(mgr 
 	tlsSecretField := ".spec.solrReference.solrTLS.trustStoreSecret"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, tlsSecretField, func(rawObj client.Object) []string {
-		// grab the SolrCloud object, extract the referenced truststore secret...
+		// grab the SolrPrometheusExporter object, extract the referenced truststore secret...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
 		if exporter.Spec.SolrReference.SolrTLS == nil || exporter.Spec.SolrReference.SolrTLS.TrustStoreSecret == nil {
 			return nil
@@ -511,7 +511,7 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForBasicAuthSecret(mgr c
 	secretField := ".spec.solrReference.basicAuthSecret"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, secretField, func(rawObj client.Object) []string {
-		// grab the SolrCloud object, extract the referenced TLS secret...
+		// grab the SolrPrometheusExporter object, extract the referenced BasicAuth secret...
 		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
 		if exporter.Spec.SolrReference.BasicAuthSecret == "" {
 			return nil

@@ -35,14 +35,23 @@ spec:
       jsonPath: .spec.solrCloud
       name: Cloud
       type: string
-    - description: Whether the backup has finished
+    - description: Most recent time the backup started
+      jsonPath: .status.startTimestamp
+      name: Started
+      type: date
+    - description: Whether the most recent backup has finished
       jsonPath: .status.finished
       name: Finished
       type: boolean
-    - description: Whether the backup was successful
+    - description: Whether the most recent backup was successful
       jsonPath: .status.successful
       name: Successful
       type: boolean
+    - description: Next scheduled time for a recurrent backup
+      format: date-time
+      jsonPath: .status.nextScheduledTime
+      name: NextBackup
+      type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
       type: date
@@ -1051,6 +1060,24 @@ spec:
                     - source
                     type: object
                 type: object
+              recurrence:
+                description: "Set this backup to be taken recurrently, with options for scheduling and storage. \n NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API."
+                properties:
+                  disabled:
+                    default: false
+                    description: Disable the recurring backups. Note this will not affect any currently-running backup.
+                    type: boolean
+                  maxSaved:
+                    default: 5
+                    description: Define the number of backup points to save for this backup at any given time. The oldest backups will be deleted if too many exist when a backup is taken. If not provided, this defaults to 5.
+                    minimum: 1
+                    type: integer
+                  schedule:
+                    description: "Perform a backup on the given schedule, in CRON format. \n Multiple CRON syntaxes are supported   - Standard CRON (e.g. \"CRON_TZ=Asia/Seoul 0 6 * * ?\")   - Predefined Schedules (e.g. \"@yearly\", \"@weekly\", \"@daily\", etc.)   - Intervals (e.g. \"@every 10h30m\") \n For more information please check this reference: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format"
+                    type: string
+                required:
+                - schedule
+                type: object
               repositoryName:
                 description: The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the auto-configured repository for legacy singleton volumes).
                 maxLength: 100
@@ -1111,6 +1138,90 @@ spec:
               finished:
                 description: Whether the backup has finished
                 type: boolean
+              history:
+                description: The status history of recurring backups
+                items:
+                  description: IndividualSolrBackupStatus defines the observed state of a single issued SolrBackup
+                  properties:
+                    collectionBackupStatuses:
+                      description: The status of each collection's backup progress
+                      items:
+                        description: CollectionBackupStatus defines the progress of a Solr Collection's backup
+                        properties:
+                          asyncBackupStatus:
+                            description: The status of the asynchronous backup call to solr
+                            type: string
+                          backupName:
+                            description: BackupName of this collection's backup in Solr
+                            type: string
+                          collection:
+                            description: Solr Collection name
+                            type: string
+                          finishTimestamp:
+                            description: Time that the collection backup finished at
+                            format: date-time
+                            type: string
+                          finished:
+                            description: Whether the backup has finished
+                            type: boolean
+                          inProgress:
+                            description: Whether the collection is being backed up
+                            type: boolean
+                          startTimestamp:
+                            description: Time that the collection backup started at
+                            format: date-time
+                            type: string
+                          successful:
+                            description: Whether the backup was successful
+                            type: boolean
+                        required:
+                        - collection
+                        type: object
+                      type: array
+                    finishTimestamp:
+                      description: Version of the Solr being backed up
+                      format: date-time
+                      type: string
+                    finished:
+                      description: Whether the backup has finished
+                      type: boolean
+                    persistenceStatus:
+                      description: Whether the backups are in progress of being persisted. This feature has been removed as of v0.5.0.
+                      properties:
+                        finishTimestamp:
+                          description: Time that the collection backup finished at
+                          format: date-time
+                          type: string
+                        finished:
+                          description: Whether the persistence has finished
+                          type: boolean
+                        inProgress:
+                          description: Whether the collection is being backed up
+                          type: boolean
+                        startTimestamp:
+                          description: Time that the collection backup started at
+                          format: date-time
+                          type: string
+                        successful:
+                          description: Whether the backup was successful
+                          type: boolean
+                      type: object
+                    solrVersion:
+                      description: Version of the Solr being backed up
+                      type: string
+                    startTimestamp:
+                      description: The time that this backup was initiated
+                      format: date-time
+                      type: string
+                    successful:
+                      description: Whether the backup was successful
+                      type: boolean
+                  type: object
+                type: array
+              nextScheduledTime:
+                description: The scheduled time for the next backup to occur
+                format: date-time
+                type: string
               persistenceStatus:
                 description: Whether the backups are in progress of being persisted. This feature has been removed as of v0.5.0.
                 properties:
@@ -1135,11 +1246,13 @@ spec:
               solrVersion:
                 description: Version of the Solr being backed up
                 type: string
+              startTimestamp:
+                description: The time that this backup was initiated
+                format: date-time
+                type: string
               successful:
                 description: Whether the backup was successful
                 type: boolean
-            required:
-            - solrVersion
             type: object
         type: object
     served: true
