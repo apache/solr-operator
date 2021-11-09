@@ -27,6 +27,9 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+leaderElection:
+  enable: true
+
 zookeeper-operator:
   # Include the zookeeper-operator as a helm chart dependency.
   # Setting this to true also tells the Solr Operator it is use to use ZookeeperCluster objects.

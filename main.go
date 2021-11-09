@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sort"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -114,7 +115,7 @@ func main() {
 	var probeAddr string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	opts := zap.Options{
@@ -135,33 +136,38 @@ func main() {
 	setupLog.Info(fmt.Sprintf("Go Version: %v", runtime.Version()))
 	setupLog.Info(fmt.Sprintf("Go OS/Arch: %s / %s", runtime.GOOS, runtime.GOARCH))
 
-	// When the operator is started to watch resources in a specific set of namespaces, we use the MultiNamespacedCacheBuilder cache.
-	// In this scenario, it is also suggested to restrict the provided authorization to this namespace by replacing the default
-	// ClusterRole and ClusterRoleBinding to Role and RoleBinding respectively
-	// For further information see the kubernetes documentation about
-	// Using [RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
-	var managerWatchCache cache.NewCacheFunc
-	if watchNamespaces != "" {
-		setupLog.Info(fmt.Sprintf("Managing for Namespaces: %s", watchNamespaces))
-		ns := strings.Split(watchNamespaces, ",")
-		for i := range ns {
-			ns[i] = strings.TrimSpace(ns[i])
-		}
-		managerWatchCache = cache.MultiNamespacedCacheBuilder(ns)
-	} else {
-		setupLog.Info("Managing for the entire cluster.")
-		managerWatchCache = (cache.NewCacheFunc)(nil)
-	}
-
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	operatorOptions := ctrl.Options{
 		Scheme:                 scheme,
 		MetricsBindAddress:     metricsAddr,
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "88488bdc.solr.apache.org",
-		NewCache:               managerWatchCache,
-	})
+	}
+
+	/*
+		When the operator is started to watch resources in a specific set of namespaces, we use the MultiNamespacedCacheBuilder cache.
+		In this scenario, it is also suggested to restrict the provided authorization to this namespace by replacing the default
+		ClusterRole and ClusterRoleBinding to Role and RoleBinding respectively
+		For further information see the kubernetes documentation about
+		Using [RBAC Authorization](https://kubernetes.io/docs/reference/access-authn-authz/rbac/).
+
+		When watching multiple namespaces with leader election enabled, the leader election will use the lowest-sorted namespace.
+		It is likely safer to run individual solr operators per-namespace, to ensure leader election is working as expected no matter what.
+	 */
+	if watchNamespaces != "" {
+		setupLog.Info(fmt.Sprintf("Managing for Namespaces: %s", watchNamespaces))
+		ns := strings.Split(watchNamespaces, ",")
+		for i := range ns {
+			ns[i] = strings.TrimSpace(ns[i])
+		}
+		sort.Strings(ns)
+		operatorOptions.NewCache = cache.MultiNamespacedCacheBuilder(ns)
+
+		operatorOptions.LeaderElectionNamespace = ns[0]
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), operatorOptions)
 	if err != nil {
 		setupLog.Error(err, "unable to start solr operator")
 		os.Exit(1)

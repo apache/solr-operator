@@ -192,6 +192,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/359
         - name: SolrBackup Documentation
           url: https://apache.github.io/solr-operator/docs/solr-backup#recurring-backups
+    - kind: changed
+      description: Solr Operator Leader Election enabled by default
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/366
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/367
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.0-prerelease
