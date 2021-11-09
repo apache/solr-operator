@@ -131,11 +131,6 @@ templates:
     {% for line in load_lines(solr_operator_news_file, 4) -%}
     {{ line }}
     {%- endfor %}
-
-
-    Note: The Apache Software Foundation uses an extensive mirroring network for
-    distributing releases. It is possible that the mirror you are using may not have
-    replicated the release yet. If that is the case, please try another mirror.
 # TODOs belong to groups for easy navigation in menus. Todo objects may contain asciidoc
 # descriptions, a number of commands to execute, some links to display, user input to gather
 # etc. Here is the documentation of each type of object. For further details, please consult
@@ -997,8 +992,8 @@ groups:
     - https://www.apache.org/foundation/voting.html
 - !TodoGroup
   id: publish
-  title: Publishing to the ASF Mirrors
-  description: Once the vote has passed, the release may be published to the ASF Mirrors.
+  title: Publishing to the ASF
+  description: Once the vote has passed, the release may be published to the ASF.
   todos:
   - !Todo
     id: tag_release
@@ -1148,17 +1143,6 @@ groups:
         - !Command
           cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
           logfile: docker_upload.log
-  - !Todo
-    id: check_mirroring
-    title: Check state of mirroring so far
-    description: Mark this as complete once a good spread is confirmed
-    commands: !Commands
-      root_folder: '{{ git_checkout_folder }}'
-      commands_text: Run this script to check the number and percentage of mirrors that have the release
-      commands:
-      - !Command
-        cmd: python3 -u hack/release/wizard/poll-mirrors.py -version {{ release_version }} -o
-        live: true
   - !Todo
     id: check_artifact_hub
     title: Check state of ArtifactHub entries
@@ -1464,15 +1448,6 @@ groups:
     title: Announce the Solr Operator release (announce@a.o)
     description: |
       (( template=announce_solr_operator_sign_mail ))
-#  - !Todo
-#    id: add_to_wikipedia
-#    title: Add the new version to Wikipedia
-#    description: |
-#      Go to Wikipedia and edit the page to include the new release.
-#      Major versions should have a small new paragraph under 'History'.
-#      If you know other languages than English, edit those as well.
-#    links:
-#    - https://en.wikipedia.org/wiki/Apache_Solr
   - !Todo
     id: add_to_apache_reporter
     title: Add the new version to the Apache Release Reporter
@@ -1514,22 +1489,6 @@ groups:
 
     links:
       - https://github.com/apache/solr-operator/milestones?state=open
-#  - !Todo
-#    id: jira_clear_security
-#    title: Clear Security Level of Public Solr JIRA Issues
-#    description: |-
-#      ASF JIRA has a deficiency in which issues that have a security level of "Public" are nonetheless not searchable.
-#      As a maintenance task, we'll clear the security flag for all public Solr JIRAs, even if it is not a task directly
-#      related to the release:
-#
-#      . Open in browser: https://issues.apache.org/jira/issues/?jql=project+=+SOLR+AND+level+=+%22Public%22
-#      . In the `Tools` menu, start a bulk change, select all issues and click `Next`
-#      . Select operation="Edit issues" and click `Next`
-#      . Click the checkbox next to `Change security level` and choose `None` in the dropdown.
-#      . On the bottom of the form, uncheck the box that says `Send mail for this update`
-#      . Click `Next`, review the changes and click `Confirm`
-#    links:
-#    - https://issues.apache.org/jira/issues/?jql=project+=+SOLR+AND+level+=+%22Public%22
   - !Todo
     id: new_github_milestone_version_bugfix_minor
     title: Add a new milestone in Github for the next releases
@@ -1543,32 +1502,32 @@ groups:
     links:
       - https://github.com/apache/solr-operator/milestones
   - !Todo
-    id: stop_mirroring
-    title: Stop mirroring old releases
+    id: archive_old_releases
+    title: Move old releases to archive
     description: |
-      Shortly after new releases are first mirrored, they are automatically copied to the archives. 
+      Shortly after new releases are uploaded, they are automatically copied to the archives.
       Only the latest point release from each active branch should be kept under the Solr PMC
       svnpubsub areas `dist/releases/solr/solr-operator`. Older releases can be
       safely deleted, since they are already backed up in the archives.
 
-      Currenlty these versions are in the mirrors:
+      Currently these versions are in the ASF releases:
 
-      *{{ mirrored_versions|join(', ') }}*
+      *{{ released_versions|join(', ') }}*
 
       The commands below will remove old versions automatically. If this suggestion is wrong,
       please do *not* execute the commands automatically, but edit the command and run manually.
-      Versions to be deleted from the mirrors are:
+      Versions to be deleted from the release repo are:
 
-      *{{ mirrored_versions_to_delete|join(', ') }}*
+      *{{ released_versions_to_delete|join(', ') }}*
 
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: |
-        Run these commands to delete proposed versions from mirrors.
+        Run these commands to delete proposed versions from the release repo.
 
         WARNING: Validate that the proposal is correct!
       commands:
       - !Command
         cmd: |
-          svn rm -m "Stop mirroring old Solr Operator releases"{% for ver in mirrored_versions_to_delete %}  https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ ver }}{% endfor %}
+          svn rm -m "Move old Solr Operator releases to archive "{% for ver in released_versions_to_delete %}  https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ ver }}{% endfor %}
         logfile: svn-rm-solr-operator.log
