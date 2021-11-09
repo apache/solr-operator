@@ -154,7 +154,7 @@ func main() {
 
 		When watching multiple namespaces with leader election enabled, the leader election will use the lowest-sorted namespace.
 		It is likely safer to run individual solr operators per-namespace, to ensure leader election is working as expected no matter what.
-	 */
+	*/
 	if watchNamespaces != "" {
 		setupLog.Info(fmt.Sprintf("Managing for Namespaces: %s", watchNamespaces))
 		ns := strings.Split(watchNamespaces, ",")
