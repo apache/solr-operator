@@ -147,6 +147,44 @@ If you add recurrence, then a new backup will be scheduled based on the `startTi
 If you remove recurrence, then the `nextBackupTime` will be removed.
 However, if the recurrent backup is already underway, it will not be stopped.
 
+### Backup Scheduling
+
+Backups are scheduled based on the `startTimestamp` of the last backup.
+Therefore if a interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
+If the interval is shorter than the time it takes to complete a backup, then the next backup will started directly after the previous backup completes (even though it is delayed from its given schedule).
+And the next backup will be scheduled based on the `startTimestamp` of the delayed backup.
+So there is a possibility of skew overtime if backups take longer than the allotted schedule.
+
+If a guaranteed schedule is important, it is recommended to use intervals that are guaranteed to be longer than the time it takes to complete a backup.
+
+### Temporarily Disabling Recurring Backups
+
+It is also easy to temporarily disable backups for a time.
+Merely add `disabled: true` under the `recurrence` section of the `SolrBackup` resource.
+And set `disabled: false`, or just remove the property to re-enable backups.
+
+Since backups are scheduled based on the `startTimestamp` of the last backup, a new backup may start immediately after you re-enable the recurrence.
+
+```yaml
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+  recurrence: # Store one backup daily, and keep a week at a time.
+    schedule: "@daily"
+    maxSaved: 7
+    disabled: true
+```
+
+**Note: this will not stop any backups running at the time that `disabled: true` is set, it will only affect scheduling future backups.**
+
 ## Deleting an example SolrBackup
 
 Once the operator completes a backup, the SolrBackup instance can be safely deleted.

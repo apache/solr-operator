@@ -1063,6 +1063,10 @@ spec:
               recurrence:
                 description: "Set this backup to be taken recurrently, with options for scheduling and storage. \n NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API."
                 properties:
+                  disabled:
+                    default: false
+                    description: Disable the recurring backups. Note this will not affect any currently-running backup.
+                    type: boolean
                   maxSaved:
                     default: 5
                     description: Define the number of backup points to save for this backup at any given time. The oldest backups will be deleted if too many exist when a backup is taken. If not provided, this defaults to 5.

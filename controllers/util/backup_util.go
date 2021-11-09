@@ -84,7 +84,7 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location))
 	queryParams.Add("repository", backup.Spec.RepositoryName)
 
-	if backup.Spec.Recurrence != nil {
+	if backup.Spec.Recurrence.IsEnabled() {
 		queryParams.Add("maxNumBackupPoints", strconv.Itoa(backup.Spec.Recurrence.MaxSaved))
 	}
 

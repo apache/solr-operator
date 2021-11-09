@@ -94,6 +94,16 @@ type BackupRecurrence struct {
 	// +kubebuilder:validation:Minimum:=1
 	// +optional
 	MaxSaved int `json:"maxSaved,omitempty"`
+
+	// Disable the recurring backups. Note this will not affect any currently-running backup.
+	//
+	// +kubebuilder:default:=false
+	// +optional
+	Disabled bool `json:"disabled,omitempty"`
+}
+
+func (recurrence *BackupRecurrence) IsEnabled() bool {
+	return recurrence != nil && !recurrence.Disabled
 }
 
 // PersistenceSource defines the location and method of persisting the backup data.

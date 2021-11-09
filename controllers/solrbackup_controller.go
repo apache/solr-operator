@@ -96,8 +96,8 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// Check if we should start the next backup
 	if backup.Status.NextScheduledTime != nil {
-		// If the backup no longer has a recurrence specified, remove the next scheduled time
-		if backup.Spec.Recurrence == nil {
+		// If the backup no longer enabled, remove the next scheduled time
+		if !backup.Spec.Recurrence.IsEnabled() {
 			backup.Status.NextScheduledTime = nil
 			backupNeedsToWait = false
 		} else if backup.Status.NextScheduledTime.UTC().Before(time.Now().UTC()) {
@@ -146,7 +146,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Schedule the next backupTime, if it doesn't have a next scheduled time, it has recurrence and the current backup is finished
-	if backup.Status.NextScheduledTime == nil && backup.Spec.Recurrence != nil && backup.Status.IndividualSolrBackupStatus.Finished {
+	if backup.Status.NextScheduledTime == nil && backup.Spec.Recurrence.IsEnabled() && backup.Status.IndividualSolrBackupStatus.Finished {
 		if nextBackupTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.StartTime.Time); err1 != nil {
 			logger.Error(err1, "Could not schedule new backup due to bad cron schedule", "cron", backup.Spec.Recurrence.Schedule)
 		} else {
