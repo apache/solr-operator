@@ -115,16 +115,16 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   **Note**: Do not take backups while upgrading from the Solr Operator `v0.4.0` to `v0.5.0`.
   Wait for the SolrClouds to be updated, after the Solr Operator is upgraded, and complete their rolling restarts before continuing to use the Backup functionality.
 
-- The location of Solr backup data as well as the name of the Solr backups have been changed, when using managed repositories.
+- The location of Solr backup data as well as the name of the Solr backups have been changed, when using volume repositories.
   Previously the name of the backup (in solr) was set to the name of the collection.
   Now the name given to the backup in Solr will be set to `<backup-resource-name>-<collection-name>`, without the `<` or `>` characters, where the `backup-resource-name` is the name of the SolrBackup resource.
 
-  The directory in the Read-Write-Many Volume, required for managed repositories, that backups are written to is now `/backups` by default, instead of `/backups/<backup-name>`.
+  The directory in the Read-Write-Many Volume, required for volume repositories, that backups are written to is now `/cloud/<solr-cloud-name>/backups` by default, instead of `/cloud/<solr-cloud-name>/backups/<backup-name>`.
   Because the backup name in Solr uses both the SolrBackup resource name and the collection name, there should be no collisions in this directory.
-  However, this can be overridden using the `SolrBackup.spec.location` option.
+  However, this can be overridden using the `SolrBackup.spec.location` option, which is appended to `/cloud/<solr-cloud-name>`.
 
 - The SolrBackup persistence option has been removed as of `v0.5.0`.
-  Users should plan to keep their backup data in the shared volume if using a MountedVolume Backup repository.
+  Users should plan to keep their backup data in the shared volume if using a Volume Backup repository.
   If `SolrBackup.spec.persistence` is provided, it will be removed and written back to Kubernetes.
 
   Users using the S3 persistence option should try to use the [S3 backup repository](solr-backup/README.md#s3-backup-repositories) instead. This requires Solr 8.10 or higher.

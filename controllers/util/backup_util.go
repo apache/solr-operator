@@ -144,8 +144,8 @@ func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collec
 }
 
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, config *rest.Config) (err error) {
-	// Directory creation only required/possible for managed (i.e. local) backups
-	if IsRepoManaged(backupRepository) {
+	// Directory creation only required/possible for volume (i.e. local) backups
+	if IsRepoVolume(backupRepository) {
 		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
 		return RunExecForPod(
 			solrCloud.GetAllSolrPodNames()[0],

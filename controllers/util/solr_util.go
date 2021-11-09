@@ -591,7 +591,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
 	for _, repo := range solrCloud.Spec.BackupRepositories {
-		if IsRepoManaged(&repo) {
+		if IsRepoVolume(&repo) {
 			_, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
 			volumeMounts = append(volumeMounts, *volumeMount)
 

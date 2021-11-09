@@ -17,10 +17,10 @@
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:
-  name: local-backup-without-persistence
+  name: volume-backup
   namespace: default
 spec:
-  repositoryName: "managed_repository_1"
+  repositoryName: "volume_repository_1"
   solrCloud: multiple-backup-repos
   collections:
     - example

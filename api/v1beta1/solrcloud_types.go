@@ -54,7 +54,7 @@ const (
 
 	DefaultBasicAuthUsername = "k8s-oper"
 
-	LegacyBackupRepositoryName = "legacy_local_repository"
+	LegacyBackupRepositoryName = "legacy_volume_repository"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -192,8 +192,8 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	if spec.StorageOptions.BackupRestoreOptions != nil {
 		spec.BackupRepositories = append(spec.BackupRepositories, SolrBackupRepository{
 			Name: LegacyBackupRepositoryName,
-			Managed: &ManagedRepository{
-				Volume:    spec.StorageOptions.BackupRestoreOptions.Volume,
+			Volume: &VolumeRepository{
+				Source:    spec.StorageOptions.BackupRestoreOptions.Volume,
 				Directory: spec.StorageOptions.BackupRestoreOptions.Directory,
 			},
 		})
@@ -253,7 +253,7 @@ type SolrDataStorageOptions struct {
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
 
 	// Options required for backups to be enabled for this solrCloud.
-	// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
+	// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
 	// TODO: Remove in v0.6.0
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
@@ -362,19 +362,19 @@ type SolrEphemeralDataStorageOptions struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
-// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
+// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
 type SolrBackupRestoreOptions struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	// Deprecated: Create an explicit 'managedRepositories' entry instead.
+	// Deprecated: Create an explicit 'backupRepositories' entry instead.
 	Volume corev1.VolumeSource `json:"volume"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
-	// Deprecated: Create an explicit 'managedRepositories' entry instead.
+	// Deprecated: Create an explicit 'backupRepositories' entry instead.
 	// +optional
 	Directory string `json:"directory,omitempty"`
 }
@@ -402,7 +402,7 @@ type SolrBackupRepository struct {
 	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
 	// post-backup compression.
 	//+optional
-	Managed *ManagedRepository `json:"managed,omitempty"`
+	Volume *VolumeRepository `json:"volume,omitempty"`
 }
 
 type GcsRepository struct {
@@ -465,15 +465,15 @@ type S3Credentials struct {
 	CredentialsFileSecret *corev1.SecretKeySelector `json:"credentialsFileSecret,omitempty"`
 }
 
-type ManagedRepository struct {
+type VolumeRepository struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	Volume corev1.VolumeSource `json:"volume"`
+	Source corev1.VolumeSource `json:"source"`
 
-	// Select a custom directory name to mount the backup/restore data from the given volume.
+	// Select a custom directory name to mount the backup/restore data in the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
 	// +optional
 	Directory string `json:"directory,omitempty"`

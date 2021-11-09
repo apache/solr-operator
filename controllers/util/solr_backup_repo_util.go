@@ -38,8 +38,8 @@ func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("backup-repository-%s", repo.Name)
 }
 
-func IsRepoManaged(repo *solrv1beta1.SolrBackupRepository) bool {
-	return repo.Managed != nil
+func IsRepoVolume(repo *solrv1beta1.SolrBackupRepository) bool {
+	return repo.Volume != nil
 }
 
 func BackupRestoreSubPathForCloud(directoryOverride string, cloud string) string {
@@ -61,17 +61,17 @@ func S3RepoSecretMountPath(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("%s/%s/%s", BaseBackupRestorePath, repo.Name, "s3credential")
 }
 
-func ManagedRepoVolumeMountPath(repo *solrv1beta1.SolrBackupRepository) string {
+func VolumeRepoVolumeMountPath(repo *solrv1beta1.SolrBackupRepository) string {
 	return fmt.Sprintf("%s/%s", BaseBackupRestorePath, repo.Name)
 }
 
 func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudName string) (source *corev1.VolumeSource, mount *corev1.VolumeMount) {
 	f := false
-	if repo.Managed != nil {
-		source = &repo.Managed.Volume
+	if repo.Volume != nil {
+		source = &repo.Volume.Source
 		mount = &corev1.VolumeMount{
-			MountPath: ManagedRepoVolumeMountPath(repo),
-			SubPath:   BackupRestoreSubPathForCloud(repo.Managed.Directory, solrCloudName),
+			MountPath: VolumeRepoVolumeMountPath(repo),
+			SubPath:   BackupRestoreSubPathForCloud(repo.Volume.Directory, solrCloudName),
 			ReadOnly:  false,
 		}
 	} else if repo.GCS != nil {
@@ -118,7 +118,7 @@ func AdditionalRepoLibs(repo *solrv1beta1.SolrBackupRepository) (libs []string) 
 }
 
 func RepoXML(repo *solrv1beta1.SolrBackupRepository) (xml string) {
-	if repo.Managed != nil {
+	if repo.Volume != nil {
 		xml = fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, repo.Name)
 	} else if repo.GCS != nil {
 		xml = fmt.Sprintf(`
@@ -198,22 +198,12 @@ func GenerateBackupRepositoriesForSolrXml(backupRepos []solrv1beta1.SolrBackupRe
 	return
 }
 
-func IsBackupVolumePresent(repo *solrv1beta1.SolrBackupRepository, pod *corev1.Pod) bool {
-	expectedVolumeName := RepoVolumeName(repo)
-	for _, volume := range pod.Spec.Volumes {
-		if volume.Name == expectedVolumeName {
-			return true
-		}
-	}
-	return false
-}
-
 func BackupLocationPath(repo *solrv1beta1.SolrBackupRepository, backupLocation string) string {
-	if repo.Managed != nil {
+	if repo.Volume != nil {
 		if backupLocation == "" {
 			backupLocation = "backups"
 		}
-		return fmt.Sprintf("%s/%s", ManagedRepoVolumeMountPath(repo), backupLocation)
+		return fmt.Sprintf("%s/%s", VolumeRepoVolumeMountPath(repo), backupLocation)
 	} else if repo.GCS != nil {
 		if backupLocation != "" {
 			return backupLocation

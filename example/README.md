@@ -11,6 +11,5 @@ The following examples are provided in helping explain various options provided 
 - Solr Prometheus Exporter
   - [Basic](test_solrprometheusexporter.yaml)
 - Solr Backup
-  - [Managed Backup](test_backup_managed.yaml)
-  - [Managed Backup with Persistence](test_backup_managed_with_persistence.yaml)
+  - [Volume Backup](test_backup_volume.yaml)
   - [GCS Backup](test_backup_gcs.yaml)
