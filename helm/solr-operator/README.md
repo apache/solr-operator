@@ -158,8 +158,9 @@ The command removes all the Kubernetes components associated with the chart and 
 |-----|------|---------|-------------|
 | watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
 | zookeeper-operator.install | boolean | `true` | This option installs the Zookeeper Operator as a helm dependency |
-| metrics.enable | boolean | `true` | Enable metrics for the Solr Operator. Will be available via the "metrics"/8080 port on the solr operator pods under the "/metrics" path. |
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |
+| leaderElection.enable | boolean | `true` | Enable leader election for the Solr Operator. Will work across multiple `watchNamespaces`, as long as all deployments have the same list for `watchNamespaces`. |
+| metrics.enable | boolean | `true` | Enable metrics for the Solr Operator. Will be available via the "metrics"/8080 port on the solr operator pods under the "/metrics" path. |
 | mTLS.clientCertSecret | string | `""` | Name of a Kubernetes TLS secret, in the same namespace, that contains a Client certificate to load into the operator. If provided, this is used when communicating with Solr. |
 | mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
 | mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |
