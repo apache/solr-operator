@@ -179,7 +179,7 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 
 	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
 	if solrCloud.Spec.SolrSecurity != nil {
-		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud.Spec.SolrSecurity, solrCloud.Namespace)
+		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud)
 		if err != nil {
 			return nil, actionTaken, err
 		}

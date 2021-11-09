@@ -221,11 +221,11 @@ func (security *SecurityConfig) AddAuthToContext(ctx context.Context) (context.C
 }
 
 // Similar to security.AddAuthToContext but we need to lookup the secret containing the authn credentials first
-func AddAuthToContext(ctx context.Context, client *client.Client, solrSecurity *solr.SolrSecurityOptions, ns string) (context.Context, error) {
-	reader := *client
-	if solrSecurity.AuthenticationType == solr.Basic {
+func AddAuthToContext(ctx context.Context, client *client.Client, solrCloud *solr.SolrCloud) (context.Context, error) {
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
+		reader := *client
 		basicAuthSecret := &corev1.Secret{}
-		if err := reader.Get(ctx, types.NamespacedName{Name: solrSecurity.BasicAuthSecret, Namespace: ns}, basicAuthSecret); err != nil {
+		if err := reader.Get(ctx, types.NamespacedName{Name: solrCloud.BasicAuthSecretName(), Namespace: solrCloud.Namespace}, basicAuthSecret); err != nil {
 			return nil, err
 		}
 		return contextWithBasicAuthHeader(ctx, basicAuthSecret), nil
