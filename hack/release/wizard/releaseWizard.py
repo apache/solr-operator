@@ -1990,6 +1990,16 @@ def prepare_announce(todo):
         print("Draft already exist, not re-generating")
     return True
 
+def check_artifacts_available(todo):
+    try:
+        cdnUrl = expand_jinja("https://dlcdn.apache.org/solr/solr-operator/{{ release_version }}/solr-operator-{{ release_version }}.tgz.asc")
+        load(cdnUrl)
+        print("Found %s" % cdnUrl)
+    except Exception as e:
+        print("Could not fetch %s (%s)" % (cdnUrl, e))
+        return False
+
+    return True
 
 def load_lines(file, from_line=0):
     if os.path.exists(file):

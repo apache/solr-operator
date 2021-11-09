@@ -1144,6 +1144,15 @@ groups:
           cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
           logfile: docker_upload.log
   - !Todo
+    id: check_distribution_directory
+    depends: svn_release_mv
+    title: Check that artifacts are available
+    function: check_artifacts_available
+    description: |
+      The task will attempt to fetch https://dlcdn.apache.org/solr/solr-operator/{{ release_version }}/solr-operator-{{ release_version }}.tgz.asc
+      to validate the ASF repo.
+      If the check fails, please re-run the task, until it succeeds.
+  - !Todo
     id: check_artifact_hub
     title: Check state of ArtifactHub entries
     depends:
@@ -1516,18 +1525,18 @@ groups:
 
       The commands below will remove old versions automatically. If this suggestion is wrong,
       please do *not* execute the commands automatically, but edit the command and run manually.
-      Versions to be deleted from the release repo are:
+      Versions to be deleted from the distribution directory repo are:
 
       *{{ released_versions_to_delete|join(', ') }}*
 
     commands: !Commands
       root_folder: '{{ git_checkout_folder }}'
       commands_text: |
-        Run these commands to delete proposed versions from the release repo.
+        Run these commands to delete proposed versions from the distribution directory repo.
 
         WARNING: Validate that the proposal is correct!
       commands:
       - !Command
         cmd: |
-          svn rm -m "Move old Solr Operator releases to archive "{% for ver in released_versions_to_delete %}  https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ ver }}{% endfor %}
+          svn rm -m "Move old Solr Operator releases to archive"{% for ver in released_versions_to_delete %}  https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ ver }}{% endfor %}
         logfile: svn-rm-solr-operator.log
