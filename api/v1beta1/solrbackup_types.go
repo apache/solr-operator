@@ -41,7 +41,7 @@ type SolrBackupSpec struct {
 	// +optional
 	RepositoryName string `json:"repositoryName,omitempty"`
 
-	// The list of collections to backup. If empty, all collections in the cloud will be backed up.
+	// The list of collections to backup.
 	// +optional
 	Collections []string `json:"collections,omitempty"`
 

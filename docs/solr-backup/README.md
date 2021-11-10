@@ -21,11 +21,11 @@ The Solr Operator supports triggering the backup of arbitrary Solr collections.
 
 Triggering these backups involves setting configuration options on both the SolrCloud and SolrBackup CRDs.
 The SolrCloud instance is responsible for defining one or more backup "repositories" (metadata describing where and how the backup data should be stored).
-SolrBackup instances then trigger backups by referencing these repositories by name, listing the Solr collections to back up, and optionally requesting some limited post-processing of the backup data (compression, relocation, etc).
+SolrBackup instances then trigger backups by referencing these repositories by name, listing the Solr collections to back up, and optionally scheduling recurring backups.
 
-For detailed information on how to best configure backups for your use case, please refer to the detailed schema information provided by `kubectl explain solrcloud.spec.dataStorage.backupRestoreOptions` and its child elements, as well as `kubectl explain solrbackup`.
+For detailed information on how to best configure backups for your use case, please refer to the detailed schema information provided by `kubectl explain solrcloud.spec.backupRepositories` and its child elements, as well as `kubectl explain solrbackup`.
 
-This page outlines how to create and delete a Kubernetes SolrBackup
+This page outlines how to create and delete a Kubernetes SolrBackup.
 
 - [Creation](#creating-an-example-solrbackup)
 - [Recurring/Scheduled Backups](#recurring-backups)
@@ -151,7 +151,7 @@ However, if the recurrent backup is already underway, it will not be stopped.
 ### Backup Scheduling
 
 Backups are scheduled based on the `startTimestamp` of the last backup.
-Therefore if a interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
+Therefore, if an interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
 If the interval is shorter than the time it takes to complete a backup, then the next backup will started directly after the previous backup completes (even though it is delayed from its given schedule).
 And the next backup will be scheduled based on the `startTimestamp` of the delayed backup.
 So there is a possibility of skew overtime if backups take longer than the allotted schedule.
@@ -218,11 +218,11 @@ Note all repositories are defined in the `SolrCloud` specification.
 In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
 All yaml examples below are `SolrCloud` resources, not `SolrBackup` resources.
 
-The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and volume ("local").
-The cloud backup solutions (GCS and S3) are strongly suggested over the volume option, though they require newer Solr releases.
+The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and Volume ("local").
+The cloud backup solutions (GCS and S3) are strongly suggested as they are cloud-native backup solutions, however they require newer Solr versions.
 
 Multiple repositories can be defined under the `SolrCloud.spec.backupRepositories` field.
-Specify a unique name and repo type that you want to connect to.
+Specify a unique name and single repo type that you want to connect to.
 Repository-type specific options are found under the object named with the repository-type.
 Examples can be found below under each repository-type section below.
 Feel free to mix and match multiple backup repository types to fit your use case (or multiple repositories of the same type):

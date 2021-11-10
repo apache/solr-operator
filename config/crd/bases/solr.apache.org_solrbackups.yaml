@@ -72,7 +72,7 @@ spec:
             description: SolrBackupSpec defines the desired state of SolrBackup
             properties:
               collections:
-                description: The list of collections to backup. If empty, all collections in the cloud will be backed up.
+                description: The list of collections to backup.
                 items:
                   type: string
                 type: array
