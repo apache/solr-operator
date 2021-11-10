@@ -32,7 +32,7 @@ This page outlines how to create, update and delete a SolrCloud in Kubernetes.
 
 ## Creating an example SolrCloud
 
-Make sure that the solr-operator and a zookeeper-operator are running.
+Make sure that the Solr Operator and a Zookeeper Operator are running.
 
 Create an example Solr cloud, with the following configuration.
 
@@ -98,11 +98,16 @@ $ kubectl delete solrcloud example
 
 ### Official Solr Images
 
-The solr-operator will work with any of the [official Solr images](https://hub.docker.com/_/solr) currently available.
+The Solr Operator is only guaranteed to work with [official Solr images](https://hub.docker.com/_/solr).
+However, as long as your custom image is built to be compatible with the official image, things should go smoothly.
+This is especially true starting with Solr 9, where the docker image creation is bundled within Solr.
+Merely run `./gradlew docker` in the Solr repository, and your custom Solr additions will be packaged into an officially compliant Solr Docker image.
+
+Please refer to the [Version Compatibility Matrix](../upgrade-notes.md#solr-versions) for more information on what Solr Versions are compatible with the Solr Operator.
 
 ### Build Your Own Private Solr Images
 
-The solr-operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images. 
+The Solr Operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images. 
 
 Using a private image requires you have a K8s secret preconfigured with appropriate access to the image. (type: kubernetes.io/dockerconfigjson)
 
