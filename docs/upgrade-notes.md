@@ -47,6 +47,12 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 | `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 | `v0.5.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
+Please note that this represents basic compatibility with the Solr Operator.
+There may be options and features that require newer versions of Solr.
+(e.g. S3/GCS Backup Support)
+
+Please test to make sure the features you plan to use are compatible with the version of Solr you choose to run.
+
 
 ### Upgrading from `v0.2.x` to `v0.3.x`
 If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
