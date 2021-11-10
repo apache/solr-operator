@@ -131,6 +131,11 @@ If both of those criteria are met, then an individual ClusterIP Service will be 
 If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
 Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
 
+## Backups
+
+Solr Backups are enabled via the Solr Operator.
+Please refer to the [SolrBackup documentation](../solr-backup) for more information on setting up a SolrCloud with backups enabled.
+
 ## Zookeeper Reference
 
 Solr Clouds require an Apache Zookeeper to connect to.

@@ -21,11 +21,11 @@ The Solr Operator supports triggering the backup of arbitrary Solr collections.
 
 Triggering these backups involves setting configuration options on both the SolrCloud and SolrBackup CRDs.
 The SolrCloud instance is responsible for defining one or more backup "repositories" (metadata describing where and how the backup data should be stored).
-SolrBackup instances then trigger backups by referencing these repositories by name, listing the Solr collections to back up, and optionally requesting some limited post-processing of the backup data (compression, relocation, etc).
+SolrBackup instances then trigger backups by referencing these repositories by name, listing the Solr collections to back up, and optionally scheduling recurring backups.
 
-For detailed information on how to best configure backups for your use case, please refer to the detailed schema information provided by `kubectl explain solrcloud.spec.dataStorage.backupRestoreOptions` and its child elements, as well as `kubectl explain solrbackup`.
+For detailed information on how to best configure backups for your use case, please refer to the detailed schema information provided by `kubectl explain solrcloud.spec.backupRepositories` and its child elements, as well as `kubectl explain solrbackup`.
 
-This page outlines how to create and delete a Kubernetes SolrBackup
+This page outlines how to create and delete a Kubernetes SolrBackup.
 
 - [Creation](#creating-an-example-solrbackup)
 - [Recurring/Scheduled Backups](#recurring-backups)
@@ -33,6 +33,7 @@ This page outlines how to create and delete a Kubernetes SolrBackup
 - [Repository Types](#supported-repository-types)
   - [GCS](#gcs-backup-repositories)
   - [S3](#s3-backup-repositories)
+  - [Volume](#volume-backup-repositories)
 
 ## Creating an example SolrBackup
 
@@ -70,8 +71,8 @@ To do this, run `kubectl edit solrcloud example`, adding the following YAML nest
 spec:
   backupRepositories:
     - name: "local-collection-backups-1"
-      managed:
-        volume:
+      volume:
+        source:
           persistentVolumeClaim:
             claimName: "collection-backup-pvc"
 ```
@@ -150,7 +151,7 @@ However, if the recurrent backup is already underway, it will not be stopped.
 ### Backup Scheduling
 
 Backups are scheduled based on the `startTimestamp` of the last backup.
-Therefore if a interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
+Therefore, if an interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
 If the interval is shorter than the time it takes to complete a backup, then the next backup will started directly after the previous backup completes (even though it is delayed from its given schedule).
 And the next backup will be scheduled based on the `startTimestamp` of the delayed backup.
 So there is a possibility of skew overtime if backups take longer than the allotted schedule.
@@ -197,13 +198,13 @@ Note that deleting SolrBackup instances doesn't delete the backed up data, which
 In our example this data can still be found on the volume we created earlier
 
 ```bash
-$ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore-managed-local-collection-backups-1/backups/
+$ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore/local-collection-backups-1/backups/
 total 8K
 drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-books
 drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-techproducts
 ```
 
-Managed backup data, as in our example, can always be deleted using standard shell commands if desired:
+Volume backup data, as in our example, can always be deleted using standard shell commands if desired:
 
 ```bash
 kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore/local-collection-backups-1/backups/local-backup-books
@@ -217,23 +218,29 @@ Note all repositories are defined in the `SolrCloud` specification.
 In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
 All yaml examples below are `SolrCloud` resources, not `SolrBackup` resources.
 
-The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and managed ("local").
-The cloud backup solutions (GCS and S3) are strongly suggested over the managed option, though they require newer Solr releases.
+The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and Volume ("local").
+The cloud backup solutions (GCS and S3) are strongly suggested as they are cloud-native backup solutions, however they require newer Solr versions.
 
 Multiple repositories can be defined under the `SolrCloud.spec.backupRepositories` field.
-Specify a unique name and repo type that you want to connect to.
+Specify a unique name and single repo type that you want to connect to.
 Repository-type specific options are found under the object named with the repository-type.
 Examples can be found below under each repository-type section below.
-Feel free to mix and match multiple backup repository types to fit your use case:
+Feel free to mix and match multiple backup repository types to fit your use case (or multiple repositories of the same type):
 
 ```yaml
 spec:
   backupRepositories:
     - name: "local-collection-backups-1"
-      managed:
+      volume:
         ...
     - name: "gcs-collection-backups-1"
       gcs:
+        ...
+    - name: "s3-collection-backups-1"
+      s3:
+        ...
+    - name: "s3-collection-backups-2"
+      s3:
         ...
 ```
 
@@ -336,19 +343,21 @@ If this is done correctly, you will only need to specify the serviceAccount for 
 _NOTE: Because the Solr S3 Repository is using system-wide settings for AWS credentials, you cannot specify different credentials for different S3 repositories.
 This may be addressed in future Solr versions, but for now use the same credentials for all s3 repos._
 
-### Managed ("Local") Backup Repositories
+### Volume Backup Repositories
 _Since v0.5.0_
 
-Managed repositories store backup data "locally" on a Kubernetes volume mounted by each Solr pod.
-An example of a SolrCloud spec with only one backup repository, with type Managed:
+Volume repositories store backup data "locally" on a Kubernetes volume mounted to each Solr pod.
+An example of a SolrCloud spec with only one backup repository, with type Volume:
 
 ```yaml
 spec:
   backupRepositories:
     - name: "local-collection-backups-1"
-      managed:
-        volume: # Required
+      volume:
+        source: # Required
           persistentVolumeClaim:
             claimName: "collection-backup-pvc"
         directory: "store/here" # Optional
 ```
+
+**NOTE: All persistent volumes used with Volume Repositories must have `accessMode: ReadWriteMany` set, otherwise the backups will not succeed.**

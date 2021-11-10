@@ -72,7 +72,7 @@ spec:
             description: SolrBackupSpec defines the desired state of SolrBackup
             properties:
               collections:
-                description: The list of collections to backup. If empty, all collections in the cloud will be backed up.
+                description: The list of collections to backup.
                 items:
                   type: string
                 type: array
@@ -1368,13 +1368,105 @@ spec:
                       - bucket
                       - gcsCredentialSecret
                       type: object
-                    managed:
+                    name:
+                      description: 'A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'
+                      maxLength: 100
+                      minLength: 1
+                      pattern: '[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?'
+                      type: string
+                    s3:
+                      description: An S3Repository for Solr to use when backing up and restoring collections.
+                      properties:
+                        baseLocation:
+                          description: An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
+                          type: string
+                        bucket:
+                          description: The name of the S3 bucket that all backup data will be stored in
+                          type: string
+                        credentials:
+                          description: "Options for specifying S3Credentials. This is optional in case you want to mount this information yourself. However, if you do not include these credentials, and you do not load them yourself via a mount or EnvVars, you will likely see errors when taking s3 backups. \n If running in EKS, you can create an IAMServiceAccount that uses a role permissioned for this S3 bucket. Then use that serviceAccountName for your SolrCloud, and the credentials should be auto-populated."
+                          properties:
+                            accessKeyIdSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Access Key ID
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            credentialsFileSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS credentials file
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            secretAccessKeySecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Secret Access Key
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                            sessionTokenSecret:
+                              description: The name & key of a Kubernetes secret holding an AWS Session Token
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must be a valid secret key.
+                                  type: string
+                                name:
+                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                          type: object
+                        endpoint:
+                          description: The full endpoint URL to use when connecting with S3 (or a supported S3 compatible interface)
+                          type: string
+                        proxyUrl:
+                          description: The full proxy URL to use when connecting with S3
+                          type: string
+                        region:
+                          description: The S3 region to store the backup data in
+                          type: string
+                      required:
+                      - bucket
+                      - region
+                      type: object
+                    volume:
                       description: Allows specification of a "repository" for Solr to use when backing up data "locally". Repositories defined here are considered "managed" and can take advantage of special operator features, such as post-backup compression.
                       properties:
                         directory:
-                          description: Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default.
+                          description: Select a custom directory name to mount the backup/restore data in the given volume. If not specified, then the name of the solrcloud will be used by default.
                           type: string
-                        volume:
+                        source:
                           description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume.'
                           properties:
                             awsElasticBlockStore:
@@ -2270,99 +2362,7 @@ spec:
                               type: object
                           type: object
                       required:
-                      - volume
-                      type: object
-                    name:
-                      description: 'A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'
-                      maxLength: 100
-                      minLength: 1
-                      pattern: '[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?'
-                      type: string
-                    s3:
-                      description: An S3Repository for Solr to use when backing up and restoring collections.
-                      properties:
-                        baseLocation:
-                          description: An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
-                          type: string
-                        bucket:
-                          description: The name of the S3 bucket that all backup data will be stored in
-                          type: string
-                        credentials:
-                          description: "Options for specifying S3Credentials. This is optional in case you want to mount this information yourself. However, if you do not include these credentials, and you do not load them yourself via a mount or EnvVars, you will likely see errors when taking s3 backups. \n If running in EKS, you can create an IAMServiceAccount that uses a role permissioned for this S3 bucket. Then use that serviceAccountName for your SolrCloud, and the credentials should be auto-populated."
-                          properties:
-                            accessKeyIdSecret:
-                              description: The name & key of a Kubernetes secret holding an AWS Access Key ID
-                              properties:
-                                key:
-                                  description: The key of the secret to select from.  Must be a valid secret key.
-                                  type: string
-                                name:
-                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                                  type: string
-                                optional:
-                                  description: Specify whether the Secret or its key must be defined
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                            credentialsFileSecret:
-                              description: The name & key of a Kubernetes secret holding an AWS credentials file
-                              properties:
-                                key:
-                                  description: The key of the secret to select from.  Must be a valid secret key.
-                                  type: string
-                                name:
-                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                                  type: string
-                                optional:
-                                  description: Specify whether the Secret or its key must be defined
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                            secretAccessKeySecret:
-                              description: The name & key of a Kubernetes secret holding an AWS Secret Access Key
-                              properties:
-                                key:
-                                  description: The key of the secret to select from.  Must be a valid secret key.
-                                  type: string
-                                name:
-                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                                  type: string
-                                optional:
-                                  description: Specify whether the Secret or its key must be defined
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                            sessionTokenSecret:
-                              description: The name & key of a Kubernetes secret holding an AWS Session Token
-                              properties:
-                                key:
-                                  description: The key of the secret to select from.  Must be a valid secret key.
-                                  type: string
-                                name:
-                                  description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names TODO: Add other useful fields. apiVersion, kind, uid?'
-                                  type: string
-                                optional:
-                                  description: Specify whether the Secret or its key must be defined
-                                  type: boolean
-                              required:
-                              - key
-                              type: object
-                          type: object
-                        endpoint:
-                          description: The full endpoint URL to use when connecting with S3 (or a supported S3 compatible interface)
-                          type: string
-                        proxyUrl:
-                          description: The full proxy URL to use when connecting with S3
-                          type: string
-                        region:
-                          description: The S3 region to store the backup data in
-                          type: string
-                      required:
-                      - bucket
-                      - region
+                      - source
                       type: object
                   required:
                   - name
@@ -5911,13 +5911,13 @@ spec:
                 description: Customize how the cloud data is stored. If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
                 properties:
                   backupRestoreOptions:
-                    description: 'Options required for backups to be enabled for this solrCloud. Deprecated: Use a SolrBackupRepository with a ManagedRepository instead TODO: Remove in v0.6.0'
+                    description: 'Options required for backups to be enabled for this solrCloud. Deprecated: Use a SolrBackupRepository with a VolumeRepository instead TODO: Remove in v0.6.0'
                     properties:
                       directory:
-                        description: 'Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default. Deprecated: Create an explicit ''managedRepositories'' entry instead.'
+                        description: 'Select a custom directory name to mount the backup/restore data from the given volume. If not specified, then the name of the solrcloud will be used by default. Deprecated: Create an explicit ''backupRepositories'' entry instead.'
                         type: string
                       volume:
-                        description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume. Deprecated: Create an explicit ''managedRepositories'' entry instead.'
+                        description: 'This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores. The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds. Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods. If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`. Other options are to use a NFS volume. Deprecated: Create an explicit ''backupRepositories'' entry instead.'
                         properties:
                           awsElasticBlockStore:
                             description: 'AWSElasticBlockStore represents an AWS Disk resource that is attached to a kubelet''s host machine and then exposed to the pod. More info: https://kubernetes.io/docs/concepts/storage/volumes#awselasticblockstore'

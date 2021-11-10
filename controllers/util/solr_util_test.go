@@ -34,9 +34,9 @@ func TestNoRepositoryXmlGeneratedWhenNoRepositoriesExist(t *testing.T) {
 func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 	repos := []solr.SolrBackupRepository{
 		{
-			Name: "managedrepository1",
-			Managed: &solr.ManagedRepository{
-				Volume: corev1.VolumeSource{},
+			Name: "volumerepository1",
+			Volume: &solr.VolumeRepository{
+				Source: corev1.VolumeSource{},
 			},
 		},
 		{
@@ -57,9 +57,9 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			},
 		},
 		{
-			Name: "managedrepository2",
-			Managed: &solr.ManagedRepository{
-				Volume: corev1.VolumeSource{},
+			Name: "volumerepository2",
+			Volume: &solr.VolumeRepository{
+				Source: corev1.VolumeSource{},
 			},
 		},
 		{
@@ -85,8 +85,8 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 
 	// These assertions don't fully guarantee valid XML, but they at least make sure each repo is defined and uses the correct class.
 	// If we wanted to bring in an xpath library for assertions we could be a lot more comprehensive here.
-	assert.Containsf(t, xmlString, "<repository name=\"managedrepository1\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", "Did not find '%s' in the list of backup repositories", "managedrepository1")
-	assert.Containsf(t, xmlString, "<repository name=\"managedrepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", "Did not find '%s' in the list of backup repositories", "managedrepository2")
+	assert.Containsf(t, xmlString, "<repository name=\"volumerepository1\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", "Did not find '%s' in the list of backup repositories", "volumerepository1")
+	assert.Containsf(t, xmlString, "<repository name=\"volumerepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", "Did not find '%s' in the list of backup repositories", "volumerepository2")
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository1\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository1")
 	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository2\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository2")
 	assert.Containsf(t, xmlString, "<repository name=\"s3repository1\" class=\"org.apache.solr.s3.S3BackupRepository\">", "Did not find '%s' in the list of backup repositories", "s3repository1")
