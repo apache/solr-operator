@@ -71,7 +71,9 @@ spec:
         {{- if .Values.metrics.enable }}
         - "--metrics-bind-address=:8080"
         {{- end }}
-        {{- if not .Values.leaderElection.enable }}
+        {{- if .Values.leaderElection.enable }}
+        - "--leader-elect=true"
+        {{- else }}
         - "--leader-elect=false"
         {{- end }}
 
