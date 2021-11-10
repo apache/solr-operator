@@ -51,7 +51,7 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION_SUFFIX:-}" ]]; then
-  EXISTING_VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
+  EXISTING_VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)"
   if [[ -z "${EXISTING_VERSION_SUFFIX}" ]]; then
     export VERSION_SUFFIX="prerelease"
   else
@@ -62,6 +62,6 @@ fi
 echo "Updating the version suffix for the project to: ${VERSION_SUFFIX}"
 
 # Version file
-awk '$1 == "VersionSuffix"{$4 = "\"'"${VERSION_SUFFIX}"'\""} 1' version/version.go > version/version.tmp.go
+awk '$1 == "VersionSuffix"{$3 = "\"'"${VERSION_SUFFIX}"'\""} 1' version/version.go > version/version.tmp.go
 go fmt version/version.tmp.go
 mv version/version.tmp.go version/version.go
