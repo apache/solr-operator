@@ -441,7 +441,10 @@ groups:
         cmd: git checkout main
         tee: true
       - !Command
-        cmd: ./hack/release/version/remove_version_specific_info.sh -v {{ next_version }}
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/remove_version_specific_info.sh
         tee: true
       - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
@@ -470,7 +473,10 @@ groups:
         cmd: git checkout {{ stable_branch }}
         tee: true
       - !Command
-        cmd: ./hack/release/version/remove_version_specific_info.sh -v {{ next_version }}
+        cmd: git pull --ff-only
+        tee: true
+      - !Command
+        cmd: ./hack/release/version/remove_version_specific_info.sh
         tee: true
       - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
