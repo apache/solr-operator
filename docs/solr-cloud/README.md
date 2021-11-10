@@ -101,7 +101,7 @@ $ kubectl delete solrcloud example
 The Solr Operator is only guaranteed to work with [official Solr images](https://hub.docker.com/_/solr).
 However, as long as your custom image is built to be compatible with the official image, things should go smoothly.
 This is especially true starting with Solr 9, where the docker image creation is bundled within Solr.
-Merely run `./gradlew docker` in the Solr repository, and your custom Solr additions will be packaged into an officially compliant Solr Docker image.
+Run `./gradlew docker` in the Solr repository, and your custom Solr additions will be packaged into an officially compliant Solr Docker image.
 
 Please refer to the [Version Compatibility Matrix](../upgrade-notes.md#solr-versions) for more information on what Solr Versions are compatible with the Solr Operator.
 
