@@ -105,6 +105,10 @@ Merely run `./gradlew docker` in the Solr repository, and your custom Solr addit
 
 Please refer to the [Version Compatibility Matrix](../upgrade-notes.md#solr-versions) for more information on what Solr Versions are compatible with the Solr Operator.
 
+Also note that certain features available within the Solr Operator are only supported in newer Solr Versions.
+The version compatibility matrix shows the minimum Solr version supported for **most** options.
+Please refer to the Solr Reference guide to see what features are enabled for the Solr version you are running.
+
 ### Build Your Own Private Solr Images
 
 The Solr Operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images. 
