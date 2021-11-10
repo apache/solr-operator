@@ -203,7 +203,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Name:         RepoVolumeName(&repo),
 				VolumeSource: *volumeSource,
 			})
-			mount.Name = RepoVolumeName(&repo)
 			volumeMounts = append(volumeMounts, *mount)
 		}
 		repoEnvVars := RepoEnvVars(&repo)
@@ -592,14 +591,15 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	// This entails setting the correct permissions for the directory
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		if IsRepoVolume(&repo) {
-			_, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
-			volumeMounts = append(volumeMounts, *volumeMount)
+			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
+				volumeMounts = append(volumeMounts, *volumeMount)
 
-			setupCommands = append(setupCommands, fmt.Sprintf(
-				"chown -R %d:%d %s",
-				DefaultSolrUser,
-				DefaultSolrGroup,
-				volumeMount.MountPath))
+				setupCommands = append(setupCommands, fmt.Sprintf(
+					"chown -R %d:%d %s",
+					DefaultSolrUser,
+					DefaultSolrGroup,
+					volumeMount.MountPath))
+			}
 		}
 	}
 

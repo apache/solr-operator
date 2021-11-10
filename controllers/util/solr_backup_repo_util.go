@@ -39,7 +39,7 @@ func RepoVolumeName(repo *solrv1beta1.SolrBackupRepository) string {
 }
 
 func IsRepoVolume(repo *solrv1beta1.SolrBackupRepository) bool {
-	return repo.Volume != nil
+	return repo != nil && repo.Volume != nil
 }
 
 func BackupRestoreSubPathForCloud(directoryOverride string, cloud string) string {
@@ -100,6 +100,9 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 			MountPath: S3RepoSecretMountPath(repo),
 			ReadOnly:  true,
 		}
+	}
+	if mount != nil {
+		mount.Name = RepoVolumeName(repo)
 	}
 	return
 }
