@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] [-k KUBERNETES_VERSION] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/smoke_test.sh [-h] [-i IMAGE] [-s GIT_SHA] [-k KUBERNETES_VERSION] [-t SOLR_VERSION] -v VERSION -l LOCATION -g GPG_KEY
 
 Smoke test the Solr Operator release artifacts.
 
@@ -34,11 +34,12 @@ Smoke test the Solr Operator release artifacts.
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
     -k  Kubernetes Version to test with (Optional, defaults to a compatible version)
+    -t  Solr Version to test with (Optional, defaults to a compatible version)
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:s:g:k: opt; do
+while getopts hv:i:l:s:g:k:t: opt; do
     case $opt in
         h)
             show_help
@@ -55,6 +56,8 @@ while getopts hv:i:l:s:g:k: opt; do
         g)  GPG_KEY=$OPTARG
             ;;
         k)  KUBERNETES_VERSION=$OPTARG
+            ;;
+        t)  SOLR_VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -78,6 +81,9 @@ if [[ -z "${GPG_KEY:-}" ]]; then
 fi
 if [[ -n "${KUBERNETES_VERSION:-}" ]]; then
   export KUBERNETES_VERSION="${KUBERNETES_VERSION}"
+fi
+if [[ -n "${SOLR_VERSION:-}" ]]; then
+  export SOLR_VERSION="${SOLR_VERSION}"
 fi
 
 PULL_PASS_THROUGH=""

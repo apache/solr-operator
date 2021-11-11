@@ -891,9 +891,12 @@ groups:
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
 
       If you want to run the smoke test with a specific version of kubernetes, use the -k option with a full version tag. (e.g. -k v1.19.3)
+      If you want to run the smoke test with a custom version of solr, use the -t option with an official Solr image version. (e.g. -t 8.10.0)
+        However, for this smoke test, you must use a solr version that support incremental backups. (i.e. 8.9+)
 
       Make sure you have the following installed before running the smoke test:
         - Docker (Give it enough memory and CPU to run ~12 containers, 3 of which are Solr nodes)
+          More information on required resources can be found here: https://kind.sigs.k8s.io/docs/user/quick-start/#settings-for-docker-desktop
         - Go 1.16
         - Kubectl
         - GnuPG
