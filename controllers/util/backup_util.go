@@ -150,7 +150,7 @@ func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.
 		return RunExecForPod(
 			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
-			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
+			[]string{"/bin/bash", "-c", "mkdir -p " + backupPath},
 			config,
 		)
 	}

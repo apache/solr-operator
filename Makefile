@@ -48,12 +48,15 @@ SHELL = /usr/bin/env bash -o pipefail
 
 all: generate
 
-.PHONY: version tag
+.PHONY: version tag git-sha
 version:
 	@echo $(VERSION)
 
 tag:
 	@echo $(TAG)
+
+git-sha:
+	@echo $(GIT_SHA)
 
 ##@ General
 

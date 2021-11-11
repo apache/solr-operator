@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] [-t SOLR_VERSION] -v VERSION -l LOCATION -g GPG_KEY
 
 Test the release candidate in a Kind cluster
 
@@ -33,11 +33,12 @@ Test the release candidate in a Kind cluster
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
     -k  Kubernetes Version to test with (full tag, e.g. v1.21.2)
+    -t  Solr Version, or image, to test with (full tag, e.g. 8.10.0)
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:g:k: opt; do
+while getopts hv:i:l:g:k:t: opt; do
     case $opt in
         h)
             show_help
@@ -52,6 +53,8 @@ while getopts hv:i:l:g:k: opt; do
         g)  GPG_KEY=$OPTARG
             ;;
         k)  KUBERNETES_VERSION=$OPTARG
+            ;;
+        t)  SOLR_VERSION=$OPTARG
             ;;
         *)
             show_help >&2
@@ -75,6 +78,9 @@ if [[ -z "${GPG_KEY:-}" ]]; then
 fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.21.2"
+fi
+if [[ -z "${SOLR_VERSION:-}" ]]; then
+  SOLR_VERSION="8.10.0"
 fi
 
 # If LOCATION is not a URL, then get the absolute path
@@ -114,6 +120,9 @@ kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_
 # Load the docker image into the cluster
 kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
 
+# Add a temporary directory for backups
+docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
+
 echo "Import Solr Keys"
 curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
 
@@ -131,13 +140,20 @@ helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${OP_HELM_
 printf "\nInstall a test Solr Cluster\n"
 helm install --kube-context "${KUBE_CONTEXT}" --verify example "${SOLR_HELM_CHART}" \
     --set replicas=3 \
-    --set solrImage.tag=8.9.0 \
+    --set image.tag=${SOLR_VERSION} \
     --set solrJavaMem="-Xms1g -Xmx3g" \
     --set customSolrKubeOptions.podOptions.resources.limits.memory="1G" \
     --set customSolrKubeOptions.podOptions.resources.requests.cpu="300m" \
     --set customSolrKubeOptions.podOptions.resources.requests.memory="512Mi" \
     --set zookeeperRef.provided.persistence.spec.resources.requests.storage="5Gi" \
-    --set zookeeperRef.provided.replicas=1
+    --set zookeeperRef.provided.replicas=1 \
+    --set "backupRepositories[0].name=local" \
+    --set "backupRepositories[0].volume.source.hostPath.path=/tmp/backup"
+
+# If LOCATION is a URL, then remove the helm repo after use
+if (echo "${LOCATION}" | grep "http"); then
+  helm repo remove "apache-solr-test-${VERSION}"
+fi
 
 # Wait for solrcloud to be ready
 printf '\nWait for all 3 Solr nodes to become ready.\n\n'
@@ -155,6 +171,23 @@ curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=
 
 printf "\nQuery the test collection, test for 0 docs\n"
 curl --silent "http://localhost:18983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
+
+printf "\nCreate a Solr Backup to take local backups of the test collection\n"
+cat <<EOF | kubectl apply -f -
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: ex-back
+spec:
+  solrCloud: example
+  collections:
+    - smoke-test
+  location: test-dir/
+  repositoryName: local
+  recurrence:
+    schedule: "@every 10s"
+    maxSaved: 3
+EOF
 
 printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
 cat <<EOF | kubectl apply -f -
@@ -182,9 +215,48 @@ sleep 15
 printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
 curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
-# If LOCATION is a URL, then remove the helm repo at the end
-if (echo "${LOCATION}" | grep "http"); then
-  helm repo remove "apache-solr-test-${VERSION}"
+printf "\nWait 20 seconds, so that more backups can be taken.\n"
+sleep 20
+
+printf "\nList the backups, and make sure that >= 3 have been taken (should be four), but only 3 are saved.\n"
+BACKUP_RESP=$(curl --silent -L "http://localhost:18983/solr/admin/collections?action=LISTBACKUP&name=ex-back-smoke-test&repository=local&collection=smoke-test&location=/var/solr/data/backup-restore/local/test-dir")
+SAVED_BACKUPS=$(echo "${BACKUP_RESP}" | jq --raw-output '.backups | length')
+if [[ "${SAVED_BACKUPS}" != "3" ]]; then
+    echo "Wrong number of saved backups, should be 3, found ${SAVED_BACKUPS}" >&2
+    exit 1
+fi
+LAST_BACKUP_ID=$(echo "${BACKUP_RESP}" | jq --raw-output '.backups[-1].backupId')
+if (( "${LAST_BACKUP_ID}" < 4 )); then
+    echo "The last backup id must be > 3, since we should have taken at least 4 backups. Last backup id found: ${LAST_BACKUP_ID}" >&2
+    exit 1
+fi
+
+printf "\nStop recurring backup\n"
+cat <<EOF | kubectl apply -f -
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: ex-back
+spec:
+  solrCloud: example
+  collections:
+    - smoke-test
+  location: test-dir/
+  repositoryName: local
+  recurrence:
+    schedule: "@every 10s"
+    maxSaved: 3
+    disabled: true
+EOF
+sleep 5
+LAST_BACKUP_ID=$(curl --silent -L "http://localhost:18983/solr/admin/collections?action=LISTBACKUP&name=ex-back-smoke-test&repository=local&collection=smoke-test&location=/var/solr/data/backup-restore/local/test-dir" | jq --raw-output '.backups[-1].backupId')
+
+printf "\nWait to make sure more backups are not taken\n"
+sleep 15
+FOUND_BACKUP_ID=$(curl --silent -L "http://localhost:18983/solr/admin/collections?action=LISTBACKUP&name=ex-back-smoke-test&repository=local&collection=smoke-test&location=/var/solr/data/backup-restore/local/test-dir" | jq --raw-output '.backups[-1].backupId')
+if (( "${FOUND_BACKUP_ID}" != "${LAST_BACKUP_ID}" )); then
+    echo "The another backup has been taken since recurrence was stopped. Last backupId should be '${LAST_BACKUP_ID}', but instead found '${FOUND_BACKUP_ID}'." >&2
+    exit 1
 fi
 
 echo "Delete test Kind Kubernetes cluster."
