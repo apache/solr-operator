@@ -108,7 +108,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
-| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit https://apache.github.io/solr-operator/docs/solr-backup or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 
 ### Data Storage Options
 
