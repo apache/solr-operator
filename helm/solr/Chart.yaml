@@ -16,7 +16,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-version: 0.5.0-prerelease
+version: 0.5.0
 appVersion: 8.9.0
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
@@ -36,7 +36,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
@@ -73,5 +73,5 @@ annotations:
       image: solr:8.9
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: <fingerprint>
+    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
