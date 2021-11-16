@@ -77,7 +77,7 @@ func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations 
 			err = parseErr
 		} else {
 			nextRestartTime := parsedSchedule.Next(lastScheduledTime)
-			nextRestart = parsedSchedule.Next(lastScheduledTime).Format(time.RFC3339)
+			nextRestart = nextRestartTime.Format(time.RFC3339)
 			reconcileWaitDurationTmp := nextRestartTime.Sub(currentTime)
 			reconcileWaitDuration = &reconcileWaitDurationTmp
 		}

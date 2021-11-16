@@ -47,8 +47,8 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 # Get full version string
-VERSION="$(cat version/version.go | grep -E 'Version([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
-VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)string' | grep -o '["''].*["'']' | xargs)"
+VERSION="$(cat version/version.go | grep -E 'Version([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)"
+VERSION_SUFFIX="$(cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)"
 if [[ -n "${VERSION_SUFFIX:-}" ]]; then
   VERSION="${VERSION}-${VERSION_SUFFIX}"
 fi

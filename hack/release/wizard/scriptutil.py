@@ -179,7 +179,7 @@ def attemptDownload(urlString, fileName):
     if not success:
       os.remove(fileName)
 
-version_prop_re = re.compile(r'Version\s*string\s*=\s*([\'"])(.*)\1')
+version_prop_re = re.compile(r'Version\s*=\s*([\'"])(.*)\1')
 def find_current_version():
   script_path = os.path.dirname(os.path.realpath(__file__))
   top_level_dir = os.path.join(os.path.abspath("%s/" % script_path), os.path.pardir, os.path.pardir, os.path.pardir)

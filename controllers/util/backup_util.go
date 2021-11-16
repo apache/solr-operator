@@ -24,24 +24,15 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 	"net/url"
-)
-
-const (
-	TarredFile       = "/var/solr/data/backup-restore/backup.tgz"
-	CleanupCommand   = " && rm -rf " + BaseBackupRestorePath + "/*"
-	BackupTarCommand = "cd " + BaseBackupRestorePath + " && tar -czf /tmp/backup.tgz * " + CleanupCommand + " && mv /tmp/backup.tgz " + TarredFile + " && chmod -R a+rwx " + TarredFile + " && cd - && "
-
-	AWSSecretDir = "/var/aws"
-
-	JobTTLSeconds = int32(60)
+	"strconv"
+	"time"
 )
 
 func GetBackupRepositoryByName(backupRepos []solr.SolrBackupRepository, repositoryName string) *solr.SolrBackupRepository {
@@ -66,248 +57,22 @@ func AsyncIdForCollectionBackup(collection string, backupName string) string {
 	return fmt.Sprintf("%s-%s", backupName, collection)
 }
 
-func CheckStatusOfCollectionBackups(backup *solr.SolrBackup) (allFinished bool) {
-	fals := false
-
+func UpdateStatusOfCollectionBackups(backupStatus *solr.IndividualSolrBackupStatus) (allFinished bool) {
 	// Check if all collection backups have been completed, this is updated in the loop
-	allFinished = len(backup.Status.CollectionBackupStatuses) > 0
+	allFinished = len(backupStatus.CollectionBackupStatuses) > 0
 
-	// Check if persistence should be skipped if no backup completed successfully
-	anySuccessful := false
+	allSuccessful := len(backupStatus.CollectionBackupStatuses) > 0
 
-	for _, collectionStatus := range backup.Status.CollectionBackupStatuses {
+	for _, collectionStatus := range backupStatus.CollectionBackupStatuses {
 		allFinished = allFinished && collectionStatus.Finished
-		anySuccessful = anySuccessful || (collectionStatus.Successful != nil && *collectionStatus.Successful)
+		allSuccessful = allSuccessful && (collectionStatus.Successful != nil && *collectionStatus.Successful)
 	}
-	if allFinished && !anySuccessful {
-		backup.Status.Finished = true
-		if backup.Status.Successful == nil {
-			backup.Status.Successful = &fals
-		}
+
+	backupStatus.Finished = allFinished
+	if allFinished && backupStatus.Successful == nil {
+		backupStatus.Successful = &allSuccessful
 	}
 	return
-}
-
-func GenerateBackupPersistenceJobForCloud(managedBackupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, solrCloud *solr.SolrCloud) *batchv1.Job {
-	backupVolume, _ := RepoVolumeSourceAndMount(managedBackupRepository, solrCloud.Name)
-	solrCloudBackupDirectoryOverride := managedBackupRepository.Managed.Directory
-	return GenerateBackupPersistenceJob(backup, backupVolume, BackupSubPathForCloud(solrCloudBackupDirectoryOverride, solrCloud.Name, backup.Name))
-}
-
-// GenerateBackupPersistenceJob creates a Job that will persist backup data and purge the backup from the solrBackupVolume
-func GenerateBackupPersistenceJob(solrBackup *solr.SolrBackup, solrBackupVolume *corev1.VolumeSource, backupSubPath string) *batchv1.Job {
-	copyLabels := solrBackup.GetLabels()
-	if copyLabels == nil {
-		copyLabels = map[string]string{}
-	}
-	labels := solrBackup.SharedLabelsWith(solrBackup.GetLabels())
-
-	// ttlSeconds := JobTTLSeconds
-
-	image, env, command, volume, volumeMount, numRetries := GeneratePersistenceOptions(solrBackup, solrBackupVolume)
-
-	volumes := []corev1.Volume{
-		{
-			Name:         "backup-data",
-			VolumeSource: *solrBackupVolume,
-		},
-	}
-	volumeMounts := []corev1.VolumeMount{
-		{
-			MountPath: BaseBackupRestorePath,
-			Name:      "backup-data",
-			SubPath:   backupSubPath,
-			ReadOnly:  false,
-		},
-	}
-	if volume != nil && volumeMount != nil {
-		volumes = append(volumes, *volume)
-		volumeMounts = append(volumeMounts, *volumeMount)
-	}
-
-	parallelismAndCompletions := int32(1)
-	solrGroup := int64(DefaultSolrGroup)
-	solrUser := int64(DefaultSolrUser)
-
-	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrBackup.PersistenceJobName(),
-			Namespace: solrBackup.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: batchv1.JobSpec{
-			// TTLSecondsAfterFinished: &ttlSeconds,
-			BackoffLimit: numRetries,
-			Parallelism:  &parallelismAndCompletions,
-			Completions:  &parallelismAndCompletions,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
-				},
-				Spec: corev1.PodSpec{
-					Volumes: volumes,
-					Containers: []corev1.Container{
-						{
-							Name:            "backup-persistence",
-							Image:           image.ToImageName(),
-							ImagePullPolicy: image.PullPolicy,
-							VolumeMounts:    volumeMounts,
-							Env:             env,
-							Command:         command,
-						},
-					},
-					SecurityContext: &corev1.PodSecurityContext{
-						RunAsUser:  &solrUser,
-						RunAsGroup: &solrGroup,
-						FSGroup:    &solrGroup,
-					},
-					RestartPolicy: corev1.RestartPolicyNever,
-				},
-			},
-		},
-	}
-	return job
-}
-
-// GeneratePersistenceOptions creates options for a Job that will persist backup data
-func GeneratePersistenceOptions(solrBackup *solr.SolrBackup, solrBackupVolume *corev1.VolumeSource) (image solr.ContainerImage, envVars []corev1.EnvVar, command []string, volume *corev1.Volume, volumeMount *corev1.VolumeMount, numRetries *int32) {
-	// 'Persistence' expected to be non-nil
-	persistenceSource := solrBackup.Spec.Persistence
-	if persistenceSource.Volume != nil {
-		// Options for persisting to a volume
-		image = persistenceSource.Volume.BusyBoxImage
-		envVars = []corev1.EnvVar{
-			{
-				Name:  "FILE_NAME",
-				Value: persistenceSource.Volume.Filename,
-			},
-		}
-
-		finalLocation := BaseBackupRestorePath
-		// If the persistence volume is the same as the backup volume, we cannot mount the same volume twice.
-		if !DeepEqualWithNils(*solrBackupVolume, persistenceSource.Volume.VolumeSource) {
-			finalLocation = "/var/backup-persistence"
-			volume = &corev1.Volume{
-				Name:         "persistence",
-				VolumeSource: persistenceSource.Volume.VolumeSource,
-			}
-			volumeMount = &corev1.VolumeMount{
-				Name:      "persistence",
-				SubPath:   persistenceSource.Volume.Path,
-				ReadOnly:  false,
-				MountPath: finalLocation,
-			}
-		}
-		// Copy the information to the persistent storage, and delete it from the backup-restore volume.
-		command = []string{"sh", "-c", BackupTarCommand + "mv " + TarredFile + " \"" + finalLocation + "/${FILE_NAME}\""}
-
-		r := int32(1)
-		numRetries = &r
-	} else if persistenceSource.S3 != nil {
-		s3 := persistenceSource.S3
-		// Options for persisting to S3
-		image = s3.AWSCliImage
-		envVars = []corev1.EnvVar{
-			{
-				Name:  "BUCKET",
-				Value: s3.Bucket,
-			},
-			{
-				Name:  "KEY",
-				Value: s3.Key,
-			},
-			{
-				Name:  "ENDPOINT_URL",
-				Value: s3.EndpointUrl,
-			},
-		}
-		// Set up optional Environment variables
-		if s3.Region != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "AWS_DEFAULT_REGION",
-				Value: s3.Region,
-			})
-		}
-		if s3.Secrets.AccessKeyId != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name: "AWS_ACCESS_KEY_ID",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: s3.Secrets.Name,
-						},
-						Key: s3.Secrets.AccessKeyId,
-					},
-				},
-			})
-		}
-		if s3.Secrets.SecretAccessKey != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name: "AWS_SECRET_ACCESS_KEY",
-				ValueFrom: &corev1.EnvVarSource{
-					SecretKeyRef: &corev1.SecretKeySelector{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: s3.Secrets.Name,
-						},
-						Key: s3.Secrets.SecretAccessKey,
-					},
-				},
-			})
-		}
-		if s3.Secrets.ConfigFile != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "AWS_CONFIG_FILE",
-				Value: AWSSecretDir + "/config",
-			})
-		}
-		if s3.Secrets.CredentialsFile != "" {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "AWS_SHARED_CREDENTIALS_FILE",
-				Value: AWSSecretDir + "/credentials",
-			})
-		}
-
-		// If a config or credentials file is provided in the secrets, load them up in a volume
-		if s3.Secrets.ConfigFile != "" || s3.Secrets.CredentialsFile != "" {
-			readonly := int32(400)
-			volume = &corev1.Volume{
-				Name: "awsSecrets",
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: s3.Secrets.Name,
-						Items: []corev1.KeyToPath{
-							{
-								Key:  s3.Secrets.ConfigFile,
-								Path: "config",
-								Mode: &readonly,
-							},
-							{
-								Key:  s3.Secrets.CredentialsFile,
-								Path: "credentials",
-								Mode: &readonly,
-							},
-						},
-					},
-				},
-			}
-			volumeMount = &corev1.VolumeMount{
-				Name:      "awsSecrets",
-				ReadOnly:  true,
-				MountPath: AWSSecretDir,
-			}
-		}
-
-		// Only include the endpoint URL if it's provided
-		includeUrl := ""
-		if s3.EndpointUrl != "" {
-			includeUrl = "--endpoint-url \"${ENDPOINT_URL}\" "
-		}
-
-		command = []string{"sh", "-c", BackupTarCommand + "aws s3 cp " + includeUrl + TarredFile + " \"s3://${BUCKET}/${KEY}\""}
-		numRetries = persistenceSource.S3.Retries
-	}
-
-	return image, envVars, command, volume, volumeMount, numRetries
 }
 
 func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, collection string) url.Values {
@@ -318,6 +83,11 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	queryParams.Add("async", AsyncIdForCollectionBackup(collection, backup.Name))
 	queryParams.Add("location", BackupLocationPath(backupRepository, backup.Spec.Location))
 	queryParams.Add("repository", backup.Spec.RepositoryName)
+
+	if backup.Spec.Recurrence.IsEnabled() {
+		queryParams.Add("maxNumBackupPoints", strconv.Itoa(backup.Spec.Recurrence.MaxSaved))
+	}
+
 	return queryParams
 }
 
@@ -340,67 +110,56 @@ func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backup
 }
 
 func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (finished bool, success bool, asyncStatus string, err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "REQUESTSTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to check on collection backup", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+
+	var message string
+	asyncStatus, message, err = solr_api.CheckAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
 
 	if err == nil {
-		if resp.ResponseHeader.Status == 0 {
-			asyncStatus = resp.Status.AsyncState
-			if resp.Status.AsyncState == "completed" {
-				finished = true
-				success = true
-			}
-			if resp.Status.AsyncState == "failed" {
-				finished = true
-				success = false
-			}
+		if asyncStatus == "completed" {
+			finished = true
+			success = true
+		}
+		if asyncStatus == "failed" {
+			finished = true
+			success = false
 		}
 	} else {
-		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return finished, success, asyncStatus, err
 }
 
 func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (err error) {
-	queryParams := url.Values{}
-	queryParams.Add("action", "DELETESTATUS")
-	queryParams.Add("requestid", AsyncIdForCollectionBackup(collection, backupName))
-
-	resp := &solr_api.SolrAsyncResponse{}
-
 	logger.Info("Calling to delete async info for backup command.", "solrCloud", cloud.Name, "collection", collection)
-	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+	var message string
+	message, err = solr_api.DeleteAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
+
 	if err != nil {
-		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection)
+		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
 
 	return err
 }
 
 func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, config *rest.Config) (err error) {
-	// Directory creation only required/possible for managed (i.e. local) backups
-	if IsRepoManaged(backupRepository) {
+	// Directory creation only required/possible for volume (i.e. local) backups
+	if IsRepoVolume(backupRepository) {
 		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
 		return RunExecForPod(
 			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
-			[]string{"/bin/bash", "-c", "rm -rf " + backupPath + " && mkdir -p " + backupPath},
-			*config,
+			[]string{"/bin/bash", "-c", "mkdir -p " + backupPath},
+			config,
 		)
 	}
 	return nil
 }
 
-func RunExecForPod(podName string, namespace string, command []string, config rest.Config) (err error) {
+func RunExecForPod(podName string, namespace string, command []string, config *rest.Config) (err error) {
 	client := &kubernetes.Clientset{}
-	if client, err = kubernetes.NewForConfig(&config); err != nil {
+	if client, err = kubernetes.NewForConfig(config); err != nil {
 		return err
 	}
 	req := client.CoreV1().RESTClient().Post().
@@ -409,7 +168,7 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 		Namespace(namespace).
 		SubResource("exec")
 	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
+	if err = corev1.AddToScheme(scheme); err != nil {
 		return fmt.Errorf("error adding to scheme: %v", err)
 	}
 
@@ -423,7 +182,8 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 		TTY:       false,
 	}, parameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(&config, "POST", req.URL())
+	var exec remotecommand.Executor
+	exec, err = remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return fmt.Errorf("error while creating Executor: %v", err)
 	}
@@ -440,4 +200,13 @@ func RunExecForPod(podName string, namespace string, command []string, config re
 	}
 
 	return nil
+}
+
+func ScheduleNextBackup(restartSchedule string, lastBackupTime time.Time) (nextBackup time.Time, err error) {
+	if parsedSchedule, parseErr := cron.ParseStandard(restartSchedule); parseErr != nil {
+		err = parseErr
+	} else {
+		nextBackup = parsedSchedule.Next(lastBackupTime)
+	}
+	return
 }

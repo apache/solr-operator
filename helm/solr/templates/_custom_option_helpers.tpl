@@ -129,6 +129,9 @@ labels:
 annotations:
   {{- toYaml .Values.ingressOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.ingressOptions.ingressClassName -}}
+ingressClassName: {{ .Values.ingressOptions.ingressClassName }}
+{{ end }}
 {{- end -}}
 
 {{/*

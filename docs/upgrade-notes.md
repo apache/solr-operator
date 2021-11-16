@@ -47,6 +47,12 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 | `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 | `v0.5.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
+Please note that this represents basic compatibility with the Solr Operator.
+There may be options and features that require newer versions of Solr.
+(e.g. S3/GCS Backup Support)
+
+Please test to make sure the features you plan to use are compatible with the version of Solr you choose to run.
+
 
 ### Upgrading from `v0.2.x` to `v0.3.x`
 If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
@@ -91,8 +97,8 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -100,19 +106,34 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.5.0
+- Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
+
+  **This means that Kubernetes support is now limited to 1.19+.**  
+  If you are unable to use a newer version of Kubernetes, please install the `v0.4.0` version of the Solr Operator for use with Kubernetes 1.18 and below.
+  See the [version compatibility matrix](#kubernetes-versions) for more information.
+
+  This also means that if you specify a custom `ingressClass` via an annotation, you should change to use the `SolrCloud.spec.customSolrKubeOptions.ingressOptions.ingressClassName` instead.
+  The ability to set the class through annotations is now deprecated in Kubernetes and will be removed in future versions.
+
 - The legacy way of specifying a backupRepository has been **DEPRECATED**.
   Instead of using `SolrCloud.spec.dataStorage.backupRestoreOptions`, use `SolrCloud.spec.backupRepositories`.
   The `SolrCloud.spec.dataStorage.backupRestoreOptions` option **will be removed in `v0.6.0`**.  
   **Note**: Do not take backups while upgrading from the Solr Operator `v0.4.0` to `v0.5.0`.
   Wait for the SolrClouds to be updated, after the Solr Operator is upgraded, and complete their rolling restarts before continuing to use the Backup functionality.
 
-- The location of Solr backup data as well as the name of the Solr backups have been changed, when using managed repositories.
+- The location of Solr backup data as well as the name of the Solr backups have been changed, when using volume repositories.
   Previously the name of the backup (in solr) was set to the name of the collection.
   Now the name given to the backup in Solr will be set to `<backup-resource-name>-<collection-name>`, without the `<` or `>` characters, where the `backup-resource-name` is the name of the SolrBackup resource.
 
-  The directory in the Read-Write-Many Volume, required for managed repositories, that backups are written to is now `/backups` by default, instead of `/backups/<backup-name>`.
+  The directory in the Read-Write-Many Volume, required for volume repositories, that backups are written to is now `/cloud/<solr-cloud-name>/backups` by default, instead of `/cloud/<solr-cloud-name>/backups/<backup-name>`.
   Because the backup name in Solr uses both the SolrBackup resource name and the collection name, there should be no collisions in this directory.
-  However, this can be overridden using the `SolrBackup.spec.location` option.
+  However, this can be overridden using the `SolrBackup.spec.location` option, which is appended to `/cloud/<solr-cloud-name>`.
+
+- The SolrBackup persistence option has been removed as of `v0.5.0`.
+  Users should plan to keep their backup data in the shared volume if using a Volume Backup repository.
+  If `SolrBackup.spec.persistence` is provided, it will be removed and written back to Kubernetes.
+
+  Users using the S3 persistence option should try to use the [S3 backup repository](solr-backup/README.md#s3-backup-repositories) instead. This requires Solr 8.10 or higher.
 
 - Default ports when using TLS are now set to 443 instead of 80.
   This affects `solrCloud.Spec.SolrAddressability.CommonServicePort` and `solrCloud.Spec.SolrAddressability.CommonServicePort` field defaulting.
@@ -151,7 +172,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
 
 ### v0.2.7
-- Do to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
+- Due to the addition of possible sidecar/initContainers for SolrClouds, the version of CRDs used had to be upgraded to `apiextensions.k8s.io/v1`.
 
   **This means that Kubernetes support is now limited to 1.16+.**  
   If you are unable to use a newer version of Kubernetes, please install the `v0.2.6` version of the Solr Operator for use with Kubernetes 1.15 and below.

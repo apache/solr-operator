@@ -13,14 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Assumes a 'solrcloud' whose 'backupRestoreOptions' match the "Multiple Backup Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
-apiVersion: solr.apache.org/v1beta1
-kind: SolrBackup
+{{- if .Values.leaderElection.enable }}
+{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
 metadata:
-  name: local-backup-without-persistence
-  namespace: default
-spec:
-  repositoryName: "managed_repository_1"
-  solrCloud: multiple-backup-repositories-solr
-  collections:
-    - example
+  name: {{ include "solr-operator.fullname" $ }}-leader-election-rolebinding
+  namespace: {{ $namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "solr-operator.fullname" $ }}-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "solr-operator.serviceAccountName" $ }}
+    namespace: {{ $.Release.Namespace }}
+
+{{- end }}
+{{- end }}

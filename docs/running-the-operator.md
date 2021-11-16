@@ -38,8 +38,8 @@ Next, install the Solr Operator chart. Note this is using Helm v3, use the offic
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
-$ helm install solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml
+$ helm install solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -126,10 +126,28 @@ The final image will only contain the solr-operator binary and necessary License
 
 ## Solr Operator Input Args
 
-* **-zookeeper-operator** Whether or not to use the Zookeeper Operator to create dependency Zookeeepers.
-                          Required to use the `spec.zookeeperRef.provided` option.
-                          If _true_, then a Zookeeper Operator must be running for the cluster.
-                          (_true_ | _false_ , defaults to _false_)
+* **--zookeeper-operator** Whether or not to use the Zookeeper Operator to create dependency Zookeeepers.
+  Required to use the `spec.zookeeperRef.provided` option.
+  If _true_, then a Zookeeper Operator must be running for the cluster.
+  (_true_ | _false_ , defaults to _false_)
+
+* **--watch-namespaces** Watch certain namespaces in the Kubernetes cluster.
+  If flag is omitted, or given an empty string, then the whole cluster will be watched.
+  If the operator should watch multiple namespaces, provide them all separated by commas.
+  (_string_ , defaults to _empty_)
+
+* **--leader-elect** Whether or not to use leader election for the Solr Operator.
+  If set to true, then only one operator pod will be functional for the namespaces given through `--watch-namespaces`.
+  If multiple namespaces are provided, leader election will use the first namespace sorted alphabetically.
+  (_true_ | _false_ , defaults to _true_)
+
+* **--metrics-bind-address** The address to bind the metrics servlet on.
+  If only a port is provided (e.g. `:8080`), then the metrics server will respond to requests with any Host header.
+  (defaults to _:8080_)
+
+* **--health-probe-bind-address=** The address to bind the health probe servlet on.
+  If only a port is provided (e.g. `:8081`), then the metrics server will respond to requests with any Host header.
+  (defaults to _:8081_)
                         
 ## Client Auth for mTLS-enabled Solr clusters
 

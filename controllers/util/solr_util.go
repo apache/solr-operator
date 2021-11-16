@@ -203,7 +203,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Name:         RepoVolumeName(&repo),
 				VolumeSource: *volumeSource,
 			})
-			mount.Name = RepoVolumeName(&repo)
 			volumeMounts = append(volumeMounts, *mount)
 		}
 		repoEnvVars := RepoEnvVars(&repo)
@@ -211,6 +210,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			backupEnvVars = append(backupEnvVars, repoEnvVars...)
 		}
 	}
+	// Add annotation specifying the backupRepositories available with this version of the Pod.
+	podAnnotations = SetAvailableBackupRepos(solrCloud, podAnnotations)
 
 	if nil != customPodOptions {
 		// Add Custom Volumes to pod
@@ -594,15 +595,16 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
 	for _, repo := range solrCloud.Spec.BackupRepositories {
-		if IsRepoManaged(&repo) {
-			_, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name)
-			volumeMounts = append(volumeMounts, *volumeMount)
+		if IsRepoVolume(&repo) {
+			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
+				volumeMounts = append(volumeMounts, *volumeMount)
 
-			setupCommands = append(setupCommands, fmt.Sprintf(
-				"chown -R %d:%d %s",
-				DefaultSolrUser,
-				DefaultSolrGroup,
-				volumeMount.MountPath))
+				setupCommands = append(setupCommands, fmt.Sprintf(
+					"chown -R %d:%d %s",
+					DefaultSolrUser,
+					DefaultSolrGroup,
+					volumeMount.MountPath))
+			}
 		}
 	}
 
@@ -915,6 +917,11 @@ func GenerateIngress(solrCloud *solr.SolrCloud, nodeNames []string) (ingress *ne
 			TLS:   ingressTLS,
 		},
 	}
+
+	if nil != customOptions && customOptions.IngressClassName != nil {
+		ingress.Spec.IngressClassName = customOptions.IngressClassName
+	}
+
 	return ingress
 }
 

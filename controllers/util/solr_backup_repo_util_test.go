@@ -136,32 +136,32 @@ func TestS3RepoSolrModules(t *testing.T) {
 	assert.EqualValues(t, []string{"s3-repository"}, RepoSolrModules(repo), "S3 Repos require the s3-repository solr module")
 }
 
-func TestManagedRepoXML(t *testing.T) {
+func TestVolumeRepoXML(t *testing.T) {
 	repo := &solr.SolrBackupRepository{
-		Name: "managedrepository2",
-		Managed: &solr.ManagedRepository{
-			Volume: corev1.VolumeSource{},
+		Name: "volumerepository2",
+		Volume: &solr.VolumeRepository{
+			Source: corev1.VolumeSource{},
 		},
 	}
-	assert.EqualValuesf(t, "<repository name=\"managedrepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", RepoXML(repo), "Wrong SolrXML entry for the Managed Repo")
+	assert.EqualValuesf(t, "<repository name=\"volumerepository2\" class=\"org.apache.solr.core.backup.repository.LocalFileSystemRepository\"/>", RepoXML(repo), "Wrong SolrXML entry for the Volume Repo")
 }
 
-func TestManagedRepoAdditionalLibs(t *testing.T) {
+func TestVolumeRepoAdditionalLibs(t *testing.T) {
 	repo := &solr.SolrBackupRepository{
-		Name: "managedrepository2",
-		Managed: &solr.ManagedRepository{
-			Volume: corev1.VolumeSource{},
+		Name: "volumerepository2",
+		Volume: &solr.VolumeRepository{
+			Source: corev1.VolumeSource{},
 		},
 	}
-	assert.Empty(t, AdditionalRepoLibs(repo), "Managed Repos require no additional libraries for Solr")
+	assert.Empty(t, AdditionalRepoLibs(repo), "Volume Repos require no additional libraries for Solr")
 }
 
-func TestManagedRepoSolrModules(t *testing.T) {
+func TestVolumeRepoSolrModules(t *testing.T) {
 	repo := &solr.SolrBackupRepository{
-		Name: "managedrepository2",
-		Managed: &solr.ManagedRepository{
-			Volume: corev1.VolumeSource{},
+		Name: "volumerepository2",
+		Volume: &solr.VolumeRepository{
+			Source: corev1.VolumeSource{},
 		},
 	}
-	assert.Empty(t, RepoSolrModules(repo), "Managed Repos require no solr modules")
+	assert.Empty(t, RepoSolrModules(repo), "Volume Repos require no solr modules")
 }

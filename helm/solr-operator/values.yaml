@@ -21,11 +21,14 @@ replicaCount: 1
 
 image:
   repository: apache/solr-operator
-  tag: v0.5.0-prerelease
+  tag: v0.6.0-prerelease
   pullPolicy: IfNotPresent
 
 nameOverride: ""
 fullnameOverride: ""
+
+leaderElection:
+  enable: true
 
 zookeeper-operator:
   # Include the zookeeper-operator as a helm chart dependency.
@@ -77,3 +80,7 @@ mTLS:
   caCertSecretKey: ca-cert.pem
   insecureSkipVerify: true
   watchForUpdates: true
+
+# Enable metrics for the Solr Operator
+metrics:
+  enable: true

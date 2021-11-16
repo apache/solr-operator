@@ -116,8 +116,8 @@ def expand_jinja(text, vars=None):
         'latest_version': state.get_latest_version(),
         'latest_lts_version': state.get_latest_lts_version(),
         'main_version': state.get_main_version(),
-        'mirrored_versions': state.get_mirrored_versions(),
-        'mirrored_versions_to_delete': state.get_mirrored_versions_to_delete(),
+        'released_versions': state.get_released_versions(),
+        'released_versions_to_delete': state.get_released_versions_to_delete(),
         'home': os.path.expanduser("~")
     })
     global_vars.update(state.get_todo_states())
@@ -285,7 +285,7 @@ class ReleaseState:
         self.rc_number = 1
         self.start_date = unix_time_millis(datetime.utcnow())
         self.script_branch = run("git rev-parse --abbrev-ref HEAD").strip()
-        self.mirrored_versions = None
+        self.released_versions = None
         try:
             self.script_branch_type = scriptutil.find_branch_type()
         except:
@@ -341,11 +341,8 @@ class ReleaseState:
 
     def get_latest_version(self):
         if self.latest_version is None:
-            #TODO: Remove when first release is made
-            #versions = self.get_mirrored_versions()
-            #latest = versions[0]
-            versions = []
-            latest = "v0.2.8"
+            versions = self.get_released_versions()
+            latest = versions[0]
             for ver in versions:
                 if Version.parse(ver).gt(Version.parse(latest)):
                     latest = ver
@@ -353,18 +350,18 @@ class ReleaseState:
             self.save()
         return state.latest_version
 
-    def get_mirrored_versions(self):
-        if state.mirrored_versions is None:
+    def get_released_versions(self):
+        if state.released_versions is None:
             releases_str = load("https://projects.apache.org/json/foundation/releases.json", "utf-8")
             releases = json.loads(releases_str)
-            state.mirrored_versions = []
+            state.released_versions = []
             if 'solr' in releases.keys():
                 releases = releases['solr']
-                state.mirrored_versions = [ r for r in list(map(lambda y: y[14:], filter(lambda x: x.startswith('solr-operator-v'), list(releases.keys())))) ]
-        return state.mirrored_versions
+                state.released_versions = [ r for r in list(map(lambda y: y[14:], filter(lambda x: x.startswith('solr-operator-v'), list(releases.keys())))) ]
+        return state.released_versions
 
-    def get_mirrored_versions_to_delete(self):
-        versions = self.get_mirrored_versions()
+    def get_released_versions_to_delete(self):
+        versions = self.get_released_versions()
         to_keep = versions
         if state.release_type == 'major':
           to_keep = [self.release_version, self.get_latest_version()]
@@ -385,7 +382,7 @@ class ReleaseState:
 
     def get_latest_lts_version(self):
         return None
-        versions = self.get_mirrored_versions()
+        versions = self.get_released_versions()
         latest = self.get_latest_version()
         lts_prefix = "%s." % (Version.parse(latest).major - 1)
         lts_versions = list(filter(lambda x: x.startswith(lts_prefix), versions))
@@ -1993,6 +1990,16 @@ def prepare_announce(todo):
         print("Draft already exist, not re-generating")
     return True
 
+def check_artifacts_available(todo):
+    try:
+        cdnUrl = expand_jinja("https://dlcdn.apache.org/solr/solr-operator/{{ release_version }}/solr-operator-{{ release_version }}.tgz.asc")
+        load(cdnUrl)
+        print("Found %s" % cdnUrl)
+    except Exception as e:
+        print("Could not fetch %s (%s)" % (cdnUrl, e))
+        return False
+
+    return True
 
 def load_lines(file, from_line=0):
     if os.path.exists(file):

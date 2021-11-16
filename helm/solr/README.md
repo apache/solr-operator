@@ -38,7 +38,7 @@ There may be breaking changes between the version you are using and the version 
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.5.0-prerelease --set image.tag=8.8.0
+helm install example apache-solr/solr --version 0.6.0-prerelease --set image.tag=8.8.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -52,7 +52,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-helm upgrade example apache-solr/solr --version 0.5.0-prerelease --reuse-values --set image.tag=8.9.0
+helm upgrade example apache-solr/solr --version 0.6.0-prerelease --reuse-values --set image.tag=8.9.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
@@ -70,6 +70,11 @@ helm uninstall example
 The command removes the SolrCloud resource, and then Kubernetes will garbage collect the resources owned by that SolrCloud, including the StatefulSet, Services, ConfigMap, etc.
 
 ## Chart Values
+
+Please note that there is not a 1-1 mapping from SolrCloud CRD options to Solr Helm options.
+All options should be supported, but they might be slightly renamed in some scenarios, such as `customSolrKubeOptions`.
+Please read below to see what the Helm chart values are for the options you need.
+Descriptions on how to use these options can be found in the [SolrCloud documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html).
 
 ### Running Solr
 
@@ -103,7 +108,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
-| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit https://apache.github.io/solr-operator/docs/solr-backup or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 
 ### Data Storage Options
 
@@ -120,8 +125,8 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Managed Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
+| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
+| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 
@@ -169,6 +174,8 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.persistence.annotations | object | | Annotations to use for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
 | zk.provided.config | object | | Zookeeper Config Options to set for the provided cluster. For all possible options, run: `kubectl explain solrcloud.spec.zookeeperRef.provided.config` |
+| zk.provided.zookeeperPodPolicy.labels | map[string]string |  | List of additional labels to add to the Zookeeper pod |
+| zk.provided.zookeeperPodPolicy.annotations | map[string]string |  | List of additional annotations to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
 | zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
@@ -177,6 +184,9 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.affinity | object |  | Add Kubernetes affinity information for the ZooKeeper pod |
 | zk.provided.zookeeperPodPolicy.tolerations | []object |  | Specify a list of Kubernetes tolerations for the ZooKeeper pod |
 | zk.provided.zookeeperPodPolicy.envVars | []object |  | List of additional environment variables for the ZooKeeper container |
+| zk.provided.zookeeperPodPolicy.securityContext | object |  | Security context for the entire ZooKeeper pod. More information can be found in the [Kubernetes docs](More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context). |
+| zk.provided.zookeeperPodPolicy.terminationGracePeriodSeconds | int | `30` | The amount of time that Kubernetes will give for a zookeeper pod instance to shutdown normally. |
+| zk.provided.zookeeperPodPolicy.imagePullSecrets | []object |  | List of image pull secrets to inject into the Zookeeper pod. |
 | zk.acl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK admin ACL information |
 | zk.acl.usernameKey | string |  | Key in the Admin ACL Secret that stores the ACL username |
 | zk.acl.passwordKey | string |  | Key in the Admin ACL Secret that stores the ACL password |
@@ -241,6 +251,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 
 ### Custom Kubernetes Options
 
+Note: In the `SolrCloud` Spec, all of these options all fall under `customSolrKubeOptions`.
+When using the helm chart, omit `customSolrKubeOptions.`
+
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | podOptions.annotations | map[string]string |  | Custom annotations to add to the Solr pod |
@@ -273,8 +286,9 @@ Configure Solr to use a separate TLS certificate for client auth.
 | headlessServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr headless service |
 | nodeServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr node service(s) |
 | nodeServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr node service(s) |
-| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if it exists |
-| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if it exists |
+| ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if an Ingress is created/used |
+| ingressOptions.ingressClassName | string |  | Set the name of the IngressClass to use, if an Ingress is created/used |
 | configMapOptions.annotations | map[string]string |  | Custom annotations to add to the Solr configMap |
 | configMapOptions.labels | map[string]string |  | Custom labels to add to the Solr configMap |
 | configMapOptions.providedConfigMap | string |  | Provide an existing configMap for the Solr XML and/or Solr log4j files. *ADVANCED* |

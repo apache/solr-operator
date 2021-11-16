@@ -46,9 +46,9 @@ func TestDeprecatedBackupRepo(t *testing.T) {
 	var solrCloudTest *SolrCloud
 	backupRepos := []SolrBackupRepository{
 		{
-			Name: "managedrepository1",
-			Managed: &ManagedRepository{
-				Volume: corev1.VolumeSource{},
+			Name: "volumerepository1",
+			Volume: &VolumeRepository{
+				Source: corev1.VolumeSource{},
 			},
 		},
 		{
@@ -99,7 +99,7 @@ func TestDeprecatedBackupRepo(t *testing.T) {
 func assertLegacyBackupRepo(t *testing.T, repository SolrBackupRepository, volume corev1.VolumeSource, dir string) {
 	assert.Equal(t, LegacyBackupRepositoryName, repository.Name, "Wrong name for the legacy backup repo")
 	assert.Nil(t, repository.GCS, "Legacy backup repo should not have GCS specs")
-	assert.NotNil(t, repository.Managed, "Legacy backup repo must have Managed specs")
-	assert.EqualValuesf(t, volume, repository.Managed.Volume, "Volume incorrectly copied over for legacy backup repo")
-	assert.Equal(t, dir, repository.Managed.Directory, "Directory incorrectly copied over for legacy backup repo")
+	assert.NotNil(t, repository.Volume, "Legacy backup repo must have Volume specs")
+	assert.EqualValuesf(t, volume, repository.Volume.Source, "Volume Source incorrectly copied over for legacy backup repo")
+	assert.Equal(t, dir, repository.Volume.Directory, "Directory incorrectly copied over for legacy backup repo")
 }

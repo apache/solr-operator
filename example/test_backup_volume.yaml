@@ -13,15 +13,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Assumes a 'solrcloud' whose 'backupRestoreOptions' match the "Multiple Backup
-# Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
+# Assumes a 'solrcloud' whose 'backupRestoreOptions' match the "Multiple Backup Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:
-  name: main-collection-gcs-backups
+  name: volume-backup
   namespace: default
 spec:
-  repositoryName: "main_collection_backup_repository"
+  repositoryName: "volume_repository_1"
   solrCloud: multiple-backup-repos
   collections:
     - example

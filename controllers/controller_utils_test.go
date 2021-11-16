@@ -26,7 +26,6 @@ import (
 	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -638,7 +637,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 		&zk_api.ZookeeperCluster{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
-		&corev1.ConfigMap{}, &batchv1.Job{}, &netv1.Ingress{},
+		&corev1.ConfigMap{}, &netv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
 		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
 		&corev1.Secret{},
@@ -926,4 +925,5 @@ var (
 			WhenUnsatisfiable: corev1.ScheduleAnyway,
 		},
 	}
+	testIngressClass = "test-ingress-class"
 )

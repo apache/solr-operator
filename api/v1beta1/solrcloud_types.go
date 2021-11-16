@@ -36,7 +36,6 @@ const (
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
 	DefaultSolrVersion  = "8.9"
-	DefaultSolrStorage  = "5Gi"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
 	DefaultSolrLogLevel = "INFO"
@@ -56,7 +55,7 @@ const (
 
 	DefaultBasicAuthUsername = "k8s-oper"
 
-	LegacyBackupRepositoryName = "legacy_local_repository"
+	LegacyBackupRepositoryName = "legacy_volume_repository"
 )
 
 // SolrCloudSpec defines the desired state of SolrCloud
@@ -194,8 +193,8 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	if spec.StorageOptions.BackupRestoreOptions != nil {
 		spec.BackupRepositories = append(spec.BackupRepositories, SolrBackupRepository{
 			Name: LegacyBackupRepositoryName,
-			Managed: &ManagedRepository{
-				Volume:    spec.StorageOptions.BackupRestoreOptions.Volume,
+			Volume: &VolumeRepository{
+				Source:    spec.StorageOptions.BackupRestoreOptions.Volume,
 				Directory: spec.StorageOptions.BackupRestoreOptions.Directory,
 			},
 		})
@@ -255,7 +254,7 @@ type SolrDataStorageOptions struct {
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
 
 	// Options required for backups to be enabled for this solrCloud.
-	// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
+	// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
 	// TODO: Remove in v0.6.0
 	// +optional
 	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
@@ -364,19 +363,19 @@ type SolrEphemeralDataStorageOptions struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
-// Deprecated: Use a SolrBackupRepository with a ManagedRepository instead
+// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
 type SolrBackupRestoreOptions struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	// Deprecated: Create an explicit 'managedRepositories' entry instead.
+	// Deprecated: Create an explicit 'backupRepositories' entry instead.
 	Volume corev1.VolumeSource `json:"volume"`
 
 	// Select a custom directory name to mount the backup/restore data from the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
-	// Deprecated: Create an explicit 'managedRepositories' entry instead.
+	// Deprecated: Create an explicit 'backupRepositories' entry instead.
 	// +optional
 	Directory string `json:"directory,omitempty"`
 }
@@ -386,6 +385,10 @@ type SolrBackupRestoreOptions struct {
 type SolrBackupRepository struct {
 	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)
+	//
+	// +kubebuilder:validation:Pattern:=[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?
+	// +kubebuilder:validation:MinLength:=1
+	// +kubebuilder:validation:MaxLength:=100
 	Name string `json:"name"`
 
 	// A GCSRepository for Solr to use when backing up and restoring collections.
@@ -400,7 +403,7 @@ type SolrBackupRepository struct {
 	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
 	// post-backup compression.
 	//+optional
-	Managed *ManagedRepository `json:"managed,omitempty"`
+	Volume *VolumeRepository `json:"volume,omitempty"`
 }
 
 type GcsRepository struct {
@@ -463,15 +466,15 @@ type S3Credentials struct {
 	CredentialsFileSecret *corev1.SecretKeySelector `json:"credentialsFileSecret,omitempty"`
 }
 
-type ManagedRepository struct {
+type VolumeRepository struct {
 	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
 	// The data within the volume will be namespaced for this instance, so feel free to use the same volume for multiple clouds.
 	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
 	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
 	// Other options are to use a NFS volume.
-	Volume corev1.VolumeSource `json:"volume"`
+	Source corev1.VolumeSource `json:"source"`
 
-	// Select a custom directory name to mount the backup/restore data from the given volume.
+	// Select a custom directory name to mount the backup/restore data in the given volume.
 	// If not specified, then the name of the solrcloud will be used by default.
 	// +optional
 	Directory string `json:"directory,omitempty"`
@@ -765,7 +768,7 @@ type ZookeeperSpec struct {
 	// +optional
 	Ephemeral *ZKEphemeral `json:"ephemeral,omitempty"`
 
-	// Pod resources for zookeeper pod
+	// Customization options for the Zookeeper Pod
 	// +optional
 	ZookeeperPod ZookeeperPodPolicy `json:"zookeeperPodPolicy,omitempty"`
 
@@ -981,6 +984,32 @@ type ZookeeperPodPolicy struct {
 	// Optional Service Account to run the zookeeper pods under.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Labels specifies the labels to attach to pods the operator creates for
+	// the zookeeper cluster.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// Annotations specifies the annotations to attach to zookeeper pods
+	// creates.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// SecurityContext specifies the security context for the entire zookeeper pod
+	// More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context
+	// +optional
+	SecurityContext *corev1.PodSecurityContext `json:"securityContext,omitempty"`
+
+	// TerminationGracePeriodSeconds is the amount of time that kubernetes will
+	// give for a zookeeper pod instance to shutdown normally.
+	// The default value is 30.
+	// +optional
+	// +kubebuilder:validation:Minimum=0
+	TerminationGracePeriodSeconds int64 `json:"terminationGracePeriodSeconds,omitempty"`
+
+	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud
@@ -988,16 +1017,16 @@ type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
-	// Replicas is the number of number of desired replicas in the cluster
+	// Replicas is the number of desired replicas in the cluster
 	Replicas int32 `json:"replicas"`
 
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
-	// ReadyReplicas is the number of number of ready replicas in the cluster
+	// ReadyReplicas is the number of ready replicas in the cluster
 	ReadyReplicas int32 `json:"readyReplicas"`
 
-	// UpToDateNodes is the number of number of Solr Node pods that are running the latest pod spec
+	// UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -1022,6 +1051,10 @@ type SolrCloudStatus struct {
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
 	BackupRestoreReady bool `json:"backupRestoreReady"`
+
+	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
+	// +optional
+	BackupRepositoriesAvailable map[string]bool `json:"backupRepositoriesAvailable,omitempty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status

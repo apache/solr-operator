@@ -43,8 +43,8 @@ helm repo add apache-solr https://solr.apache.org/charts
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
-helm install solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
+kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml
+helm install solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
 ```
 
 The command deploys the solr-operator on the Kubernetes cluster with the default configuration.
@@ -57,8 +57,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
 
 ```bash
-kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.5.0-prerelease/all-with-dependencies.yaml
-helm upgrade solr-operator apache-solr/solr-operator --version 0.5.0-prerelease
+kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml
+helm upgrade solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
 ```
 
 #### Namespaces
@@ -159,6 +159,8 @@ The command removes all the Kubernetes components associated with the chart and 
 | watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
 | zookeeper-operator.install | boolean | `true` | This option installs the Zookeeper Operator as a helm dependency |
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |
+| leaderElection.enable | boolean | `true` | Enable leader election for the Solr Operator. Will work across multiple `watchNamespaces`, as long as all deployments have the same list for `watchNamespaces`. |
+| metrics.enable | boolean | `true` | Enable metrics for the Solr Operator. Will be available via the "metrics"/8080 port on the solr operator pods under the "/metrics" path. |
 | mTLS.clientCertSecret | string | `""` | Name of a Kubernetes TLS secret, in the same namespace, that contains a Client certificate to load into the operator. If provided, this is used when communicating with Solr. |
 | mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
 | mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |
@@ -170,7 +172,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | image.repository | string | `"apache/solr-operator"` | The repository of the Solr Operator image |
-| image.tag | string | `"v0.5.0-prerelease"` | The tag/version of the Solr Operator to run |
+| image.tag | string | `"v0.6.0-prerelease"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |

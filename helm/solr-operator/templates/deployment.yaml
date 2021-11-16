@@ -67,6 +67,15 @@ spec:
         - --tls-skip-verify-server={{ .Values.mTLS.insecureSkipVerify }}
         {{- end }}
         - --tls-watch-cert={{ .Values.mTLS.watchForUpdates }}
+        - "--health-probe-bind-address=:8081"
+        {{- if .Values.metrics.enable }}
+        - "--metrics-bind-address=:8080"
+        {{- end }}
+        {{- if .Values.leaderElection.enable }}
+        - "--leader-elect=true"
+        {{- else }}
+        - "--leader-elect=false"
+        {{- end }}
 
         env:
           - name: POD_NAMESPACE
@@ -101,6 +110,12 @@ spec:
         {{- if (include "solr-operator.mTLS.volumeMounts" .) }}
         volumeMounts:
           {{- include "solr-operator.mTLS.volumeMounts" .  | nindent 10 }}
+        {{- end }}
+
+        {{- if .Values.metrics.enable }}
+        ports:
+          - containerPort: 8080
+            name: metrics
         {{- end }}
       {{- if (include "solr-operator.mTLS.volumes" .) }}
       volumes:

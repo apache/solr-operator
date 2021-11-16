@@ -13,19 +13,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Assumes a 'solrcloud' whose 'backupRestoreOptions' match the "Multiple Backup Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
-apiVersion: solr.apache.org/v1beta1
-kind: SolrBackup
+{{- if .Values.leaderElection.enable }}
+{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
+---
+# permissions to do leader election.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
 metadata:
-  name: local-backup-without-persistence
-  namespace: default
-spec:
-  repositoryName: "managed_repository_1"
-  solrCloud: multiple-backup-repositories-solr
-  collections:
-    - example
-  persistence:
-    volume:
-      source:
-        persistentVolumeClaim:
-          claimName: "pvc-test"
+  name: {{ include "solr-operator.fullname" $ }}-leader-election-role
+  namespace: {{ $namespace }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+
+{{- end }}
+{{- end }}

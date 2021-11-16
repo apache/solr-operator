@@ -24,6 +24,11 @@ Those configuration options are laid out on this page.
 
 The SolrCloud CRD gives users the ability to customize how Solr is run.
 
+Please note that the options described below are shown using the base SolrCloud resource, not the helm chart.
+Most options will have the same name and path, however there are differences such as `customSolrKubeOptions`.
+If using Helm, refer to the [Helm Chart documentation](https://artifacthub.io/packages/helm/apache-solr/solr#chart-values) to see the names for the options you are looking to use.
+This document should still be used to see how the SolrCloud options can be used.
+
 ### Solr Modules and Additional Libraries
 _Since v0.5.0_
 
@@ -123,6 +128,14 @@ Under `SolrCloud.Spec.solrAddressability`:
 **Note:** Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
 If both of those criteria are met, then an individual ClusterIP Service will be created for each Solr Node/Pod.
 
+If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
+Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
+
+## Backups
+
+Solr Backups are enabled via the Solr Operator.
+Please refer to the [SolrBackup documentation](../solr-backup) for more information on setting up a SolrCloud with backups enabled.
+
 ## Zookeeper Reference
 
 Solr Clouds require an Apache Zookeeper to connect to.
@@ -178,6 +191,11 @@ Using the [zookeeper-operator](https://github.com/pravega/zookeeper-operator), a
 each solrCloud that has this option specified.
 
 The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+To find all Provided zookeeper options, run `kubectl explain solrcloud.spec.zookeeperRef.provided`.
+Zookeeper Conf and PodOptions provided in the linked Zookeeper Operator version should be supported in the SolrCloud CRD.
+However, this is a manual task, so not all options might be available.
+If there is an option available in the ZookeeperCluster CRD that is not exposed via the SolrCloud CRD, please create a Github Issue.
 
 #### Zookeeper Storage Options
 _Since v0.4.0_
