@@ -1,3 +1,20 @@
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ -->
+
 # Solr on Kubernetes on local Mac
 
 This tutorial shows how to setup Solr under Kubernetes on your local mac. The plan is as follows:
@@ -73,9 +90,9 @@ This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-
 
 ```bash
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.4.0/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.5.0/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.4.0
+$ helm install solr-operator apache-solr/solr-operator --version 0.5.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -106,7 +123,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 
 ```bash
 # Create a 3-node cluster v8.3 with 300m Heap each:
-helm install example-solr apache-solr/solr --version 0.4.0 \
+helm install example-solr apache-solr/solr --version 0.5.0 \
   --set image.tag=8.3 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
@@ -193,7 +210,7 @@ So we wish to upgrade to a newer Solr version:
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
-helm upgrade example-solr apache-solr/solr --version 0.4.0 \
+helm upgrade example-solr apache-solr/solr --version 0.5.0 \
   --reuse-values \
   --set image.tag=8.7
 

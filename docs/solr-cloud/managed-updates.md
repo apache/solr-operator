@@ -1,3 +1,20 @@
+<!--
+    Licensed to the Apache Software Foundation (ASF) under one or more
+    contributor license agreements.  See the NOTICE file distributed with
+    this work for additional information regarding copyright ownership.
+    The ASF licenses this file to You under the Apache License, Version 2.0
+    the "License"); you may not use this file except in compliance with
+    the License.  You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+ -->
+
 # Managed SolrCloud Rolling Updates
 _Since v0.2.7_
 
@@ -55,3 +72,20 @@ This maximum is calculated by taking the given, or default, [`maxPodsUnavailable
         - Some replicas in the shard may already be in a non-active state, or may reside on Solr Nodes that are not "live".
         The `maxShardReplicasUnavailable` calculation will take these replicas into account, as a starting point.
         - If a pod contains non-active replicas, and the pod is chosen to be updated, then the pods that are already non-active will not be double counted for the `maxShardReplicasUnavailable` calculation.
+
+## Triggering a Manual Rolling Restart
+
+Given these complex requirements, `kubectl rollout restart statefulset` will generally not work on a SolrCloud.
+
+One option to trigger a manual restart is to change one of the podOptions annotations. For example you could set this to the date and time of the manual restart.
+
+
+```yaml
+apiVersion: solr.apache.org/v1beta1
+kind: SolrCloud
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      annotations:
+        manualrestart: "2021-10-20T08:37:00Z"
+```
