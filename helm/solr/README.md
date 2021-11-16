@@ -38,7 +38,7 @@ There may be breaking changes between the version you are using and the version 
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.5.0 --set image.tag=8.8.0
+helm install example apache-solr/solr --version 0.5.1-prerelease --set image.tag=8.8.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -52,7 +52,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-helm upgrade example apache-solr/solr --version 0.5.0 --reuse-values --set image.tag=8.9.0
+helm upgrade example apache-solr/solr --version 0.5.1-prerelease --reuse-values --set image.tag=8.9.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.

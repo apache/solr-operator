@@ -16,7 +16,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-version: 0.5.0
+version: 0.5.1-prerelease
 appVersion: 8.9.0
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
@@ -36,26 +36,20 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: added
+      description: Addition 1
+      links:
+        - name: Github Issue
+          url: https://github.com/issue-url
     - kind: changed
-      description: The minimum supported version for Kubernetes is now v1.19.
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/277
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/321
-    - kind: deprecated
-      description: The legacy backup options (dataStorage.backupRestoreOptions) have been deprecated. Please use backupRepositories instead.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/301
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/302
-        - name: Backup Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-backup/
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -73,5 +67,5 @@ annotations:
       image: solr:8.9
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
