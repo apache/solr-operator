@@ -297,12 +297,13 @@ func AddAuthToContext(ctx context.Context, client *client.Client, solrCloud *sol
 			return nil, err
 		}
 		return contextWithBasicAuthHeader(ctx, basicAuthSecret), nil
-	} else if solrSecurity.AuthenticationType == solr.Oidc {
+	} else if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Oidc {
 		clientCredsSecret := &corev1.Secret{}
-		if err := reader.Get(ctx, types.NamespacedName{Name: solrSecurity.Oidc.ClientCredentialsSecret, Namespace: ns}, clientCredsSecret); err != nil {
+		reader := *client
+		if err := reader.Get(ctx, types.NamespacedName{Name: solrCloud.Spec.SolrSecurity.Oidc.ClientCredentialsSecret, Namespace: solrCloud.Namespace}, clientCredsSecret); err != nil {
 			return nil, err
 		}
-		return contextWithOAuth2TokenSource(ctx, clientCredsSecret, solrSecurity.Oidc)
+		return contextWithOAuth2TokenSource(ctx, clientCredsSecret, solrCloud.Spec.SolrSecurity.Oidc)
 	}
 	return ctx, nil
 }
