@@ -101,6 +101,7 @@ templates:
     For the most exhaustive list, see the change log on ArtifactHub or view the git history in the solr-operator repo.
 
       <https://artifacthub.io/packages/helm/apache-solr/solr-operator?modal=changelog>
+
       <https://github.com/apache/solr-operator/releases/tag/{{ release_version }}>
 
   announce_solr_operator_mail: |
@@ -1114,23 +1115,6 @@ groups:
           logfile: upload_crds.log
           tee: true
   - !Todo
-    id: cleanup_svn_rc_folder
-    title: Cleanup RC folder in SVN
-    depends:
-      - svn_release_mv
-    vars:
-      dist_stage_url: https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}
-    commands: !Commands
-      root_folder: '{{ git_checkout_folder }}'
-      confirm_each_command: false
-      commands_text: This will remove the release artifacts from staging repo
-      commands:
-        - !Command
-          cmd: svn rm -m "Clean up the RC folder for {{ release_version }} RC{{ rc_number }}"  {{ dist_stage_url }}
-          logfile: svn_rm_containing.log
-          comment: Clean up containing folder on the staging repo
-          tee: true
-  - !Todo
     id: publish_docker_image
     title: Publish the final release Docker image
     depends: tag_release
@@ -1416,6 +1400,10 @@ groups:
           comment: Delete all current docs
           tee: true
         - !Command
+          cmd: git restore --staged _config.yml && git checkout _config.yml
+          comment: Un-delete the github pages config file
+          stdout: true
+        - !Command
           cmd: git checkout {{ release_version }} -- LICENSE NOTICE README.md docs example .gitignore
           comment: Checkout relevant docs & examples from the release tag.
           stdout: true
@@ -1423,6 +1411,7 @@ groups:
           cmd: git status
           stdout: true
           logfile: github-pages-status.log
+          comment: Make sure that the git changes look good, and that the _config.yml is not altered.
         - !Command
           cmd: git commit -a -m "Upgrade documentation for {{ release_version }} release" && git push origin gh-pages
           stdout: true
