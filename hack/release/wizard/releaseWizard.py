@@ -111,7 +111,7 @@ def expand_jinja(text, vars=None):
         'vote_close_72h': vote_close_72h_date().strftime("%Y-%m-%d %H:00 UTC"),
         'vote_close_72h_epoch': unix_time_millis(vote_close_72h_date()),
         'vote_close_72h_holidays': vote_close_72h_holidays(),
-        'solr_operator_news_file': solr_operator_news_file,
+        'solr_operator_news_file': state.get_solr_operator_news_file(),
         'load_lines': load_lines,
         'latest_version': state.get_latest_version(),
         'latest_lts_version': state.get_latest_lts_version(),
@@ -613,6 +613,10 @@ class ReleaseState:
 
     def get_refguide_release(self):
         return "%s_%s" % (self.release_version_major, self.release_version_minor)
+
+    def get_solr_operator_news_file(self):
+        return os.path.join(state.get_website_git_folder(), 'content', 'solr', 'operator', 'news',
+                                           "%s-%s-available.md" % (self.get_release_date_iso(), self.release_version.replace(".", "-")))
 
     def get_todo_states(self):
         states = {}
@@ -1394,11 +1398,6 @@ def main():
 
     state.save()
 
-    global solr_operator_news_file
-    solr_operator_news_file = os.path.join(state.get_website_git_folder(), 'content', 'solr', 'operator', 'news',
-      "%s-%s-available.md" % (state.get_release_date_iso(), state.release_version.replace(".", "-")))
-    website_folder = state.get_website_git_folder()
-
     main_menu = UpdatableConsoleMenu(title="Solr Operator ReleaseWizard",
                             subtitle=get_releasing_text,
                             prologue_text="Welcome to the release wizard. From here you can manage the process including creating new RCs. "
@@ -1981,9 +1980,9 @@ def vote_close_72h_holidays():
 
 
 def prepare_announce(todo):
-    if not os.path.exists(solr_operator_news_file):
+    if not os.path.exists(state.get_solr_operator_news_file()):
         solr_operator_text = expand_jinja("(( template=announce_solr_operator ))")
-        with open(solr_operator_news_file, 'w') as fp:
+        with open(state.get_solr_operator_news_file(), 'w') as fp:
             fp.write(solr_operator_text)
         # print("Wrote Solr Operator announce draft to %s" % solr_operator_news_file)
     else:
