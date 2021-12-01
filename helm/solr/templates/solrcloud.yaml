@@ -185,7 +185,7 @@ spec:
     connectionInfo:
       internalConnectionString: {{ .Values.zk.address | default .Values.zk.externalAddress | quote }}
       {{- if .Values.zk.externalAddress }}
-      externalAddress: {{ .Values.zk.externalAddress | quote }}
+      externalConnectionString: {{ .Values.zk.externalAddress | quote }}
       {{- end }}
       chroot: {{ trim (include "solr.zk.chroot" .) | quote }}
       {{- if .Values.zk.acl }}
