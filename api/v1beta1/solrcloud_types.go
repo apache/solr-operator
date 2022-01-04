@@ -34,7 +34,7 @@ const (
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
-	DefaultSolrVersion  = "8.9"
+	DefaultSolrVersion  = "8.11"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
 	DefaultSolrLogLevel = "INFO"

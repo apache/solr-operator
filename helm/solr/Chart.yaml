@@ -17,7 +17,7 @@ apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
 version: 0.6.0-prerelease
-appVersion: 8.9.0
+appVersion: 8.11.1
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
 sources:
@@ -40,6 +40,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: Upgrade the default Solr version to 8.11
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/387
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/388
     - kind: fixed
       description: Fixed Helm chart value "zk.externalAddress"
       links:
@@ -61,7 +68,7 @@ annotations:
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
-      image: solr:8.9
+      image: solr:8.11
       whitelisted: true
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
