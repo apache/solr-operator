@@ -105,6 +105,11 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ## Upgrade Warnings and Notes
 
+### v0.6.0
+- The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.
+  This will not affect any existing resources, as default versions are hard-written to the resources immediately.
+  Only new resources created after the Solr Operator is upgraded to `v0.6.0` will be affected.
+
 ### v0.5.0
 - Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
 
@@ -150,7 +155,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
 
 - The default Solr version for `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `7.7.0` to `8.9`.
-  This will not effect any existing resources, as default versions are hard-written to the resources immediately.
+  This will not affect any existing resources, as default versions are hard-written to the resources immediately.
   Only new resources created after the Solr Operator is upgraded to `v0.4.0` will be affected.
 
 - In previous versions of the Solr Operator, the provided Zookeeper instances could only use Persistent Storage.

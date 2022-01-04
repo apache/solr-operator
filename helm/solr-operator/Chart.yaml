@@ -54,16 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: changed
+      description: Upgrade the default Solr version to 8.11
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/387
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/388
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
@@ -99,7 +96,7 @@ annotations:
                     storage: "20Gi"
         replicas: 3
         solrImage:
-          tag: 8.7.0
+          tag: 8.11
         solrJavaMem: "-Xms4g -Xmx4g"
         customSolrKubeOptions:
           podOptions:
@@ -140,18 +137,7 @@ annotations:
             name: "example"
         numThreads: 4
         image:
-          tag: 8.7.0
-    - apiVersion: solr.apache.org/v1beta1
-      kind: SolrPrometheusExporter
-      metadata:
-        name: example
-      spec:
-        solrReference:
-          cloud:
-            name: "example"
-        numThreads: 4
-        image:
-          tag: 8.7.0
+          tag: 8.11
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrBackup
       metadata:
