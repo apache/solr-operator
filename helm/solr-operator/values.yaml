@@ -19,6 +19,10 @@
 
 replicaCount: 1
 
+global:
+  # Lists the secrets you need to use to pull solr-operator and zookeeper-operator images from a private registry.
+  imagePullSecrets: []
+
 image:
   repository: apache/solr-operator
   tag: v0.6.0-prerelease
