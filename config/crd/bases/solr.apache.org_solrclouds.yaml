@@ -97,7 +97,7 @@ spec:
                           description: The name of the GCS bucket that all backup data will be stored in
                           type: string
                         gcsCredentialSecret:
-                          description: The name & key of a Kubernetes secret holding a Google cloud service account key
+                          description: The name & key of a Kubernetes secret holding a Google cloud service account key.  Must be set unless deployed in GKE and making use of Google's "Workplace Identity" feature.
                           properties:
                             key:
                               description: The key of the secret to select from.  Must be a valid secret key.
@@ -113,7 +113,6 @@ spec:
                           type: object
                       required:
                       - bucket
-                      - gcsCredentialSecret
                       type: object
                     name:
                       description: 'A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)'

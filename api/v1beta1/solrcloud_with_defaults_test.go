@@ -55,7 +55,7 @@ func TestDeprecatedBackupRepo(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},

@@ -43,7 +43,7 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -66,7 +66,7 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name2"},
 					Key:                  "some-secret-key-2",
 				},
@@ -95,6 +95,24 @@ func TestGeneratedSolrXmlContainsEntryForEachRepository(t *testing.T) {
 	assert.Contains(t, modules, "gcs-repository", "The modules for the backupRepos should contain gcs-repository")
 	assert.Contains(t, modules, "s3-repository", "The modules for the backupRepos should contain s3-repository")
 	assert.Empty(t, libs, "There should be no libs for the backupRepos")
+}
+
+func TestGeneratedGcsRepositoryXmlSkipsCredentialIfUnset(t *testing.T) {
+	repos := []solr.SolrBackupRepository{
+		{
+			Name: "gcsrepository1",
+			GCS: &solr.GcsRepository{
+				Bucket: "some-bucket-name1",
+				GcsCredentialSecret: nil,
+			},
+		},
+	}
+	xmlString, _, _ := GenerateBackupRepositoriesForSolrXml(repos)
+
+	// These assertions don't fully guarantee valid XML, but they at least make sure each repo is defined and uses the correct class.
+	// If we wanted to bring in an xpath library for assertions we could be a lot more comprehensive here.
+	assert.Containsf(t, xmlString, "<repository name=\"gcsrepository1\" class=\"org.apache.solr.gcs.GCSBackupRepository\">", "Did not find '%s' in the list of backup repositories", "gcsrepository1")
+	assert.NotContainsf(t, xmlString, "<str name=\"gcsCredentialPath\">", "Found unexpected gcsCredentialPath param in GCS repository configuration")
 }
 
 func TestGenerateAdditionalLibXMLPart(t *testing.T) {

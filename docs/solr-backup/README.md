@@ -250,13 +250,15 @@ _Since v0.5.0_
 GCS Repositories store backup data remotely in Google Cloud Storage.
 This repository type is only supported in deployments that use a Solr version >= `8.9.0`.
 
-Each repository must specify the GCS bucket to store data in (the `bucket` property), and the name of a Kubernetes secret containing credentials for accessing GCS (the `gcsCredentialSecret` property).
+Each repository must specify the GCS bucket to store data in (the `bucket` property), and (usually) the name of a Kubernetes secret containing credentials for accessing GCS (the `gcsCredentialSecret` property).
 This secret must have a key `service-account-key.json` whose value is a JSON service account key as described [here](https://cloud.google.com/iam/docs/creating-managing-service-account-keys)
 If you already have your service account key, this secret can be created using a command like the one below.
 
 ```bash
 kubectl create secret generic <secretName> --from-file=service-account-key.json=<path-to-service-account-key>
 ```
+
+In some rare cases (e.g. when deploying in GKE and relying on its [Workload Identity](https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) feature) explicit credentials are not required to talk to GCS.  In these cases, the `gcsCredentialSecret` property may be omitted.
 
 An example of a SolrCloud spec with only one backup repository, with type GCS:
 
@@ -266,7 +268,7 @@ spec:
     - name: "gcs-backups-1"
       gcs:
         bucket: "backup-bucket" # Required
-        gcsCredentialSecret: # Required
+        gcsCredentialSecret: 
           name: "secretName"
           key: "service-account-key.json"
         baseLocation: "/store/here" # Optional
