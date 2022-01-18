@@ -37,8 +37,6 @@ spec:
         {{ toYaml .Values.labels | nindent 8 }}
         {{- end }}
     spec:
-      securityContext:
-        runAsNonRoot: true
       serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
@@ -92,6 +90,7 @@ spec:
 
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
         livenessProbe:
           httpGet:
             path: /healthz
