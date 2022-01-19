@@ -102,7 +102,7 @@ func TestGeneratedGcsRepositoryXmlSkipsCredentialIfUnset(t *testing.T) {
 		{
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
-				Bucket: "some-bucket-name1",
+				Bucket:              "some-bucket-name1",
 				GcsCredentialSecret: nil,
 			},
 		},
