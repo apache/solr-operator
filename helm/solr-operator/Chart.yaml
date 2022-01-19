@@ -54,16 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: fixed
+      description: Solr Operator helm chart now sets runAsNonRoot only on the solr operator container. Sidecars can run as root.
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/389
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/395
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.1-prerelease
