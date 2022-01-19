@@ -37,7 +37,8 @@ func TestCopyResources(t *testing.T) {
 		Limits: map[corev1.ResourceName]resource.Quantity{},
 	}
 	assert.True(t, CopyResources(newResources, baseResources, "", log))
-	assert.Nil(t, baseResources.Limits, "Limits should not exist after the copy")
+	assert.NotNil(t, baseResources.Limits, "Limits should still exist but be empty after the copy. 'nil' does not overwrite an empty list/map")
+	assert.Len(t, baseResources.Limits, 0, "Incorrect length for resource limits")
 	assert.NotNil(t, baseResources.Requests, "Requests should exist after the copy")
 	assert.Len(t, baseResources.Requests, 1, "Incorrect length for resource requests")
 
@@ -45,6 +46,10 @@ func TestCopyResources(t *testing.T) {
 		corev1.ResourceCPU: *resource.NewQuantity(400, resource.BinarySI),
 	}
 	assert.False(t, CopyResources(newResources, baseResources, "", log), "No change should be detected if only the format of a quantity changes")
+
+	baseResources.Limits = nil
+	newResources.Limits = map[corev1.ResourceName]resource.Quantity{}
+	assert.False(t, CopyResources(newResources, baseResources, "", log), "No change should be detected if a map goes from nil to empty")
 
 	newResources.Requests = map[corev1.ResourceName]resource.Quantity{
 		corev1.ResourceCPU: *resource.NewQuantity(600, resource.BinarySI),
@@ -82,4 +87,9 @@ func TestCopyResources(t *testing.T) {
 	assert.Contains(t, baseResources.Requests, corev1.ResourceCPU, "CPU should still be in the resource requests")
 	assert.Equal(t, resource.NewQuantity(500, resource.BinarySI), baseResources.Requests.Cpu(), "Incorrect value for request cpu")
 	assert.NotContains(t, baseResources.Requests, corev1.ResourceMemory, "Memory should no longer be in the resource requests")
+
+	newResources = &corev1.ResourceRequirements{}
+	assert.True(t, CopyResources(newResources, baseResources, "", log), "A change should be detected when removing everything")
+	assert.Len(t, baseResources.Requests, 0, "Incorrect length for resource requests")
+	assert.Nil(t, baseResources.Requests, "Resource requests should be nil")
 }

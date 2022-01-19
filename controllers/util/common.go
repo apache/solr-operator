@@ -639,11 +639,7 @@ func CopyContainerResourceList(fromPtr, toPtr *corev1.ResourceList, basePath str
 	to := *toPtr
 	from := *fromPtr
 	copyEntireMap := false
-	if (to == nil) != (from == nil) {
-		requireUpdate = true
-		logger.Info("Update required because field changed", "field", basePath, "from", to, "to", from)
-		copyEntireMap = true
-	} else if len(to) != len(from) {
+	if len(to) != len(from) {
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", basePath+".Length", "from", len(to), "to", len(from))
 		copyEntireMap = true
