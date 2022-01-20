@@ -29,3 +29,10 @@ ZK_OP_VERSION="$(cat versions.props | grep -E 'zookeeper-operator' | grep -o 'v[
   printf "\n\n---\n"
   curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/${ZK_OP_VERSION}/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
 } > config/dependencies/zookeeper_cluster_crd.yaml
+
+# Fetch the correct dependency Zookeeper CRD, package with other CRDS
+{
+  cat hack/headers/zookeeper-operator-header.yaml.txt;
+  printf "\n\n---\n"
+  curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/${ZK_OP_VERSION}/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
+} > config/dependencies/zookeeper_cluster_crd.yaml

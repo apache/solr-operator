@@ -36,7 +36,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 dependencies:
   - name: 'zookeeper-operator'
-    version: 0.2.12
+    version: 0.2.13
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
@@ -61,6 +61,15 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/387
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/388
+    - kind: changed
+      description: The required Zookeeper Operator version has been upgraded to v0.2.13
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/396
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/397
+        - name: Zookeeper Operator v0.2.13 Release
+          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.13
     - kind: fixed
       description: Solr Operator helm chart now sets runAsNonRoot only on the solr operator container. Sidecars can run as root.
       links:
