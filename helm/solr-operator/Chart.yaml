@@ -61,6 +61,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/387
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/388
+    - kind: changed
+      description: Loosen requirement on GCS backup credential/secret. Can now be omitted if using GKE's Workload Identity.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/391
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/394
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
