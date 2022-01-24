@@ -77,6 +77,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/389
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/395
+    - kind: changed
+      description: Loosen requirement on GCS backup credential/secret. Can now be omitted if using GKE's Workload Identity.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/391
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/394
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
@@ -128,7 +135,7 @@ annotations:
           - name: default-gcs
             gcs:
               bucket: solr-gcs-backups
-              gcsCredentialSecret: # Required
+              gcsCredentialSecret: # Required unless deployed in GKE and using its "Workplace Identity" feature
                 name: gcs-credentials
                 key: "service-account-key.json"
               baseLocation: "/solrcloud/backups"

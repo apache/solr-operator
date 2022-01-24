@@ -89,7 +89,7 @@ func TestSolrBackupApiParamsForGcsRepositoryBackup(t *testing.T) {
 		Name: "some-gcs-repository",
 		GCS: &solr.GcsRepository{
 			Bucket: "some-gcs-bucket",
-			GcsCredentialSecret: corev1.SecretKeySelector{
+			GcsCredentialSecret: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
 				Key:                  "some-secret-key",
 			},
@@ -122,7 +122,7 @@ func TestSolrBackupApiParamsForGcsRepositoryBackupWithLocation(t *testing.T) {
 		Name: "some-gcs-repository",
 		GCS: &solr.GcsRepository{
 			Bucket: "some-gcs-bucket",
-			GcsCredentialSecret: corev1.SecretKeySelector{
+			GcsCredentialSecret: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
 				Key:                  "some-secret-key",
 			},
@@ -156,7 +156,7 @@ func TestSolrBackupApiParamsForGcsRepositoryBackupWithNoLocations(t *testing.T) 
 		Name: "some-gcs-repository",
 		GCS: &solr.GcsRepository{
 			Bucket: "some-gcs-bucket",
-			GcsCredentialSecret: corev1.SecretKeySelector{
+			GcsCredentialSecret: &corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name"},
 				Key:                  "some-secret-key",
 			},
@@ -252,7 +252,7 @@ func TestReportsFailureWhenBackupRepositoryCannotBeFoundByName(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -274,7 +274,7 @@ func TestCanLookupVolumeRepositoryByName(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -288,7 +288,7 @@ func TestCanLookupVolumeRepositoryByName(t *testing.T) {
 			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name2"},
 					Key:                  "some-secret-key-2",
 				},
@@ -312,7 +312,7 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -326,7 +326,7 @@ func TestCanLookupGcsRepositoryByName(t *testing.T) {
 			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name2"},
 					Key:                  "some-secret-key-2",
 				},
@@ -350,7 +350,7 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -364,7 +364,7 @@ func TestCanLookupLegacyRepositoryByName(t *testing.T) {
 			Name: "gcsrepository2",
 			GCS: &solr.GcsRepository{
 				Bucket: "some-bucket-name2",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name2"},
 					Key:                  "some-secret-key-2",
 				},
