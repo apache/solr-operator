@@ -409,8 +409,10 @@ type GcsRepository struct {
 	// The name of the GCS bucket that all backup data will be stored in
 	Bucket string `json:"bucket"`
 
-	// The name & key of a Kubernetes secret holding a Google cloud service account key
-	GcsCredentialSecret corev1.SecretKeySelector `json:"gcsCredentialSecret"`
+	// The name & key of a Kubernetes secret holding a Google cloud service account key.  Must be set unless deployed in
+	// GKE and making use of Google's "Workplace Identity" feature.
+	//+optional
+	GcsCredentialSecret *corev1.SecretKeySelector `json:"gcsCredentialSecret,omitempty"`
 
 	// An already-created chroot within the bucket to store data in. Defaults to the root path "/" if not specified.
 	// +optional

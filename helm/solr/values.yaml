@@ -145,7 +145,7 @@ backupRepositories: []
   # - name: example-repo # Required
   #   gcs:
   #     bucket: example-bucket # Required
-  #     gcsCredentialSecret: # Required
+  #     gcsCredentialSecret: # Required (unless using GKE's 'Workplace Identity' feature)
   #       name: "gcsSecretName"
   #       key: "service-account-key.json"
 
