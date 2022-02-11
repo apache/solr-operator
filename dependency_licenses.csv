@@ -41,6 +41,7 @@ golang.org/x/crypto,Unknown,BSD-3-Clause
 golang.org/x/net,Unknown,BSD-3-Clause
 golang.org/x/oauth2,Unknown,BSD-3-Clause
 golang.org/x/sys,Unknown,BSD-3-Clause
+golang.org/x/term,Unknown,BSD-3-Clause
 golang.org/x/text,Unknown,BSD-3-Clause
 golang.org/x/time/rate,Unknown,BSD-3-Clause
 gomodules.xyz/jsonpatch/v2,Unknown,Apache-2.0
