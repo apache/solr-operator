@@ -61,6 +61,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/389
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/395
+    - kind: fixed
+      description: Correctly check whether resource limits & requests have changed when updating children objects
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/393
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/398
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.1-prerelease
