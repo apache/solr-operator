@@ -16,3 +16,10 @@ require (
 	k8s.io/utils v0.0.0-20210111153108-fddb29f9d009
 	sigs.k8s.io/controller-runtime v0.8.3
 )
+
+// These are to fix security vulnerabilities. Remove whenever these are the default versions used
+replace (
+	github.com/gogo/protobuf => github.com/gogo/protobuf v1.3.2
+	golang.org/x/crypto => golang.org/x/crypto v0.0.0-20201216223049-8b5274cf687f
+	golang.org/x/text => golang.org/x/text v0.3.7
+)

@@ -68,6 +68,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/393
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/398
+    - kind: security
+      description: Upgrade inherited dependencies to mitigate security vulnerabilities
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/405
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/406
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.5.1-prerelease
