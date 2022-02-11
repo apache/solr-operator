@@ -174,4 +174,4 @@ annotations:
           - techproducts
           - books
         location: "/this/location"
-  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
