@@ -497,7 +497,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 	from := *fromPtr
 	if len(to) != len(from) {
 		requireUpdate = true
-		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
+		logger.Info("Update required because field changed", "field", basePath+".Length", "from", len(to), "to", len(from))
 		*toPtr = from
 	} else {
 		for i := 0; i < len(from); i++ {
@@ -540,11 +540,7 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				to[i].Env = from[i].Env
 			}
 
-			if !DeepEqualWithNils(to[i].Resources, from[i].Resources) {
-				requireUpdate = true
-				logger.Info("Update required because field changed", "field", containerBasePath+"Resources", "from", to[i].Resources, "to", from[i].Resources)
-				to[i].Resources = from[i].Resources
-			}
+			requireUpdate = CopyResources(&from[i].Resources, &to[i].Resources, containerBasePath+"Resources.", logger) || requireUpdate
 
 			if !DeepEqualWithNils(to[i].VolumeMounts, from[i].VolumeMounts) {
 				requireUpdate = true
@@ -609,7 +605,7 @@ func CopyPodVolumes(fromPtr, toPtr *[]corev1.Volume, basePath string, logger log
 	from := *fromPtr
 	if len(to) != len(from) {
 		requireUpdate = true
-		logger.Info("Update required because field changed", "field", basePath+"Length", "from", len(to), "to", len(from))
+		logger.Info("Update required because field changed", "field", basePath+".Length", "from", len(to), "to", len(from))
 		*toPtr = from
 	} else {
 		for i := 0; i < len(from); i++ {
@@ -626,6 +622,48 @@ func CopyPodVolumes(fromPtr, toPtr *[]corev1.Volume, basePath string, logger log
 				to[i].VolumeSource = from[i].VolumeSource
 			}
 		}
+	}
+	return requireUpdate
+}
+
+func CopyResources(from, to *corev1.ResourceRequirements, basePath string, logger logr.Logger) (requireUpdate bool) {
+
+	requireUpdate = CopyContainerResourceList(&from.Requests, &to.Requests, basePath+"Requests", logger) || requireUpdate
+
+	requireUpdate = CopyContainerResourceList(&from.Limits, &to.Limits, basePath+"Limits", logger) || requireUpdate
+
+	return requireUpdate
+}
+
+func CopyContainerResourceList(fromPtr, toPtr *corev1.ResourceList, basePath string, logger logr.Logger) (requireUpdate bool) {
+	to := *toPtr
+	from := *fromPtr
+	copyEntireMap := false
+	if len(to) != len(from) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+".Length", "from", len(to), "to", len(from))
+		copyEntireMap = true
+	} else {
+		for resourceName, newQuantity := range from {
+			resourceBasePath := basePath + "[" + resourceName.String() + "]"
+			if oldQuantity, isThere := to[resourceName]; isThere {
+				if !oldQuantity.Equal(newQuantity) {
+					requireUpdate = true
+					logger.Info("Update required because field changed", "field", resourceBasePath, "from", oldQuantity, "to", newQuantity)
+					to[resourceName] = newQuantity
+				}
+			} else {
+				// This means the keys of the resource maps (from & to) are not the same, therefore update the entire map.
+				// We will still loop through the rest of the resources to print out any additional updates required,
+				// otherwise the logging could miss resource quantity changes.
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", resourceBasePath, "from", nil, "to", newQuantity)
+				copyEntireMap = true
+			}
+		}
+	}
+	if copyEntireMap {
+		*toPtr = from
 	}
 	return requireUpdate
 }
