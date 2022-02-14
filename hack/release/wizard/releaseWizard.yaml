@@ -223,7 +223,7 @@ groups:
       You will need these tools:
 
       * Python v3.4 or later, with dependencies listed in requirements.txt
-      * Go 1.16
+      * Go 1.17
       * gpg
       * git
       * svn
@@ -898,7 +898,7 @@ groups:
       Make sure you have the following installed before running the smoke test:
         - Docker (Give it enough memory and CPU to run ~12 containers, 3 of which are Solr nodes)
           More information on required resources can be found here: https://kind.sigs.k8s.io/docs/user/quick-start/#settings-for-docker-desktop
-        - Go 1.16
+        - Go 1.17
         - Kubectl
         - GnuPG
         - Helm v3.4.0+
