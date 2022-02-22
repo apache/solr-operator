@@ -60,7 +60,7 @@ All ACL fields are **required** if an ACL is used.
 
 - **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the admin ACL username and password.
 - **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
-- **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL password.
+- **`passwordKey`** - The name of the key in the provided secret that stores the admin ACL password.
 
 ### Standalone
 
