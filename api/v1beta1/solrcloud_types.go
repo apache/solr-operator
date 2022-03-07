@@ -560,7 +560,7 @@ type ExternalAddressability struct {
 	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
 	// This option is ignored with the LoadBalancer method.
 	// +optional
-	AdditionalDomainNames []string `json:"additionalDomains,omitempty"`
+	AdditionalDomainNames []string `json:"additionalDomainNames,omitempty"`
 
 	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
 	// This overrides the default usage of the podPort.
