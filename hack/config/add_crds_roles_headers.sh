@@ -23,7 +23,7 @@ set -u
 
 echo "Add headers to CRDs and Role files"
 
-rm -rf "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml.tmp
+rm -f "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml.tmp
 
 files=("${CONFIG_DIRECTORY:-config}"/crd/bases/* "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml)
 

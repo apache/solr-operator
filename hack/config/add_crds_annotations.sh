@@ -23,7 +23,7 @@ set -u
 
 echo "Add annotations to CRDs"
 
-rm -rf "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp
+rm -f "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp
 
 files=("${CONFIG_DIRECTORY:-config}"/crd/bases/*)
 
