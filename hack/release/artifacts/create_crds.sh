@@ -85,11 +85,8 @@ for filename in config/crd/bases/*.yaml; do
 done
 
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
-{
-  cat hack/headers/zookeeper-operator-header.yaml.txt;
-  printf "\n\n---\n"
-  curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/v0.2.12/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml"
-} > "${ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
+./hack/zk-operator/update-crd.sh
+cp "config/dependencies/zookeeper_cluster_crd.yaml" "${ARTIFACTS_DIR}/crds/zookeeperclusters.yaml"
 
 # Package all Solr and Dependency CRDs
 {

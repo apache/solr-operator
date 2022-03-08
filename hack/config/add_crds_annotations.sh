@@ -21,17 +21,17 @@ set -o pipefail
 # error on unset variables
 set -u
 
-echo "Add headers to CRDs and Role files"
+echo "Add annotations to CRDs"
 
-rm -f "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml.tmp
+rm -f "${CONFIG_DIRECTORY:-config}"/crd/bases/*.tmp
 
-files=("${CONFIG_DIRECTORY:-config}"/crd/bases/* "${CONFIG_DIRECTORY:-config}"/rbac/role.yaml)
+files=("${CONFIG_DIRECTORY:-config}"/crd/bases/*)
 
 # Copy and package CRDs
 for file in "${files[@]}"; do
   {
-    cat hack/headers/header.yaml.txt
-    printf "\n"
-    cat "${file}"
+    cat "${file}" | sed -e "/^    controller-gen.kubebuilder.io.version.*/a \\
+    operator.solr.apache.org\\/version: ${VERSION}\\
+    argocd.argoproj.io\\/sync-options: Replace=true"
   } > "${file}.tmp" && mv "${file}.tmp" "${file}"
 done

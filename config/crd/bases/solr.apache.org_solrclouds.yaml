@@ -19,6 +19,8 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.5.0
+    operator.solr.apache.org/version: v0.5.1-prerelease
+    argocd.argoproj.io/sync-options: Replace=true
   creationTimestamp: null
   name: solrclouds.solr.apache.org
 spec:
