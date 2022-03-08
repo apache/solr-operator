@@ -28,7 +28,8 @@ ZK_OP_VERSION="$(cat versions.props | grep -E 'zookeeper-operator' | grep -o 'v[
   cat hack/headers/zookeeper-operator-header.yaml.txt;
   printf "\n\n---\n"
   curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/${ZK_OP_VERSION}/deploy/crds/zookeeper.pravega.io_zookeeperclusters_crd.yaml" \
-    | sed -e '/^  name: zookeeperclusters.zookeeper.pravega.io$/a \
-  annotations:\
-    argocd.argoproj.io\/sync-options: Replace=true'
+    | sed -e "/^  name: zookeeperclusters.zookeeper.pravega.io$/a \\
+  annotations:\\
+    operator.zookeeper.pravega.io\\/version: ${ZK_OP_VERSION}\\
+    argocd.argoproj.io\\/sync-options: Replace=true"
 } > config/dependencies/zookeeper_cluster_crd.yaml
