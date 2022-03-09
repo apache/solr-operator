@@ -47,6 +47,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/379
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/380
+    - kind: fixed
+      description: Fixed Helm chart value "addressability.external.additionalDomains", will be renamed to "additionalDomainNames" in v0.6.0
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/412
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/415
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
