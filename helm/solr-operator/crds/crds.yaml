@@ -6978,8 +6978,13 @@ spec:
                   external:
                     description: External defines the way in which this SolrCloud nodes should be made addressable externally, from outside the Kubernetes cluster. If none is provided, the Solr Cloud will not be made addressable externally.
                     properties:
-                      additionalDomains:
+                      additionalDomainNames:
                         description: Provide additional domainNames that the Ingress or ExternalDNS should listen on. This option is ignored with the LoadBalancer method.
+                        items:
+                          type: string
+                        type: array
+                      additionalDomains:
+                        description: "Provide additional domainNames that the Ingress or ExternalDNS should listen on. This option is ignored with the LoadBalancer method. \n DEPRECATED: Please use additionalDomainNames instead. This will be removed in a future version."
                         items:
                           type: string
                         type: array
