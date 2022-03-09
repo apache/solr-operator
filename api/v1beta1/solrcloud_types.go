@@ -560,7 +560,15 @@ type ExternalAddressability struct {
 	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
 	// This option is ignored with the LoadBalancer method.
 	// +optional
-	AdditionalDomainNames []string `json:"additionalDomains,omitempty"`
+	AdditionalDomainNames []string `json:"additionalDomainNames,omitempty"`
+
+	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
+	// This option is ignored with the LoadBalancer method.
+	//
+	// DEPRECATED: Please use additionalDomainNames instead. This will be removed in a future version.
+	//
+	// +optional
+	AdditionalDomains []string `json:"additionalDomains,omitempty"`
 
 	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
 	// This overrides the default usage of the podPort.
@@ -609,6 +617,35 @@ func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 		changed = true
 		opts.UseExternalAddress = false
 	}
+
+	// Add the values from the deprecated "additionalDomains" to the new "additionalDomainNames" field
+	// But make sure you aren't creating duplicates
+	// TODO: Remove in v0.7.0
+	if opts.AdditionalDomains != nil {
+		// Only modify AdditionalDomainNames if AdditionalDomains is empty
+		// But if it is non-nil and empty, still set AdditionalDomains to nil
+		if len(opts.AdditionalDomains) > 0 {
+			if len(opts.AdditionalDomainNames) == 0 {
+				opts.AdditionalDomainNames = opts.AdditionalDomains
+			} else {
+				for _, domain := range opts.AdditionalDomains {
+					hasDomain := false
+					for _, containsDomain := range opts.AdditionalDomainNames {
+						if domain == containsDomain {
+							hasDomain = true
+							break
+						}
+					}
+					if !hasDomain {
+						opts.AdditionalDomainNames = append(opts.AdditionalDomainNames, domain)
+					}
+				}
+			}
+		}
+		changed = true
+		opts.AdditionalDomains = nil
+	}
+
 	// If the Ingress method is used, default the nodePortOverride to 80 or 443, since that is the port that most ingress controllers listen on.
 	if !opts.HideNodes && opts.Method == Ingress && opts.NodePortOverride == 0 {
 		changed = true
