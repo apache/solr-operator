@@ -142,7 +142,7 @@ External addressability is disabled by default.
 | addressability.kubeDomain | string | | The cluster domain the Kubernetes is addressed under. Overrides the `global.clusterDomain` option. |
 | addressability.external.method | string | | The method by which Solr should be made addressable outside of the Kubernetes cluster. Either `Ingress` or `ExternalDNS` |
 | addressability.external.domainName | string | | The base domain name that Solr nodes should be addressed under. |
-| addressability.external.additionalDomainNames | []string | | Additional base domain names that Solr nodes should be addressed under. These are not used to advertise Solr locations, just the `domainName` is. |
+| addressability.external.additionalDomains | []string | | Additional base domain names that Solr nodes should be addressed under. These are not used to advertise Solr locations, just the `domainName` is. |
 | addressability.external.useExternalAddress | boolean | `false` | Make the official hostname of the SolrCloud nodes the external address. This cannot be used when `hideNodes` is set to `true` or `ingressTLSTerminationSecret` is set to `true`. |
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
