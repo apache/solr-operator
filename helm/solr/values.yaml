@@ -80,7 +80,7 @@ addressability:
   external: {}
     # method: "Ingress"
     # domainName: "example.com"
-    # additionalDomainNames: []
+    # additionalDomains: []
     # useExternalAddress: false
     # hideNodes: false
     # hideCommon: false

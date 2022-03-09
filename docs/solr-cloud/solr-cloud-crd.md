@@ -118,7 +118,7 @@ Under `SolrCloud.Spec.solrAddressability`:
   Currently available options are [`Ingress`](https://kubernetes.io/docs/concepts/services-networking/ingress/) and [`ExternalDNS`](https://github.com/kubernetes-sigs/external-dns).
   The goal is to support more methods in the future, such as LoadBalanced Services.
   - **`domainName`** - (Required) The primary domain name to open your cloud endpoints on. If `useExternalAddress` is set to `true`, then this is the domain that will be used in Solr Node names.
-  - **`additionalDomainNames`** - You can choose to listen on additional domains for each endpoint, however Solr will not register itself under these names.
+  - **`additionalDomains`** - You can choose to listen on additional domains for each endpoint, however Solr will not register itself under these names.
   - **`useExternalAddress`** - Use the external address to advertise the SolrNode. If a domain name is required for the chosen external `method`, then the one provided in `domainName` will be used.
   - **`hideCommon`** - Do not externally expose the common service (one endpoint for all solr nodes).
   - **`hideNodes`** - Do not externally expose each node. (This cannot be set to `true` if the cloud is running across multiple kubernetes clusters)
