@@ -188,19 +188,6 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
 
-	// TODO: Deprecated in v0.5.0 - remove in v0.6.0
-	if spec.StorageOptions.BackupRestoreOptions != nil {
-		spec.BackupRepositories = append(spec.BackupRepositories, SolrBackupRepository{
-			Name: LegacyBackupRepositoryName,
-			Volume: &VolumeRepository{
-				Source:    spec.StorageOptions.BackupRestoreOptions.Volume,
-				Directory: spec.StorageOptions.BackupRestoreOptions.Directory,
-			},
-		})
-		spec.StorageOptions.BackupRestoreOptions = nil
-		changed = true
-	}
-
 	return changed
 }
 
@@ -251,12 +238,6 @@ type SolrDataStorageOptions struct {
 	//
 	// +optional
 	EphemeralStorage *SolrEphemeralDataStorageOptions `json:"ephemeral,omitempty"`
-
-	// Options required for backups to be enabled for this solrCloud.
-	// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
-	// TODO: Remove in v0.6.0
-	// +optional
-	BackupRestoreOptions *SolrBackupRestoreOptions `json:"backupRestoreOptions,omitempty"`
 }
 
 func (opts *SolrDataStorageOptions) withDefaults() (changed bool) {
@@ -360,23 +341,6 @@ type SolrEphemeralDataStorageOptions struct {
 	//EmptyDirVolumeSource is an optional config for the emptydir volume that will store Solr data.
 	// +optional
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
-}
-
-// Deprecated: Use a SolrBackupRepository with a VolumeRepository instead
-type SolrBackupRestoreOptions struct {
-	// This is a volumeSource for a volume that will be mounted to all solrNodes to store backups and load restores.
-	// The data within the volume will be namespaces for this instance, so feel free to use the same volume for multiple clouds.
-	// Since the volume will be mounted to all solrNodes, it must be able to be written from multiple pods.
-	// If a PVC reference is given, the PVC must have `accessModes: - ReadWriteMany`.
-	// Other options are to use a NFS volume.
-	// Deprecated: Create an explicit 'backupRepositories' entry instead.
-	Volume corev1.VolumeSource `json:"volume"`
-
-	// Select a custom directory name to mount the backup/restore data from the given volume.
-	// If not specified, then the name of the solrcloud will be used by default.
-	// Deprecated: Create an explicit 'backupRepositories' entry instead.
-	// +optional
-	Directory string `json:"directory,omitempty"`
 }
 
 //+kubebuilder:validation:MinProperties:=2

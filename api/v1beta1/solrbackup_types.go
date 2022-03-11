@@ -19,7 +19,6 @@ package v1beta1
 
 import (
 	"fmt"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -55,21 +54,9 @@ type SolrBackupSpec struct {
 	//
 	// +optional
 	Recurrence *BackupRecurrence `json:"recurrence,omitempty"`
-
-	// Persistence is the specification on how to persist the backup data.
-	// This feature has been removed as of v0.5.0. Any options specified here will not be used.
-	//
-	// +optional
-	Persistence *PersistenceSource `json:"persistence,omitempty"`
 }
 
 func (spec *SolrBackupSpec) withDefaults() (changed bool) {
-	// Remove any Persistence specs, since this feature was removed.
-	if spec.Persistence != nil {
-		changed = true
-		spec.Persistence = nil
-	}
-
 	return changed
 }
 
@@ -106,99 +93,6 @@ func (recurrence *BackupRecurrence) IsEnabled() bool {
 	return recurrence != nil && !recurrence.Disabled
 }
 
-// PersistenceSource defines the location and method of persisting the backup data.
-// Exactly one member must be specified.
-//
-// Deprecated: Will be unused as of v0.5.0
-type PersistenceSource struct {
-	// Persist to an s3 compatible endpoint
-	// +optional
-	S3 *S3PersistenceSource `json:"S3,omitempty"`
-
-	// Persist to a volume
-	// +optional
-	Volume *VolumePersistenceSource `json:"volume,omitempty"`
-}
-
-// S3PersistenceSource defines the specs for connecting to s3 for persistence
-//
-// Deprecated: Will be unused as of v0.5.0
-type S3PersistenceSource struct {
-	// The S3 compatible endpoint URL
-	// +optional
-	EndpointUrl string `json:"endpointUrl,omitempty"`
-
-	// The Default region to use with AWS.
-	// Can also be provided through a configFile in the secrets.
-	// Overridden by any endpointUrl value provided.
-	// +optional
-	Region string `json:"region,omitempty"`
-
-	// The S3 bucket to store/find the backup data
-	Bucket string `json:"bucket"`
-
-	// The key for the referenced tarred & zipped backup file
-	// Defaults to the name of the backup/restore + '.tgz'
-	// +optional
-	Key string `json:"key"`
-
-	// The number of retries to communicate with S3
-	// +optional
-	Retries *int32 `json:"retries,omitempty"`
-
-	// The secrets to use when configuring and authenticating s3 calls
-	Secrets S3Secrets `json:"secrets"`
-
-	// Image containing the AWS Cli
-	// +optional
-	AWSCliImage ContainerImage `json:"AWSCliImage,omitempty"`
-}
-
-// S3Secrets describes the secrets provided for accessing s3.
-//
-// Deprecated: Will be unused as of v0.5.0
-type S3Secrets struct {
-	// The name of the secrets object to use
-	Name string `json:"fromSecret"`
-
-	// The key (within the provided secret) of an AWS Config file to use
-	// +optional
-	ConfigFile string `json:"configFile,omitempty"`
-
-	// The key (within the provided secret) of an AWS Credentials file to use
-	// +optional
-	CredentialsFile string `json:"credentialsFile,omitempty"`
-
-	// The key (within the provided secret) of the Access Key ID to use
-	// +optional
-	AccessKeyId string `json:"accessKeyId,omitempty"`
-
-	// The key (within the provided secret) of the Secret Access Key to use
-	// +optional
-	SecretAccessKey string `json:"secretAccessKey,omitempty"`
-}
-
-// UploadSpec defines the location and method of uploading the backup data
-//
-// Deprecated: Will be unused as of v0.5.0
-type VolumePersistenceSource struct {
-	// The volume for persistence
-	VolumeSource corev1.VolumeSource `json:"source"`
-
-	// The location of the persistence directory within the volume
-	// +optional
-	Path string `json:"path,omitempty"`
-
-	// The filename of the tarred & zipped backup file
-	// Defaults to the name of the backup/restore + '.tgz'
-	// +optional
-	Filename string `json:"filename"`
-
-	// BusyBox image for manipulating and moving data
-	// +optional
-	BusyBoxImage ContainerImage `json:"busyBoxImage,omitempty"`
-}
-
 // SolrBackupStatus defines the observed state of SolrBackup
 type SolrBackupStatus struct {
 	// The current Backup Status, which all fields are added to this struct
@@ -226,12 +120,6 @@ type IndividualSolrBackupStatus struct {
 	// The status of each collection's backup progress
 	// +optional
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
-
-	// Whether the backups are in progress of being persisted.
-	// This feature has been removed as of v0.5.0.
-	//
-	// +optional
-	PersistenceStatus *BackupPersistenceStatus `json:"persistenceStatus,omitempty"`
 
 	// Version of the Solr being backed up
 	// +optional
@@ -267,30 +155,6 @@ type CollectionBackupStatus struct {
 	AsyncBackupStatus string `json:"asyncBackupStatus,omitempty"`
 
 	// Whether the backup has finished
-	Finished bool `json:"finished,omitempty"`
-
-	// Time that the collection backup finished at
-	// +optional
-	FinishTime *metav1.Time `json:"finishTimestamp,omitempty"`
-
-	// Whether the backup was successful
-	// +optional
-	Successful *bool `json:"successful,omitempty"`
-}
-
-// BackupPersistenceStatus defines the status of persisting Solr backup data
-//
-// Deprecated: Will be unused as of v0.5.0
-type BackupPersistenceStatus struct {
-	// Whether the collection is being backed up
-	// +optional
-	InProgress bool `json:"inProgress,omitempty"`
-
-	// Time that the collection backup started at
-	// +optional
-	StartTime *metav1.Time `json:"startTimestamp,omitempty"`
-
-	// Whether the persistence has finished
 	Finished bool `json:"finished,omitempty"`
 
 	// Time that the collection backup finished at
