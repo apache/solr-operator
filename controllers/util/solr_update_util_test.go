@@ -80,17 +80,23 @@ func TestPickPodsToUpgrade(t *testing.T) {
 
 	// Normal inputs
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade := getPodNames(pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log))
+	podsToUpgradeDetailed, podsHaveReplicas := pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log)
+	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-2": true, "foo-solrcloud-6": false})
+	podsToUpgrade := getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-2", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Do to the down/non-live replicas, only the node without replicas and one more can be upgraded.")
 
 	// Test the maxBatchNodeUpgradeSpec
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 1, log))
+	podsToUpgradeDetailed, podsHaveReplicas = pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 1, log)
+	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-6": false})
+	podsToUpgrade = getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Only 1 node should be upgraded when maxBatchNodeUpgradeSpec=1")
 
 	// Test the maxShardReplicasDownSpec
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log))
+	podsToUpgradeDetailed, podsHaveReplicas = pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log)
+	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-2": true, "foo-solrcloud-3": true, "foo-solrcloud-4": true, "foo-solrcloud-6": false})
+	podsToUpgrade = getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-2", "foo-solrcloud-3", "foo-solrcloud-4", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade.")
 
 	/*
@@ -974,7 +980,7 @@ var (
 	}
 )
 
-func getPodNames(pods []corev1.Pod, ignored map[string]bool) []string {
+func getPodNames(pods []corev1.Pod, ignored ...map[string]bool) []string {
 	names := make([]string, len(pods))
 	for i, pod := range pods {
 		names[i] = pod.Name
