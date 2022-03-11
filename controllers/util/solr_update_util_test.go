@@ -974,7 +974,7 @@ var (
 	}
 )
 
-func getPodNames(pods []corev1.Pod) []string {
+func getPodNames(pods []corev1.Pod, ignored map[string]bool) []string {
 	names := make([]string, len(pods))
 	for i, pod := range pods {
 		names[i] = pod.Name
