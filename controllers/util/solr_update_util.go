@@ -477,7 +477,6 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 	return allNodeNames
 }
 
-
 // EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod, if the Pod is using ephemeral storage.
 // If the pod is using persistent storage, this function is a no-op.
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
