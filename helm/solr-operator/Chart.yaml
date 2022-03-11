@@ -105,6 +105,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/407
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/408
+    - kind: changed
+      description: The "addressability.external.additionalDomains" option has been renamed to "addressability.external.additionalDomainNames". See the upgrade notes for more information.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/412
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/416
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease

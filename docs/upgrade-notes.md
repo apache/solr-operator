@@ -116,6 +116,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
   Make sure to install the correct version of the Zookeeper Operator CRDS, as [shown above](#upgrading-the-zookeeper-operator).
 
+- The SolrCloud CRD field `Spec.solrAddressability.external.additionalDomains` has been renamed to `additionalDomainNames`.
+  In this release `additionalDomains` is still accepted, but all values will automatically be added to `additionalDomainNames` and the field will be set to `nil` by the operator.
+  The `additionalDomains` option will be removed in a future version.
+
 ### v0.5.0
 - Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
 
