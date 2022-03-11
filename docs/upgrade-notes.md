@@ -28,24 +28,24 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 ### Kubernetes Versions
 
 | Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21` | `1.22`+ |
-| :---: | :---: | :---: | :---: | :---: |
-| `v0.2.6` | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.2.7` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.2.8` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.3.0` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.4.0` | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.5.0` | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
+|:---------------------:| :---: | :---: | :---: | :---: |
+|       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 
 | Solr Operator Version | `6.6` | `7.7` | `8.0` - `8.5` | `8.6`+ |
-| :---: | :---: | :---: | :---: | :---: | 
-| `v0.2.6` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-| `v0.2.7` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| `v0.2.8` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| `v0.3.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| `v0.4.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-| `v0.5.0` | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|:---------------------:| :---: | :---: | :---: | :---: |
+|       `v0.2.6`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :x: |
+|       `v0.2.7`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.2.8`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.3.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.4.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
