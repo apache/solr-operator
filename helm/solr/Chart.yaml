@@ -61,6 +61,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/412
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/416
+    - kind: removed
+      description: The deprecated "dataStorage.backupRestoreOptions" field has been removed.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/418
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

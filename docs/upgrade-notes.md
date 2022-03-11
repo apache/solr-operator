@@ -120,6 +120,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   In this release `additionalDomains` is still accepted, but all values will automatically be added to `additionalDomainNames` and the field will be set to `nil` by the operator.
   The `additionalDomains` option will be removed in a future version.
 
+- CRD options deprecated in `v0.5.0` have been removed.
+  This includes field `SolrCloud.spec.dataStorage.backupRestoreOptions`, `SolrBackup.spec.persistence` and `SolrBackup.status.persistenceStatus`.
+  Upgrading to `v0.5.0` will remove these options on existing and new SolrCloud and SolrBackup resources.
+  However, once the Solr CRDs are upgraded to `v0.6.0`, you will no longer be able to submit resources with the options listed above.
+  Please migrate your systems to use the new options while running `v0.5.0`, before upgrading to `v0.6.0`. 
+
 ### v0.5.0
 - Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
 
