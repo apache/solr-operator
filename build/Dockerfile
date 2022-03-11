@@ -11,7 +11,7 @@
 # limitations under the License.
 
 # Build the manager binary
-FROM golang:1.16 as builder
+FROM golang:1.17 as builder
 
 WORKDIR /workspace
 ARG GO111MODULE=on

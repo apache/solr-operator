@@ -19,7 +19,7 @@ There may be breaking changes between the version you are running and the versio
 Before installing the Solr Operator, we need to install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 This is because the Solr Operator, in most instances, relies on the Zookeeper Operator to create the Zookeeper clusters that Solr coordinates through.
 
-The Solr Operator helm chart has a conditional dependency on the [official Zookeeper Operator helm chart](https://github.com/pravega/zookeeper-operator/tree/v0.2.12/charts/zookeeper-operator#installing-the-chart),
+The Solr Operator helm chart has a conditional dependency on the [official Zookeeper Operator helm chart](https://github.com/pravega/zookeeper-operator/tree/v0.2.13/charts/zookeeper-operator#installing-the-chart),
 which is enabled **by default**.
 
 If you wish to manage the installation of the Zookeeper Operator yourself, set:
@@ -192,7 +192,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 ### Configuring the Zookeeper Operator
 
-If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.12/charts/zookeeper-operator#configuration).
+If you have `zookeeper-operator.install` set to `true`, which is the default behavior, then you can use the [Zookeeper Operator Chart values](https://github.com/pravega/zookeeper-operator/tree/v0.2.13/charts/zookeeper-operator#configuration).
 You must prefix every Zookeeper Operator configuration with `zookeeper-operator.`, in order for it to be used.
 
 For example:

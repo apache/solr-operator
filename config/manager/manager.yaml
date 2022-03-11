@@ -37,8 +37,6 @@ spec:
       labels:
         control-plane: solr-operator
     spec:
-      securityContext:
-        runAsNonRoot: true
       containers:
       - args:
         - --leader-elect
@@ -47,6 +45,7 @@ spec:
         name: solr-operator
         securityContext:
           allowPrivilegeEscalation: false
+          runAsNonRoot: true
         livenessProbe:
           httpGet:
             path: /healthz

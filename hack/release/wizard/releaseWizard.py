@@ -66,8 +66,6 @@ from consolemenu.items import FunctionItem, SubmenuItem, ExitItem
 from consolemenu.screen import Screen
 from scriptutil import BranchType, Version, download, run
 
-# SolrOperator-to-GoLang version mapping
-go_versions = {"0.3": "1.16"}
 editor = None
 
 # Edit this to add other global jinja2 variables or filters

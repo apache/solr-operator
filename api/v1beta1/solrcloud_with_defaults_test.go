@@ -55,7 +55,7 @@ func TestDeprecatedBackupRepo(t *testing.T) {
 			Name: "gcsrepository1",
 			GCS: &GcsRepository{
 				Bucket: "some-bucket-name1",
-				GcsCredentialSecret: corev1.SecretKeySelector{
+				GcsCredentialSecret: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: "some-secret-name1"},
 					Key:                  "some-secret-key",
 				},
@@ -102,4 +102,68 @@ func assertLegacyBackupRepo(t *testing.T, repository SolrBackupRepository, volum
 	assert.NotNil(t, repository.Volume, "Legacy backup repo must have Volume specs")
 	assert.EqualValuesf(t, volume, repository.Volume.Source, "Volume Source incorrectly copied over for legacy backup repo")
 	assert.Equal(t, dir, repository.Volume.Directory, "Directory incorrectly copied over for legacy backup repo")
+}
+
+func TestDeprecatedAdditionalDomains(t *testing.T) {
+	ext := &ExternalAddressability{}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no additional domains in either field)")
+
+	ext.AdditionalDomainNames = []string{"t1", "t2"}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no additional domains in the deprecated field)")
+
+	ext.AdditionalDomains = nil
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no additional domains in the deprecated field)")
+
+	ext.AdditionalDomains = []string{}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2"}, ext.AdditionalDomainNames, "There are no values from additionalDomains to append to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomains = []string{"t1", "t2"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2"}, ext.AdditionalDomainNames, "The values are the same between additionalDomains and additionalDomainNames, so nothing should be changed in additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomains = []string{"t1", "t2", "t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomains = []string{"t1", "t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomains = []string{"t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomains = []string{"t4", "t1", "t2", "t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t1", "t2", "t4", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomainNames = nil
+	ext.AdditionalDomains = []string{"t4", "t1", "t2", "t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t4", "t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
+
+	ext.AdditionalDomainNames = []string{}
+	ext.AdditionalDomains = []string{"t4", "t1", "t2", "t3"}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.ElementsMatch(t, []string{"t4", "t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
+	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
 }

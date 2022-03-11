@@ -74,7 +74,7 @@ func RepoVolumeSourceAndMount(repo *solrv1beta1.SolrBackupRepository, solrCloudN
 			SubPath:   BackupRestoreSubPathForCloud(repo.Volume.Directory, solrCloudName),
 			ReadOnly:  false,
 		}
-	} else if repo.GCS != nil {
+	} else if repo.GCS != nil && repo.GCS.GcsCredentialSecret != nil {
 		source = &corev1.VolumeSource{
 			Secret: &corev1.SecretVolumeSource{
 				SecretName:  repo.GCS.GcsCredentialSecret.Name,
@@ -124,11 +124,18 @@ func RepoXML(repo *solrv1beta1.SolrBackupRepository) (xml string) {
 	if repo.Volume != nil {
 		xml = fmt.Sprintf(`<repository name="%s" class="org.apache.solr.core.backup.repository.LocalFileSystemRepository"/>`, repo.Name)
 	} else if repo.GCS != nil {
+
+		// gcsCredentialPath parameter is optional for deployments running within GCP/GKE
+		credentialString := ""
+		if repo.GCS.GcsCredentialSecret != nil {
+			credentialString = fmt.Sprintf(`<str name="gcsCredentialPath">%s/%s</str>`, GcsRepoSecretMountPath(repo), GCSCredentialSecretKey)
+		}
+
 		xml = fmt.Sprintf(`
 <repository name="%s" class="org.apache.solr.gcs.GCSBackupRepository">
     <str name="gcsBucket">%s</str>
-    <str name="gcsCredentialPath">%s/%s</str>
-</repository>`, repo.Name, repo.GCS.Bucket, GcsRepoSecretMountPath(repo), GCSCredentialSecretKey)
+    %s
+</repository>`, repo.Name, repo.GCS.Bucket, credentialString)
 	} else if repo.S3 != nil {
 		s3Extras := make([]string, 0)
 		if repo.S3.Endpoint != "" {

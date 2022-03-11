@@ -42,7 +42,12 @@ So when upgrading the minimum supported Solr Version for the operator, we can th
 
 ## 9.x
 
+### 9.0
+
 - SOLR-14957: Prometheus exporter bin is now in the PATH for the Solr docker image
+- SOLR-14957: The default Prometheus exporter config is now on the classpath, and it does not need to be provided on startup.
+- SOLR-15914: Solr Modules can be included via an Environment variable, no need to use `sharedLib`
+- SOLR-9575: No need to pre-fill the solr.xml in SOLR_HOME (combined with SOLR-14999)
 
 ## Future Wishlist
 

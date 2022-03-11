@@ -114,3 +114,5 @@ fi
   sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
 } > docs/running-the-operator.md.tmp && mv docs/running-the-operator.md.tmp docs/running-the-operator.md
+
+make manifests

@@ -206,17 +206,7 @@ func CopyZookeeperClusterFields(from, to *zk_api.ZookeeperCluster, logger logr.L
 				requireUpdate = true
 				to.Spec.Persistence = from.Spec.Persistence
 			} else {
-				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests) {
-					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests)
-					requireUpdate = true
-					to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Requests
-				}
-
-				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits) {
-					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits)
-					requireUpdate = true
-					to.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits = from.Spec.Persistence.PersistentVolumeClaimSpec.Resources.Limits
-				}
+				requireUpdate = CopyResources(&from.Spec.Persistence.PersistentVolumeClaimSpec.Resources, &to.Spec.Persistence.PersistentVolumeClaimSpec.Resources, "Spec.Persistence.PersistentVolumeClaimSpec.Resources.", logger) || requireUpdate
 
 				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
 					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.AccessModes", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes)
@@ -278,11 +268,7 @@ func CopyZookeeperClusterFields(from, to *zk_api.ZookeeperCluster, logger logr.L
 		}
 	}
 
-	if !DeepEqualWithNils(to.Spec.Pod.Resources, from.Spec.Pod.Resources) {
-		logger.Info("Update required because field changed", "field", "Spec.Pod.Resources", "from", to.Spec.Pod.Resources, "to", from.Spec.Pod.Resources)
-		requireUpdate = true
-		to.Spec.Pod.Resources = from.Spec.Pod.Resources
-	}
+	requireUpdate = CopyResources(&from.Spec.Pod.Resources, &to.Spec.Pod.Resources, "Spec.Pod.Resources.", logger) || requireUpdate
 
 	if !DeepEqualWithNils(to.Spec.Pod.Env, from.Spec.Pod.Env) {
 		logger.Info("Update required because field changed", "field", "Spec.Pod.Env", "from", to.Spec.Pod.Env, "to", from.Spec.Pod.Env)
