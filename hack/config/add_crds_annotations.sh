@@ -30,8 +30,6 @@ files=("${CONFIG_DIRECTORY:-config}"/crd/bases/*)
 # Copy and package CRDs
 for file in "${files[@]}"; do
   {
-    cat "${file}" | sed -e "/^    controller-gen.kubebuilder.io.version.*/a \\
-    operator.solr.apache.org\\/version: ${VERSION}\\
-    argocd.argoproj.io\\/sync-options: Replace=true"
+    awk '/^    controller-gen.kubebuilder.io.version.*/{print "    operator.solr.apache.org/version: '"${VERSION}"'\n    argocd.argoproj.io/sync-options: Replace=true"}1' "${file}"
   } > "${file}.tmp" && mv "${file}.tmp" "${file}"
 done
