@@ -248,6 +248,20 @@ def maybe_remove_rc_from_svn():
                  enable_execute=True, confirm_each_command=False).run()
 
 
+def maybe_undo_last_commit():
+    todo = state.get_todo_by_id('build_rc')
+    if todo and todo.is_done():
+        print("final git commit made")
+        Commands(state.get_git_checkout_folder(),
+                 """Looks like you made the final local commit for the release, but you have fixes that need to be made. So we need to undo the local commit, and re-do it after the fix commits have been made.""",
+                 [Command(
+                     """git commit reset HEAD^ --hard""",
+                     logfile="git_commit_reset.log",
+                     tee=True
+                 )],
+                 enable_execute=True, confirm_each_command=False).run()
+
+
 # To be able to hide fields when dumping Yaml
 class SecretYamlObject(yaml.YAMLObject):
     hidden_fields = []
@@ -441,6 +455,7 @@ class ReleaseState:
     def new_rc(self):
         if ask_yes_no("Are you sure? This will abort current RC"):
             maybe_remove_rc_from_svn()
+            maybe_undo_last_commit()
             dict = {}
             for g in list(filter(lambda x: x.in_rc_loop(), self.todo_groups)):
                 for t in g.get_todos():
