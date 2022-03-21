@@ -16,8 +16,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.5.1
-appVersion: v0.5.1
+version: 0.5.2-prerelease
+appVersion: v0.5.2-prerelease
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -42,49 +42,31 @@ dependencies:
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: fixed
-      description: Solr Operator helm chart now sets runAsNonRoot only on the solr operator container. Sidecars can run as root.
+    - kind: added
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/389
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/395
-    - kind: fixed
-      description: Correctly check whether resource limits & requests have changed when updating children objects
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/393
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/398
-    - kind: security
-      description: Upgrade inherited dependencies to mitigate security vulnerabilities
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/405
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/406
+          url: https://github.com/issue-url
     - kind: changed
-      description: Upgrade GoLang version to 1.17
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/407
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/408
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.5.1
+      image: apache/solr-operator:v0.5.2-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
@@ -181,4 +163,4 @@ annotations:
           - techproducts
           - books
         location: "/this/location"
-  artifacthub.io/containsSecurityUpdates: "true"
+  artifacthub.io/containsSecurityUpdates: "false"

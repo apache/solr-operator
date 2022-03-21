@@ -16,7 +16,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-version: 0.5.1
+version: 0.5.2-prerelease
 appVersion: 8.9.0
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
@@ -36,24 +36,20 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: fixed
-      description: Fixed Helm chart value "zk.externalAddress"
+    - kind: added
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/379
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/380
-    - kind: fixed
-      description: Fixed Helm chart value "addressability.external.additionalDomains", will be renamed to "additionalDomainNames" in v0.6.0
+          url: https://github.com/issue-url
+    - kind: changed
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/412
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/415
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -71,5 +67,5 @@ annotations:
       image: solr:8.9
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
