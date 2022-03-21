@@ -28,7 +28,7 @@ spec:
       method: Ingress
       useExternalAddress: false
       domainName: "kube.example.com"
-      additionalDomainNames:
+      additionalDomains:
         - "another.kube.example.com"
         - "another.kube.other.com"
       nodePortOverride: 80
