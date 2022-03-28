@@ -44,6 +44,7 @@ const (
 	SolrCloudPVCTechnology           = "solr-cloud"
 	SolrPVCStorageLabel              = "solr.apache.org/storage"
 	SolrCloudPVCDataStorage          = "data"
+	SolrDataVolumeName               = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
 	SolrXmlFile                      = "solr.xml"
@@ -134,8 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	solrDataVolumeName := "data"
-	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
+	volumeMounts := []corev1.VolumeMount{{Name: SolrDataVolumeName, MountPath: "/var/solr/data"}}
 
 	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.UsesPersistentStorage() {
@@ -143,7 +143,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		// Set the default name of the pvc
 		if pvc.ObjectMeta.Name == "" {
-			pvc.ObjectMeta.Name = solrDataVolumeName
+			pvc.ObjectMeta.Name = SolrDataVolumeName
 		}
 
 		// Set some defaults in the PVC Spec
@@ -177,7 +177,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	} else {
 		ephemeralVolume := corev1.Volume{
-			Name:         solrDataVolumeName,
+			Name:         SolrDataVolumeName,
 			VolumeSource: corev1.VolumeSource{},
 		}
 		if solrCloud.Spec.StorageOptions.EphemeralStorage != nil {
@@ -380,7 +380,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, SolrDataVolumeName, security)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {

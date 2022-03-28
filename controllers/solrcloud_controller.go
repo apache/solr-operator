@@ -418,8 +418,25 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
-		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+		additionalPodsToUpdate, podsHaveReplicas, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
+		for _, pod := range additionalPodsToUpdate {
+			if podsHaveReplicas[pod.Name] {
+				// Only evict pods that contain replicas in the clusterState
+				if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, &pod, updateLogger); evictError != nil {
+					err = evictError
+					updateLogger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
+				} else if canDeletePod {
+					podsToUpdate = append(podsToUpdate, pod)
+				} else {
+					// Try again in 5 seconds if cannot delete a pod.
+					updateRequeueAfter(&requeueOrNot, time.Second*5)
+				}
+			} else {
+				// If a pod has no replicas, then update it when asked to
+				podsToUpdate = append(podsToUpdate, pod)
+			}
+		}
 
 		for _, pod := range podsToUpdate {
 			err = r.Delete(ctx, &pod, client.Preconditions{
@@ -432,6 +449,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if err != nil || retryLater {
 			updateRequeueAfter(&requeueOrNot, time.Second*15)
+		}
+		if err != nil {
+			return requeueOrNot, err
 		}
 	}
 
@@ -474,7 +494,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	return requeueOrNot, nil
+	return requeueOrNot, err
 }
 
 func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger,
