@@ -47,13 +47,6 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/387
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/388
-    - kind: fixed
-      description: Fixed Helm chart value "zk.externalAddress"
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/379
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/380
     - kind: changed
       description: The "addressability.external.additionalDomains" option has been renamed to "addressability.external.additionalDomainNames". See the upgrade notes for more information.
       links:
