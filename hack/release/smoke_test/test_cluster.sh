@@ -80,7 +80,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.21.2"
 fi
 if [[ -z "${SOLR_VERSION:-}" ]]; then
-  SOLR_VERSION="8.10.0"
+  SOLR_VERSION="8.11.1"
 fi
 
 # If LOCATION is not a URL, then get the absolute path
@@ -141,12 +141,12 @@ printf "\nInstall a test Solr Cluster\n"
 helm install --kube-context "${KUBE_CONTEXT}" --verify example "${SOLR_HELM_CHART}" \
     --set replicas=3 \
     --set image.tag=${SOLR_VERSION} \
-    --set solrJavaMem="-Xms1g -Xmx3g" \
-    --set customSolrKubeOptions.podOptions.resources.limits.memory="1G" \
-    --set customSolrKubeOptions.podOptions.resources.requests.cpu="300m" \
-    --set customSolrKubeOptions.podOptions.resources.requests.memory="512Mi" \
-    --set zookeeperRef.provided.persistence.spec.resources.requests.storage="5Gi" \
-    --set zookeeperRef.provided.replicas=1 \
+    --set solrOptions.javaMemory="-Xms1g -Xmx3g" \
+    --set podOptions.resources.limits.memory="1G" \
+    --set podOptions.resources.requests.cpu="300m" \
+    --set podOptions.resources.requests.memory="512Mi" \
+    --set zk.provided.persistence.spec.resources.requests.storage="5Gi" \
+    --set zk.provided.replicas=1 \
     --set "backupRepositories[0].name=local" \
     --set "backupRepositories[0].volume.source.hostPath.path=/tmp/backup"
 
@@ -258,6 +258,24 @@ if (( "${FOUND_BACKUP_ID}" != "${LAST_BACKUP_ID}" )); then
     echo "The another backup has been taken since recurrence was stopped. Last backupId should be '${LAST_BACKUP_ID}', but instead found '${FOUND_BACKUP_ID}'." >&2
     exit 1
 fi
+
+
+printf "\nDo a rolling restart and make sure the cluster is healthy afterwards\n"
+
+helm upgrade --kube-context "${KUBE_CONTEXT}"  --verify example "${SOLR_HELM_CHART}" --reuse-values  \
+    --set-string podOptions.annotations.restart="true"
+printf '\nWait for the rolling restart to begin.\n\n'
+grep -q "3              3       3            0" <(exec kubectl get solrcloud example -w); kill $!
+
+printf '\nWait for all 3 Solr nodes to become ready.\n\n'
+grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
+
+# Need a new port-forward, since the last one will have broken due to all pods restarting
+kubectl port-forward service/example-solrcloud-common 28983:80 || true &
+sleep 2
+
+printf "\nQuery the test collection, test for 0 docs\n\n"
+curl --silent "http://localhost:28983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
 
 echo "Delete test Kind Kubernetes cluster."
 kind delete clusters "${CLUSTER_NAME}"

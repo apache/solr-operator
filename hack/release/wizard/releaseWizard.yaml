@@ -699,6 +699,10 @@ groups:
       If you want to test with local changes, either change the git repo you are using in the release wizard
       or uncomment the command to remove local changes below.
 
+      This will issue a final commit (that sets the release version throughout the repo), but that commit will not be pushed until the release vote is successful.
+      This final commit ID is integral to the release, so it's ABSOLUTELY NECESSARY to make sure that no commits are pushed to the release branch "{{ release_branch }}"
+      until the Release Candidate either succeeds or fails.
+
       You will need to enter your GPG Key Passphrase multiple times, so be ready for that.
       This includes a prompt that will likely not spinup a separate window.
       If the script pauses for a long time and has a key in the prompt, please enter your passphrase.
@@ -803,6 +807,7 @@ groups:
         - !Command
           cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
           logfile: rc_docker_upload.log
+          tee: true
   - !Todo
     id: import_svn
     title: Import artifacts into SVN
@@ -868,7 +873,7 @@ groups:
       The artifacts are layed out in the following way:
         * solr-operator-{{ release_version }}.tgz - Contains the source release
         * crds/ - Contains the CRD files
-        * helm/ - Contains the Helm release packages
+        * helm-charts/ - Contains the Helm release packages
 
       The RC Docker image can be found at:
         apache/solr-operator:{{ release_version }}-rc{{ rc_number }}
@@ -1134,7 +1139,11 @@ groups:
           logfile: git_clean.log
           tee: true
         - !Command
+          cmd: docker buildx create --use
+          tee: true
+        - !Command
           cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
+          tee: true
           logfile: docker_upload.log
   - !Todo
     id: check_distribution_directory
@@ -1228,7 +1237,7 @@ groups:
           comment: Edit the pelicanconf.file. Make sure to include the "v" prefix in the version.
           stdout: true
         - !Command
-          cmd: git commit -am "Update version variables for release {{ release_version }}"
+          cmd: git commit -am "Update version variables for Solr Operator release {{ release_version }}"
           logfile: commit.log
           stdout: true
     post_description: |
@@ -1342,9 +1351,6 @@ groups:
       and view the staged site at https://solr.staged.apache.org/operator
       Verify that correct links and versions are mentioned in download pages, download buttons etc.
       If you find anything wrong, then commit and push any changes and check again.
-
-      Next step is to merge the changes to branch 'production' in order to publish the site.
-      Make sure that you do "Merge with Commit", do NOT use a Squash Merge.
     links:
     - https://ci2.apache.org/#/builders/3
     - https://solr.staged.apache.org/operator

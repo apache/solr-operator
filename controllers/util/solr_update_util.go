@@ -23,11 +23,12 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
-	cron "github.com/robfig/cron/v3"
+	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -94,7 +95,7 @@ func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations 
 // TODO:
 //  - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
 //    - Might be too much complexity for very little gain.
-func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, retryLater bool) {
+func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
 	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, len(outOfDatePods), outOfDatePodsNotStartedCount, availableUpdatedPodCount)
 	if maxPodsToUpdate <= 0 {
@@ -114,7 +115,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 				} else {
 					queryParams.Set("action", "OVERSEERSTATUS")
 					err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, overseerResp)
-					if hasError, apiErr := solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
+					if hasError, apiErr = solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
 						err = apiErr
 					}
 				}
@@ -127,7 +128,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 		// If the update logic already wants to retry later, then do not pick any pods
 		if !retryLater {
 			logger.Info("Pod update selection started.", "outOfDatePods", len(outOfDatePods), "maxPodsUnavailable", maxPodsUnavailable, "unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", outOfDatePodsNotStartedCount, "maxPodsToUpdate", maxPodsToUpdate)
-			podsToUpdate = pickPodsToUpdate(cloud, outOfDatePods, clusterResp.ClusterStatus, overseerResp.Leader, maxPodsToUpdate, logger)
+			podsToUpdate, podsHaveReplicas = pickPodsToUpdate(cloud, outOfDatePods, clusterResp.ClusterStatus, overseerResp.Leader, maxPodsToUpdate, logger)
 
 			// If there are no pods to upgrade, even though the maxPodsToUpdate is >0, then retry later because the issue stems from cluster state
 			// and clusterState changes will not call the reconciler.
@@ -136,7 +137,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 			}
 		}
 	}
-	return podsToUpdate, retryLater
+	return podsToUpdate, podsHaveReplicas, retryLater
 }
 
 // calculateMaxPodsToUpdate determines the maximum number of additional pods that can be updated.
@@ -154,7 +155,8 @@ func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, outOfDatePodCount int, outO
 }
 
 func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, clusterStatus solr_api.SolrClusterStatus,
-	overseer string, maxPodsToUpdate int, logger logr.Logger) (podsToUpdate []corev1.Pod) {
+	overseer string, maxPodsToUpdate int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool) {
+	podsHaveReplicas = make(map[string]bool, maxPodsToUpdate)
 	nodeContents, totalShardReplicas, shardReplicasNotActive, allManagedPodsLive := findSolrNodeContents(clusterStatus, overseer, GetAllManagedSolrNodeNames(cloud))
 	sortNodePodsBySafety(outOfDatePods, nodeContents, cloud)
 
@@ -237,6 +239,7 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 			}
 			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", reason)
 			podsToUpdate = append(podsToUpdate, pod)
+			podsHaveReplicas[pod.Name] = isInClusterState && nodeContent.replicas > 0
 
 			// Stop after the maxBatchNodeUpdate count, if one is provided.
 			if maxPodsToUpdate >= 1 && len(podsToUpdate) >= maxPodsToUpdate {
@@ -247,7 +250,7 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 			logger.Info("Pod not able to be killed for update.", "pod", pod.Name, "reason", reason)
 		}
 	}
-	return podsToUpdate
+	return podsToUpdate, podsHaveReplicas
 }
 
 func sortNodePodsBySafety(outOfDatePods []corev1.Pod, nodeMap map[string]*SolrNodeContents, solrCloud *solr.SolrCloud) {
@@ -296,7 +299,7 @@ func ResolveMaxPodsUnavailable(maxPodsUnavailable *intstr.IntOrString, desiredPo
 	if maxPodsUnavailable != nil && maxPodsUnavailable.Type == intstr.Int && maxPodsUnavailable.IntVal <= int32(0) {
 		return desiredPods, nil
 	}
-	podsUnavailable, err := intstr.GetValueFromIntOrPercent(intstr.ValueOrDefault(maxPodsUnavailable, intstr.FromString(DefaultMaxPodsUnavailable)), desiredPods, false)
+	podsUnavailable, err := intstr.GetScaledValueFromIntOrPercent(intstr.ValueOrDefault(maxPodsUnavailable, intstr.FromString(DefaultMaxPodsUnavailable)), desiredPods, false)
 	if err != nil {
 		return 1, err
 	}
@@ -314,7 +317,7 @@ func ResolveMaxShardReplicasUnavailable(maxShardReplicasUnavailable *intstr.IntO
 	maxUnavailable, isCached := cache[shard]
 	var err error
 	if !isCached {
-		maxUnavailable, err = intstr.GetValueFromIntOrPercent(intstr.ValueOrDefault(maxShardReplicasUnavailable, intstr.FromInt(DefaultMaxShardReplicasUnavailable)), totalShardReplicas[shard], false)
+		maxUnavailable, err = intstr.GetScaledValueFromIntOrPercent(intstr.ValueOrDefault(maxShardReplicasUnavailable, intstr.FromInt(DefaultMaxShardReplicasUnavailable)), totalShardReplicas[shard], false)
 		if err != nil {
 			maxUnavailable = 1
 		}
@@ -472,4 +475,77 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 		allNodeNames[SolrNodeName(solrCloud, podName)] = true
 	}
 	return allNodeNames
+}
+
+// EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod, if the Pod is using ephemeral storage.
+// If the pod is using persistent storage, this function is a no-op.
+// This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
+func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, logger logr.Logger) (err error, canDeletePod bool) {
+	var solrDataVolume *corev1.Volume
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == SolrDataVolumeName {
+			solrDataVolume = &volume
+			break
+		}
+	}
+
+	// Only evict if the Data volume is not persistent
+	if solrDataVolume.VolumeSource.PersistentVolumeClaim == nil {
+		// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
+		// Otherwise, move the replicas to other pods
+		if (solrCloud.Spec.Replicas == nil || *solrCloud.Spec.Replicas < 2) && strings.HasSuffix(pod.Name, "-0") {
+			queryParams := url.Values{}
+			queryParams.Add("action", "DELETENODE")
+			queryParams.Add("node", SolrNodeName(solrCloud, pod.Name))
+			// TODO: Figure out a way to do this, since DeleteNode will not delete the last replica of every type...
+			canDeletePod = true
+		} else {
+			requestId := "move-replicas-" + pod.Name
+
+			// First check to see if the Async Replace request has started
+			if asyncState, message, asyncErr := solr_api.CheckAsyncRequest(ctx, solrCloud, requestId); asyncErr != nil {
+				err = asyncErr
+			} else if asyncState == "notfound" {
+				// Submit new Replace Node request
+				replaceResponse := &solr_api.SolrAsyncResponse{}
+				queryParams := url.Values{}
+				queryParams.Add("action", "REPLACENODE")
+				queryParams.Add("parallel", "true")
+				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
+				queryParams.Add("async", requestId)
+				err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
+				if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
+					err = apiErr
+				}
+				if err == nil {
+					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
+				} else {
+					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
+				}
+			} else {
+				logger.Info("Found async status", "requestId", requestId, "state", asyncState)
+				// Only continue to delete the pod if the ReplaceNode request is complete and successful
+				if asyncState == "completed" {
+					canDeletePod = true
+					logger.Info("Migration of all replicas off of pod before deletion complete. Pod can now be deleted.", "pod", pod.Name)
+				} else if asyncState == "failed" {
+					logger.Info("Migration of all replicas off of pod before deletion failed. Will try again.", "pod", pod.Name, "message", message)
+				}
+
+				// Delete the async request Id if the async request is successful or failed.
+				// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
+				if asyncState == "completed" || asyncState == "failed" {
+					if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
+						logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
+					} else {
+						canDeletePod = false
+					}
+				}
+			}
+		}
+	} else {
+		// The pod can be deleted, since it is using persistent data storage
+		canDeletePod = true
+	}
+	return err, canDeletePod
 }

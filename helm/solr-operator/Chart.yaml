@@ -70,13 +70,6 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/397
         - name: Zookeeper Operator v0.2.13 Release
           url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.13
-    - kind: fixed
-      description: Solr Operator helm chart now sets runAsNonRoot only on the solr operator container. Sidecars can run as root.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/389
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/395
     - kind: changed
       description: Loosen requirement on GCS backup credential/secret. Can now be omitted if using GKE's Workload Identity.
       links:
@@ -84,27 +77,6 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/391
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/394
-    - kind: fixed
-      description: Correctly check whether resource limits & requests have changed when updating children objects
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/393
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/398
-    - kind: security
-      description: Upgrade inherited dependencies to mitigate security vulnerabilities
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/405
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/406
-    - kind: changed
-      description: Upgrade GoLang version to 1.17
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/407
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/408
     - kind: changed
       description: The "addressability.external.additionalDomains" option has been renamed to "addressability.external.additionalDomainNames". See the upgrade notes for more information.
       links:
@@ -112,6 +84,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/412
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/416
+    - kind: added
+      description: You can now do a managed update of Solr while using ephemeral data. The operator will manage data migration during the rolling update for you.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/365
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/375
     - kind: removed
       description: Options deprecated in v0.5.0 have been removed. See the upgrade notes for more information.
       links:
