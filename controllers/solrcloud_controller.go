@@ -568,6 +568,10 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
+		// Assume the pod is up-to-date if we don't have an updateRevision from the statefulSet status.
+		// This should only happen when the statefulSet has just been created, so it's not a big deal.
+		// NOTE: This is usually because the statefulSet status wasn't fetched, not because the fetched updateRevision
+		//       is empty.
 		updateRevision := statefulSetStatus.UpdateRevision
 		nodeStatus.SpecUpToDate = updateRevision == "" || p.Labels["controller-revision-hash"] == updateRevision
 		if nodeStatus.SpecUpToDate {
