@@ -158,6 +158,13 @@ undeploy: prepare-deploy-kustomize ## Undeploy controller from the K8s cluster s
 
 ##@ Tests and Checks
 
+smoke-test: build-release-artifacts ## Run a full smoke test on a set of local release artifacts, based on the current working directory.
+	./hack/release/smoke_test/smoke_test.sh \
+		-l $(or $(ARTIFACTS_DIR),release-artifacts) \
+		-v $(VERSION) \
+		-i "${IMG}:${TAG}" \
+		-s $(GIT_SHA)
+
 check: lint test ## Do all checks, lints and tests for the Solr Operator
 
 lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm ## Lint the codebase to check for formatting and correctness
