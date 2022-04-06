@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/verify_all.sh [-h] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/verify_all.sh [-h] [-g GPG_KEY] -v VERSION -l LOCATION
 
 Verify checksums and signatures of all release artifacts.
 Check that the docker image contains the necessary LICENSE and NOTICE.
@@ -31,7 +31,7 @@ Check that the docker image contains the necessary LICENSE and NOTICE.
     -h  Display this help and exit
     -v  Version of the Solr Operator
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
-    -g  GPG Key (fingerprint) used to sign the artifacts
+    -g  GPG Key (fingerprint) used to sign the artifacts. (Optional, if missing then fingerprints will not be checked)
 EOF
 }
 
@@ -62,9 +62,6 @@ fi
 if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location through -l, or through the LOCATION env var" >&2 && exit 1
 fi
-if [[ -z "${GPG_KEY:-}" ]]; then
-  echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
-fi
 
 TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/solr-operator-smoke-verify-XXXXXX")
 
@@ -76,9 +73,13 @@ fi
 echo "Import Solr Keys"
 curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
 
-# First generate the old-style public key ring, if it doesn't already exist and contain the information we want
-if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "${GPG_KEY}"); then
-  gpg --export >~/.gnupg/pubring.gpg
+
+# First generate the old-style public key ring, if it doesn't already exist and contain the information we want.
+# Only do this if a GPG Key was provided
+if [[ -n "${GPG_KEY:-}" ]]; then
+  if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "${GPG_KEY}"); then
+    gpg --export >~/.gnupg/pubring.gpg
+  fi
 fi
 
 echo "Download all artifacts and verify signatures"
@@ -107,12 +108,14 @@ echo "Download all artifacts and verify signatures"
         echo "Veryifying: ${artifact_directory}/${artifact}"
         sha512sum -c "${artifact}.sha512" \
           || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
-        gpg --verify "${artifact}.asc" "${artifact}" \
-          || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
+        if [[ -n "${GPG_KEY:-}" ]]; then
+          gpg --verify "${artifact}.asc" "${artifact}" \
+            || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
+        fi
       done
 
-      # If a helm chart has a provenance file, verify it
-      if [[ -f "${artifact}.prov" ]]; then
+      # If a helm chart has a provenance file, and a GPG Key was provided, then verify the provenance file
+      if [[ -f "${artifact}.prov" && -n "${GPG_KEY:-}" ]]; then
         helm verify "${artifact}"
       fi
     )
@@ -122,8 +125,10 @@ echo "Download all artifacts and verify signatures"
     echo "Veryifying: ${artifact}"
     sha512sum -c "${artifact}.sha512" \
       || { echo "Invalid sha512 for ${artifact}. Aborting!"; exit 1; }
-    gpg --verify "${artifact}.asc" "${artifact}" \
-      || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
+    if [[ -n "${GPG_KEY:-}" ]]; then
+      gpg --verify "${artifact}.asc" "${artifact}" \
+        || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
+    fi
   done
 )
 
