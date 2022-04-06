@@ -119,6 +119,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/365
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/375
+    - kind: fixed
+      description: SolrClouds now support a ZookeeperConnection address without the port (uses 2181 by default). The operator will also log whenever the statefulSet is skipped because of the zkConnectionString.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/428
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/429
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
