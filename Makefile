@@ -35,8 +35,9 @@ GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
-KUSTOMIZE_VERSION=4.3.0
+KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.5.0
+GO_LICENSES_VERSION=v1.0.0
 
 GO111MODULE ?= on
 
@@ -240,18 +241,12 @@ controller-gen: ## Download controller-gen locally if necessary.
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION))
 
 KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
-# Uncomment and remove other lines once kustomize supports "go install"
-# https://github.com/kubernetes-sigs/kustomize/issues/3618
-# $(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v$(KUSTOMIZE_VERSION))
 kustomize: ## Download kustomize locally if necessary.
-ifeq (,$(wildcard $(KUSTOMIZE)))
-	@echo "Downloading kustomize"
-	(cd /tmp && curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- $(KUSTOMIZE_VERSION) $(PROJECT_DIR)/bin)
-endif
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION))
 
 GO_LICENSES = $(PROJECT_DIR)/bin/go-licenses
 go-licenses: ## Download go-licenses locally if necessary.
-	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@latest)
+	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@$(GO_LICENSES_VERSION))
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
