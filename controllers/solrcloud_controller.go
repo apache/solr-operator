@@ -288,9 +288,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Only create stateful set if zkConnectionString can be found (must contain host and port)
-	if !strings.Contains(newStatus.ZkConnectionString(), ":") {
+	// Only create stateful set if zkConnectionString can be found (must contain a host before the chroot)
+	zkConnectionString := newStatus.ZkConnectionString()
+	if len(zkConnectionString) < 2 || strings.HasPrefix(zkConnectionString, "/") {
 		blockReconciliationOfStatefulSet = true
+		logger.Info("Will not create/update the StatefulSet because the zookeeperConnectionString has no host", "zookeeperConnectionString", zkConnectionString)
 	}
 
 	// Holds TLS config info for a server cert and optionally a client cert as well
