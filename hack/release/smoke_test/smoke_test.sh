@@ -34,7 +34,7 @@ Smoke test the Solr Operator release artifacts.
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -g  GPG Key (fingerprint) used to sign the artifacts
     -k  Kubernetes Version to test with (Optional, defaults to a compatible version)
-    -t  Solr Version to test with (Optional, defaults to a compatible version)
+    -t  Solr Image (or version/tag of the official Solr image) to test with (Optional, defaults to a compatible version)
 EOF
 }
 
@@ -57,7 +57,7 @@ while getopts hv:i:l:s:g:k:t: opt; do
             ;;
         k)  KUBERNETES_VERSION=$OPTARG
             ;;
-        t)  SOLR_VERSION=$OPTARG
+        t)  SOLR_IMAGE=$OPTARG
             ;;
         *)
             show_help >&2
@@ -82,8 +82,8 @@ fi
 if [[ -n "${KUBERNETES_VERSION:-}" ]]; then
   export KUBERNETES_VERSION="${KUBERNETES_VERSION}"
 fi
-if [[ -n "${SOLR_VERSION:-}" ]]; then
-  export SOLR_VERSION="${SOLR_VERSION}"
+if [[ -n "${SOLR_IMAGE:-}" ]]; then
+  export SOLR_IMAGE="${SOLR_IMAGE}"
 fi
 
 PULL_PASS_THROUGH=""
