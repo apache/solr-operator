@@ -113,7 +113,7 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 	$(GO_LICENSES) save . --save_path licenses --force
 
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
-	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts)
+	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
 
 ##@ Build
 
