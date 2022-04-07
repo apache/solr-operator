@@ -19,6 +19,7 @@ on:
   pull_request:
     branches:
       - 'main'
+      - 'release-*'
 
 jobs:
   test:
@@ -30,6 +31,6 @@ jobs:
       # Setup
       - uses: actions/checkout@v2
 
-      # Cleanup & Install dependencies
+      # Build the docker image
       - run: docker --version
       - run: make docker-build

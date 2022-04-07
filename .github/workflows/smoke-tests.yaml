@@ -13,17 +13,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Build & Test
+name: Build Artifacts and Smoke Test
 
 on:
   pull_request:
     branches:
       - 'main'
       - 'release-*'
+    paths-ignore:
+      - '.github/workflows/**'
+      - '!.github/workflows/smoke-tests.yml'
+      - 'dev-docs/**'
+      - 'docs/**'
+      - 'example/**'
+      - 'hack/release/upload/**'
+      - 'hack/release/version/**'
+      - 'hack/release/wizard/**'
+      - '.gitignore'
+      - '.asf.yaml'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - 'NOTICE'
 
 jobs:
   test:
-    name: Build and Test Operator
+    name: Smoke Test Artifacts
 
     runs-on: ubuntu-latest
 
@@ -39,23 +54,6 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      # Cleanup & Install dependencies
-      - run: make clean
-      - run: make install-dependencies
-
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-code-dependencies-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-code-dependencies
-
-      # Build
-      - run: make manifests
-      - run: make build
-
-      # Test
-      - run: make lint
-      - run: make test
-      - run: make check-git
+      # Build the release artifacts, and run a full smoke test (minus signatures)
+      - run: docker --version
+      - run: make smoke-test
