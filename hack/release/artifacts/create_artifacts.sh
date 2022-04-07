@@ -90,7 +90,7 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
 
       for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
         echo "Signing ${artifact_directory}/${artifact}"
-        if [ -n "${GPG_KEY:-}" && ! -f "${artifact}.asc" ]; then
+        if [[ -n "${GPG_KEY:-}" ]] && [ ! -f "${artifact}.asc" ]; then
           gpg -u "${GPG_KEY}" -ab "${artifact}"
         fi
         if [ ! -f "${artifact}.sha512" ]; then
@@ -102,7 +102,7 @@ echo "Setting up Solr Operator ${VERSION} release artifacts at '${ARTIFACTS_DIR}
 
   for artifact in $(find * -type f -maxdepth 0 ! \( -name '*.asc' -o -name '*.sha512' -o -name '*.prov' \) ); do
     echo "Signing ${artifact}"
-    if [ -n "${GPG_KEY:-}" && ! -f "${artifact}.asc" ]; then
+    if [[ -n "${GPG_KEY:-}" ]] && [ ! -f "${artifact}.asc" ]; then
       gpg -u "${GPG_KEY}" -ab "${artifact}"
     fi
     if [ ! -f "${artifact}.sha512" ]; then
