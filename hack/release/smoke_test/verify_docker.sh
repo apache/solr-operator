@@ -76,15 +76,22 @@ echo "Verify the Docker image ${IMAGE}"
 docker run --rm --entrypoint='sh' "${IMAGE}" -c "ls /etc/licenses/LICENSE ; ls /etc/licenses/NOTICE; ls /etc/licenses/dependencies/*"
 
 # Check for Version and other information
-docker run --rm -it --entrypoint='sh' "${IMAGE}" -c "/solr-operator || true" | grep "solr-operator Version: ${VERSION}" \
+SOLR_OP_LOGS=$(docker run --rm --entrypoint='sh' "${IMAGE}" -c "/solr-operator 2>&1 || true")
+echo "${SOLR_OP_LOGS}" | grep "solr-operator Version: ${VERSION}" \
   || {
+     printf "\n\n" >&2
      echo "Could not find correct Version in Operator startup logs: ${VERSION}" >&2;
+     printf "\n\n" >&2
+     echo "${SOLR_OP_LOGS}" >&2;
      exit 1
     }
 if [[ -n "${GIT_SHA:-}" ]]; then
-  docker run --rm -it --entrypoint='sh' "${IMAGE}" -c "/solr-operator || true" | grep "solr-operator Git SHA: ${GIT_SHA}" \
+  echo "${SOLR_OP_LOGS}" | grep "solr-operator Git SHA: ${GIT_SHA}" \
     || {
+     printf "\n\n" >&2
      echo "Could not find correct Git SHA in Operator startup logs: ${GIT_SHA}" >&2;
+     printf "\n\n" >&2
+     echo "${SOLR_OP_LOGS}" >&2;
      exit 1
     }
 fi

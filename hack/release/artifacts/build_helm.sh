@@ -56,7 +56,7 @@ done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
 
 if [[ -z "${VERSION:-}" ]]; then
-  VERSION=$(make version)
+  VERSION=$(make -s version)
 fi
 if [[ -z "${ARTIFACTS_DIR:-}" ]]; then
   echo "Specify an base artifact directory -d, or through the ARTIFACTS_DIR env var" >&2 && exit 1
