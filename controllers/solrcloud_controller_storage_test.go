@@ -107,6 +107,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel]).To(Equal(solrCloud.Name), "PVC Instance label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels["base"]).To(Equal("here"), "Additional PVC label doesn't match")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(found.Spec.VolumeClaimTemplates[0].Name), "Custom PVC name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(found.Spec.VolumeClaimTemplates[0].Name), "Custom PVC name not used in volume mount")
 			})
 		})
 	})
@@ -140,6 +142,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCStorageLabel]).To(Equal("data"), "PVC Storage label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels[util.SolrPVCInstanceLabel]).To(Equal(solrCloud.Name), "PVC Instance label doesn't match")
 				g.Expect(found.Spec.VolumeClaimTemplates[0].Labels["base"]).To(Equal("here"), "Additional PVC label doesn't match")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(found.Spec.VolumeClaimTemplates[0].Name), "Custom PVC name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(found.Spec.VolumeClaimTemplates[0].Name), "Custom PVC name not used in volume mount")
 			})
 
 			By("ensuring that the PVCs are deleted and the finalizer is removed when the SolrCloud is deleted")
@@ -163,13 +167,15 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
-			By("testing the Solr StatefulSet PVC Spec")
+			By("testing the Solr StatefulSet Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
 				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
 			})
 		})
 	})
@@ -188,13 +194,15 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
-			By("testing the Solr StatefulSet PVC Spec")
+			By("testing the Solr StatefulSet Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
 				dataVolume := found.Spec.Template.Spec.Volumes[1]
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
 				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
 			})
 		})
 	})
@@ -216,7 +224,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
-			By("testing the Solr StatefulSet PVC Spec")
+			By("testing the Solr StatefulSet Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
@@ -224,6 +232,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(dataVolume.EmptyDir).To(Not(BeNil()), "The data volume should be an empty-dir.")
 				g.Expect(dataVolume.HostPath).To(BeNil(), "The data volume should not be a hostPath volume.")
 				g.Expect(dataVolume.EmptyDir).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.EmptyDir), "The empty dir settings do not match with what was provided.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
 			})
 		})
 	})
@@ -246,7 +256,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
-			By("testing the Solr StatefulSet PVC Spec")
+			By("testing the Solr StatefulSet Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
@@ -254,6 +264,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
 				g.Expect(dataVolume.HostPath).To(Not(BeNil()), "The data volume should be a hostPath volume.")
 				g.Expect(dataVolume.HostPath).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath), "The hostPath  settings do not match with what was provided.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
 			})
 		})
 	})
@@ -280,7 +292,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
 			})
 
-			By("testing the Solr StatefulSet PVC Spec")
+			By("testing the Solr StatefulSet Spec")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.VolumeClaimTemplates).To(HaveLen(0), "No data volume claims should exist when using ephemeral storage")
@@ -288,6 +300,8 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(dataVolume.EmptyDir).To(BeNil(), "The data volume should not be an empty-dir.")
 				g.Expect(dataVolume.HostPath).To(Not(BeNil()), "The data volume should be a hostPath volume.")
 				g.Expect(dataVolume.HostPath).To(Equal(solrCloud.Spec.StorageOptions.EphemeralStorage.HostPath), "The hostPath  settings do not match with what was provided.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
+				g.Expect(found.Spec.Template.Spec.InitContainers[0].VolumeMounts[1].Name).To(Equal(dataVolume.Name), "Ephemeral Data volume name not used in volume mount")
 			})
 		})
 	})
