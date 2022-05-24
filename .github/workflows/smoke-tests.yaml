@@ -13,23 +13,47 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Docker Build
+name: Build Artifacts and Smoke Test
 
 on:
   pull_request:
     branches:
       - 'main'
+      - 'release-*'
+    paths-ignore:
+      - '.github/workflows/**'
+      - '!.github/workflows/smoke-tests.yml'
+      - 'dev-docs/**'
+      - 'docs/**'
+      - 'example/**'
+      - 'hack/release/upload/**'
+      - 'hack/release/version/**'
+      - 'hack/release/wizard/**'
+      - '.gitignore'
+      - '.asf.yaml'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - 'NOTICE'
 
 jobs:
   test:
-    name: Build Docker Image
+    name: Smoke Test Artifacts
 
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        go: [ '1.17' ]
 
     steps:
       # Setup
       - uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
 
-      # Cleanup & Install dependencies
+      # Build the release artifacts, and run a full smoke test (minus signatures)
       - run: docker --version
-      - run: make docker-build
+      - run: make smoke-test

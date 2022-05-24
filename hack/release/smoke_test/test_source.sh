@@ -89,7 +89,7 @@ echo "Download source artifact, verify and run 'make check'"
   make check
 
   # Check the version
-  FOUND_VERSION=$(make version)
+  FOUND_VERSION=$(make -s version)
   if [[ "$FOUND_VERSION" != "${VERSION}" ]]; then
     echo "Version in source release should be ${VERSION}, but found ${FOUND_VERSION}" >&2
     exit 1

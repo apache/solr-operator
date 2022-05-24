@@ -135,7 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	volumeMounts := []corev1.VolumeMount{{Name: SolrDataVolumeName, MountPath: "/var/solr/data"}}
+	solrDataVolumeName := SolrDataVolumeName
 
 	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.UsesPersistentStorage() {
@@ -143,7 +143,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		// Set the default name of the pvc
 		if pvc.ObjectMeta.Name == "" {
-			pvc.ObjectMeta.Name = SolrDataVolumeName
+			pvc.ObjectMeta.Name = solrDataVolumeName
+		} else {
+			solrDataVolumeName = pvc.ObjectMeta.Name
 		}
 
 		// Set some defaults in the PVC Spec
@@ -177,7 +179,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	} else {
 		ephemeralVolume := corev1.Volume{
-			Name:         SolrDataVolumeName,
+			Name:         solrDataVolumeName,
 			VolumeSource: corev1.VolumeSource{},
 		}
 		if solrCloud.Spec.StorageOptions.EphemeralStorage != nil {
@@ -193,6 +195,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
 	}
+
+	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
 
 	// Add necessary specs for backupRepos
 	backupEnvVars := make([]corev1.EnvVar, 0)
@@ -380,7 +384,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, SolrDataVolumeName, security)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {

@@ -324,8 +324,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		err = r.Get(ctx, types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
 
 		// Set the annotation for a scheduled restart, if necessary.
-		if nextRestartAnnotation, reconcileWaitDuration, err := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); err != nil {
-			logger.Error(err, "Cannot parse restartSchedule cron", "cron", instance.Spec.UpdateStrategy.RestartSchedule)
+		if nextRestartAnnotation, reconcileWaitDuration, schedulingErr := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); schedulingErr != nil {
+			logger.Error(schedulingErr, "Cannot parse restartSchedule cron", "cron", instance.Spec.UpdateStrategy.RestartSchedule)
 		} else {
 			if nextRestartAnnotation != "" {
 				// Set the new restart time annotation
@@ -520,8 +520,6 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 	nodeNames := make([]string, len(foundPods.Items))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
 
-	updateRevision := statefulSetStatus.UpdateRevision
-
 	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
@@ -572,7 +570,12 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
-		nodeStatus.SpecUpToDate = p.Labels["controller-revision-hash"] == updateRevision
+		// Assume the pod is up-to-date if we don't have an updateRevision from the statefulSet status.
+		// This should only happen when the statefulSet has just been created, so it's not a big deal.
+		// NOTE: This is usually because the statefulSet status wasn't fetched, not because the fetched updateRevision
+		//       is empty.
+		updateRevision := statefulSetStatus.UpdateRevision
+		nodeStatus.SpecUpToDate = updateRevision == "" || p.Labels["controller-revision-hash"] == updateRevision
 		if nodeStatus.SpecUpToDate {
 			newStatus.UpToDateNodes += 1
 			if nodeStatus.Ready {
