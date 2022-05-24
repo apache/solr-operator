@@ -91,7 +91,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
 | busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
 | busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
-| solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | PullSecret for the BusyBox image |
+| solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | Java memory parameters |
 | solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line |
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
