@@ -97,6 +97,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/418
     - kind: fixed
+      description: Fixed issue with StatefulSet volumeMounts for PVCs with custom names.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/438
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/439
+    - kind: fixed
       description: SolrCloud pods are no longer deleted right after a SolrCloud is created.
       links:
         - name: Github Issue

@@ -23,17 +23,17 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] [-t SOLR_VERSION] -v VERSION -l LOCATION -g GPG_KEY
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] [-t SOLR_IMAGE] [-g GPG_KEY] -v VERSION -l LOCATION
 
 Test the release candidate in a Kind cluster
 
     -h  Display this help and exit
     -v  Version of the Solr Operator
-    -i  Solr Operator docker image to use  (Optional, defaults to apache/solr-operator:<version>)
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
-    -g  GPG Key (fingerprint) used to sign the artifacts
-    -k  Kubernetes Version to test with (full tag, e.g. v1.21.2)
-    -t  Solr Version, or image, to test with (full tag, e.g. 8.10.0)
+    -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
+    -g  GPG Key (fingerprint) used to sign the artifacts (Optional, if not provided then the helm chart will not be verified)
+    -k  Kubernetes Version to test with (full tag, e.g. v1.21.2) (Optional, defaults to a compatible version)
+    -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 8.11). (Optional, defaults to a compatible version)
 EOF
 }
 
@@ -54,7 +54,7 @@ while getopts hv:i:l:g:k:t: opt; do
             ;;
         k)  KUBERNETES_VERSION=$OPTARG
             ;;
-        t)  SOLR_VERSION=$OPTARG
+        t)  SOLR_IMAGE=$OPTARG
             ;;
         *)
             show_help >&2
@@ -73,14 +73,14 @@ fi
 if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
 fi
-if [[ -z "${GPG_KEY:-}" ]]; then
-  echo "Specify a gpg key fingerprint through -g, or through the GPG_KEY env var" >&2 && exit 1
-fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.21.2"
 fi
-if [[ -z "${SOLR_VERSION:-}" ]]; then
-  SOLR_VERSION="8.11.1"
+if [[ -z "${SOLR_IMAGE:-}" ]]; then
+  SOLR_IMAGE="${SOLR_VERSION:-8.11}"
+fi
+if [[ "${SOLR_IMAGE}" != *":"* ]]; then
+  SOLR_IMAGE="solr:${SOLR_IMAGE}"
 fi
 
 # If LOCATION is not a URL, then get the absolute path
@@ -117,8 +117,19 @@ fi
 echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
 kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}"
 
-# Load the docker image into the cluster
-kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
+# Load the docker images into the cluster
+if (docker image inspect "${IMAGE}" &>/dev/null); then
+  kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
+  printf "\nUsing local version of Solr Operator image \"${IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
+else
+  printf "\nUsing the remote Solr Operator image \"${IMAGE}\", since it was not found in the local Docker image list.\n\n"
+fi
+if (docker image inspect "${SOLR_IMAGE}" &>/dev/null); then
+  kind load docker-image --name "${CLUSTER_NAME}" "${SOLR_IMAGE}"
+  printf "\nUsing local version of Solr image \"${SOLR_IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
+else
+  printf "\nUsing the remote Solr image \"${SOLR_IMAGE}\", since it was not found in the local Docker image list.\n\n"
+fi
 
 # Add a temporary directory for backups
 docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
@@ -126,21 +137,28 @@ docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
 echo "Import Solr Keys"
 curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
 
-# First generate the old-style public key ring, if it doesn't already exist and contain the information we want
-if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "${GPG_KEY}"); then
-  gpg --export >~/.gnupg/pubring.gpg
+# First generate the old-style public key ring, if it doesn't already exist and contain the information we want.
+# Only do this if a GPG Key was provided
+VERIFY_OR_NOT=""
+if [[ -n "${GPG_KEY:-}" ]]; then
+  VERIFY_OR_NOT="--verify"
+  if ! (gpg --no-default-keyring --keyring=~/.gnupg/pubring.gpg --list-keys "${GPG_KEY}"); then
+    gpg --export >~/.gnupg/pubring.gpg
+  fi
 fi
 
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
-helm install --kube-context "${KUBE_CONTEXT}" --verify solr-operator "${OP_HELM_CHART}" --set image.tag="${IMAGE##*:}" \
+helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" \
+    --set-string image.tag="${IMAGE##*:}" \
     --set image.repository="${IMAGE%%:*}" \
     --set image.pullPolicy="Never"
 
 printf "\nInstall a test Solr Cluster\n"
-helm install --kube-context "${KUBE_CONTEXT}" --verify example "${SOLR_HELM_CHART}" \
+helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" \
     --set replicas=3 \
-    --set image.tag=${SOLR_VERSION} \
+    --set image.repository="${SOLR_IMAGE%%:*}" \
+    --set-string image.tag="${SOLR_IMAGE##*:}" \
     --set solrOptions.javaMemory="-Xms1g -Xmx3g" \
     --set podOptions.resources.limits.memory="1G" \
     --set podOptions.resources.requests.cpu="300m" \
@@ -201,7 +219,7 @@ spec:
       name: "example"
   numThreads: 4
   image:
-    tag: 8.7.0
+    tag: "8.11"
 EOF
 
 printf "\nWait for the Solr Prometheus Exporter to be ready\n"
@@ -262,10 +280,10 @@ fi
 
 printf "\nDo a rolling restart and make sure the cluster is healthy afterwards\n"
 
-helm upgrade --kube-context "${KUBE_CONTEXT}"  --verify example "${SOLR_HELM_CHART}" --reuse-values  \
+helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" --reuse-values  \
     --set-string podOptions.annotations.restart="true"
 printf '\nWait for the rolling restart to begin.\n\n'
-grep -q "3              3       3            0" <(exec kubectl get solrcloud example -w); kill $!
+grep -q "3              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
 
 printf '\nWait for all 3 Solr nodes to become ready.\n\n'
 grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!

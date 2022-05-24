@@ -113,7 +113,7 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 	$(GO_LICENSES) save . --save_path licenses --force
 
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
-	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts)
+	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
 
 ##@ Build
 
@@ -157,6 +157,13 @@ undeploy: prepare-deploy-kustomize ## Undeploy controller from the K8s cluster s
 	kubectl delete -k config/default
 
 ##@ Tests and Checks
+
+smoke-test: build-release-artifacts ## Run a full smoke test on a set of local release artifacts, based on the current working directory.
+	./hack/release/smoke_test/smoke_test.sh \
+		-l $(or $(ARTIFACTS_DIR),release-artifacts) \
+		-v $(VERSION) \
+		-i "${IMG}:${TAG}" \
+		-s $(GIT_SHA)
 
 check: lint test ## Do all checks, lints and tests for the Solr Operator
 
