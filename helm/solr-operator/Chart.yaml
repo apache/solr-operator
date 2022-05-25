@@ -110,6 +110,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/431
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/432
+    - kind: fixed
+      description: Fixed rolebindings when watching multiple namespaces
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/444
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
