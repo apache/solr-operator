@@ -128,7 +128,8 @@ helm install example-solr apache-solr/solr --version 0.5.1 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
   --set addressability.external.domainName="ing.local.domain" \
-  --set addressability.external.useExternalAddress="true"
+  --set addressability.external.useExternalAddress="true" \
+  --set ingressOptions.ingressClassName="nginx"
 
 # The solr-operator has created a new resource type 'solrclouds' which we can query
 # Check the status live as the deploy happens
