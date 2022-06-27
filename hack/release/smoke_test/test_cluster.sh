@@ -233,8 +233,8 @@ sleep 15
 printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
 curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
-printf "\nWait 20 seconds, so that more backups can be taken.\n"
-sleep 20
+printf "\nWait 22 seconds, so that more backups can be taken.\n"
+sleep 22
 
 printf "\nList the backups, and make sure that >= 3 have been taken (should be four), but only 3 are saved.\n"
 BACKUP_RESP=$(curl --silent -L "http://localhost:18983/solr/admin/collections?action=LISTBACKUP&name=ex-back-smoke-test&repository=local&collection=smoke-test&location=/var/solr/data/backup-restore/local/test-dir")
