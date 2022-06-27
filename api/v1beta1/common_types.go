@@ -251,12 +251,11 @@ func ImageVersion(image string) (version string) {
 	if len(split) < 2 {
 		return ""
 	} else {
-		return split[1]
+		return split[len(split)-1]
 	}
 }
 
-// SolrNodeStatus is the status of a solrNode in the cloud, with readiness status
-// and internal and external addresses
+// ZookeeperConnectionInfo is the information on how to connect to the Solr Zookeeper Cluster
 type ZookeeperConnectionInfo struct {
 	// The connection string to connect to the ensemble from within the Kubernetes cluster
 	// +optional
@@ -299,7 +298,7 @@ func (ci *ZookeeperConnectionInfo) withDefaults() (changed bool) {
 	return changed
 }
 
-// ZookeeperSpec defines the internal zookeeper ensemble to run for solr
+// ZookeeperACL defines acls to connect to a protected Zookeeper
 type ZookeeperACL struct {
 	// The name of the Kubernetes Secret that stores the username and password for the ACL.
 	// This secret must be in the same namespace as the solrCloud or prometheusExporter is running in.
