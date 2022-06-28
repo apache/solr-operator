@@ -122,6 +122,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/428
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/429
+    - kind: fixed
+      description: SolrCloud.Status now shows correct version when using an image repo that contains a colon
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/445
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/450
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
