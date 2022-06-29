@@ -35,6 +35,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -46,6 +47,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.3.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.4.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
