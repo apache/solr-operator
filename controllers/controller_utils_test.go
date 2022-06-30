@@ -868,6 +868,14 @@ var (
 			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
 		},
 	}
+	testResources2 = corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU: *resource.NewMilliQuantity(400, resource.DecimalSI),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceEphemeralStorage: resource.MustParse("3Gi"),
+		},
+	}
 	extraContainers1 = []corev1.Container{
 		{
 			Name:                     "container1",

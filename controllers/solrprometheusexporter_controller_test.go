@@ -161,6 +161,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ServiceAccountName:            testServiceAccountName,
 						Lifecycle:                     testLifecycle,
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
+						DefaultInitContainerResources: testResources2,
 					},
 					DeploymentOptions: &solrv1beta1.DeploymentOptions{
 						Annotations: testDeploymentAnnotations,

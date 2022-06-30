@@ -1563,6 +1563,28 @@ spec:
                           type: string
                         description: Annotations to be added for pods.
                         type: object
+                      defaultInitContainerResources:
+                        description: ProvidedInitContainerResources is the resource requirements for the default init container(s) created by the Solr Operator if any are created.
+                        properties:
+                          limits:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: 'Limits describes the maximum amount of compute resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                            type: object
+                          requests:
+                            additionalProperties:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            description: 'Requests describes the minimum amount of compute resources required. If Requests is omitted for a container, it defaults to Limits if that is explicitly specified, otherwise to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
+                            type: object
+                        type: object
                       envVars:
                         description: Additional environment variables to pass to the default container.
                         items:
@@ -2782,7 +2804,7 @@ spec:
                             type: integer
                         type: object
                       resources:
-                        description: Resources is the resource requirements for the container. This field cannot be updated once the cluster is created.
+                        description: Resources is the resource requirements for the default container.
                         properties:
                           limits:
                             additionalProperties:
@@ -5888,7 +5910,7 @@ spec:
                             description: Node Selector to be added on pods.
                             type: object
                           resources:
-                            description: Resources is the resource requirements for the container. This field cannot be updated once the cluster is created.
+                            description: Resources is the resource requirements for the Zookeeper container.
                             properties:
                               limits:
                                 additionalProperties:

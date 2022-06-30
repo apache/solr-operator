@@ -61,8 +61,7 @@ type PodOptions struct {
 	// +optional
 	Affinity *corev1.Affinity `json:"affinity,omitempty"`
 
-	// Resources is the resource requirements for the container.
-	// This field cannot be updated once the cluster is created.
+	// Resources is the resource requirements for the default container.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 
@@ -150,6 +149,10 @@ type PodOptions struct {
 	// +listMapKey=whenUnsatisfiable
 	// +optional
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+
+	// ProvidedInitContainerResources is the resource requirements for the default init container(s) created by the Solr Operator if any are created.
+	// +optional
+	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

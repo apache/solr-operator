@@ -621,6 +621,17 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
+	// If the user has provided custom resources for the default init containers, use them
+	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
+	if nil != customPodOptions {
+		resources := customPodOptions.DefaultInitContainerResources
+		if resources.Limits != nil || resources.Requests != nil {
+			for i := range containers {
+				containers[i].Resources = resources
+			}
+		}
+	}
+
 	return containers
 }
 
