@@ -296,6 +296,9 @@ podOptions:
     #   cpu: 500m
     #   memory: 4G
 
+  # Resources for the init containers created by the Solr Operator
+  defaultInitContainerResources: {}
+
   volumes: []
     # - name:
     #   defaultContainerMount: {}
