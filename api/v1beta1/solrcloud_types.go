@@ -554,11 +554,23 @@ type ExternalAddressability struct {
 	//
 	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
 	//
+	// DEPRECATED: Use ingressTLSTermination.tlsSecret instead
+	//
 	// +optional
 	IngressTLSTerminationSecret string `json:"ingressTLSTerminationSecret,omitempty"`
+
+	// IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections.
+	//
+	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
+	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr.
+	//
+	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
+	//
+	// +optional
+	IngressTLSTermination *SolrIngressTLSTermination `json:"ingressTLSTermination,omitempty"`
 }
 
-// ExternalAddressability is a string enumeration type that enumerates
+// ExternalAddressabilityMethod is a string enumeration type that enumerates
 // all possible ways that a SolrCloud can be made addressable external to the kubernetes cluster.
 // +kubebuilder:validation:Enum=Ingress;ExternalDNS
 type ExternalAddressabilityMethod string
@@ -576,8 +588,21 @@ const (
 )
 
 func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
+	// TODO: Remove in v0.7.0
+	// If the deprecated IngressTLSTerminationSecret exists, use it to default the new location of the value.
+	// If that location already exists, then merely remove the deprecated option.
+	if opts.IngressTLSTerminationSecret != "" {
+		if !opts.HasIngressTLSTermination() {
+			opts.IngressTLSTermination = &SolrIngressTLSTermination{
+				TLSSecret: opts.IngressTLSTerminationSecret,
+			}
+		}
+		opts.IngressTLSTerminationSecret = ""
+		changed = true
+	}
+
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
-	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTerminationSecret != "") {
+	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTermination != nil) {
 		changed = true
 		opts.UseExternalAddress = false
 	}
@@ -626,6 +651,25 @@ func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 	}
 
 	return changed
+}
+
+// SolrIngressTLSTermination defines how a SolrCloud should have TLS Termination enabled.
+// Only one option can be provided.
+//
+// +kubebuilder:validation:MaxProperties=1
+type SolrIngressTLSTermination struct {
+
+	// UseDefaultTLSSecret determines whether the ingress should use the default TLS secret provided by the Ingress implementation.
+	//
+	// For example, using nginx: https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate
+	//
+	// +optional
+	UseDefaultTLSSecret bool `json:"useDefaultTLSSecret,omitempty"`
+
+	// TLSSecret defines a TLS Secret to use for TLS termination of all exposed addresses for this SolrCloud in the Ingress.
+	//
+	// +optional
+	TLSSecret string `json:"tlsSecret,omitempty"`
 }
 
 type SolrUpdateStrategy struct {
@@ -1333,11 +1377,18 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	return url
 }
 
+func (ea *ExternalAddressability) HasIngressTLSTermination() bool {
+	if ea != nil && ea.Method == Ingress && ea.IngressTLSTermination != nil {
+		return ea.IngressTLSTermination.UseDefaultTLSSecret || ea.IngressTLSTermination.TLSSecret != ""
+	}
+	return false
+}
+
 func (sc *SolrCloud) UrlScheme(external bool) string {
 	urlScheme := "http"
 	if sc.Spec.SolrTLS != nil {
 		urlScheme = "https"
-	} else if external && sc.Spec.SolrAddressability.External != nil && sc.Spec.SolrAddressability.External.Method == Ingress && sc.Spec.SolrAddressability.External.IngressTLSTerminationSecret != "" {
+	} else if external && sc.Spec.SolrAddressability.External.HasIngressTLSTermination() {
 		urlScheme = "https"
 	}
 	return urlScheme
