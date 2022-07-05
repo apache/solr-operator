@@ -80,9 +80,17 @@ func (ps *SolrPrometheusExporterSpec) withDefaults(namespace string) (changed bo
 	changed = ps.SolrReference.withDefaults(namespace) || changed
 
 	if ps.Image == nil {
-		ps.Image = &ContainerImage{}
+		// Only instantiate the Image variable if the Solr reference is a SolrCloud resource.
+		// If so, then the image will be defaulted to the same image that the Solr reference uses.
+		if ps.SolrReference.Cloud == nil || ps.SolrReference.Cloud.Name == "" {
+			ps.Image = &ContainerImage{}
+		}
 	}
-	changed = ps.Image.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
+
+	// Do not change this to an else, as the Image might be instantiated in the if
+	if ps.Image != nil {
+		changed = ps.Image.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
+	}
 
 	if ps.NumThreads == 0 {
 		ps.NumThreads = 1
