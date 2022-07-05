@@ -112,7 +112,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   This will not affect any existing resources, as default versions are hard-written to the resources immediately.
   Only new resources created after the Solr Operator is upgraded to `v0.6.0` will be affected.
 
-- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.12` to `v0.2.13`.
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.12` to `v0.2.14`.
   If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
   Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
