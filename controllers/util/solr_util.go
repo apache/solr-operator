@@ -715,7 +715,7 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string)
 
 func getAppProtocol(solrCloud *solr.SolrCloud) *string {
 	appProtocol := "http"
-	if solrCloud.Spec.SolrTLS == nil {
+	if solrCloud.Spec.SolrTLS != nil {
 		appProtocol = "https"
 	}
 	return &appProtocol

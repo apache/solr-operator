@@ -332,7 +332,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 			Expect(service.Spec.Ports[0].Port).To(Equal(int32(80)), "Wrong port number on metrics Service")
 			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on metrics Service")
 			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on metrics Service should not be nil")
-			Expect(*service.Spec.Ports[0].AppProtocol).ToNot(Equal("http"), "Wrong appProtocol on metrics Service")
+			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on metrics Service")
 		})
 	})
 })

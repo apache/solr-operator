@@ -262,7 +262,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(commonService.Annotations).To(Equal(testCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
 			Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
-			Expect(*commonService.Spec.Ports[0].AppProtocol).ToNot(Equal("http"), "Wrong appProtocol on common Service")
+			Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on common Service")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
@@ -271,7 +271,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
 			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
-			Expect(*headlessService.Spec.Ports[0].AppProtocol).ToNot(Equal("http"), "Wrong appProtocol on headless Service")
+			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on headless Service")
 		})
 	})
 
