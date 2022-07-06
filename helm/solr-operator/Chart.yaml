@@ -129,6 +129,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/445
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/450
+    - kind: added
+      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/427
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/453
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease

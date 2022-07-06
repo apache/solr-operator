@@ -98,7 +98,10 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, false)
 			By("checking that the BasicAuth works as expected when using TLS")
-			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+			foundStatefulSet := expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+
+			By("Checking that the Service has the correct settings")
+			expectTLSService(ctx, solrCloud, foundStatefulSet.Spec.Selector.MatchLabels, true)
 
 			By("Checking that the Ingress will passthrough with Server TLS")
 			expectPassthroughIngressTLSConfig(ctx, solrCloud, tlsSecretName)
@@ -141,7 +144,10 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, false)
 			By("checking that the BasicAuth works as expected when using TLS")
-			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+			foundStatefulSet := expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
+
+			By("Checking that the Service has the correct settings")
+			expectTLSService(ctx, solrCloud, foundStatefulSet.Spec.Selector.MatchLabels, true)
 		})
 	})
 
@@ -223,10 +229,14 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				MountedTLSDir: mountedClientTLSDir,
 				CheckPeerName: true,
 			}
+			solrCloud.Spec.SolrAddressability.External.HideNodes = true
 		})
 		FIt("has the correct resources", func() {
 			By("checking that the Mounted TLS Config is correct in the generated StatefulSet")
-			expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
+			foundStatefulSet := expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
+
+			By("Checking that the Service has the correct settings")
+			expectTLSService(ctx, solrCloud, foundStatefulSet.Spec.Selector.MatchLabels, true)
 		})
 	})
 
@@ -384,6 +394,11 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in Status should not be nil.")
 				g.Expect(*found.ExternalCommonAddress).To(Equal("https://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud."+testDomain), "Wrong external common address in status")
 			})
+
+			foundStatefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("Checking that the Service has the correct settings")
+			expectTLSService(ctx, solrCloud, foundStatefulSet.Spec.Selector.MatchLabels, false)
 		})
 	})
 })
@@ -692,7 +707,7 @@ func createMockTLSSecret(ctx context.Context, parentObject client.Object, secret
 	return mockTLSSecret
 }
 
-func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *appsv1.StatefulSet {
 	statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 	podTemplate := &statefulSet.Spec.Template
 	expectMountedTLSDirConfigOnPodTemplate(podTemplate, solrCloud)
@@ -718,6 +733,7 @@ func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1
 		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
 		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
 	}
+	return statefulSet
 }
 
 func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec, solrCloud *solrv1beta1.SolrCloud) {
@@ -813,6 +829,47 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 		}
 	} else {
 		g.Expect(zkSetupInitContainer).To(BeNil(), "Shouldn't find the zk-setup InitContainer in the sts, when not using https!")
+	}
+}
+
+func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, selectorLables map[string]string, podsHaveTLSEnabled bool) {
+	appProtocol := "http"
+	podPort := 8983
+	servicePort := 80
+	if podsHaveTLSEnabled {
+		appProtocol = "https"
+		servicePort = 443
+	}
+	By("testing the Solr Common Service")
+	commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), selectorLables, false)
+	Expect(commonService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+	Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on common Service")
+	Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
+	Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
+	Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
+	Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on common Service")
+
+	if solrCloud.Spec.SolrAddressability.External.UsesIndividualNodeServices() {
+		nodeNames := solrCloud.GetAllSolrPodNames()
+		By("testing the Solr Node Service(s)")
+		for _, nodeName := range nodeNames {
+			service := expectService(ctx, solrCloud, nodeName, util.MergeLabelsOrAnnotations(selectorLables, map[string]string{"statefulset.kubernetes.io/pod-name": nodeName}), false)
+			Expect(service.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+			Expect(service.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on node Service")
+			Expect(service.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on node Service")
+			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on node Service")
+			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on node Service should not be nil")
+			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on node Service")
+		}
+	} else {
+		By("testing the Solr Headless Service")
+		headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), selectorLables, true)
+		Expect(headlessService.Spec.Ports[0].Name).To(Equal("solr-client"), "Wrong port name on common Service")
+		Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(podPort)), "Wrong port on headless Service")
+		Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
+		Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
+		Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
+		Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on headless Service")
 	}
 }
 
