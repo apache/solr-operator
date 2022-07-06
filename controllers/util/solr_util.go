@@ -23,6 +23,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sort"
@@ -55,6 +56,13 @@ const (
 
 	DistLibs    = "/opt/solr/dist"
 	ContribLibs = "/opt/solr/contrib/%s/lib"
+)
+
+var (
+	DefaultSolrVolumePrepInitContainerMemory = resource.NewScaledQuantity(50, 6)
+	DefaultSolrVolumePrepInitContainerCPU    = resource.NewMilliQuantity(50, resource.DecimalExponent)
+	DefaultSolrZKPrepInitContainerMemory     = resource.NewScaledQuantity(200, 6)
+	DefaultSolrZKPrepInitContainerCPU        = resource.NewMilliQuantity(400, resource.DecimalExponent)
 )
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
@@ -607,12 +615,20 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
+	volumePrepResources := corev1.ResourceList{
+		corev1.ResourceCPU:    *DefaultSolrVolumePrepInitContainerCPU,
+		corev1.ResourceMemory: *DefaultSolrVolumePrepInitContainerMemory,
+	}
 	volumePrepInitContainer := corev1.Container{
 		Name:            "cp-solr-xml",
 		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
 		ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
 		Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
 		VolumeMounts:    volumeMounts,
+		Resources: corev1.ResourceRequirements{
+			Requests: volumePrepResources,
+			Limits:   volumePrepResources,
+		},
 	}
 
 	containers = append(containers, volumePrepInitContainer)
@@ -1053,6 +1069,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		cmd += cmdToPutSecurityJsonInZk()
 	}
 
+	zkSetupResources := corev1.ResourceList{
+		corev1.ResourceCPU:    *DefaultSolrZKPrepInitContainerCPU,
+		corev1.ResourceMemory: *DefaultSolrZKPrepInitContainerMemory,
+	}
 	if cmd != "" {
 		return true, corev1.Container{
 			Name:                     "setup-zk",
@@ -1062,6 +1082,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 			TerminationMessagePolicy: "File",
 			Command:                  []string{"sh", "-c", cmd},
 			Env:                      envVars,
+			Resources: corev1.ResourceRequirements{
+				Requests: zkSetupResources,
+				Limits:   zkSetupResources,
+			},
 		}
 	}
 
