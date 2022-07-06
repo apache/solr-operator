@@ -26,7 +26,7 @@ const (
 
 	// DefaultZkContainerVersion is the default tag used for for the zookeeper
 	// container
-	DefaultZkContainerVersion = "0.2.13"
+	DefaultZkContainerVersion = "0.2.14"
 
 	// DefaultZkContainerPolicy is the default container pull policy used
 	DefaultZkContainerPolicy = "Always"
@@ -156,6 +156,11 @@ type ZookeeperClusterSpec struct {
 	// for the zookeeper pods.
 	// +optional
 	Probes *Probes `json:"probes,omitempty"`
+
+	// MaxUnavailableReplicas defines the
+	// MaxUnavailable Replicas in pdb.
+	// Default is 1.
+	MaxUnavailableReplicas int32 `json:"maxUnavailableReplicas,omitempty"`
 }
 
 type Probes struct {
@@ -282,6 +287,10 @@ func (s *ZookeeperClusterSpec) withDefaults(z *ZookeeperCluster) (changed bool) 
 			changed = true
 		}
 	}
+	if s.MaxUnavailableReplicas < 1 {
+		s.MaxUnavailableReplicas = 1
+		changed = true
+	}
 	return changed
 }
 
@@ -314,7 +323,6 @@ type Probe struct {
 // +kubebuilder:printcolumn:name="Internal Endpoint",type=string,JSONPath=`.status.internalClientEndpoint`,description="Client endpoint internal to cluster network"
 // +kubebuilder:printcolumn:name="External Endpoint",type=string,JSONPath=`.status.externalClientEndpoint`,description="Client endpoint external to cluster network via LoadBalancer"
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 // +k8s:openapi-gen=true
 
 // ZookeeperCluster is the Schema for the zookeeperclusters API
@@ -775,7 +783,8 @@ const (
 	VolumeReclaimPolicyDelete VolumeReclaimPolicy = "Delete"
 )
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
+
 // ZookeeperClusterList contains a list of ZookeeperCluster
 type ZookeeperClusterList struct {
 	metav1.TypeMeta `json:",inline"`

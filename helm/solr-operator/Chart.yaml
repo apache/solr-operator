@@ -36,7 +36,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 dependencies:
   - name: 'zookeeper-operator'
-    version: 0.2.13
+    version: 0.2.14
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
@@ -62,14 +62,14 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/388
     - kind: changed
-      description: The required Zookeeper Operator version has been upgraded to v0.2.13
+      description: The required Zookeeper Operator version has been upgraded to v0.2.14
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/396
+          url: https://github.com/apache/solr-operator/issues/443
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/397
-        - name: Zookeeper Operator v0.2.13 Release
-          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.13
+          url: https://github.com/apache/solr-operator/pull/449
+        - name: Zookeeper Operator v0.2.14 Release
+          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.14
     - kind: changed
       description: Loosen requirement on GCS backup credential/secret. Can now be omitted if using GKE's Workload Identity.
       links:
@@ -129,6 +129,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/445
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/450
+    - kind: added
+      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/427
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/453
     - kind: added
       description: SolrCloud default initContainer(s) can now have their resources customized via `podOptions.defaultInitContainerResources`. These initContainers now include default resources.
       links:
