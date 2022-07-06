@@ -130,7 +130,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/450
     - kind: added
-      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set.
+      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set. This fixes integration with Istio.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/427

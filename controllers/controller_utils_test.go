@@ -808,6 +808,7 @@ var (
 	}
 	testPriorityClass              = "p4"
 	testImagePullSecretName        = "MAIN_SECRET"
+	testImagePullSecretName2       = "ANOTHER_SECRET"
 	testAdditionalImagePullSecrets = []corev1.LocalObjectReference{
 		{Name: "ADDITIONAL_SECRET_1"},
 		{Name: "ADDITIONAL_SECRET_2"},
