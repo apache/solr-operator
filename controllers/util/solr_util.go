@@ -713,6 +713,14 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string)
 	return libXml
 }
 
+func getAppProtocol(solrCloud *solr.SolrCloud) *string {
+	appProtocol := "http"
+	if solrCloud.Spec.SolrTLS != nil {
+		appProtocol = "https"
+	}
+	return &appProtocol
+}
+
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
 // solrCloud: SolrCloud instance
 func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
@@ -750,7 +758,13 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: SolrClientPortName, Port: int32(solrCloud.Spec.SolrAddressability.CommonServicePort), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{
+					Name:        SolrClientPortName,
+					Port:        int32(solrCloud.Spec.SolrAddressability.CommonServicePort),
+					Protocol:    corev1.ProtocolTCP,
+					TargetPort:  intstr.FromString(SolrClientPortName),
+					AppProtocol: getAppProtocol(solrCloud),
+				},
 			},
 			Selector: selectorLabels,
 		},
@@ -796,7 +810,13 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: SolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{
+					Name:        SolrClientPortName,
+					Port:        int32(solrCloud.NodePort()),
+					Protocol:    corev1.ProtocolTCP,
+					TargetPort:  intstr.FromString(SolrClientPortName),
+					AppProtocol: getAppProtocol(solrCloud),
+				},
 			},
 			Selector:                 selectorLabels,
 			ClusterIP:                corev1.ClusterIPNone,
@@ -836,7 +856,13 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 		Spec: corev1.ServiceSpec{
 			Selector: selectorLabels,
 			Ports: []corev1.ServicePort{
-				{Name: SolrClientPortName, Port: int32(solrCloud.NodePort()), Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromString(SolrClientPortName)},
+				{
+					Name:        SolrClientPortName,
+					Port:        int32(solrCloud.NodePort()),
+					Protocol:    corev1.ProtocolTCP,
+					TargetPort:  intstr.FromString(SolrClientPortName),
+					AppProtocol: getAppProtocol(solrCloud),
+				},
 			},
 			PublishNotReadyAddresses: true,
 		},

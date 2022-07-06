@@ -401,6 +401,8 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
+	appProtocol := "http"
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrPrometheusExporter.MetricsServiceName(),
@@ -410,7 +412,13 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: SolrMetricsPortName, Port: ExtSolrMetricsPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrMetricsPort)},
+				{
+					Name:        SolrMetricsPortName,
+					Port:        ExtSolrMetricsPort,
+					Protocol:    corev1.ProtocolTCP,
+					TargetPort:  intstr.FromInt(SolrMetricsPort),
+					AppProtocol: &appProtocol,
+				},
 			},
 			Selector: selectorLabels,
 		},
