@@ -130,12 +130,19 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/450
     - kind: added
-      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set.
+      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set. This fixes integration with Istio.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/427
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/453
+    - kind: changed
+      description: SolrPrometheusExporters now default to using the references SolrCloud image if none is provided. Note, the entire PrometheusExporter image specification must be empty for it to use the SolrCloud image. This does not effect existing resources, only newly created resources.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/386
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/454
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
