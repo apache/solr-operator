@@ -136,6 +136,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/427
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/453
+    - kind: changed
+      description: SolrBackup.Status' 'Next Scheduled' is now updated on changes to the backup schedule.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/376
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/455
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
