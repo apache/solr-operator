@@ -143,6 +143,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/386
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/454
+    - kind: added
+      description: SolrCloud default initContainer(s) can now have their resources customized via `podOptions.defaultInitContainerResources`. These initContainers now include default resources.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/448
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/451
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
