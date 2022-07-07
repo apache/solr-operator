@@ -150,7 +150,7 @@ type PodOptions struct {
 	// +optional
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 
-	// ProvidedInitContainerResources is the resource requirements for the default init container(s) created by the Solr Operator if any are created.
+	// DefaultInitContainerResources are the resource requirements for the default init container(s) created by the Solr Operator, if any are created.
 	// +optional
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
 }

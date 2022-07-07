@@ -1564,7 +1564,7 @@ spec:
                         description: Annotations to be added for pods.
                         type: object
                       defaultInitContainerResources:
-                        description: ProvidedInitContainerResources is the resource requirements for the default init container(s) created by the Solr Operator if any are created.
+                        description: DefaultInitContainerResources are the resource requirements for the default init container(s) created by the Solr Operator, if any are created.
                         properties:
                           limits:
                             additionalProperties:
