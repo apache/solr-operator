@@ -5149,6 +5149,9 @@ spec:
                     description: Verify client's hostname during SSL handshake Only applies for server configuration
                     type: boolean
                 type: object
+              solrZkOpts:
+                description: This will add java system properties for connecting to Zookeeper. SolrZkOpts is the string interface for these optional settings
+                type: string
               updateStrategy:
                 description: Define how Solr rolling updates are executed.
                 properties:
