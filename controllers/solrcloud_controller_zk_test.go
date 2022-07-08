@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 )
 
 var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
@@ -515,6 +516,42 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 
 			By("testing the created ZookeeperCluster")
 			expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
+		})
+	})
+
+	FContext("Solr Cloud with Solr ZK Connection Options", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+						ChRoot:                   "/test",
+					},
+				},
+				SolrZkOpts: testSolrZKOpts,
+				SolrOpts:   testSolrOpts,
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
+			expectedEnvVars := map[string]string{
+				"ZK_HOST":        "host:7271/test",
+				"SOLR_HOST":      "$(POD_HOSTNAME).foo-solrcloud-headless.default",
+				"SOLR_PORT":      "8983",
+				"SOLR_NODE_PORT": "8983",
+				"SOLR_ZK_OPTS":   testSolrZKOpts,
+				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_STOP_WAIT": strconv.FormatInt(60-5, 10),
+			}
+			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+			expectedInitContainerEnvVars := map[string]string{
+				"SOLR_ZK_OPTS": testSolrZKOpts,
+				"SOLR_OPTS":    "$(SOLR_ZK_OPTS) " + testSolrOpts,
+			}
+			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[1].Env)
 		})
 	})
 })

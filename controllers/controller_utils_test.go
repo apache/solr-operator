@@ -935,4 +935,6 @@ var (
 		},
 	}
 	testIngressClass = "test-ingress-class"
+	testSolrZKOpts   = "-Dsolr.zk.opts=this"
+	testSolrOpts     = "-Dsolr.opts=this"
 )
