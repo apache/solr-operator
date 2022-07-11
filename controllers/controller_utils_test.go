@@ -808,6 +808,7 @@ var (
 	}
 	testPriorityClass              = "p4"
 	testImagePullSecretName        = "MAIN_SECRET"
+	testImagePullSecretName2       = "ANOTHER_SECRET"
 	testAdditionalImagePullSecrets = []corev1.LocalObjectReference{
 		{Name: "ADDITIONAL_SECRET_1"},
 		{Name: "ADDITIONAL_SECRET_2"},
@@ -866,6 +867,14 @@ var (
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
+		},
+	}
+	testResources2 = corev1.ResourceRequirements{
+		Limits: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceCPU: *resource.NewMilliQuantity(400, resource.DecimalSI),
+		},
+		Requests: map[corev1.ResourceName]resource.Quantity{
+			corev1.ResourceEphemeralStorage: resource.MustParse("3Gi"),
 		},
 	}
 	extraContainers1 = []corev1.Container{

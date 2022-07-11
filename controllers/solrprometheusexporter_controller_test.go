@@ -52,6 +52,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		ctx context.Context
 
 		solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter
+		solrRef                *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
@@ -161,6 +162,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ServiceAccountName:            testServiceAccountName,
 						Lifecycle:                     testLifecycle,
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
+						DefaultInitContainerResources: testResources2,
 					},
 					DeploymentOptions: &solrv1beta1.DeploymentOptions{
 						Annotations: testDeploymentAnnotations,
@@ -282,7 +284,6 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		solrName := "test-solr"
 		testZkCnxString := "host-from-solr:2181"
 		testZKChroot := "/this/path"
-		var solrRef *solrv1beta1.SolrCloud
 		BeforeEach(func() {
 			solrPrometheusExporter.Spec = solrv1beta1.SolrPrometheusExporterSpec{
 				SolrReference: solrv1beta1.SolrReference{
@@ -303,6 +304,11 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
+					SolrImage: &solrv1beta1.ContainerImage{
+						Tag:             "should-be-the-same",
+						PullPolicy:      corev1.PullAlways,
+						ImagePullSecret: testImagePullSecretName2,
+					},
 					ZookeeperRef: &solrv1beta1.ZookeeperRef{
 						ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
 							InternalConnectionString: testZkCnxString,
@@ -334,6 +340,9 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				}
 				g.Expect(found.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container")
 				g.Expect(found.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
+				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(Equal(solrv1beta1.DefaultSolrRepo+":should-be-the-same"), "Incorrect image, should be pulled from the SolrCloud")
+				g.Expect(found.Spec.Template.Spec.Containers[0].ImagePullPolicy).To(Equal(corev1.PullAlways), "Incorrect imagePullPolicy, should be pulled from the SolrCloud")
+				g.Expect(found.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(corev1.LocalObjectReference{Name: testImagePullSecretName2}), "Incorrect imagePullSecrets, should be pulled from the SolrCloud")
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
@@ -417,7 +426,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		})
 	})
 
-	FContext("Updating a user-provided ConfigMap", func() {
+	FContext("Updating a user-provided ConfigMap | Use explicitly defined image", func() {
 		testZkCnxString := "host-from-solr:2181"
 		testZKChroot := "/this/path"
 		withUserProvidedConfigMapName := "custom-exporter-config"
@@ -436,7 +445,32 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ProvidedConfigMap: withUserProvidedConfigMapName,
 					},
 				},
+				Image: &solrv1beta1.ContainerImage{
+					Repository: "test/repo",
+				},
 			}
+
+			solrRef = &solrv1beta1.SolrCloud{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-solr",
+					Namespace: "default",
+				},
+				Spec: solrv1beta1.SolrCloudSpec{
+					SolrImage: &solrv1beta1.ContainerImage{
+						Tag:             "should-be-the-same",
+						PullPolicy:      corev1.PullAlways,
+						ImagePullSecret: testImagePullSecretName2,
+					},
+					ZookeeperRef: &solrv1beta1.ZookeeperRef{
+						ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+							InternalConnectionString: testZkCnxString,
+							ChRoot:                   testZKChroot,
+						},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, solrRef)).To(Succeed(), "Creating test SolrCloud for Prometheus Exporter to connect to")
+
 		})
 		FIt("has the correct resources", func() {
 			By("testing the SolrPrometheusExporter Deployment is not created without an existing configMap")
@@ -478,6 +512,11 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					util.PrometheusExporterConfigXmlMd5Annotation: fmt.Sprintf("%x", md5.Sum([]byte(updatedConfigXml))),
 				}
 				g.Expect(found.Spec.Template.ObjectMeta.Annotations).To(Equal(expectedAnnotations), "Incorrect pod annotations after updating configMap")
+
+				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(Equal("test/repo:"+solrv1beta1.DefaultSolrVersion), "The prometheus exporter container has the wrong image, should be using the explictly defined information, not copying from the SolrCloud")
+				g.Expect(found.Spec.Template.Spec.Containers[0].ImagePullPolicy).To(Equal(corev1.PullIfNotPresent), "The prometheus exporter container has the wrong imagePullPolicy, should not be copying from the SolrCloud")
+
+				g.Expect(found.Spec.Template.Spec.ImagePullSecrets).To(BeEmpty(), "The prometheus exporter should not have any imagePullSecrets, since it's not copying image information from the SolrCloud")
 			})
 		})
 	})
