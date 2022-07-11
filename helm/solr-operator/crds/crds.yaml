@@ -441,7 +441,7 @@ spec:
                       - region
                       type: object
                     volume:
-                      description: Allows specification of a "repository" for Solr to use when backing up data "locally". Repositories defined here are considered "managed" and can take advantage of special operator features, such as post-backup compression.
+                      description: Allows specification of a "repository" for Solr to use when backing up data "locally".
                       properties:
                         directory:
                           description: Select a custom directory name to mount the backup/restore data in the given volume. If not specified, then the name of the solrcloud will be used by default.

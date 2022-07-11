@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Assumes a 'solrcloud' whose 'backupRestoreOptions' match the "Multiple Backup Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
+# Assumes a 'solrcloud' whose 'backupRepositories' match the "Multiple Backup Repositories" solrcloud example ('test_solrcloud_backuprepos.yaml')
 apiVersion: solr.apache.org/v1beta1
 kind: SolrBackup
 metadata:

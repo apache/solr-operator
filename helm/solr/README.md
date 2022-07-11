@@ -125,8 +125,6 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 

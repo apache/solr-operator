@@ -130,13 +130,6 @@ dataStorage:
       annotations: {}
       storageClassName: ""
 
-  # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
-  # DEPRECATED: Please use backupRepositories instead.
-  # TODO: Remove in v0.6.0
-  backupRestoreOptions: {}
-    # volume: {}
-    # directory: ""
-
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
 # - https://apache.github.io/solr-operator/docs/solr-backup

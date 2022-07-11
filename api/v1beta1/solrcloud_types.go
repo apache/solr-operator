@@ -363,8 +363,6 @@ type SolrBackupRepository struct {
 	S3 *S3Repository `json:"s3,omitempty"`
 
 	// Allows specification of a "repository" for Solr to use when backing up data "locally".
-	// Repositories defined here are considered "managed" and can take advantage of special operator features, such as
-	// post-backup compression.
 	//+optional
 	Volume *VolumeRepository `json:"volume,omitempty"`
 }

@@ -70,13 +70,6 @@ These options can be found in `SolrCloud.spec.dataStorage`
   If both are specified then the `hostPath` volume source will take precedence.
   - **`emptyDir`** - An [`emptyDir` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) that describes the desired emptyDir volume to use in each SolrCloud pod to store data.
   - **`hostPath`** - A [`hostPath` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) that describes the desired hostPath volume to use in each SolrCloud pod to store data.
-    
-- **`backupRestoreOptions`** (Required for integration with [`SolrBackups`](../solr-backup/README.md))
-  - **`volume`** - This is a [volume source](https://kubernetes.io/docs/concepts/storage/volumes/), that supports `ReadWriteMany` access.
-  This is critical because this single volume will be loaded into all pods at the same path.
-  - **`directory`** - A custom directory to store backup/restore data, within the volume described above.
-  This is optional, and defaults to the name of the SolrCloud.
-  Only use this option when you require restoring the same backup to multiple SolrClouds.
 
 ## Update Strategy
 _Since v0.2.7_
