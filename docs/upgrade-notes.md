@@ -112,7 +112,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   This will not affect any existing resources, as default versions are hard-written to the resources immediately.
   Only new resources created after the Solr Operator is upgraded to `v0.6.0` will be affected.
 
-- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.12` to `v0.2.13`.
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.12` to `v0.2.14`.
   If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
   Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
@@ -126,11 +126,16 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   In this release `ingressTLSTerminationSecret` is still accepted, but all values will automatically be changed to `ingressTLSTermination.tlsSecret` and the original field will be set to `nil` by the operator.
   The `ingressTLSTerminationSecret` option will be removed in a future version.
 
+- `SolrPrometheusExporter` resources without any image specifications (`SolrPrometheusExporter.Spec.image.*`) will use the referenced `SolrCloud` image, if the reference is by `name`, not `zkConnectionString`.
+  If any `SolrPrometheusExporter.Spec.image.*` option is provided, then those values will be defaulted by the Solr Operator and the `SolrCloud` image will not be used.
+  When upgrading from `v0.5.*` to `v0.6.0`, only new `SolrPrometheusExporter` resources will use this new feature.
+  To enable it on existing resources, update the resources and remove the `SolrPrometheusExporter.Spec.image` section.
+
 - CRD options deprecated in `v0.5.0` have been removed.
   This includes field `SolrCloud.spec.dataStorage.backupRestoreOptions`, `SolrBackup.spec.persistence` and `SolrBackup.status.persistenceStatus`.
-  Upgrading to `v0.5.0` will remove these options on existing and new SolrCloud and SolrBackup resources.
+  Upgrading to `v0.5.*` will remove these options on existing and new SolrCloud and SolrBackup resources.
   However, once the Solr CRDs are upgraded to `v0.6.0`, you will no longer be able to submit resources with the options listed above.
-  Please migrate your systems to use the new options while running `v0.5.0`, before upgrading to `v0.6.0`. 
+  Please migrate your systems to use the new options while running `v0.5.*`, before upgrading to `v0.6.0`. 
 
 ### v0.5.0
 - Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.

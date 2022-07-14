@@ -1022,8 +1022,7 @@ type ZookeeperPodPolicy struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// Resources is the resource requirements for the container.
-	// This field cannot be updated once the cluster is created.
+	// Resources is the resource requirements for the Zookeeper container.
 	// +optional
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 

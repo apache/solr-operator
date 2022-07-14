@@ -77,7 +77,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.21.2"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-8.11}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
@@ -218,8 +218,6 @@ spec:
     cloud:
       name: "example"
   numThreads: 4
-  image:
-    tag: "8.11"
 EOF
 
 printf "\nWait for the Solr Prometheus Exporter to be ready\n"
@@ -285,8 +283,8 @@ helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_H
 printf '\nWait for the rolling restart to begin.\n\n'
 grep -q "3              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
 
-printf '\nWait for all 3 Solr nodes to become ready.\n\n'
-grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
+printf '\nWait 5 minutes for all 3 Solr nodes to become ready.\n\n'
+grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w --request-timeout 300); kill $!
 
 # Need a new port-forward, since the last one will have broken due to all pods restarting
 kubectl port-forward service/example-solrcloud-common 28983:80 || true &

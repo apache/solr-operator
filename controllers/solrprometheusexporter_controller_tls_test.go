@@ -24,6 +24,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strings"
 	"time"
 
@@ -322,6 +323,16 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 			), "Init container command does not have necessary arguments")
 
 			Expect(expInitContainer.Image).To(Equal("myBBImage:test"), "Wrong image for BusyBox initContainer")
+
+			By("testing the SolrPrometheusExporter Service")
+			service := expectService(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsServiceName(), deployment.Spec.Selector.MatchLabels, false)
+			Expect(service.Annotations).To(HaveKeyWithValue("prometheus.io/scrape", "true"), "Metrics Service Prometheus scraping is not enabled.")
+			Expect(service.Spec.Ports[0].TargetPort).To(Equal(intstr.FromInt(util.SolrMetricsPort)), "Wrong target port on metrics Service")
+			Expect(service.Spec.Ports[0].Name).To(Equal(util.SolrMetricsPortName), "Wrong port name on metrics Service")
+			Expect(service.Spec.Ports[0].Port).To(Equal(int32(80)), "Wrong port number on metrics Service")
+			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on metrics Service")
+			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on metrics Service should not be nil")
+			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on metrics Service")
 		})
 	})
 })

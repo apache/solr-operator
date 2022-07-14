@@ -48,7 +48,7 @@ type SolrConnectionInfo struct {
 
 // GenerateSolrPrometheusExporterDeployment returns a new appsv1.Deployment pointer generated for the SolrCloud Prometheus Exporter instance
 // solrPrometheusExporter: SolrPrometheusExporter instance
-func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, configXmlMd5 string, tls *TLSCerts, basicAuthMd5 string) *appsv1.Deployment {
+func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrPrometheusExporter, solrConnectionInfo SolrConnectionInfo, solrCloudImage *solr.ContainerImage, configXmlMd5 string, tls *TLSCerts, basicAuthMd5 string) *appsv1.Deployment {
 	gracePeriodTerm := int64(10)
 	singleReplica := int32(1)
 	fsGroup := int64(SolrMetricsPort)
@@ -175,11 +175,16 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		envVars = append(envVars, corev1.EnvVar{Name: "JAVA_OPTS", Value: strings.Join(allJavaOpts, " ")})
 	}
 
+	containerImage := solrPrometheusExporter.Spec.Image
+	if containerImage == nil {
+		containerImage = solrCloudImage
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:            "solr-prometheus-exporter",
-			Image:           solrPrometheusExporter.Spec.Image.ToImageName(),
-			ImagePullPolicy: solrPrometheusExporter.Spec.Image.PullPolicy,
+			Image:           containerImage.ToImageName(),
+			ImagePullPolicy: containerImage.PullPolicy,
 			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName, Protocol: corev1.ProtocolTCP}},
 			VolumeMounts:    volumeMounts,
 			Command:         []string{entrypoint},
@@ -261,10 +266,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		},
 	}
 
-	if solrPrometheusExporter.Spec.Image.ImagePullSecret != "" {
+	if containerImage.ImagePullSecret != "" {
 		imagePullSecrets = append(
 			imagePullSecrets,
-			corev1.LocalObjectReference{Name: solrPrometheusExporter.Spec.Image.ImagePullSecret},
+			corev1.LocalObjectReference{Name: containerImage.ImagePullSecret},
 		)
 	}
 
@@ -396,6 +401,8 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		annotations = MergeLabelsOrAnnotations(annotations, customOptions.Annotations)
 	}
 
+	appProtocol := "http"
+
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        solrPrometheusExporter.MetricsServiceName(),
@@ -405,7 +412,13 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{Name: SolrMetricsPortName, Port: ExtSolrMetricsPort, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(SolrMetricsPort)},
+				{
+					Name:        SolrMetricsPortName,
+					Port:        ExtSolrMetricsPort,
+					Protocol:    corev1.ProtocolTCP,
+					TargetPort:  intstr.FromInt(SolrMetricsPort),
+					AppProtocol: &appProtocol,
+				},
 			},
 			Selector: selectorLabels,
 		},

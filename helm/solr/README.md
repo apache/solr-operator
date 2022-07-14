@@ -261,6 +261,8 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.labels | map[string]string |  | Custom labels to add to the Solr pod |
 | podOptions.resources.limits | map[string]string |  | Provide Resource limits for the Solr container |
 | podOptions.resources.requests | map[string]string |  | Provide Resource requests for the Solr container |
+| podOptions.defaultInitContainerResources.limits | map[string]string |  | Provide Resource limits for Solr's default initContainer(s) |
+| podOptions.defaultInitContainerResources.requests | map[string]string |  | Provide Resource requests for Solr's default initContainer(s) |
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |

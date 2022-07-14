@@ -43,6 +43,9 @@ This name can be provided at: `SolrPrometheusExporter.spec.solrRef.cloud.name`
 - Provide explicit Zookeeper Connection info for the prometheus exporter to use.  
   This info can be provided at: `SolrPrometheusExporter.spec.solrRef.cloud.zkConnectionInfo`, with keys `internalConnectionString` and `chroot`
 
+If `SolrPrometheusExporter.spec.solrRef.cloud.name` is used and no image information is passed via `SolrPrometheusExporter.spec.image.*` options, then the Prometheus Exporter will use the same image as the SolrCloud it is listening to.
+If any `SolrPrometheusExporter.spec.image.*` option is provided, then the Prometheus Exporter will use its own image.
+
 #### ACLs
 _Since v0.2.7_
 

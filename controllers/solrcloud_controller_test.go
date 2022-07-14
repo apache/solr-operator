@@ -160,6 +160,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
 						InternalConnectionString: "host:7271",
+						ChRoot:                   "/test",
 					},
 				},
 				UpdateStrategy: solrv1beta1.SolrUpdateStrategy{
@@ -171,6 +172,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 					PodOptions: &solrv1beta1.PodOptions{
 						Annotations:    testPodAnnotations,
 						Labels:         testPodLabels,
+						Resources:      testResources,
 						Tolerations:    testTolerations,
 						NodeSelector:   testNodeSelectors,
 						LivenessProbe:  testProbeLivenessNonDefaults,
@@ -181,6 +183,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
+						DefaultInitContainerResources: testResources2,
+						InitContainers:                extraContainers1,
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,
@@ -216,7 +220,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
+				"ZK_HOST":        "host:7271/test",
 				"SOLR_HOST":      "$(POD_HOSTNAME).foo-solrcloud-headless.default",
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
@@ -225,7 +229,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
-			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/"}
+			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/test"}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels)), "Incorrect statefulSet labels")
 			Expect(statefulSet.Annotations).To(Equal(util.MergeLabelsOrAnnotations(expectedStatefulSetAnnotations, testSSAnnotations)), "Incorrect statefulSet annotations")
@@ -240,6 +244,10 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].ReadinessProbe, testProbeReadinessNonDefaults, "Incorrect Readiness Probe")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].StartupProbe, testProbeStartup, "Incorrect Startup Probe")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect container lifecycle")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources).To(Equal(testResources), "Incorrect container resources")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Resources).To(Equal(testResources2), "Incorrect initContainer[0] resources")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Resources).To(Equal(testResources2), "Incorrect initContainer[1] resources")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].Resources).ToNot(Equal(testResources2), "Incorrect initContainer[2] resources, should not use the default override")
 			Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(testTolerations), "Incorrect Tolerations for Pod")
 			Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
 			Expect(statefulSet.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect imagePullSecrets")
@@ -260,12 +268,18 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectedCommonServiceLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"service-type": "common"})
 			Expect(commonService.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedCommonServiceLabels, testCommonServiceLabels)), "Incorrect common service labels")
 			Expect(commonService.Annotations).To(Equal(testCommonServiceAnnotations), "Incorrect common service annotations")
+			Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
+			Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
+			Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on common Service")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
 			expectedHeadlessServiceLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"service-type": "headless"})
 			Expect(headlessService.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedHeadlessServiceLabels, testHeadlessServiceLabels)), "Incorrect headless service labels")
 			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
+			Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
+			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
+			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on headless Service")
 		})
 	})
 

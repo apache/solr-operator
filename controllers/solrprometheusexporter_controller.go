@@ -178,7 +178,8 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 
 	// Get the ZkConnectionString to connect to
 	solrConnectionInfo := util.SolrConnectionInfo{}
-	if solrConnectionInfo, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
+	var solrCloudImage *solrv1beta1.ContainerImage
+	if solrConnectionInfo, solrCloudImage, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
 		return requeueOrNot, err
 	}
 
@@ -207,7 +208,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 		basicAuthMd5 = fmt.Sprintf("%x", md5.Sum([]byte(creds)))
 	}
 
-	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, configXmlMd5, tls, basicAuthMd5)
+	deploy := util.GenerateSolrPrometheusExporterDeployment(prometheusExporter, solrConnectionInfo, solrCloudImage, configXmlMd5, tls, basicAuthMd5)
 
 	ready := false
 	// Check if the Metrics Deployment already exists
@@ -269,7 +270,7 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	return requeueOrNot, err
 }
 
-func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, err error) {
+func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, solrCloudImage *solrv1beta1.ContainerImage, err error) {
 	solrConnectionInfo = util.SolrConnectionInfo{}
 
 	if prometheusExporter.Spec.SolrReference.Standalone != nil {
@@ -288,10 +289,11 @@ func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconci
 			err = r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: solrNamespace}, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
+				solrCloudImage = solrCloud.Spec.SolrImage
 			}
 		}
 	}
-	return solrConnectionInfo, err
+	return
 }
 
 // reconcileTLSConfig Reconciles the various options for configuring TLS for the exporter
