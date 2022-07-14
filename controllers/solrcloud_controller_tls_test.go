@@ -382,11 +382,38 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		tlsSecretName := "tls-cert-secret-from-user"
 		BeforeEach(func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
-			solrCloud.Spec.SolrAddressability.External.IngressTLSTerminationSecret = tlsSecretName
+			solrCloud.Spec.SolrAddressability.External.IngressTLSTermination = &solrv1beta1.SolrIngressTLSTermination{
+				TLSSecret: tlsSecretName,
+			}
+		})
+		FIt("has the correct resources - Explicit Secret", func() {
+			By("Checking that the Ingress will terminate TLS")
+			expectTerminateIngressTLSConfig(ctx, solrCloud, tlsSecretName, false)
+
+			By("Checking that the SolrCloud status has the correct scheme for URLs")
+			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
+				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.Name+"-solrcloud-common."+solrCloud.Namespace), "Wrong internal common address in status")
+				g.Expect(found.ExternalCommonAddress).To(Not(BeNil()), "External common address in Status should not be nil.")
+				g.Expect(*found.ExternalCommonAddress).To(Equal("https://"+solrCloud.Namespace+"-"+solrCloud.Name+"-solrcloud."+testDomain), "Wrong external common address in status")
+			})
+
+			foundStatefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("Checking that the Service has the correct settings")
+			expectTLSService(ctx, solrCloud, foundStatefulSet.Spec.Selector.MatchLabels, false)
+		})
+	})
+
+	FContext("Common Ingress TLS Termination - Default Secret", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
+			solrCloud.Spec.SolrAddressability.External.IngressTLSTermination = &solrv1beta1.SolrIngressTLSTermination{
+				UseDefaultTLSSecret: true,
+			}
 		})
 		FIt("has the correct resources", func() {
 			By("Checking that the Ingress will terminate TLS")
-			expectTerminateIngressTLSConfig(ctx, solrCloud, tlsSecretName, false)
+			expectTerminateIngressTLSConfig(ctx, solrCloud, "", false)
 
 			By("Checking that the SolrCloud status has the correct scheme for URLs")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
