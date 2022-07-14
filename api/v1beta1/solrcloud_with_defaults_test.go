@@ -85,3 +85,58 @@ func TestDeprecatedAdditionalDomains(t *testing.T) {
 	assert.ElementsMatch(t, []string{"t4", "t1", "t2", "t3"}, ext.AdditionalDomainNames, "The unique values from additionalDomains were not appended to additionalDomainNames")
 	assert.Nil(t, ext.AdditionalDomains, "The additionalDomains field was not set to nil")
 }
+
+func TestDeprecatedIngressTerminationTLSSecret(t *testing.T) {
+	ext := &ExternalAddressability{
+		Method:           Ingress,
+		NodePortOverride: 80,
+	}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no termination in either field)")
+
+	ext.IngressTLSTerminationSecret = ""
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no termination in the deprecated field)")
+
+	ext.IngressTLSTermination = &SolrIngressTLSTermination{
+		TLSSecret: "test",
+	}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no termination in the deprecated field)")
+
+	ext.IngressTLSTermination = &SolrIngressTLSTermination{
+		UseDefaultTLSSecret: true,
+	}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no termination in the deprecated field)")
+
+	ext.IngressTLSTermination = &SolrIngressTLSTermination{
+		UseDefaultTLSSecret: false,
+	}
+
+	assert.False(t, ext.withDefaults(false), "withDefaults() returned true when nothing should have been changed (no termination in the deprecated field)")
+
+	ext.IngressTLSTerminationSecret = "test2"
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.Equal(t, "test2", ext.IngressTLSTermination.TLSSecret, "The value from ingressTLSTerminationSecret should have populated ingressTLSTermination.tlsSecret")
+	assert.Empty(t, ext.IngressTLSTerminationSecret, "The ingressTLSTerminationSecret field was not set to nil")
+
+	ext.IngressTLSTerminationSecret = "test2"
+	ext.IngressTLSTermination = &SolrIngressTLSTermination{
+		UseDefaultTLSSecret: true,
+	}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.Empty(t, ext.IngressTLSTermination.TLSSecret, "The value from ingressTLSTerminationSecret should not have populated ingressTLSTermination.tlsSecret, since useDefaultTLSSecret is set to true")
+	assert.Empty(t, ext.IngressTLSTerminationSecret, "The ingressTLSTerminationSecret field was not set to nil")
+
+	ext.IngressTLSTerminationSecret = "test2"
+	ext.IngressTLSTermination = &SolrIngressTLSTermination{
+		TLSSecret: "test",
+	}
+
+	assert.True(t, ext.withDefaults(false), "withDefaults() returned false when the additionalDomains field needs to be removed")
+	assert.Equal(t, "test", ext.IngressTLSTermination.TLSSecret, "The value from ingressTLSTerminationSecret should not have populated ingressTLSTermination.tlsSecret, since the field is already set")
+	assert.Empty(t, ext.IngressTLSTerminationSecret, "The ingressTLSTerminationSecret field was not set to nil")
+}
