@@ -129,6 +129,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/445
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/450
+    - kind: added
+      description: SolrClouds can now use the Ingress controller's default TLS Secret when terminating TLS at the Ingress.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/437
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/452
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
