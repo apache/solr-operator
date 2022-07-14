@@ -147,7 +147,8 @@ External addressability is disabled by default.
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
 | addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with Solr TLS enabled (not TLS Termination described below). |
-| addressability.external.ingressTLSTerminationSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
+| addressability.external.ingressTLSTermination.tlsSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. Cannot be used when `useDefaultTlsSecret` is used. |
+| addressability.external.ingressTLSTermination.useDefaultTLSSecret | boolean | `false` | Use the default TLS Secret set by your Ingress controller, if your Ingress controller supports this feature. Cannot be used when `tlsSecret` is used. |
 
 ### ZK Options
 
