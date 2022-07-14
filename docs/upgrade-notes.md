@@ -122,6 +122,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   In this release `additionalDomains` is still accepted, but all values will automatically be added to `additionalDomainNames` and the field will be set to `nil` by the operator.
   The `additionalDomains` option will be removed in a future version.
 
+- The SolrCloud CRD field `Spec.solrAddressability.external.ingressTLSTerminationSecret` has been moved to `Spec.solrAddressability.external.ingressTLSTermination.tlsSecret`.
+  In this release `ingressTLSTerminationSecret` is still accepted, but all values will automatically be changed to `ingressTLSTermination.tlsSecret` and the original field will be set to `nil` by the operator.
+  The `ingressTLSTerminationSecret` option will be removed in a future version.
+
 - CRD options deprecated in `v0.5.0` have been removed.
   This includes field `SolrCloud.spec.dataStorage.backupRestoreOptions`, `SolrBackup.spec.persistence` and `SolrBackup.status.persistenceStatus`.
   Upgrading to `v0.5.0` will remove these options on existing and new SolrCloud and SolrBackup resources.
