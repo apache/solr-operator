@@ -19,6 +19,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/go-logr/logr"
 	"strconv"
 	"strings"
 
@@ -139,7 +140,7 @@ type SolrCloudSpec struct {
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults() (changed bool) {
+func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -166,7 +167,7 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
-	changed = spec.SolrAddressability.withDefaults(spec.SolrTLS != nil) || changed
+	changed = spec.SolrAddressability.withDefaults(spec.SolrTLS != nil, logger) || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
 
@@ -467,9 +468,9 @@ type SolrAddressabilityOptions struct {
 	KubeDomain string `json:"kubeDomain,omitempty"`
 }
 
-func (opts *SolrAddressabilityOptions) withDefaults(usesTLS bool) (changed bool) {
+func (opts *SolrAddressabilityOptions) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
 	if opts.External != nil {
-		changed = opts.External.withDefaults(usesTLS)
+		changed = opts.External.withDefaults(usesTLS, logger)
 	}
 	if opts.PodPort == 0 {
 		changed = true
@@ -587,17 +588,24 @@ const (
 	LoadBalancer ExternalAddressabilityMethod = "LoadBalancer"
 )
 
-func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
+func (opts *ExternalAddressability) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
 	// TODO: Remove in v0.7.0
 	// If the deprecated IngressTLSTerminationSecret exists, use it to default the new location of the value.
 	// If that location already exists, then merely remove the deprecated option.
 	if opts.IngressTLSTerminationSecret != "" {
+		terminationSecretLogger := logger.WithValues("option", "spec.solrAddressability.external.ingressTLSTerminationSecret").WithValues("newLocation", "spec.solrAddressability.external.ingressTLSTermination.tlsSecret")
+		var loggingAction string
 		if !opts.HasIngressTLSTermination() {
 			opts.IngressTLSTermination = &SolrIngressTLSTermination{
 				TLSSecret: opts.IngressTLSTerminationSecret,
 			}
+			loggingAction = "Moving"
+		} else {
+			terminationSecretLogger = terminationSecretLogger.WithValues("reason", "Cannot move deprecated option because ingressTLSTermination is already defined")
+			loggingAction = "Removing"
 		}
 		opts.IngressTLSTerminationSecret = ""
+		terminationSecretLogger.Info(loggingAction + " deprecated CRD option")
 		changed = true
 	}
 
@@ -631,6 +639,7 @@ func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 				}
 			}
 		}
+		logger.Info("Moving deprecated CRD option", "option", "spec.solrAddressability.external.additionalDomains", "newLocation", "spec.solrAddressability.external.additionalDomainNames")
 		changed = true
 		opts.AdditionalDomains = nil
 	}
@@ -1154,8 +1163,8 @@ type SolrCloud struct {
 }
 
 // WithDefaults set default values when not defined in the spec.
-func (sc *SolrCloud) WithDefaults() bool {
-	return sc.Spec.withDefaults()
+func (sc *SolrCloud) WithDefaults(logger logr.Logger) bool {
+	return sc.Spec.withDefaults(logger)
 }
 
 func (sc *SolrCloud) GetAllSolrPodNames() []string {
