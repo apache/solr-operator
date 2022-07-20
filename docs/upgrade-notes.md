@@ -122,6 +122,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   In this release `additionalDomains` is still accepted, but all values will automatically be added to `additionalDomainNames` and the field will be set to `nil` by the operator.
   The `additionalDomains` option will be removed in a future version.
 
+- The SolrCloud CRD field `Spec.solrAddressability.external.ingressTLSTerminationSecret` has been moved to `Spec.solrAddressability.external.ingressTLSTermination.tlsSecret`.
+  In this release `ingressTLSTerminationSecret` is still accepted, but all values will automatically be changed to `ingressTLSTermination.tlsSecret` and the original field will be set to `nil` by the operator.
+  The `ingressTLSTerminationSecret` option will be removed in a future version.
+
 - `SolrPrometheusExporter` resources without any image specifications (`SolrPrometheusExporter.Spec.image.*`) will use the referenced `SolrCloud` image, if the reference is by `name`, not `zkConnectionString`.
   If any `SolrPrometheusExporter.Spec.image.*` option is provided, then those values will be defaulted by the Solr Operator and the `SolrCloud` image will not be used.
   When upgrading from `v0.5.*` to `v0.6.0`, only new `SolrPrometheusExporter` resources will use this new feature.

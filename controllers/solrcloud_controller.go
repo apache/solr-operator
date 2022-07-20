@@ -100,7 +100,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
-	changed := instance.WithDefaults()
+	changed := instance.WithDefaults(logger)
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
 		if err = r.Update(ctx, instance); err != nil {

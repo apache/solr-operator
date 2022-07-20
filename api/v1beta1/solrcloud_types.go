@@ -19,6 +19,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/go-logr/logr"
 	"strconv"
 	"strings"
 
@@ -139,7 +140,7 @@ type SolrCloudSpec struct {
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
 }
 
-func (spec *SolrCloudSpec) withDefaults() (changed bool) {
+func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
 	if spec.Replicas == nil {
 		changed = true
 		r := DefaultSolrReplicas
@@ -166,7 +167,7 @@ func (spec *SolrCloudSpec) withDefaults() (changed bool) {
 		spec.SolrGCTune = DefaultSolrGCTune
 	}
 
-	changed = spec.SolrAddressability.withDefaults(spec.SolrTLS != nil) || changed
+	changed = spec.SolrAddressability.withDefaults(spec.SolrTLS != nil, logger) || changed
 
 	changed = spec.UpdateStrategy.withDefaults() || changed
 
@@ -467,9 +468,9 @@ type SolrAddressabilityOptions struct {
 	KubeDomain string `json:"kubeDomain,omitempty"`
 }
 
-func (opts *SolrAddressabilityOptions) withDefaults(usesTLS bool) (changed bool) {
+func (opts *SolrAddressabilityOptions) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
 	if opts.External != nil {
-		changed = opts.External.withDefaults(usesTLS)
+		changed = opts.External.withDefaults(usesTLS, logger)
 	}
 	if opts.PodPort == 0 {
 		changed = true
@@ -554,11 +555,23 @@ type ExternalAddressability struct {
 	//
 	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
 	//
+	// DEPRECATED: Use ingressTLSTermination.tlsSecret instead
+	//
 	// +optional
 	IngressTLSTerminationSecret string `json:"ingressTLSTerminationSecret,omitempty"`
+
+	// IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections.
+	//
+	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
+	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr.
+	//
+	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
+	//
+	// +optional
+	IngressTLSTermination *SolrIngressTLSTermination `json:"ingressTLSTermination,omitempty"`
 }
 
-// ExternalAddressability is a string enumeration type that enumerates
+// ExternalAddressabilityMethod is a string enumeration type that enumerates
 // all possible ways that a SolrCloud can be made addressable external to the kubernetes cluster.
 // +kubebuilder:validation:Enum=Ingress;ExternalDNS
 type ExternalAddressabilityMethod string
@@ -575,9 +588,29 @@ const (
 	LoadBalancer ExternalAddressabilityMethod = "LoadBalancer"
 )
 
-func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
+func (opts *ExternalAddressability) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
+	// TODO: Remove in v0.7.0
+	// If the deprecated IngressTLSTerminationSecret exists, use it to default the new location of the value.
+	// If that location already exists, then merely remove the deprecated option.
+	if opts.IngressTLSTerminationSecret != "" {
+		terminationSecretLogger := logger.WithValues("option", "spec.solrAddressability.external.ingressTLSTerminationSecret").WithValues("newLocation", "spec.solrAddressability.external.ingressTLSTermination.tlsSecret")
+		var loggingAction string
+		if !opts.HasIngressTLSTermination() {
+			opts.IngressTLSTermination = &SolrIngressTLSTermination{
+				TLSSecret: opts.IngressTLSTerminationSecret,
+			}
+			loggingAction = "Moving"
+		} else {
+			terminationSecretLogger = terminationSecretLogger.WithValues("reason", "Cannot move deprecated option because ingressTLSTermination is already defined")
+			loggingAction = "Removing"
+		}
+		opts.IngressTLSTerminationSecret = ""
+		terminationSecretLogger.Info(loggingAction + " deprecated CRD option")
+		changed = true
+	}
+
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
-	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTerminationSecret != "") {
+	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTermination != nil) {
 		changed = true
 		opts.UseExternalAddress = false
 	}
@@ -606,6 +639,7 @@ func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 				}
 			}
 		}
+		logger.Info("Moving deprecated CRD option", "option", "spec.solrAddressability.external.additionalDomains", "newLocation", "spec.solrAddressability.external.additionalDomainNames")
 		changed = true
 		opts.AdditionalDomains = nil
 	}
@@ -626,6 +660,25 @@ func (opts *ExternalAddressability) withDefaults(usesTLS bool) (changed bool) {
 	}
 
 	return changed
+}
+
+// SolrIngressTLSTermination defines how a SolrCloud should have TLS Termination enabled.
+// Only one option can be provided.
+//
+// +kubebuilder:validation:MaxProperties=1
+type SolrIngressTLSTermination struct {
+
+	// UseDefaultTLSSecret determines whether the ingress should use the default TLS secret provided by the Ingress implementation.
+	//
+	// For example, using nginx: https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate
+	//
+	// +optional
+	UseDefaultTLSSecret bool `json:"useDefaultTLSSecret,omitempty"`
+
+	// TLSSecret defines a TLS Secret to use for TLS termination of all exposed addresses for this SolrCloud in the Ingress.
+	//
+	// +optional
+	TLSSecret string `json:"tlsSecret,omitempty"`
 }
 
 type SolrUpdateStrategy struct {
@@ -1110,8 +1163,8 @@ type SolrCloud struct {
 }
 
 // WithDefaults set default values when not defined in the spec.
-func (sc *SolrCloud) WithDefaults() bool {
-	return sc.Spec.withDefaults()
+func (sc *SolrCloud) WithDefaults(logger logr.Logger) bool {
+	return sc.Spec.withDefaults(logger)
 }
 
 func (sc *SolrCloud) GetAllSolrPodNames() []string {
@@ -1332,11 +1385,18 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 	return url
 }
 
+func (ea *ExternalAddressability) HasIngressTLSTermination() bool {
+	if ea != nil && ea.Method == Ingress && ea.IngressTLSTermination != nil {
+		return ea.IngressTLSTermination.UseDefaultTLSSecret || ea.IngressTLSTermination.TLSSecret != ""
+	}
+	return false
+}
+
 func (sc *SolrCloud) UrlScheme(external bool) string {
 	urlScheme := "http"
 	if sc.Spec.SolrTLS != nil {
 		urlScheme = "https"
-	} else if external && sc.Spec.SolrAddressability.External != nil && sc.Spec.SolrAddressability.External.Method == Ingress && sc.Spec.SolrAddressability.External.IngressTLSTerminationSecret != "" {
+	} else if external && sc.Spec.SolrAddressability.External.HasIngressTLSTermination() {
 		urlScheme = "https"
 	}
 	return urlScheme
