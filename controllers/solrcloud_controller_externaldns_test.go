@@ -70,7 +70,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 		By("defaulting the missing SolrCloud values")
 		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-			g.Expect(found.WithDefaults()).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
+			g.Expect(found.WithDefaults(logger)).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
 		})
 	})
 
