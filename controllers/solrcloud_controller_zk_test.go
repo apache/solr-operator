@@ -113,12 +113,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
+			insertExpectedAclEnvVars(expectedEnvVars, false)
+			for _, envVar := range extraVars {
+				expectedEnvVars[envVar.Name] = envVar.Value
+			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-			testACLEnvVars(foundEnv[len(foundEnv)-6:len(foundEnv)-3], false)
-			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
-			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-			// TODO: Make this not invalidate foundEnv
-			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
+			testPodEnvVariables(expectedEnvVars, foundEnv)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
 		})
 	})
@@ -178,12 +178,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
+			insertExpectedAclEnvVars(expectedEnvVars, true)
+			for _, envVar := range extraVars {
+				expectedEnvVars[envVar.Name] = envVar.Value
+			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-			testACLEnvVars(foundEnv[len(foundEnv)-8:len(foundEnv)-3], true)
-			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
-			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-			// TODO: Make this not invalidate foundEnv
-			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
+			testPodEnvVariables(expectedEnvVars, foundEnv)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
 
 			By("testing that no ZookeeperCluster is created when using a connection String")
@@ -431,12 +431,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"ZK_CHROOT":      "/a-ch/root",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
+			insertExpectedAclEnvVars(expectedEnvVars, false)
+			for _, envVar := range extraVars {
+				expectedEnvVars[envVar.Name] = envVar.Value
+			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-			testACLEnvVars(foundEnv[len(foundEnv)-6:len(foundEnv)-3], false)
-			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
-			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-			// TODO: Make this not invalidate foundEnv
-			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-6], foundEnv[len(foundEnv)-1]))
+			testPodEnvVariables(expectedEnvVars, foundEnv)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
 
 			By("testing the created ZookeeperCluster")
@@ -506,12 +506,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
+			insertExpectedAclEnvVars(expectedEnvVars, true)
+			for _, envVar := range extraVars {
+				expectedEnvVars[envVar.Name] = envVar.Value
+			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
-			testACLEnvVars(foundEnv[len(foundEnv)-8:len(foundEnv)-3], true)
-			Expect(foundEnv[len(foundEnv)-3:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
-			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-			// TODO: Make this not invalidate foundEnv
-			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-8], foundEnv[len(foundEnv)-1]))
+			testPodEnvVariables(expectedEnvVars, foundEnv)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
 
 			By("testing the created ZookeeperCluster")
@@ -530,6 +530,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 				SolrZkOpts: testSolrZKOpts,
 				SolrOpts:   testSolrOpts,
+				SolrSecurity: &solrv1beta1.SolrSecurityOptions{
+					AuthenticationType: solrv1beta1.Basic,
+				},
 			}
 		})
 		FIt("has the correct resources", func() {
@@ -548,8 +551,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 			expectedInitContainerEnvVars := map[string]string{
-				"SOLR_ZK_OPTS": testSolrZKOpts,
-				"SOLR_OPTS":    "$(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_ZK_OPTS":    testSolrZKOpts,
+				"SOLR_OPTS":       "$(SOLR_ZK_OPTS) " + testSolrOpts,
+				"ZKCLI_JVM_FLAGS": "-Dsolr.zk.opts=this",
 			}
 			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[1].Env)
 		})
