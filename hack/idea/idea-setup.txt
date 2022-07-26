@@ -1,0 +1,12 @@
+
+In order to easily run the Solr Operator tests via IDEA (IntelliJ or GoLand), you must install the GinkGo IntelliJ Plugin,
+as the test framework is not supported by default in IntelliJ or GoLand.
+
+The plugin can be found here: https://plugins.jetbrains.com/plugin/17554-ginkgo
+
+There is no need to install Ginkgo yourself, as the plugin documentation tells you.
+The "make idea" command does this for you.
+
+The templating of the testing configuration is included in the repo under .run/.
+Please do not make changes to this file.
+

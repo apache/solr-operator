@@ -81,6 +81,8 @@ We welcome issue reports [here](../../issues); be sure to choose the proper issu
 Before submitting a PR, please be sure to run `make prepare` before committing.
 Otherwise the GitHub checks are likely to fail.
 
+If you are trying to run tests locally in IntelliJ/GoLand, refer to [the IDEA tests docs](dev-docs/idea-tests.md).
+
 ## License
 
 Please read the [LICENSE](LICENSE) file here.
