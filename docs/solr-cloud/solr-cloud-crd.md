@@ -165,6 +165,9 @@ Under `spec.zookeeperRef`:
   - **`externalConnectionString`** - The ZK connection string to the external Zookeeper cluster, e.g. `zoo1:2181`
   - **`chroot`** - The chroot to use for the cluster
 
+External ZooKeeper clusters are often configured to use ZooKeeper features (e.g. securePort) which require corresponding configuration on the client side.
+To support these use-cases, users may provide arbitrary system properties under `spec.solrZkOpts` which will be passed down to all ZooKeeper clients (Solr, zkcli.sh, etc.) managed by the operator.
+
 #### ACLs
 _Since v0.2.7_
 
