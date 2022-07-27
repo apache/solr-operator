@@ -23,8 +23,8 @@ NAME ?= solr-operator
 REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
 IMG = $(REPOSITORY)/$(NAME)
 # Default tag from info in version/version.go
-VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)
-TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)=' | grep -o '["''].*["'']' | xargs)
+VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | sed 's/.*["'']\(.*\)["'']/\1/g')
+TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)=' | sed 's/.*["'"'"']\(.*\)["'"'"']/\1/g')
 ifneq (,$(VERSION_SUFFIX))
 VERSION = $(TMP_VERSION)-$(VERSION_SUFFIX)
 else
@@ -38,6 +38,7 @@ ARCH = $(shell go env GOARCH)
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.5.0
 GO_LICENSES_VERSION=v1.0.0
+GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 
 GO111MODULE ?= on
 
@@ -114,6 +115,9 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
+
+idea: ginkgo ## Setup the project so to be able to run tests via IntelliJ/GoLand
+	cat hack/idea/idea-setup.txt
 
 ##@ Build
 
@@ -254,6 +258,10 @@ kustomize: ## Download kustomize locally if necessary.
 GO_LICENSES = $(PROJECT_DIR)/bin/go-licenses
 go-licenses: ## Download go-licenses locally if necessary.
 	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@$(GO_LICENSES_VERSION))
+
+GINKGO = $(PROJECT_DIR)/bin/ginkgo
+ginkgo: ## Download go-licenses locally if necessary.
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))

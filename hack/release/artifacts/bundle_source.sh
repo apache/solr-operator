@@ -79,5 +79,6 @@ rm -rf "${ARTIFACTS_DIR}"/*.tgz*
 COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
   --exclude .asf.yaml \
   --exclude .github \
+  --exclude .run \
   --transform "s,^,solr-operator-${VERSION}/," \
   -czf "${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz" .
