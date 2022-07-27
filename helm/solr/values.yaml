@@ -52,6 +52,7 @@ busyBoxImage: {}
 solrOptions:
   javaMemory: ""
   javaOpts: ""
+  zkJavaOpts: ""
   logLevel: ""
   gcTune: ""
   solrModules: []

@@ -397,11 +397,15 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ValueFrom: nil,
 					},
 				}
+				for _, zkAclEnvVar := range zkAclEnvVars {
+					expectedEnvVars[zkAclEnvVar.Name] = zkAclEnvVar.Value
+				}
+				for _, extraVar := range extraVars {
+					expectedEnvVars[extraVar.Name] = extraVar.Value
+				}
 				g.Expect(foundEnv[0:5]).To(Equal(zkAclEnvVars), "ZK ACL Env Vars are not correct")
 				g.Expect(foundEnv[5:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
-				// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
-				// TODO: Make this not invalidate foundEnv
-				testMetricsPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnv[len(foundEnv)-1:])
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnv)
 			})
 			By("Changing the ZKConnection String of the SolrCloud")
 

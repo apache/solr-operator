@@ -20,6 +20,7 @@ package controllers
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	"regexp"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -506,36 +507,32 @@ func filterVarsByName(envVars []corev1.EnvVar, f func(string) bool) []corev1.Env
 }
 
 func testPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
-	testGenericPodEnvVariables(expectedEnvVars, foundEnvVars, "SOLR_OPTS", resolveOffset(additionalOffset))
+	testPodEnvVariablesWithGomega(Default, expectedEnvVars, foundEnvVars, resolveOffset(additionalOffset))
 }
 
 func testPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
-	testGenericPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnvVars, "SOLR_OPTS", resolveOffset(additionalOffset))
-}
-
-func testMetricsPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
-	testGenericPodEnvVariables(expectedEnvVars, foundEnvVars, "JAVA_OPTS", resolveOffset(additionalOffset))
-}
-
-func testMetricsPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, additionalOffset ...int) {
-	testGenericPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnvVars, "JAVA_OPTS", resolveOffset(additionalOffset))
-}
-
-func testGenericPodEnvVariables(expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string, additionalOffset ...int) {
-	testGenericPodEnvVariablesWithGomega(Default, expectedEnvVars, foundEnvVars, lastVarName, resolveOffset(additionalOffset))
-}
-
-func testGenericPodEnvVariablesWithGomega(g Gomega, expectedEnvVars map[string]string, foundEnvVars []corev1.EnvVar, lastVarName string, additionalOffset ...int) {
+	envVarRegex := regexp.MustCompile(`\$\([a-zA-Z0-9_]+\)`)
 	offset := resolveOffset(additionalOffset)
 	matchCount := 0
-	for _, envVar := range foundEnvVars {
+	var processedEnvVarNames = make([]string, len(foundEnvVars))
+	for i, envVar := range foundEnvVars {
 		if expectedVal, match := expectedEnvVars[envVar.Name]; match {
 			matchCount += 1
 			g.ExpectWithOffset(offset, envVar.Value).To(Equal(expectedVal), "Wrong value for env variable '%s' in podSpec", envVar.Name)
 		}
+
+		// Check that the current envVar only references other env-vars that have already been defined
+		envVarsReferencedByCurrent := envVarRegex.FindAllString(envVar.Value, -1)
+		for _, referencedVar := range envVarsReferencedByCurrent {
+			referencedVarTrimmed := referencedVar[2 : len(referencedVar)-1] // "$(ENV_VAR_NAME)" -> "ENV_VAR_NAME"
+			g.Expect(processedEnvVarNames).To(ContainElement(referencedVarTrimmed),
+				"Env-var %s with value [%s] must be defined after the env-var it depends on: %s",
+				envVar.Name, envVar.Value, referencedVarTrimmed)
+		}
+
+		processedEnvVarNames[i] = envVar.Name
 	}
 	g.ExpectWithOffset(offset, matchCount).To(Equal(len(expectedEnvVars)), "Not all expected env variables found in podSpec")
-	g.ExpectWithOffset(offset, foundEnvVars[len(foundEnvVars)-1].Name).To(Equal(lastVarName), "%s must be the last envVar set, as it uses other envVars.", lastVarName)
 }
 
 func testMapContainsOther(mapName string, base map[string]string, other map[string]string, additionalOffset ...int) {
@@ -549,13 +546,16 @@ func testMapContainsOtherWithGomega(g Gomega, mapName string, base map[string]st
 	}
 }
 
-func testACLEnvVars(actualEnvVars []corev1.EnvVar, hasReadOnly bool, additionalOffset ...int) {
-	testACLEnvVarsWithGomega(Default, actualEnvVars, hasReadOnly, resolveOffset(additionalOffset))
+func insertExpectedAclEnvVars(dest map[string]string, hasReadOnly bool) {
+	expectedEnvVars := getExpectedAclEnvVars(hasReadOnly)
+	for _, expectedEnvVar := range expectedEnvVars {
+		dest[expectedEnvVar.Name] = expectedEnvVar.Value
+	}
 }
 
-func testACLEnvVarsWithGomega(g Gomega, actualEnvVars []corev1.EnvVar, hasReadOnly bool, additionalOffset ...int) {
+func getExpectedAclEnvVars(hasReadOnly bool) []corev1.EnvVar {
 	/*
-		This test verifies ACL related env vars are set correctly and in the correct order, but expects a very specific config to be used in your test SolrCloud config:
+		Populates ACL related env vars are set correctly and in the correct order, assuming a very specific test SolrCloud config:
 		set hasReadOnly = false if ReadOnlyACL is not provided
 					AllACL: &solrv1beta1.ZookeeperACL{
 						SecretRef:   "secret-name",
@@ -627,6 +627,11 @@ func testACLEnvVarsWithGomega(g Gomega, actualEnvVars []corev1.EnvVar, hasReadOn
 				ValueFrom: nil,
 			})
 	}
+	return zkAclEnvVars
+}
+
+func testACLEnvVarsWithGomega(g Gomega, actualEnvVars []corev1.EnvVar, hasReadOnly bool, additionalOffset ...int) {
+	zkAclEnvVars := getExpectedAclEnvVars(hasReadOnly)
 	g.ExpectWithOffset(resolveOffset(additionalOffset), actualEnvVars).To(Equal(zkAclEnvVars), "ZK ACL Env Vars are not correct")
 }
 
@@ -935,4 +940,6 @@ var (
 		},
 	}
 	testIngressClass = "test-ingress-class"
+	testSolrZKOpts   = "-Dsolr.zk.opts=this"
+	testSolrOpts     = "-Dsolr.opts=this"
 )

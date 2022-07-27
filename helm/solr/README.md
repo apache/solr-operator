@@ -92,7 +92,8 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
 | busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
 | solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | Java memory parameters |
-| solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line |
+| solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line.  ZooKeeper-connection related properties should be reserved for `solrOptions.zkJavaOpts` (see below). |
+| solrOptions.zkJavaOpts | string | `""` | Additional java arguments required to connect to ZooKeeper to pass via the command line |
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
 | solrOptions.solrModules | []string | | List of packaged Solr Modules to load when running Solr. Note: There is no need to specify solr modules necessary for other parts of the Spec (i.e. `backupRepositories[].gcs`), those will be added automatically. |

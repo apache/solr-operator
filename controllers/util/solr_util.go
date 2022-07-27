@@ -1095,6 +1095,9 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 
 	if security != nil && security.SecurityJson != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: security.SecurityJsonSrc})
+		if solrCloud.Spec.SolrZkOpts != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: "ZKCLI_JVM_FLAGS", Value: solrCloud.Spec.SolrZkOpts})
+		}
 		cmd += cmdToPutSecurityJsonInZk()
 	}
 
@@ -1138,16 +1141,29 @@ func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.
 		},
 	}
 
+	solrOpts := make([]string, 0)
+
 	// Add ACL information, if given, through Env Vars
 	allACL, readOnlyACL := solrCloud.Spec.ZookeeperRef.GetACLs()
 	if hasACLs, aclEnvs := AddACLsToEnv(allACL, readOnlyACL); hasACLs {
 		envVars = append(envVars, aclEnvs...)
 
 		// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
-		solrOpt = "$(SOLR_ZK_CREDS_AND_ACLS)"
+		solrOpts = append(solrOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
 	}
 
-	return envVars, solrOpt, len(zkChroot) > 1
+	// Add ZK Connection System Properties to Solr
+	if solrCloud.Spec.SolrZkOpts != "" {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "SOLR_ZK_OPTS",
+			Value: solrCloud.Spec.SolrZkOpts,
+		})
+
+		// The $SOLR_ZK_OPTS parameter does not get picked up when running solr, it must be added to the SOLR_OPTS.
+		solrOpts = append(solrOpts, "$(SOLR_ZK_OPTS)")
+	}
+
+	return envVars, strings.Join(solrOpts, " "), len(zkChroot) > 1
 }
 
 func setupVolumeMountForUserProvidedConfigMapEntry(reconcileConfigInfo map[string]string, fileKey string, solrVolumes []corev1.Volume, envVar string) (*corev1.VolumeMount, *corev1.EnvVar, *corev1.Volume) {

@@ -101,6 +101,11 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrOpts string `json:"solrOpts,omitempty"`
 
+	// This will add java system properties for connecting to Zookeeper.
+	// SolrZkOpts is the string interface for these optional settings
+	// +optional
+	SolrZkOpts string `json:"solrZkOpts,omitempty"`
+
 	// Set the Solr Log level, defaults to INFO
 	// +optional
 	SolrLogLevel string `json:"solrLogLevel,omitempty"`
