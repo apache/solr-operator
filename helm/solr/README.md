@@ -126,8 +126,6 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
-| dataStorage.backupRestoreOptions.volume | object | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** A read-write-many volume that can be attached to all Solr pods, for the purpose of storing backup data. This is required when using the SolrBackup CRD. |
-| dataStorage.backupRestoreOptions.directory | string | | **DEPRECATED: Use a Volume Repo in `backupRepositories` instead. This option will be removed in `v0.6.0`.** Override the default backup-restore volume location in the Solr container |
 
 ### Addressability Options
 
@@ -144,11 +142,12 @@ External addressability is disabled by default.
 | addressability.external.method | string | | The method by which Solr should be made addressable outside of the Kubernetes cluster. Either `Ingress` or `ExternalDNS` |
 | addressability.external.domainName | string | | The base domain name that Solr nodes should be addressed under. |
 | addressability.external.additionalDomainNames | []string | | Additional base domain names that Solr nodes should be addressed under. These are not used to advertise Solr locations, just the `domainName` is. |
-| addressability.external.useExternalAddress | boolean | `false` | Make the official hostname of the SolrCloud nodes the external address. This cannot be used when `hideNodes` is set to `true` or `ingressTLSTerminationSecret` is set to `true`. |
+| addressability.external.useExternalAddress | boolean | `false` | Make the official hostname of the SolrCloud nodes the external address. This cannot be used when `hideNodes` is set to `true` or `ingressTLSTermination` is used. |
 | addressability.external.hideNodes | boolean | `false` | Do not make the individual Solr nodes addressable outside of the Kubernetes cluster. |
 | addressability.external.hideCommon | boolean | `false` | Do not make the load-balanced common Solr endpoint addressable outside of the Kubernetes cluster. |
 | addressability.external.nodePortOverride | int | | Override the port of individual Solr nodes when using the `Ingress` method. This will default to `80` if using an Ingress without TLS and `443` when using an Ingress with Solr TLS enabled (not TLS Termination described below). |
-| addressability.external.ingressTLSTerminationSecret | string | | Name of Kubernetes Secret to terminate TLS when using the `Ingress` method. |
+| addressability.external.ingressTLSTermination.tlsSecret | string | | Name a of Kubernetes TLS Secret to terminate TLS when using the `Ingress` method. Cannot be used when `useDefaultTlsSecret` is used. |
+| addressability.external.ingressTLSTermination.useDefaultTLSSecret | boolean | `false` | Use the default TLS Secret set by your Ingress controller, if your Ingress controller supports this feature. Cannot be used when `tlsSecret` is used. |
 
 ### ZK Options
 

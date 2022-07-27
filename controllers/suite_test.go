@@ -19,6 +19,7 @@ package controllers
 
 import (
 	zk_api "github.com/apache/solr-operator/controllers/zk_api"
+	"github.com/go-logr/logr"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
@@ -41,6 +42,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var cfg *rest.Config
+var logger logr.Logger
 var k8sClient client.Client
 var testEnv *envtest.Environment
 
@@ -62,7 +64,8 @@ var _ = BeforeSuite(func() {
 	SetDefaultEventuallyTimeout(timeout)
 	SetDefaultEventuallyPollingInterval(interval)
 
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	logf.SetLogger(logger)
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{

@@ -149,10 +149,6 @@ spec:
         {{- end }}
       {{- end }}
     {{- end }}
-    {{- if .Values.dataStorage.backupRestoreOptions }}
-    backupRestoreOptions:
-      {{- toYaml .Values.dataStorage.backupRestoreOptions | nindent 6 }}
-    {{- end }}
   {{- end }}
 
   {{- if .Values.solrOptions.solrModules }}

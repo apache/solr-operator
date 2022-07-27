@@ -209,7 +209,7 @@ spec:
                       - region
                       type: object
                     volume:
-                      description: Allows specification of a "repository" for Solr to use when backing up data "locally". Repositories defined here are considered "managed" and can take advantage of special operator features, such as post-backup compression.
+                      description: Allows specification of a "repository" for Solr to use when backing up data "locally".
                       properties:
                         directory:
                           description: Select a custom directory name to mount the backup/restore data in the given volume. If not specified, then the name of the solrcloud will be used by default.
@@ -4860,8 +4860,19 @@ spec:
                       hideNodes:
                         description: Do not expose each of the Solr Node services externally. The number of services this affects could range from 1 (a headless service for ExternalDNS) to the number of Solr pods your cloud contains (individual node services for Ingress/LoadBalancer). Defaults to false.
                         type: boolean
+                      ingressTLSTermination:
+                        description: "IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections. \n This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination. This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr. \n When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS."
+                        maxProperties: 1
+                        properties:
+                          tlsSecret:
+                            description: TLSSecret defines a TLS Secret to use for TLS termination of all exposed addresses for this SolrCloud in the Ingress.
+                            type: string
+                          useDefaultTLSSecret:
+                            description: "UseDefaultTLSSecret determines whether the ingress should use the default TLS secret provided by the Ingress implementation. \n For example, using nginx: https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate"
+                            type: boolean
+                        type: object
                       ingressTLSTerminationSecret:
-                        description: "IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress. \n This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination. This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr. \n When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS."
+                        description: "IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress. \n This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination. This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr. \n When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS. \n DEPRECATED: Use ingressTLSTermination.tlsSecret instead"
                         type: string
                       method:
                         description: The way in which this SolrCloud's service(s) should be made addressable externally.

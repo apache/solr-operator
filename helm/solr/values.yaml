@@ -86,7 +86,9 @@ addressability:
     # hideNodes: false
     # hideCommon: false
     # nodePortOverride: null
-    # ingressTLSTerminationSecret: ""
+    # ingressTLSTermination:
+    #   tlsSecret: ""
+    #   useDefaultTLSSecret: false
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
 # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
@@ -130,13 +132,6 @@ dataStorage:
       labels: {}
       annotations: {}
       storageClassName: ""
-
-  # BackupRestoreOptions is required when using this cloud with the SolrBackup CRD.
-  # DEPRECATED: Please use backupRepositories instead.
-  # TODO: Remove in v0.6.0
-  backupRestoreOptions: {}
-    # volume: {}
-    # directory: ""
 
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:

@@ -150,6 +150,24 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/448
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/451
+    - kind: changed
+      description: SolrBackup.Status' 'Next Scheduled' is now updated on changes to the backup schedule.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/376
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/455
+    - kind: changed
+      description: SolrClouds can now use the Ingress controller's default TLS Secret when terminating TLS at the Ingress. The old `ingressTLSTerminationSecret` option is now deprecated. Refer the upgrade notes for more information.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/437
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/452
+        - name: Upgrade Notes
+          url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#v060
+        - name: Solr Addressability Docs
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability
     - kind: added
       description: SolrCloud now accepts a `solrZkOpts` option for specifying any Java system properties needed to connect to ZooKeeper.
       links:

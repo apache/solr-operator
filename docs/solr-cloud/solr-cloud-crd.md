@@ -70,13 +70,6 @@ These options can be found in `SolrCloud.spec.dataStorage`
   If both are specified then the `hostPath` volume source will take precedence.
   - **`emptyDir`** - An [`emptyDir` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#emptydir) that describes the desired emptyDir volume to use in each SolrCloud pod to store data.
   - **`hostPath`** - A [`hostPath` volume source](https://kubernetes.io/docs/concepts/storage/volumes/#hostpath) that describes the desired hostPath volume to use in each SolrCloud pod to store data.
-    
-- **`backupRestoreOptions`** (Required for integration with [`SolrBackups`](../solr-backup/README.md))
-  - **`volume`** - This is a [volume source](https://kubernetes.io/docs/concepts/storage/volumes/), that supports `ReadWriteMany` access.
-  This is critical because this single volume will be loaded into all pods at the same path.
-  - **`directory`** - A custom directory to store backup/restore data, within the volume described above.
-  This is optional, and defaults to the name of the SolrCloud.
-  Only use this option when you require restoring the same backup to multiple SolrClouds.
 
 ## Update Strategy
 _Since v0.2.7_
@@ -119,11 +112,17 @@ Under `SolrCloud.Spec.solrAddressability`:
   The goal is to support more methods in the future, such as LoadBalanced Services.
   - **`domainName`** - (Required) The primary domain name to open your cloud endpoints on. If `useExternalAddress` is set to `true`, then this is the domain that will be used in Solr Node names.
   - **`additionalDomainNames`** - You can choose to listen on additional domains for each endpoint, however Solr will not register itself under these names.
-  - **`useExternalAddress`** - Use the external address to advertise the SolrNode. If a domain name is required for the chosen external `method`, then the one provided in `domainName` will be used.
+  - **`useExternalAddress`** - Use the external address to advertise the SolrNode. If a domain name is required for the chosen external `method`, then the one provided in `domainName` will be used. \
+    This can not be set to `true` when **`hideNodes`** is set to `true` or **`ingressTLSTermination`** is used.
   - **`hideCommon`** - Do not externally expose the common service (one endpoint for all solr nodes).
   - **`hideNodes`** - Do not externally expose each node. (This cannot be set to `true` if the cloud is running across multiple kubernetes clusters)
   - **`nodePortOverride`** - Make the Node Service(s) override the podPort. This is only available for the `Ingress` external method. If `hideNodes` is set to `true`, then this option is ignored. If provided, this port will be used to advertise the Solr Node. \
-  If `method: Ingress` and `hideNodes: false`, then this value defaults to `80` since that is the default port that ingress controllers listen on.
+    If `method: Ingress` and `hideNodes: false`, then this value defaults to `80` since that is the default port that ingress controllers listen on.
+  - **`ingressTLSTermination`** - Terminate TLS for the SolrCloud at the `Ingress`, if using the `Ingress` **method**. This will leave the inter-node communication within the cluster to use HTTP. \
+    This option may not be used with **`useExternalAddress`**. Only one sub-option can be provided.
+    - **`useDefaultTLSSecret`** - Use the default TLS Secret set by your Ingress controller, if your Ingress controller supports this feature. Cannot be used when `tlsSecret` is used. \
+      For example, using nginx: https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate
+    - **`tlsSecret`** - Name a of Kubernetes TLS Secret to terminate TLS when using the `Ingress` method. Cannot be used when `useDefaultTlsSecret` is used.
 
 **Note:** Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
 If both of those criteria are met, then an individual ClusterIP Service will be created for each Solr Node/Pod.
@@ -626,7 +625,7 @@ You may also use the `spec.solrClientTLS.mountedTLSDir` option to load a pod spe
 
 The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
 ```yaml
-apiVersion: extensions/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   annotations:
@@ -770,13 +769,14 @@ spec:
       method: Ingress
       hideNodes: true
       useExternalAddress: false
-      ingressTLSTerminationSecret: my-selfsigned-cert-tls
+      ingressTLSTermination:
+        tlsSecret: my-selfsigned-cert-tls
 ```
 
 The only additional settings required here are:
 - Making sure that you are not using the external TLS address for Solr to communicate internally via `useExternalAddress: false`.
   This will be ignored, even if it is set to `true`.
-- Adding a TLS secret through `ingressTLSTerminationSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+- Adding a TLS secret through `ingressTLSTermination.tlsSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
   _This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
 
 To generate a TLS secret, follow the [instructions above](#use-cert-manager-to-issue-the-certificate) and use the templated Hostname: `<namespace>-<name>-solrcloud.<domain>`
@@ -802,7 +802,8 @@ spec:
       method: Ingress
       hideNodes: true
       useExternalAddress: false
-      ingressTLSTerminationSecret: myingress-cert
+      ingressTLSTermination:
+        tlsSecret: myingress-cert
 ```
 
 For more information on the Ingress TLS Termination options for cert-manager, [refer to the documentation](https://cert-manager.io/docs/usage/ingress/).
