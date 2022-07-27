@@ -150,6 +150,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/448
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/451
+    - kind: added
+      description: SolrCloud now accepts a `solrZkOpts` option for specifying any Java system properties needed to connect to ZooKeeper.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/435
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/456
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
