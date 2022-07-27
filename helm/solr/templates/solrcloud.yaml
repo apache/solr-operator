@@ -67,6 +67,9 @@ spec:
   {{- if .Values.solrOptions.javaOpts }}
   solrOpts: {{ .Values.solrOptions.javaOpts | quote }}
   {{- end }}
+  {{- if .Values.solrOptions.zkJavaOpts }}
+  solrZkOpts: {{ .Values.solrOptions.zkJavaOpts | quote }}
+  {{- end }}
 
   {{- if .Values.solrOptions.security }}
   solrSecurity:
