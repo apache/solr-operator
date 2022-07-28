@@ -1523,6 +1523,14 @@ type SolrTLSOptions struct {
 	// This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
 	// +optional
 	MountedTLSDir *MountedTLSDirectory `json:"mountedTLSDir,omitempty"`
+
+	// Path on the Solr image to your JVM's truststore to merge with an external truststore.
+	// If supplied, Solr will be configured to use the merged truststore.
+	// The truststore for the JVM in the default Solr image is: $JAVA_HOME/lib/security/cacerts
+	MergeJavaTruststore string `json:"mergeJavaTrustStore,omitempty"`
+
+	// Password for the Java truststore to merge; defaults to "changeit"
+	MergeJavaTruststorePass string `json:"mergeJavaTrustStorePass,omitempty"`
 }
 
 // +kubebuilder:validation:Enum=Basic

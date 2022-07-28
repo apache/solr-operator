@@ -270,6 +270,64 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		})
 	})
 
+	FContext("Secret TLS - Merge Truststore", func() {
+		tlsSecretName := "tls-cert-secret-from-user"
+		keystorePassKey := "some-password-key-thingy"
+		trustStoreSecretName := "custom-truststore-secret"
+		trustStoreFile := "truststore.p12"
+		BeforeEach(func() {
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
+			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
+			solrCloud.Spec.SolrTLS.TrustStoreSecret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: trustStoreSecretName},
+				Key:                  trustStoreFile,
+			}
+			solrCloud.Spec.SolrTLS.TrustStorePasswordSecret = &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: trustStoreSecretName},
+				Key:                  "truststore-pass",
+			}
+			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Need // require client auth too (mTLS between the pods)
+			solrCloud.Spec.SolrTLS.MergeJavaTruststore = util.DefaultJvmTruststore
+		})
+		FIt("has the correct resources", func() {
+			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, false)
+		})
+	})
+
+	FContext("Secret TLS - Merge Truststores for Server & Client", func() {
+		serverCertSecret := "tls-server-cert"
+		clientCertSecret := "tls-client-cert"
+		keystorePassKey := "some-password-key-thingy"
+		BeforeEach(func() {
+			solrCloud.Spec.SolrTLS = createTLSOptions(serverCertSecret, keystorePassKey, false)
+			solrCloud.Spec.SolrTLS.MergeJavaTruststore = util.DefaultJvmTruststore
+
+			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Need
+
+			// Additional client cert
+			solrCloud.Spec.SolrClientTLS = &solrv1beta1.SolrTLSOptions{
+				KeyStorePasswordSecret: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: clientCertSecret},
+					Key:                  keystorePassKey,
+				},
+				PKCS12Secret: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: clientCertSecret},
+					Key:                  util.DefaultPkcs12KeystoreFile,
+				},
+				TrustStoreSecret: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: clientCertSecret},
+					Key:                  util.DefaultPkcs12TruststoreFile,
+				},
+				RestartOnTLSSecretUpdate: false,
+				MergeJavaTruststore:      util.DefaultJvmTruststore,
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
+			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, false)
+		})
+	})
+
 	FContext("Secret TLS - Pkcs12 Conversion", func() {
 		tlsSecretName := "tls-cert-secret-from-user-no-pkcs12"
 		keystorePassKey := "some-password-key-thingy"
@@ -466,6 +524,11 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 		expectedTrustStorePath = util.DefaultTrustStorePath + "/" + tls.TrustStoreSecret.Key
 	}
 
+	// did we merge the Java truststore with the user-supplied?
+	if tls.MergeJavaTruststore != "" {
+		expectedTrustStorePath = "/var/solr/tls-merged/truststore.p12"
+	}
+
 	if tls.PKCS12Secret != nil {
 		expectTLSEnvVarsWithGomega(g, mainContainer.Env, tls.KeyStorePasswordSecret.Name, tls.KeyStorePasswordSecret.Key, needsPkcs12InitContainer, expectedTrustStorePath, clientOnly, clientTLS)
 	} else if tls.TrustStoreSecret != nil {
@@ -477,7 +540,11 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 		g.Expect(len(envVars)).To(Equal(3), "Wrong number of SSL env vars for Pod")
 		for _, envVar := range envVars {
 			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE" {
-				g.Expect(envVar.Value).To(Equal(expectedTrustStorePath), "Wrong envVar value for %s", envVar.Name)
+				expectedPath := expectedTrustStorePath
+				if clientTLS != nil && clientTLS.MergeJavaTruststore != "" {
+					expectedPath = "/var/solr/tls-client-merged/truststore.p12"
+				}
+				g.Expect(envVar.Value).To(Equal(expectedPath), "Wrong envVar value for %s", envVar.Name)
 			}
 			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD" {
 				g.Expect(envVar.Value).To(BeEmpty(), "EnvVar %s should not use an explicit Value, since it is populated from a secret", envVar.Name)
@@ -529,6 +596,20 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
 		g.Expect(expInitContainer.Command[2]).To(Equal(expCmd), "Wrong TLS initContainer command")
+	}
+
+	if tls.MergeJavaTruststore != "" {
+		// verify the merge-truststore initContainer was created as well
+		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "An init container should exist to merge truststores")
+		var expInitContainer *corev1.Container = nil
+		for _, cnt := range podTemplate.Spec.InitContainers {
+			if cnt.Name == "merge-truststore" {
+				expInitContainer = &cnt
+				break
+			}
+		}
+		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the merge-truststore InitContainer in the sts!")
+		g.Expect(expInitContainer.Command[2]).To(ContainSubstring("keytool"), "Wrong merge initContainer command")
 	}
 
 	if tls.ClientAuth == solrv1beta1.Need {
@@ -612,11 +693,6 @@ func expectMountedTLSDirEnvVars(envVars []corev1.EnvVar, solrCloud *solrv1beta1.
 }
 
 // ensure the TLS related env vars are set for the Solr pod
-func expectTLSEnvVars(envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool, expectedTruststorePath string, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) {
-	expectTLSEnvVarsWithGomega(Default, envVars, expectedKeystorePasswordSecretName, expectedKeystorePasswordSecretKey, needsPkcs12InitContainer, expectedTruststorePath, clientOnly, clientTLS)
-}
-
-// ensure the TLS related env vars are set for the Solr pod
 func expectTLSEnvVarsWithGomega(g Gomega, envVars []corev1.EnvVar, expectedKeystorePasswordSecretName string, expectedKeystorePasswordSecretKey string, needsPkcs12InitContainer bool, expectedTruststorePath string, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) {
 	g.Expect(envVars).To(Not(BeNil()), "Env Vars should not be nil")
 	envVars = filterVarsByName(envVars, func(n string) bool {
@@ -678,7 +754,11 @@ func expectTLSEnvVarsWithGomega(g Gomega, envVars []corev1.EnvVar, expectedKeyst
 			}
 
 			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE" {
-				g.Expect(envVar.Value).To(Equal("/var/solr/client-tls/truststore.p12"), "Wrong envVar value for %s", envVar.Name)
+				expectedPath := "/var/solr/client-tls/truststore.p12"
+				if clientTLS.MergeJavaTruststore != "" {
+					expectedPath = "/var/solr/tls-client-merged/truststore.p12"
+				}
+				g.Expect(envVar.Value).To(Equal(expectedPath), "Wrong envVar value for %s", envVar.Name)
 			}
 
 			if envVar.Name == "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD" || envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD" {
