@@ -609,7 +609,93 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 			}
 		}
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the merge-truststore InitContainer in the sts!")
-		g.Expect(expInitContainer.Command[2]).To(ContainSubstring("keytool"), "Wrong merge initContainer command")
+		g.Expect(expInitContainer.Command[2]).To(ContainSubstring("keytool"), "Wrong merge-truststore initContainer command")
+		providedTruststorePath := util.DefaultKeyStorePath
+		trustStoreMount := 0
+		if tls.TrustStoreSecret != nil && (tls.PKCS12Secret == nil || tls.PKCS12Secret.Name != tls.TrustStoreSecret.Name) {
+			providedTruststorePath = util.DefaultTrustStorePath
+			if tls.PKCS12Secret != nil {
+				trustStoreMount = 1
+			}
+		}
+		g.Expect(expInitContainer.VolumeMounts).To(Not(BeEmpty()), "There are no volume mounts for the merge-truststore InitContainer!")
+		g.Expect(expInitContainer.VolumeMounts[trustStoreMount].MountPath).To(Equal(providedTruststorePath), "Wrong mountPath for the provided truststore in the merge-truststore InitContainer!")
+		g.Expect(expInitContainer.VolumeMounts[trustStoreMount+1].MountPath).To(Equal("/var/solr/tls-merged"), "Wrong mountPath for the merge-truststore InitContainer!")
+		sslTrustStoreVar := "SOLR_SSL_TRUST_STORE"
+		if clientOnly {
+			sslTrustStoreVar = "SOLR_SSL_CLIENT_TRUST_STORE"
+		}
+		g.Expect(expInitContainer.Command[2]).To(
+			And(
+				ContainSubstring("-srckeystore "+tls.MergeJavaTruststore),
+				ContainSubstring("-srckeystore $"+sslTrustStoreVar),
+			), "Wrong paths in the merge-truststore InitContainer command!")
+
+		// verify the mountpath in the Solr container
+		var mergedTruststoreVolumeMount *corev1.VolumeMount = nil
+		for _, vm := range podTemplate.Spec.Containers[0].VolumeMounts {
+			if vm.Name == "merge-truststore" {
+				mergedTruststoreVolumeMount = &vm
+				break
+			}
+		}
+		g.Expect(mergedTruststoreVolumeMount).To(Not(BeNil()), "Didn't find the merge-truststore VolumeMount in the solr container!")
+		g.Expect(mergedTruststoreVolumeMount.MountPath).To(Equal("/var/solr/tls-merged"), "Wrong merge-truststore VolumeMount in the solr container")
+
+		for _, envVar := range expInitContainer.Env {
+			if envVar.Name == "MERGED_TRUST_STORE" {
+				g.Expect(envVar.Value).To(Equal("/var/solr/tls-merged/truststore.p12"), "EnvVar %s has the wrong string value", envVar.Name)
+				g.Expect(envVar.ValueFrom).To(BeNil(), "EnvVar %s must not have a ValueFrom", envVar.Name)
+			}
+		}
+	}
+
+	if clientTLS != nil && clientTLS.MergeJavaTruststore != "" {
+		// verify the merge-truststore initContainer was created as well
+		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "An init container should exist to merge client truststores")
+		var expInitContainer *corev1.Container = nil
+		for _, cnt := range podTemplate.Spec.InitContainers {
+			if cnt.Name == "merge-client-truststore" {
+				expInitContainer = &cnt
+				break
+			}
+		}
+		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the merge-client-truststore InitContainer in the sts!")
+		g.Expect(expInitContainer.Command[2]).To(ContainSubstring("keytool"), "Wrong merge-client-truststore initContainer command")
+		g.Expect(expInitContainer.VolumeMounts).To(Not(BeEmpty()), "There are no volume mounts for the merge-client-truststore InitContainer!")
+		providedTruststorePath := util.DefaultClientKeyStorePath
+		trustStoreMount := 0
+		if clientTLS.TrustStoreSecret != nil && (clientTLS.PKCS12Secret == nil || clientTLS.PKCS12Secret.Name != clientTLS.TrustStoreSecret.Name) {
+			providedTruststorePath = util.DefaultClientTrustStorePath
+			if clientTLS.PKCS12Secret != nil && clientTLS.PKCS12Secret.Name != clientTLS.TrustStoreSecret.Name {
+				trustStoreMount = 1
+			}
+		}
+		g.Expect(expInitContainer.VolumeMounts[trustStoreMount].MountPath).To(Equal(providedTruststorePath), "Wrong mountPath for the provided truststore in the merge-client-truststore InitContainer!")
+		g.Expect(expInitContainer.VolumeMounts[trustStoreMount+1].MountPath).To(Equal("/var/solr/tls-client-merged"), "Wrong mountPath for the merge-client-truststore InitContainer!")
+		g.Expect(expInitContainer.Command[2]).To(
+			And(
+				ContainSubstring("-srckeystore "+clientTLS.MergeJavaTruststore),
+				ContainSubstring("-srckeystore $SOLR_SSL_CLIENT_TRUST_STORE"),
+			), "Wrong paths in the merge-client-truststore InitContainer command!")
+
+		// verify the mountpath in the Solr container
+		var mergedTruststoreVolumeMount *corev1.VolumeMount = nil
+		for _, vm := range podTemplate.Spec.Containers[0].VolumeMounts {
+			if vm.Name == "merge-client-truststore" {
+				mergedTruststoreVolumeMount = &vm
+				break
+			}
+		}
+		g.Expect(mergedTruststoreVolumeMount).To(Not(BeNil()), "Didn't find the merge-client-truststore VolumeMount in the solr container!")
+		g.Expect(mergedTruststoreVolumeMount.MountPath).To(Equal("/var/solr/tls-client-merged"), "Wrong merge-client-truststore VolumeMount in the solr container")
+
+		for _, envVar := range expInitContainer.Env {
+			if envVar.Name == "MERGED_TRUST_STORE" {
+				g.Expect(envVar.Value).To(Equal("/var/solr/tls-client-merged/truststore.p12"), "EnvVar %s has the wrong string value", envVar.Name)
+				g.Expect(envVar.ValueFrom).To(BeNil(), "EnvVar %s must not have a ValueFrom", envVar.Name)
+			}
+		}
 	}
 
 	if tls.ClientAuth == solrv1beta1.Need {
