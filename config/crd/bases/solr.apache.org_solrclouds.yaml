@@ -4926,6 +4926,12 @@ spec:
                     required:
                     - key
                     type: object
+                  mergeJavaTrustStore:
+                    description: 'Path on the Solr image to your JVM''s truststore to merge with an external truststore. If supplied, Solr will be configured to use the merged truststore. The truststore for the JVM in the default Solr image is: $JAVA_HOME/lib/security/cacerts'
+                    type: string
+                  mergeJavaTrustStorePass:
+                    description: Password for the Java truststore to merge; defaults to "changeit"
+                    type: string
                   mountedTLSDir:
                     description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                     properties:
@@ -5087,6 +5093,12 @@ spec:
                     required:
                     - key
                     type: object
+                  mergeJavaTrustStore:
+                    description: 'Path on the Solr image to your JVM''s truststore to merge with an external truststore. If supplied, Solr will be configured to use the merged truststore. The truststore for the JVM in the default Solr image is: $JAVA_HOME/lib/security/cacerts'
+                    type: string
+                  mergeJavaTrustStorePass:
+                    description: Password for the Java truststore to merge; defaults to "changeit"
+                    type: string
                   mountedTLSDir:
                     description: Used to specify a path where the keystore, truststore, and password files for the TLS certificate are mounted by an external agent or CSI driver. This option is typically used with `spec.updateStrategy.restartSchedule` to restart Solr pods before the mounted TLS cert expires.
                     properties:

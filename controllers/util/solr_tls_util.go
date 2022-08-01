@@ -24,6 +24,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
@@ -43,6 +44,12 @@ const (
 	DefaultPkcs12KeystoreFile      = "keystore.p12"
 	DefaultPkcs12TruststoreFile    = "truststore.p12"
 	DefaultKeystorePasswordFile    = "keystore-password"
+	DefaultJvmTruststore           = "$JAVA_HOME/lib/security/cacerts"
+)
+
+var (
+	DefaultMergeTruststoreInitContainerMemory = resource.NewScaledQuantity(64, 6)
+	DefaultMergeTruststoreInitContainerCPU    = resource.NewMilliQuantity(50, resource.DecimalExponent)
 )
 
 // Helper struct for holding server and/or client cert config
@@ -54,6 +61,8 @@ type TLSCerts struct {
 	ClientConfig *TLSConfig
 	// Image used for initContainers that help configure the TLS settings
 	InitContainerImage *solr.ContainerImage
+	// Holds custom resource requests for the initContainer if the defaults are overridden by config
+	InitContainerResources *corev1.ResourceRequirements
 }
 
 // Holds TLS options from the user config as well as other config properties determined during reconciliation
@@ -72,10 +81,12 @@ type TLSConfig struct {
 	TruststorePath string
 	VolumePrefix   string
 	Namespace      string
+	EnvVarPrefix   string
 }
 
 // Get a TLSCerts struct for reconciling TLS on a SolrCloud
 func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
+
 	tls := &TLSCerts{
 		ServerConfig: &TLSConfig{
 			Options:           instance.Spec.SolrTLS.DeepCopy(),
@@ -83,6 +94,7 @@ func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
 			TruststorePath:    DefaultTrustStorePath,
 			CertMd5Annotation: SolrTlsCertMd5Annotation,
 			Namespace:         instance.Namespace,
+			EnvVarPrefix:      "SOLR_SSL",
 		},
 		InitContainerImage: instance.Spec.BusyBoxImage,
 	}
@@ -94,8 +106,17 @@ func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
 			VolumePrefix:      "client-",
 			CertMd5Annotation: SolrClientTlsCertMd5Annotation,
 			Namespace:         instance.Namespace,
+			EnvVarPrefix:      "SOLR_SSL_CLIENT",
 		}
 	}
+
+	if instance.Spec.CustomSolrKubeOptions.PodOptions != nil {
+		resources := instance.Spec.CustomSolrKubeOptions.PodOptions.DefaultInitContainerResources
+		if resources.Limits != nil || resources.Requests != nil {
+			tls.InitContainerResources = &resources
+		}
+	}
+
 	return tls
 }
 
@@ -110,16 +131,26 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 			PullPolicy: solr.DefaultPullPolicy,
 		}
 	}
-	return &TLSCerts{
+	tls := &TLSCerts{
 		ClientConfig: &TLSConfig{
 			Options:           prometheusExporter.Spec.SolrReference.SolrTLS.DeepCopy(),
 			KeystorePath:      DefaultKeyStorePath,
 			TruststorePath:    DefaultTrustStorePath,
 			CertMd5Annotation: SolrClientTlsCertMd5Annotation,
 			Namespace:         prometheusExporter.Namespace,
+			EnvVarPrefix:      "SOLR_SSL_CLIENT",
 		},
 		InitContainerImage: bbImage,
 	}
+
+	if prometheusExporter.Spec.CustomKubeOptions.PodOptions != nil {
+		resources := prometheusExporter.Spec.CustomKubeOptions.PodOptions.DefaultInitContainerResources
+		if resources.Limits != nil || resources.Requests != nil {
+			tls.InitContainerResources = &resources
+		}
+	}
+
+	return tls
 }
 
 // Enrich the config for a SolrCloud StatefulSet to enable TLS, either loaded from a secret or
@@ -129,8 +160,9 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSet) {
 	serverCert := tls.ServerConfig
 
-	// Add the SOLR_SSL_* vars to the main container's environment
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
+
+	// Add the SOLR_SSL_* vars to the main container's environment
 	mainContainer.Env = append(mainContainer.Env, serverCert.serverEnvVars()...)
 	// Was a client cert mounted too? If so, add the client env vars to the main container as well
 	if tls.ClientConfig != nil {
@@ -150,6 +182,13 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 		mountInitDbIfNeeded(stateful)
 		// use an initContainer to create the wrapper script in the initdb
 		stateful.Spec.Template.Spec.InitContainers = append(stateful.Spec.Template.Spec.InitContainers, tls.generateTLSInitdbScriptInitContainer())
+	}
+
+	if serverCert.Options.MergeJavaTruststore != "" {
+		serverCert.addMergeTruststoreInitContainer(&stateful.Spec.Template, tls.InitContainerResources)
+	}
+	if tls.ClientConfig != nil && tls.ClientConfig.Options.MergeJavaTruststore != "" {
+		tls.ClientConfig.addMergeTruststoreInitContainer(&stateful.Spec.Template, tls.InitContainerResources)
 	}
 }
 
@@ -171,6 +210,11 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 	} else if clientCert.Options.MountedTLSDir != nil {
 		// volumes and mounts for TLS when using the mounted dir option
 		clientCert.mountTLSWrapperScriptAndInitContainer(deployment, tls.InitContainerImage)
+	}
+
+	if clientCert.Options.MergeJavaTruststore != "" {
+		// add an initContainer that merges the truststores together
+		clientCert.addMergeTruststoreInitContainer(&deployment.Spec.Template, tls.InitContainerResources)
 	}
 }
 
@@ -806,4 +850,99 @@ func verifyTLSSecretConfig(client *client.Client, secretName string, secretNames
 	}
 
 	return foundTLSSecret, nil
+}
+
+// Adds an initContainer that merges the JVM's truststore with the user-supplied truststore
+func (tls *TLSConfig) addMergeTruststoreInitContainer(template *corev1.PodTemplateSpec, initContRes *corev1.ResourceRequirements) {
+	mainContainer := &template.Spec.Containers[0]
+
+	// supports either client or server truststore env var names
+	envVar := tls.trustStoreEnvVarName()
+
+	// build an initContainer that merges the truststores together
+	initContainer, mergeVol, mergeMount :=
+		tls.buildMergeTruststoreInitContainer(mainContainer.Image, mainContainer.ImagePullPolicy, mainContainer.Env)
+	if initContRes != nil {
+		initContainer.Resources = *initContRes
+	}
+	template.Spec.InitContainers = append(template.Spec.InitContainers, *initContainer)
+	template.Spec.Volumes = append(template.Spec.Volumes, *mergeVol)
+	mainContainer.VolumeMounts = append(mainContainer.VolumeMounts, *mergeMount)
+	// point the truststore to the merged
+	updateEnvVars := []corev1.EnvVar{}
+	for _, n := range mainContainer.Env {
+		// copy over all but the one we're swapping out ...
+		if n.Name != envVar {
+			updateEnvVars = append(updateEnvVars, n)
+		}
+	}
+	mainContainer.Env = append(updateEnvVars, corev1.EnvVar{Name: envVar, Value: mergeMount.MountPath + "/truststore.p12"})
+}
+
+func (tls *TLSConfig) buildMergeTruststoreInitContainer(solrImageName string, imagePullPolicy corev1.PullPolicy, serverEnvVars []corev1.EnvVar) (*corev1.Container, *corev1.Volume, *corev1.VolumeMount) {
+	// StatefulSet might have a client and server SSL config, so need to vary the initContainer and vol mount names
+	envVar := tls.trustStoreEnvVarName()
+	passEnvVar := envVar + "_PASSWORD"
+	volName := fmt.Sprintf("merge-%struststore", tls.VolumePrefix)
+	mergedEnvVar := tls.mergedTruststoreEnvVarName()
+	mountPath := tls.mergedTruststoreMountPath()
+	envVars := []corev1.EnvVar{
+		{
+			Name:  mergedEnvVar,
+			Value: mountPath + "/truststore.p12",
+		},
+	}
+	envVars = append(envVars, serverEnvVars...)
+
+	// the default truststore pass for most JVM is "changeit"
+	javaTruststorePass := tls.Options.MergeJavaTruststorePass
+	if javaTruststorePass == "" {
+		javaTruststorePass = "changeit"
+	}
+
+	// Use Java's keytool to merge the JVM's truststore with the user-supplied truststore
+	cmd := fmt.Sprintf(`keytool -importkeystore -srckeystore %s -srcstorepass %s -destkeystore $%s -deststoretype pkcs12 -deststorepass $%s;
+keytool -importkeystore -srckeystore $%s -srcstorepass $%s -destkeystore $%s -deststoretype pkcs12 -deststorepass $%s`,
+		tls.Options.MergeJavaTruststore, javaTruststorePass, mergedEnvVar, passEnvVar, envVar, passEnvVar, mergedEnvVar, passEnvVar)
+
+	// Need volume mounts from mainContainer (to get access to the user-supplied truststore)
+	_, mounts := tls.volumesAndMounts()
+	// Mount a shared dir between the initContainer and mainContainer to store the merged truststore
+	mergeVol := &corev1.Volume{Name: volName, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}
+	mergeMount := &corev1.VolumeMount{Name: volName, ReadOnly: false, MountPath: mountPath}
+	mounts = append(mounts, *mergeMount)
+
+	volumePrepResources := corev1.ResourceList{
+		corev1.ResourceCPU:    *DefaultMergeTruststoreInitContainerCPU,
+		corev1.ResourceMemory: *DefaultMergeTruststoreInitContainerMemory,
+	}
+
+	initCont := &corev1.Container{
+		Name:                     volName,
+		Image:                    solrImageName, // we use the Solr image for the initContainer since it has the truststore and keytool
+		ImagePullPolicy:          imagePullPolicy,
+		TerminationMessagePath:   "/dev/termination-log",
+		TerminationMessagePolicy: "File",
+		Command:                  []string{"sh", "-c", cmd},
+		VolumeMounts:             mounts,
+		Env:                      envVars,
+		Resources:                corev1.ResourceRequirements{Requests: volumePrepResources, Limits: volumePrepResources},
+	}
+
+	return initCont, mergeVol, mergeMount
+}
+
+func (tls *TLSConfig) trustStoreEnvVarName() string {
+	return tls.EnvVarPrefix + "_TRUST_STORE"
+}
+
+func (tls *TLSConfig) mergedTruststoreEnvVarName() string {
+	if tls.VolumePrefix == "client-" {
+		return "MERGED_CLIENT_TRUST_STORE"
+	}
+	return "MERGED_TRUST_STORE"
+}
+
+func (tls *TLSConfig) mergedTruststoreMountPath() string {
+	return fmt.Sprintf("/var/solr/tls-%smerged", tls.VolumePrefix)
 }

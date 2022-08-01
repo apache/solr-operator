@@ -228,6 +228,38 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 		})
 	})
 
+	FContext("TLS Secret - Merge TrustStore Only", func() {
+		tlsSecretName := "tls-cert-secret-from-user"
+		BeforeEach(func() {
+			solrPrometheusExporter.Spec = solrv1beta1.SolrPrometheusExporterSpec{
+				SolrReference: solrv1beta1.SolrReference{
+					Cloud: &solrv1beta1.SolrCloudReference{
+						ZookeeperConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+							InternalConnectionString: "host:2181",
+							ChRoot:                   "/this/path",
+						},
+					},
+					SolrTLS: &solrv1beta1.SolrTLSOptions{
+						TrustStorePasswordSecret: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+							Key:                  "keystore-passwords-are-important",
+						},
+						TrustStoreSecret: &corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: tlsSecretName},
+							Key:                  util.DefaultPkcs12TruststoreFile,
+						},
+						RestartOnTLSSecretUpdate: false,
+						MergeJavaTruststore:      util.DefaultJvmTruststore,
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the SolrPrometheusExporter Deployment")
+			testReconcileWithTruststoreOnly(ctx, solrPrometheusExporter, tlsSecretName)
+		})
+	})
+
 	FContext("TLS Secret - TrustStore Only - Restart on Secret Update", func() {
 		tlsSecretName := "tls-cert-secret-from-user"
 		BeforeEach(func() {
