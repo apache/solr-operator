@@ -24,6 +24,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
@@ -46,6 +47,11 @@ const (
 	DefaultJvmTruststore           = "$JAVA_HOME/lib/security/cacerts"
 )
 
+var (
+	DefaultMergeTruststoreInitContainerMemory = resource.NewScaledQuantity(64, 6)
+	DefaultMergeTruststoreInitContainerCPU    = resource.NewMilliQuantity(50, resource.DecimalExponent)
+)
+
 // Helper struct for holding server and/or client cert config
 // This struct is intended for internal use only and is only exposed outside the package so that the controllers can access
 type TLSCerts struct {
@@ -55,6 +61,8 @@ type TLSCerts struct {
 	ClientConfig *TLSConfig
 	// Image used for initContainers that help configure the TLS settings
 	InitContainerImage *solr.ContainerImage
+	// Holds custom resource requests for the initContainer if the defaults are overridden by config
+	InitContainerResources *corev1.ResourceRequirements
 }
 
 // Holds TLS options from the user config as well as other config properties determined during reconciliation
@@ -78,6 +86,7 @@ type TLSConfig struct {
 
 // Get a TLSCerts struct for reconciling TLS on a SolrCloud
 func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
+
 	tls := &TLSCerts{
 		ServerConfig: &TLSConfig{
 			Options:           instance.Spec.SolrTLS.DeepCopy(),
@@ -100,6 +109,14 @@ func TLSCertsForSolrCloud(instance *solr.SolrCloud) *TLSCerts {
 			EnvVarPrefix:      "SOLR_SSL_CLIENT",
 		}
 	}
+
+	if instance.Spec.CustomSolrKubeOptions.PodOptions != nil {
+		resources := instance.Spec.CustomSolrKubeOptions.PodOptions.DefaultInitContainerResources
+		if resources.Limits != nil || resources.Requests != nil {
+			tls.InitContainerResources = &resources
+		}
+	}
+
 	return tls
 }
 
@@ -114,7 +131,7 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 			PullPolicy: solr.DefaultPullPolicy,
 		}
 	}
-	return &TLSCerts{
+	tls := &TLSCerts{
 		ClientConfig: &TLSConfig{
 			Options:           prometheusExporter.Spec.SolrReference.SolrTLS.DeepCopy(),
 			KeystorePath:      DefaultKeyStorePath,
@@ -125,6 +142,15 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 		},
 		InitContainerImage: bbImage,
 	}
+
+	if prometheusExporter.Spec.CustomKubeOptions.PodOptions != nil {
+		resources := prometheusExporter.Spec.CustomKubeOptions.PodOptions.DefaultInitContainerResources
+		if resources.Limits != nil || resources.Requests != nil {
+			tls.InitContainerResources = &resources
+		}
+	}
+
+	return tls
 }
 
 // Enrich the config for a SolrCloud StatefulSet to enable TLS, either loaded from a secret or
@@ -159,10 +185,10 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 	}
 
 	if serverCert.Options.MergeJavaTruststore != "" {
-		serverCert.addMergeTruststoreInitContainer(&stateful.Spec.Template)
+		serverCert.addMergeTruststoreInitContainer(&stateful.Spec.Template, tls.InitContainerResources)
 	}
 	if tls.ClientConfig != nil && tls.ClientConfig.Options.MergeJavaTruststore != "" {
-		tls.ClientConfig.addMergeTruststoreInitContainer(&stateful.Spec.Template)
+		tls.ClientConfig.addMergeTruststoreInitContainer(&stateful.Spec.Template, tls.InitContainerResources)
 	}
 }
 
@@ -188,7 +214,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 
 	if clientCert.Options.MergeJavaTruststore != "" {
 		// add an initContainer that merges the truststores together
-		clientCert.addMergeTruststoreInitContainer(&deployment.Spec.Template)
+		clientCert.addMergeTruststoreInitContainer(&deployment.Spec.Template, tls.InitContainerResources)
 	}
 }
 
@@ -827,7 +853,7 @@ func verifyTLSSecretConfig(client *client.Client, secretName string, secretNames
 }
 
 // Adds an initContainer that merges the JVM's truststore with the user-supplied truststore
-func (tls *TLSConfig) addMergeTruststoreInitContainer(template *corev1.PodTemplateSpec) {
+func (tls *TLSConfig) addMergeTruststoreInitContainer(template *corev1.PodTemplateSpec, initContRes *corev1.ResourceRequirements) {
 	mainContainer := &template.Spec.Containers[0]
 
 	// supports either client or server truststore env var names
@@ -836,6 +862,9 @@ func (tls *TLSConfig) addMergeTruststoreInitContainer(template *corev1.PodTempla
 	// build an initContainer that merges the truststores together
 	initContainer, mergeVol, mergeMount :=
 		tls.buildMergeTruststoreInitContainer(mainContainer.Image, mainContainer.ImagePullPolicy, mainContainer.Env)
+	if initContRes != nil {
+		initContainer.Resources = *initContRes
+	}
 	template.Spec.InitContainers = append(template.Spec.InitContainers, *initContainer)
 	template.Spec.Volumes = append(template.Spec.Volumes, *mergeVol)
 	mainContainer.VolumeMounts = append(mainContainer.VolumeMounts, *mergeMount)
@@ -883,7 +912,12 @@ keytool -importkeystore -srckeystore $%s -srcstorepass $%s -destkeystore $%s -de
 	mergeMount := &corev1.VolumeMount{Name: volName, ReadOnly: false, MountPath: mountPath}
 	mounts = append(mounts, *mergeMount)
 
-	return &corev1.Container{
+	volumePrepResources := corev1.ResourceList{
+		corev1.ResourceCPU:    *DefaultMergeTruststoreInitContainerCPU,
+		corev1.ResourceMemory: *DefaultMergeTruststoreInitContainerMemory,
+	}
+
+	initCont := &corev1.Container{
 		Name:                     volName,
 		Image:                    solrImageName, // we use the Solr image for the initContainer since it has the truststore and keytool
 		ImagePullPolicy:          imagePullPolicy,
@@ -892,7 +926,10 @@ keytool -importkeystore -srckeystore $%s -srcstorepass $%s -destkeystore $%s -de
 		Command:                  []string{"sh", "-c", cmd},
 		VolumeMounts:             mounts,
 		Env:                      envVars,
-	}, mergeVol, mergeMount
+		Resources:                corev1.ResourceRequirements{Requests: volumePrepResources, Limits: volumePrepResources},
+	}
+
+	return initCont, mergeVol, mergeMount
 }
 
 func (tls *TLSConfig) trustStoreEnvVarName() string {

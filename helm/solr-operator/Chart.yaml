@@ -175,6 +175,14 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/435
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/456
+    - kind: added
+      description: TLS config provides an option to merge the JVM truststore from the Solr image with a user-supplied truststore.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/390
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/461
+
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.6.0-prerelease
