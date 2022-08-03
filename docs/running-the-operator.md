@@ -38,8 +38,8 @@ Next, install the Solr Operator chart. Note this is using Helm v3, use the offic
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml
-$ helm install solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.7.0-prerelease/all-with-dependencies.yaml
+$ helm install solr-operator apache-solr/solr-operator --version 0.7.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
