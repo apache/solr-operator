@@ -227,8 +227,10 @@ check-git: ## Check to make sure the repo does not have uncommitted code
 
 ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
 test: manifests generate ## Run the unit tests
-	mkdir -p ${ENVTEST_ASSETS_DIR}
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.8.3/hack/setup-envtest.sh
+	# Kubebuilder-tools doesn't have a darwin+arm (i.e. Apple Silicon) distribution but the amd one works fine for our purposes
+	if [[ "${GOOS}" == "darwin" && "${ARCH}" == "arm64" ]]; then export GOARCH=amd64; fi; \
+	mkdir -p ${ENVTEST_ASSETS_DIR}; \
+	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.8.3/hack/setup-envtest.sh; \
 	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); GINKGO_EDITOR_INTEGRATION=true go test ./... -coverprofile cover.out
 
 ##@ Helm
