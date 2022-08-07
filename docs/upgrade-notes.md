@@ -99,8 +99,8 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.6.0-prerelease/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.6.0-prerelease
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.6.0/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.6.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._

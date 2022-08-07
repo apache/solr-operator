@@ -12,11 +12,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-version: 0.6.0-prerelease
+version: 0.6.0
 appVersion: 8.11.1
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
@@ -36,7 +35,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
@@ -76,5 +75,5 @@ annotations:
       image: solr:8.11
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: <fingerprint>
+    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
