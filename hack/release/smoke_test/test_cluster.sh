@@ -83,6 +83,21 @@ if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
 fi
 
+export LOCATION="$LOCATION"
+export VERSION="$VERSION"
+
+function add_solr_helm_repo() {
+  if (echo "${LOCATION}" | grep "http"); then
+    helm repo add --force-update "apache-solr-test-${VERSION}" "${LOCATION}/helm-charts"
+  fi
+}
+
+function remove_solr_helm_repo() {
+  if (echo "${LOCATION}" | grep "http"); then
+    helm repo remove "apache-solr-test-${VERSION}"
+  fi
+}
+
 # If LOCATION is not a URL, then get the absolute path
 if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
@@ -93,9 +108,6 @@ if ! (echo "${LOCATION}" | grep "http"); then
 else
   # If LOCATION is a URL, then we want to make sure we have the up-to-date docker image.
   docker pull "${IMAGE}"
-
-  # Add the Test Helm Repo
-  helm repo add --force-update "apache-solr-test-${VERSION}" "${LOCATION}/helm-charts"
 
   OP_HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
   SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
@@ -147,6 +159,8 @@ if [[ -n "${GPG_KEY:-}" ]]; then
   fi
 fi
 
+add_solr_helm_repo
+
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" \
@@ -169,9 +183,7 @@ helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_H
     --set "backupRepositories[0].volume.source.hostPath.path=/tmp/backup"
 
 # If LOCATION is a URL, then remove the helm repo after use
-if (echo "${LOCATION}" | grep "http"); then
-  helm repo remove "apache-solr-test-${VERSION}"
-fi
+remove_solr_helm_repo
 
 # Wait for solrcloud to be ready
 printf '\nWait for all 3 Solr nodes to become ready.\n\n'
@@ -277,11 +289,12 @@ fi
 
 
 printf "\nDo a rolling restart and make sure the cluster is healthy afterwards\n"
-
+add_solr_helm_repo
 helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" --reuse-values  \
     --set-string podOptions.annotations.restart="true"
 printf '\nWait for the rolling restart to begin.\n\n'
 grep -q "3              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
+remove_solr_helm_repo
 
 printf '\nWait 5 minutes for all 3 Solr nodes to become ready.\n\n'
 grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w --request-timeout 300); kill $!
