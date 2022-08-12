@@ -41,7 +41,7 @@ This tutorial shows how to setup Solr under Kubernetes on your local mac. The pl
 	https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 
 # Install Docker Desktop for Mac (use edge version to get latest k8s)
-brew cask install docker-edge
+brew install --cask docker
 
 # Enable Kubernetes in Docker Settings, or run the command below:
 sed -i -e 's/"kubernetesEnabled" : false/"kubernetesEnabled" : true/g' \
