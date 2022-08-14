@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.6.0
-appVersion: v0.6.0
+version: 0.6.1-prerelease
+appVersion: v0.6.1-prerelease
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -41,142 +41,31 @@ dependencies:
 annotations:
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: changed
-      description: Upgrade the default Solr version to 8.11
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/387
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/388
-    - kind: changed
-      description: The required Zookeeper Operator version has been upgraded to v0.2.14
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/443
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/449
-        - name: Zookeeper Operator v0.2.14 Release
-          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.14
-    - kind: changed
-      description: Loosen requirement on GCS backup credential/secret. Can now be omitted if using GKE's Workload Identity.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/391
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/394
-    - kind: changed
-      description: The "addressability.external.additionalDomains" option has been renamed to "addressability.external.additionalDomainNames". See the upgrade notes for more information.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/412
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/416
     - kind: added
-      description: You can now do a managed update of Solr while using ephemeral data. The operator will manage data migration during the rolling update for you.
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/365
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/375
-    - kind: removed
-      description: Options deprecated in v0.5.0 have been removed. See the upgrade notes for more information.
-      links:
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/418
-    - kind: fixed
-      description: Fixed issue with StatefulSet volumeMounts for PVCs with custom names.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/438
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/439
-    - kind: fixed
-      description: SolrCloud pods are no longer deleted right after a SolrCloud is created.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/431
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/432
-    - kind: fixed
-      description: Fixed rolebindings when watching multiple namespaces
-      links:
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/444
-    - kind: fixed
-      description: SolrClouds now support a ZookeeperConnection address without the port (uses 2181 by default). The operator will also log whenever the statefulSet is skipped because of the zkConnectionString.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/428
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/429
-    - kind: fixed
-      description: SolrCloud.Status now shows correct version when using an image repo that contains a colon
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/445
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/450
-    - kind: added
-      description: SolrCloud and SolrPrometheusExporter Services now have the appropriate (http or https) appProtocol set. This fixes integration with Istio.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/427
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/453
+          url: https://github.com/issue-url
     - kind: changed
-      description: SolrPrometheusExporters now default to using the references SolrCloud image if none is provided. Note, the entire PrometheusExporter image specification must be empty for it to use the SolrCloud image. This does not effect existing resources, only newly created resources.
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/386
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/454
-    - kind: added
-      description: SolrCloud default initContainer(s) can now have their resources customized via `podOptions.defaultInitContainerResources`. These initContainers now include default resources.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/448
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/451
-    - kind: changed
-      description: SolrBackup.Status' 'Next Scheduled' is now updated on changes to the backup schedule.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/376
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/455
-    - kind: changed
-      description: SolrClouds can now use the Ingress controller's default TLS Secret when terminating TLS at the Ingress. The old `ingressTLSTerminationSecret` option is now deprecated. Refer the upgrade notes for more information.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/437
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/452
-        - name: Upgrade Notes
-          url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#v060
-        - name: Solr Addressability Docs
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability
-    - kind: added
-      description: SolrCloud now accepts a `solrZkOpts` option for specifying any Java system properties needed to connect to ZooKeeper.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/435
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/456
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.6.0
+      image: apache/solr-operator:v0.6.1-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1

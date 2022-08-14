@@ -15,7 +15,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluser running on Kubernetes via the Solr Operator
-version: 0.6.0
+version: 0.6.1-prerelease
 appVersion: 8.11.1
 kubeVersion: ">= 1.19.0-0"
 home: https://solr.apache.org
@@ -35,29 +35,20 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: changed
-      description: Upgrade the default Solr version to 8.11
+    - kind: added
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/387
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/388
+          url: https://github.com/issue-url
     - kind: changed
-      description: The "addressability.external.additionalDomains" option has been renamed to "addressability.external.additionalDomainNames". See the upgrade notes for more information.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/412
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/416
-    - kind: removed
-      description: The deprecated "dataStorage.backupRestoreOptions" field has been removed.
+      description: Change 2
       links:
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/418
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -75,5 +66,5 @@ annotations:
       image: solr:8.11
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
