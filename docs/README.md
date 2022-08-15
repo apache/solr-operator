@@ -20,6 +20,7 @@
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
 - [Local Tutorial](local_tutorial.md)
+- [Upgrade Notes](upgrade-notes.md)
 - [Running the Solr Operator](running-the-operator.md)
 - Available Solr Resources
     - [Solr Clouds](solr-cloud)

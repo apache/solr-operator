@@ -19,8 +19,6 @@ metadata:
   name: ingress-cloud
 spec:
   replicas: 3
-  solrImage:
-    tag: 8.7.0
   solrAddressability:
     podPort: 10000
     commonServicePort: 80
@@ -28,10 +26,13 @@ spec:
       method: Ingress
       useExternalAddress: false
       domainName: "kube.example.com"
-      additionalDomains:
+      additionalDomainNames:
         - "another.kube.example.com"
         - "another.kube.other.com"
       nodePortOverride: 80
+  customSolrKubeOptions:
+    ingressOptions:
+      ingressClassName: nginx
 
 ---
 apiVersion: solr.apache.org/v1beta1
@@ -40,8 +41,6 @@ metadata:
   name: external-dns-cloud
 spec:
   replicas: 3
-  solrImage:
-    tag: 8.7.0
   solrAddressability:
     podPort: 10000
     commonServicePort: 80

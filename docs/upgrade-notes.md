@@ -35,6 +35,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -46,6 +47,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.3.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.4.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
@@ -97,13 +99,43 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.5.1/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.5.1
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.6.0/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.6.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
 ## Upgrade Warnings and Notes
+
+### v0.6.0
+- The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.
+  This will not affect any existing resources, as default versions are hard-written to the resources immediately.
+  Only new resources created after the Solr Operator is upgraded to `v0.6.0` will be affected.
+
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.12` to `v0.2.14`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
+  Make sure to install the correct version of the Zookeeper Operator CRDS, as [shown above](#upgrading-the-zookeeper-operator).
+
+- The SolrCloud CRD field `Spec.solrAddressability.external.additionalDomains` has been renamed to `additionalDomainNames`.
+  In this release `additionalDomains` is still accepted, but all values will automatically be added to `additionalDomainNames` and the field will be set to `nil` by the operator.
+  The `additionalDomains` option will be removed in a future version.
+
+- The SolrCloud CRD field `Spec.solrAddressability.external.ingressTLSTerminationSecret` has been moved to `Spec.solrAddressability.external.ingressTLSTermination.tlsSecret`.
+  In this release `ingressTLSTerminationSecret` is still accepted, but all values will automatically be changed to `ingressTLSTermination.tlsSecret` and the original field will be set to `nil` by the operator.
+  The `ingressTLSTerminationSecret` option will be removed in a future version.
+
+- `SolrPrometheusExporter` resources without any image specifications (`SolrPrometheusExporter.Spec.image.*`) will use the referenced `SolrCloud` image, if the reference is by `name`, not `zkConnectionString`.
+  If any `SolrPrometheusExporter.Spec.image.*` option is provided, then those values will be defaulted by the Solr Operator and the `SolrCloud` image will not be used.
+  When upgrading from `v0.5.*` to `v0.6.0`, only new `SolrPrometheusExporter` resources will use this new feature.
+  To enable it on existing resources, update the resources and remove the `SolrPrometheusExporter.Spec.image` section.
+
+- CRD options deprecated in `v0.5.0` have been removed.
+  This includes field `SolrCloud.spec.dataStorage.backupRestoreOptions`, `SolrBackup.spec.persistence` and `SolrBackup.status.persistenceStatus`.
+  Upgrading to `v0.5.*` will remove these options on existing and new SolrCloud and SolrBackup resources.
+  However, once the Solr CRDs are upgraded to `v0.6.0`, you will no longer be able to submit resources with the options listed above.
+  Please migrate your systems to use the new options while running `v0.5.*`, before upgrading to `v0.6.0`. 
 
 ### v0.5.0
 - Due to the deprecation and removal of `networking.k8s.io/v1beta1` in Kubernetes v1.22, `networking.k8s.io/v1` will be used for Ingresses.
@@ -150,7 +182,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   **Note**: The old option takes a _string_ `"true"`/`"false"`, while the new option takes a _boolean_ `true`/`false`.
 
 - The default Solr version for `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `7.7.0` to `8.9`.
-  This will not effect any existing resources, as default versions are hard-written to the resources immediately.
+  This will not affect any existing resources, as default versions are hard-written to the resources immediately.
   Only new resources created after the Solr Operator is upgraded to `v0.4.0` will be affected.
 
 - In previous versions of the Solr Operator, the provided Zookeeper instances could only use Persistent Storage.
