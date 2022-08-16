@@ -48,8 +48,11 @@ github:
     main:
       required_signatures: false
 
+  del_branch_on_merge: true
+
   # Github Pages
   ghp_branch: gh-pages
+  ghp_path: ~
 
 notifications:
   commits:      commits@solr.apache.org
