@@ -109,7 +109,7 @@ test   example   123m      true       false                     161m
 _Since v0.5.0_
 
 The Solr Operator enables taking recurring updates, at a set interval.
-Note that this feature requires a SolrCloud running Solr `8.9.0` or older, because it relies on `Incremental` backups.
+Note that this feature requires a SolrCloud running Solr >= `8.9.0`, because it relies on `Incremental` backups.
 
 By default the Solr Operator will save a maximum of **5** backups at a time, however users can override this using `SolrBackup.spec.recurrence.maxSaved`.
 When using `recurrence`, users must provide a Cron-style `schedule` for the interval at which backups should be taken.
