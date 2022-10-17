@@ -844,8 +844,7 @@ type ZookeeperSpec struct {
 	// +optional
 	ReadOnlyACL *ZookeeperACL `json:"readOnlyAcl,omitempty"`
 
-	// ZooKeeper ACL to use when connecting with ZK for reading operations.
-	// This ACL should have READ permission in the given chRoot.
+	// Additional Zookeeper Configuration settings
 	// +optional
 	Config ZookeeperConfig `json:"config,omitempty"`
 }
@@ -1416,6 +1415,16 @@ func (sc *SolrCloud) AdvertisedNodeHost(nodeName string) string {
 
 func (sc *SolrCloud) UsesPersistentStorage() bool {
 	return sc.Spec.StorageOptions.PersistentStorage != nil
+}
+
+func (sc *SolrCloud) DataVolumeName() string {
+	// Set the default name of the pvc
+	if sc.Spec.StorageOptions.PersistentStorage != nil &&
+		sc.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name != "" {
+		return sc.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.ObjectMeta.Name
+	} else {
+		return "data"
+	}
 }
 
 func (sc *SolrCloud) SharedLabels() map[string]string {

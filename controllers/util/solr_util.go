@@ -45,7 +45,6 @@ const (
 	SolrCloudPVCTechnology           = "solr-cloud"
 	SolrPVCStorageLabel              = "solr.apache.org/storage"
 	SolrCloudPVCDataStorage          = "data"
-	SolrDataVolumeName               = "data"
 	SolrPVCInstanceLabel             = "solr.apache.org/instance"
 	SolrXmlMd5Annotation             = "solr.apache.org/solrXmlMd5"
 	SolrXmlFile                      = "solr.xml"
@@ -143,18 +142,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	solrDataVolumeName := SolrDataVolumeName
+	solrDataVolumeName := solrCloud.DataVolumeName()
 
 	var pvcs []corev1.PersistentVolumeClaim
 	if solrCloud.UsesPersistentStorage() {
 		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
 
 		// Set the default name of the pvc
-		if pvc.ObjectMeta.Name == "" {
-			pvc.ObjectMeta.Name = solrDataVolumeName
-		} else {
-			solrDataVolumeName = pvc.ObjectMeta.Name
-		}
+		pvc.ObjectMeta.Name = solrDataVolumeName
 
 		// Set some defaults in the PVC Spec
 		if len(pvc.Spec.AccessModes) == 0 {

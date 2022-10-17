@@ -121,7 +121,7 @@ type IndividualSolrBackupStatus struct {
 	// +optional
 	CollectionBackupStatuses []CollectionBackupStatus `json:"collectionBackupStatuses,omitempty"`
 
-	// Version of the Solr being backed up
+	// The time that this backup was finished
 	// +optional
 	FinishTime *metav1.Time `json:"finishTimestamp,omitempty"`
 
