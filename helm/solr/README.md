@@ -177,7 +177,6 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.labels | map[string]string |  | List of additional labels to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.annotations | map[string]string |  | List of additional annotations to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |
-| zk.provided.zookeeperPodPolicy.affinity | string |  | PullSecret for the ZooKeeper image |
 | zk.provided.zookeeperPodPolicy.resources.limits | map[string]string |  | Provide Resource limits for the ZooKeeper containers |
 | zk.provided.zookeeperPodPolicy.resources.requests | map[string]string |  | Provide Resource requests for the ZooKeeper containers |
 | zk.provided.zookeeperPodPolicy.nodeSelector | map[string]string |  | Add a node selector for the ZooKeeper pod, to specify where it can be scheduled |
