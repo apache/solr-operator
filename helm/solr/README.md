@@ -182,7 +182,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.nodeSelector | map[string]string |  | Add a node selector for the ZooKeeper pod, to specify where it can be scheduled |
 | zk.provided.zookeeperPodPolicy.affinity | object |  | Add Kubernetes affinity information for the ZooKeeper pod |
 | zk.provided.zookeeperPodPolicy.tolerations | []object |  | Specify a list of Kubernetes tolerations for the ZooKeeper pod |
-| zk.provided.zookeeperPodPolicy.envVars | []object |  | List of additional environment variables for the ZooKeeper container |
+| zk.provided.zookeeperPodPolicy.env | []object |  | List of additional environment variables for the ZooKeeper container |
 | zk.provided.zookeeperPodPolicy.securityContext | object |  | Security context for the entire ZooKeeper pod. More information can be found in the [Kubernetes docs](More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context). |
 | zk.provided.zookeeperPodPolicy.terminationGracePeriodSeconds | int | `30` | The amount of time that Kubernetes will give for a zookeeper pod instance to shutdown normally. |
 | zk.provided.zookeeperPodPolicy.imagePullSecrets | []object |  | List of image pull secrets to inject into the Zookeeper pod. |
