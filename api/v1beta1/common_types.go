@@ -207,13 +207,16 @@ type AdditionalVolume struct {
 	Name string `json:"name"`
 
 	// Source is the source of the Volume to be loaded into the solrCloud Pod
-	Source corev1.VolumeSource `json:"source"`
+	Source corev1.VolumeSource `json:"source,omitempty"`
 
 	// DefaultContainerMount defines how to mount this volume into the default container.
 	// If this volume is to be used only with sidecar or non-default init containers,
 	// then this option is not necessary.
 	// +optional
 	DefaultContainerMount *corev1.VolumeMount `json:"defaultContainerMount,omitempty"`
+
+	// Projected Volume source
+	ProjectedSource *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
 }
 
 // ContainerImage defines the fields needed for a Docker repository image. The
