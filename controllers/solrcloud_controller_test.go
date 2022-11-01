@@ -732,7 +732,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraProjectedVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraProjectedVolumes)+2), "Pod has wrong number of volumes")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraProjectedVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraProjectedVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+			// TODO: This test fails with "timeout waiting for process etcd to start", how to debug in IDEA with Go plugin?
+			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Projected).To(Equal(extraProjectedVolumes[0].ProjectedSource), "Additional Volume from podOptions not loaded into pod properly.")
 
 			By("testing the Solr Common Service")
 			expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
