@@ -482,15 +482,16 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
 func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, logger logr.Logger) (err error, canDeletePod bool) {
 	var solrDataVolume *corev1.Volume
+	dataVolumeName := solrCloud.DataVolumeName()
 	for _, volume := range pod.Spec.Volumes {
-		if volume.Name == SolrDataVolumeName {
+		if volume.Name == dataVolumeName {
 			solrDataVolume = &volume
 			break
 		}
 	}
 
 	// Only evict if the Data volume is not persistent
-	if solrDataVolume.VolumeSource.PersistentVolumeClaim == nil {
+	if solrDataVolume != nil && solrDataVolume.VolumeSource.PersistentVolumeClaim == nil {
 		// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
 		// Otherwise, move the replicas to other pods
 		if (solrCloud.Spec.Replicas == nil || *solrCloud.Spec.Replicas < 2) && strings.HasSuffix(pod.Name, "-0") {

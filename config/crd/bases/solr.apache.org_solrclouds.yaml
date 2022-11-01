@@ -5267,7 +5267,7 @@ spec:
                         description: The ChRoot to connect solr at
                         type: string
                       config:
-                        description: ZooKeeper ACL to use when connecting with ZK for reading operations. This ACL should have READ permission in the given chRoot.
+                        description: Additional Zookeeper Configuration settings
                         properties:
                           additionalConfig:
                             additionalProperties:
