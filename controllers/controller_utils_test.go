@@ -856,6 +856,32 @@ var (
 			},
 		},
 	}
+	// Volume Projection test
+	expiration = int64(300)
+	mySource   = []corev1.VolumeProjection{
+		{
+			ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+				Audience:          "My.Audience",
+				Path:              "token",
+				ExpirationSeconds: &expiration,
+			},
+		},
+	}
+	extraProjectedVolumes = []solrv1beta1.AdditionalVolume{
+		{
+			Name: "projVol",
+			ProjectedSource: &corev1.ProjectedVolumeSource{
+				Sources:     mySource,
+				DefaultMode: nil, // TODO: Use other value?
+			},
+			DefaultContainerMount: &corev1.VolumeMount{
+				Name:      "ignore",
+				ReadOnly:  false,
+				MountPath: "/test/mount/path",
+				SubPath:   "sub/",
+			},
+		},
+	}
 	testAffinity = &corev1.Affinity{
 		PodAffinity: &corev1.PodAffinity{
 			RequiredDuringSchedulingIgnoredDuringExecution: []corev1.PodAffinityTerm{
