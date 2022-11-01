@@ -153,7 +153,7 @@ spec:
                   type: object
                 type: array
               finishTimestamp:
-                description: Version of the Solr being backed up
+                description: The time that this backup was finished
                 format: date-time
                 type: string
               finished:
@@ -200,7 +200,7 @@ spec:
                         type: object
                       type: array
                     finishTimestamp:
-                      description: Version of the Solr being backed up
+                      description: The time that this backup was finished
                       format: date-time
                       type: string
                     finished:
