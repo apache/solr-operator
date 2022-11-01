@@ -703,4 +703,42 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
 		})
 	})
+
+	FContext("Solr Cloud with Projected Volume", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				SolrJavaMem:  "-Xmx4G",
+				SolrOpts:     "extra-opts",
+				SolrLogLevel: "DEBUG",
+				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+					PodOptions: &solrv1beta1.PodOptions{
+						Volumes: extraProjectedVolumes,
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func() {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			// Other Pod Options Checks
+			extraProjectedVolumes[0].DefaultContainerMount.Name = extraProjectedVolumes[0].Name
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraProjectedVolumes)+1), "Container has wrong number of volumeMounts")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraProjectedVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraProjectedVolumes)+2), "Pod has wrong number of volumes")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraProjectedVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraProjectedVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+
+			By("testing the Solr Common Service")
+			expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
+
+			By("testing the Solr Headless Service")
+			expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
+		})
+	})
 })
