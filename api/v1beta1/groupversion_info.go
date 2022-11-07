@@ -16,8 +16,8 @@
  */
 
 // Package v1beta1 contains API Schema definitions for the solr.apache.org v1beta1 API group
-//+kubebuilder:object:generate=true
-//+groupName=solr.apache.org
+// +kubebuilder:object:generate=true
+// +groupName=solr.apache.org
 package v1beta1
 
 import (

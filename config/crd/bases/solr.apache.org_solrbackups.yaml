@@ -20,7 +20,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.7.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.5.0
+    controller-gen.kubebuilder.io/version: v0.6.0
   creationTimestamp: null
   name: solrbackups.solr.apache.org
 spec:
@@ -63,10 +63,14 @@ spec:
         description: SolrBackup is the Schema for the solrbackups API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
             type: string
           metadata:
             type: object
@@ -79,28 +83,42 @@ spec:
                   type: string
                 type: array
               location:
-                description: The location to store the backup in the specified backup repository.
+                description: The location to store the backup in the specified backup
+                  repository.
                 type: string
               recurrence:
-                description: "Set this backup to be taken recurrently, with options for scheduling and storage. \n NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API."
+                description: "Set this backup to be taken recurrently, with options
+                  for scheduling and storage. \n NOTE: This is only supported for
+                  Solr Clouds version 8.9+, as it uses the incremental backup API."
                 properties:
                   disabled:
                     default: false
-                    description: Disable the recurring backups. Note this will not affect any currently-running backup.
+                    description: Disable the recurring backups. Note this will not
+                      affect any currently-running backup.
                     type: boolean
                   maxSaved:
                     default: 5
-                    description: Define the number of backup points to save for this backup at any given time. The oldest backups will be deleted if too many exist when a backup is taken. If not provided, this defaults to 5.
+                    description: Define the number of backup points to save for this
+                      backup at any given time. The oldest backups will be deleted
+                      if too many exist when a backup is taken. If not provided, this
+                      defaults to 5.
                     minimum: 1
                     type: integer
                   schedule:
-                    description: "Perform a backup on the given schedule, in CRON format. \n Multiple CRON syntaxes are supported   - Standard CRON (e.g. \"CRON_TZ=Asia/Seoul 0 6 * * ?\")   - Predefined Schedules (e.g. \"@yearly\", \"@weekly\", \"@daily\", etc.)   - Intervals (e.g. \"@every 10h30m\") \n For more information please check this reference: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format"
+                    description: "Perform a backup on the given schedule, in CRON
+                      format. \n Multiple CRON syntaxes are supported   - Standard
+                      CRON (e.g. \"CRON_TZ=Asia/Seoul 0 6 * * ?\")   - Predefined
+                      Schedules (e.g. \"@yearly\", \"@weekly\", \"@daily\", etc.)
+                      \  - Intervals (e.g. \"@every 10h30m\") \n For more information
+                      please check this reference: https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format"
                     type: string
                 required:
                 - schedule
                 type: object
               repositoryName:
-                description: The name of the repository to use for the backup.  Defaults to "legacy_local_repository" if not specified (the auto-configured repository for legacy singleton volumes).
+                description: The name of the repository to use for the backup.  Defaults
+                  to "legacy_local_repository" if not specified (the auto-configured
+                  repository for legacy singleton volumes).
                 maxLength: 100
                 minLength: 1
                 pattern: '[a-zA-Z0-9]([-_a-zA-Z0-9]*[a-zA-Z0-9])?'
@@ -120,7 +138,8 @@ spec:
               collectionBackupStatuses:
                 description: The status of each collection's backup progress
                 items:
-                  description: CollectionBackupStatus defines the progress of a Solr Collection's backup
+                  description: CollectionBackupStatus defines the progress of a Solr
+                    Collection's backup
                   properties:
                     asyncBackupStatus:
                       description: The status of the asynchronous backup call to solr
@@ -162,24 +181,29 @@ spec:
               history:
                 description: The status history of recurring backups
                 items:
-                  description: IndividualSolrBackupStatus defines the observed state of a single issued SolrBackup
+                  description: IndividualSolrBackupStatus defines the observed state
+                    of a single issued SolrBackup
                   properties:
                     collectionBackupStatuses:
                       description: The status of each collection's backup progress
                       items:
-                        description: CollectionBackupStatus defines the progress of a Solr Collection's backup
+                        description: CollectionBackupStatus defines the progress of
+                          a Solr Collection's backup
                         properties:
                           asyncBackupStatus:
-                            description: The status of the asynchronous backup call to solr
+                            description: The status of the asynchronous backup call
+                              to solr
                             type: string
                           backupName:
-                            description: BackupName of this collection's backup in Solr
+                            description: BackupName of this collection's backup in
+                              Solr
                             type: string
                           collection:
                             description: Solr Collection name
                             type: string
                           finishTimestamp:
-                            description: Time that the collection backup finished at
+                            description: Time that the collection backup finished
+                              at
                             format: date-time
                             type: string
                           finished:

@@ -60,6 +60,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/479
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/481
+    - kind: added
+      description: Support custom annotations on created ServiceAccount
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/480
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease

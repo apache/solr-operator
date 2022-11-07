@@ -18,6 +18,13 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
+GO_VERSION = $(shell go version | sed -r 's/^.*([0-9]+\.[0-9]+\.[0-9]+).*$$/\1/g')
+REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | sed -r 's/^go ([0-9]+\.[0-9]+)$$/\1/g')
+
+ifeq (,$(findstring $(REQUIRED_GO_VERSION),$(GO_VERSION)))
+$(error Unsupported go version found $(GO_VERSION), please install go $(REQUIRED_GO_VERSION))
+endif
+
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
 REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
@@ -37,7 +44,7 @@ ARCH = $(shell go env GOARCH)
 
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
-GO_LICENSES_VERSION=v1.0.0
+GO_LICENSES_VERSION=v1.5.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 
 GO111MODULE ?= on
@@ -108,10 +115,10 @@ fmt: ## Run go fmt against code.
 	go fmt ./...
 
 fetch-licenses-list: go-licenses ## Fetch the list of license types
-	$(GO_LICENSES) csv . | grep -v -E "solr-operator" | sort > dependency_licenses.csv
+	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
 
 fetch-licenses-full: go-licenses ## Fetch all licenses
-	$(GO_LICENSES) save . --save_path licenses --force
+	$(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
 
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
@@ -180,7 +187,9 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	$(GO_LICENSES) csv . 2>/dev/null | grep -v -E "solr-operator" | sort | diff dependency_licenses.csv -
+	$(GO_LICENSES) check . \
+		--allowed_licenses=Apache-2.0,Apache-1.1,MIT,BSD-3-Clause,BSD-2-Clause,ISC,ICU,X11,NCSA,W3C,AFL-3.0,MS-PL,CC0-1.0,BSL-1.0,WTFPL,Unicode-DFS-2015,Unicode-DFS-2016,ZPL-2.0,UPL-1.0,Unlicense,MPL-2.0
+	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
 
 check-zk-op-version: ## Ensure the zookeeper-operator version is standard throughout the codebase
 	./hack/zk-operator/check-version.sh
