@@ -62,6 +62,9 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
+  ## Annotations to be added to ServiceAccount
+  annotations: {}
+
 # Various Pod Options to customize the runtime of the operator
 resources: {}
 envVars: []

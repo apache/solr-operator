@@ -349,8 +349,8 @@ type SolrEphemeralDataStorageOptions struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 }
 
-//+kubebuilder:validation:MinProperties:=2
-//+kubebuilder:validation:MaxProperties:=2
+// +kubebuilder:validation:MinProperties:=2
+// +kubebuilder:validation:MaxProperties:=2
 type SolrBackupRepository struct {
 	// A name used to identify this local storage profile.  Values should follow RFC-1123.  (See here for more details:
 	// https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names)

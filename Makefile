@@ -18,6 +18,13 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
 
+GO_VERSION = $(shell go version | sed -r 's/^.*([0-9]+\.[0-9]+\.[0-9]+).*$$/\1/g')
+REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | sed -r 's/^go ([0-9]+\.[0-9]+)$$/\1/g')
+
+ifeq (,$(findstring $(REQUIRED_GO_VERSION),$(GO_VERSION)))
+$(error Unsupported go version found $(GO_VERSION), please install go $(REQUIRED_GO_VERSION))
+endif
+
 # Image URL to use all building/pushing image targets
 NAME ?= solr-operator
 REPOSITORY ?= $(or $(NAMESPACE:%/=%), apache)
@@ -36,7 +43,7 @@ GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
 KUSTOMIZE_VERSION=v4.5.2
-CONTROLLER_GEN_VERSION=v0.5.0
+CONTROLLER_GEN_VERSION=v0.6.0
 GO_LICENSES_VERSION=v1.5.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 
