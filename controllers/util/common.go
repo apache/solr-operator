@@ -174,8 +174,8 @@ func customizeProbe(initialProbe *corev1.Probe, customProbe corev1.Probe) *corev
 		initialProbe.PeriodSeconds = customProbe.PeriodSeconds
 	}
 
-	if customProbe.Handler.Exec != nil || customProbe.Handler.HTTPGet != nil || customProbe.Handler.TCPSocket != nil {
-		initialProbe.Handler = customProbe.Handler
+	if customProbe.ProbeHandler.Exec != nil || customProbe.ProbeHandler.HTTPGet != nil || customProbe.ProbeHandler.TCPSocket != nil {
+		initialProbe.ProbeHandler = customProbe.ProbeHandler
 	}
 
 	return initialProbe

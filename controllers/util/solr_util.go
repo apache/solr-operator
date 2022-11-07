@@ -80,7 +80,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	defaultProbeTimeout := int32(1)
-	defaultHandler := corev1.Handler{
+	defaultHandler := corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: probeScheme,
 			Path:   "/solr" + DefaultProbePath,
@@ -328,9 +328,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
-	var postStart *corev1.Handler
+	var postStart *corev1.LifecycleHandler
 	if hasChroot {
-		postStart = &corev1.Handler{
+		postStart = &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
 			},
@@ -338,7 +338,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Default preStop hook
-	preStop := &corev1.Handler{
+	preStop := &corev1.LifecycleHandler{
 		Exec: &corev1.ExecAction{
 			Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
 		},
@@ -412,7 +412,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
 				PeriodSeconds:       10,
-				Handler:             defaultHandler,
+				ProbeHandler:        defaultHandler,
 			},
 			ReadinessProbe: &corev1.Probe{
 				InitialDelaySeconds: 15,
@@ -420,7 +420,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold:    1,
 				FailureThreshold:    3,
 				PeriodSeconds:       5,
-				Handler:             defaultHandler,
+				ProbeHandler:        defaultHandler,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
