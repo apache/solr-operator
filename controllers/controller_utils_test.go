@@ -868,7 +868,7 @@ var (
 	}
 	testResources = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
+			corev1.ResourceCPU: resource.MustParse("5300m"),
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
@@ -876,7 +876,7 @@ var (
 	}
 	testResources2 = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU: *resource.NewMilliQuantity(400, resource.DecimalSI),
+			corev1.ResourceCPU: resource.MustParse("400m"),
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("3Gi"),
