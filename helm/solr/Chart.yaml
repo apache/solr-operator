@@ -14,7 +14,7 @@
 # limitations under the License.
 apiVersion: v2
 name: solr
-description: A SolrCloud cluser running on Kubernetes via the Solr Operator
+description: A SolrCloud cluster running on Kubernetes via the Solr Operator
 version: 0.7.0-prerelease
 appVersion: 8.11.1
 kubeVersion: ">= 1.19.0-0"
