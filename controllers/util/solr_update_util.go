@@ -93,8 +93,8 @@ func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations 
 // If an out of date pod has a solr container that is not started, it should be accounted for in outOfDatePodsNotStartedCount not outOfDatePods.
 //
 // TODO:
-//  - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
-//    - Might be too much complexity for very little gain.
+//   - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
+//   - Might be too much complexity for very little gain.
 func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
 	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, len(outOfDatePods), outOfDatePodsNotStartedCount, availableUpdatedPodCount)
@@ -336,9 +336,10 @@ func ResolveMaxShardReplicasUnavailable(maxShardReplicasUnavailable *intstr.IntO
 /*
 findSolrNodeContents will take a cluster and overseerLeader response from the SolrCloud Collections API, and aggregate the information.
 This aggregated info is returned as:
-	- A map from Solr nodeName to SolrNodeContents, with the information from the clusterState and overseerLeader
-    - A map from unique shard name (collection+shard) to the count of replicas that are not active for that shard.
-      - If a node is not live, then all shards that live on that node will be considered "not active"
+  - A map from Solr nodeName to SolrNodeContents, with the information from the clusterState and overseerLeader
+  - A map from unique shard name (collection+shard) to the count of replicas for that shard.
+  - A map from unique shard name (collection+shard) to the count of replicas that are not active for that shard.
+  - If a node is not live, then all shards that live on that node will be considered "not active"
 */
 func findSolrNodeContents(cluster solr_api.SolrClusterStatus, overseerLeader string, managedSolrNodeNames map[string]bool) (nodeContents map[string]*SolrNodeContents, totalShardReplicas map[string]int, shardReplicasNotActive map[string]int, allManagedPodsLive bool) {
 	nodeContents = make(map[string]*SolrNodeContents, 0)
