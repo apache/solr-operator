@@ -40,9 +40,9 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
-      description: Add annotations to created ServiceAccount
+      description: Support custom annotations on created ServiceAccount
       links:
-        - name: GitHub PR 480
+        - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/480
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
