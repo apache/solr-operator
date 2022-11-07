@@ -37,7 +37,7 @@ ARCH = $(shell go env GOARCH)
 
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.5.0
-GO_LICENSES_VERSION=v1.0.0
+GO_LICENSES_VERSION=v1.5.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 
 GO111MODULE ?= on
