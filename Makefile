@@ -287,7 +287,7 @@ GINKGO = $(LOCALBIN)/ginkgo
 ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
 $(GINKGO): $(LOCALBIN)
 ginkgo: ## Download ginkgo locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@$(GINKGO_VERSION))
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION))
 
 SETUP_ENVTEST = $(LOCALBIN)/setup-envtest
 .PHONY: setup-envtest
