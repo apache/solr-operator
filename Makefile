@@ -86,6 +86,8 @@ help: ## Display this help.
 ##@ Setup
 
 clean: ## Clean build directories across the project
+	# The setup-envtest script makes the versioned envtest binary folder read-only...
+	chmod u+w -R ./bin
 	rm -rf ./bin
 	rm -rf ./testbin
 	rm -rf ./release-artifacts
