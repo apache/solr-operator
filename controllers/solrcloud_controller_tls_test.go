@@ -125,7 +125,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			}
 			solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
 				ReadinessProbe: &corev1.Probe{
-					Handler: corev1.Handler{
+					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Scheme: corev1.URISchemeHTTPS,
 							Path:   "/solr/admin/info/health",

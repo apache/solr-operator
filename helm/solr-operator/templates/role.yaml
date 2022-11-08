@@ -15,7 +15,6 @@
 
 {{- if .Values.rbac.create }}
 {{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
-
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ include "solr-operator.roleType" $ }}

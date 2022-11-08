@@ -85,7 +85,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 
 	FContext("Boostrap Security JSON with Custom Probe Paths", func() {
 		BeforeEach(func() {
-			customHandler := corev1.Handler{
+			customHandler := corev1.ProbeHandler{
 				HTTPGet: &corev1.HTTPGetAction{
 					Scheme: corev1.URISchemeHTTP,
 					Path:   "/solr/readyz",
@@ -96,8 +96,8 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			// verify users can vary the probe path and the secure probe exec command uses them
 			solrCloud.Spec.CustomSolrKubeOptions = solrv1beta1.CustomSolrKubeOptions{
 				PodOptions: &solrv1beta1.PodOptions{
-					LivenessProbe:  &corev1.Probe{Handler: customHandler},
-					ReadinessProbe: &corev1.Probe{Handler: customHandler},
+					LivenessProbe:  &corev1.Probe{ProbeHandler: customHandler},
+					ReadinessProbe: &corev1.Probe{ProbeHandler: customHandler},
 				},
 			}
 

@@ -751,7 +751,7 @@ var (
 		SuccessThreshold:    1,
 		FailureThreshold:    3,
 		PeriodSeconds:       10,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Scheme: corev1.URISchemeHTTP,
 				Path:   "/solr/admin/info/system",
@@ -765,7 +765,7 @@ var (
 		SuccessThreshold:    1,
 		FailureThreshold:    3,
 		PeriodSeconds:       5,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			TCPSocket: &corev1.TCPSocketAction{
 				Port: intstr.FromInt(8983),
 			},
@@ -777,7 +777,7 @@ var (
 		SuccessThreshold:    1,
 		FailureThreshold:    5,
 		PeriodSeconds:       5,
-		Handler: corev1.Handler{
+		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{
 					"ls",
@@ -786,12 +786,12 @@ var (
 		},
 	}
 	testLifecycle = &corev1.Lifecycle{
-		PostStart: &corev1.Handler{
+		PostStart: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{"/bin/sh", "-c", "echo Hello from the postStart handler"},
 			},
 		},
-		PreStop: &corev1.Handler{
+		PreStop: &corev1.LifecycleHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{"/bin/sh", "-c", "echo Hello from the preStop handler"},
 			},
@@ -868,7 +868,7 @@ var (
 	}
 	testResources = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU: *resource.NewMilliQuantity(5300, resource.DecimalSI),
+			corev1.ResourceCPU: resource.MustParse("5300m"),
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("5Gi"),
@@ -876,7 +876,7 @@ var (
 	}
 	testResources2 = corev1.ResourceRequirements{
 		Limits: map[corev1.ResourceName]resource.Quantity{
-			corev1.ResourceCPU: *resource.NewMilliQuantity(400, resource.DecimalSI),
+			corev1.ResourceCPU: resource.MustParse("400m"),
 		},
 		Requests: map[corev1.ResourceName]resource.Quantity{
 			corev1.ResourceEphemeralStorage: resource.MustParse("3Gi"),
