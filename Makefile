@@ -86,14 +86,15 @@ help: ## Display this help.
 ##@ Setup
 
 clean: ## Clean build directories across the project
-	# The setup-envtest script makes the versioned envtest binary folder read-only...
-	chmod u+w -R ./bin
-	rm -rf ./bin
-	rm -rf ./testbin
-	rm -rf ./release-artifacts
-	rm -rf ./helm/*/charts ./helm/*/Chart.lock
-	rm -rf ./cover.out
-	rm -rf ./generated-check
+ifneq ($(wildcard $(LOCALBIN)),)
+	chmod u+w -R $(LOCALBIN)
+endif
+	rm -rf $(LOCALBIN)
+	rm -rf $(PROJECT_DIR)/testbin
+	rm -rf $(PROJECT_DIR)/release-artifacts
+	rm -rf $(PROJECT_DIR)/helm/*/charts $(PROJECT_DIR)/helm/*/Chart.lock
+	rm -rf $(PROJECT_DIR)/cover.out
+	rm -rf $(PROJECT_DIR)/generated-check
 
 mod-tidy: ## Make sure the go mod files are up-to-date
 	export GO111MODULE=on; go mod tidy
