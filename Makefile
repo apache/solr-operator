@@ -96,6 +96,9 @@ clean: ## Clean build directories across the project
 mod-tidy: ## Make sure the go mod files are up-to-date
 	export GO111MODULE=on; go mod tidy
 
+mod-clean: ## Clean up mod caches, ideally do this when upgrading go versions
+	go clean -modcache
+
 
 ##@ Development
 
@@ -114,7 +117,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
-fetch-licenses-list: go-licenses ## Fetch the list of license types
+fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
 	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
 
 fetch-licenses-full: go-licenses ## Fetch all licenses
