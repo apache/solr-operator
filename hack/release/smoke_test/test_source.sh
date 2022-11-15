@@ -98,6 +98,8 @@ echo "Download source artifact, verify and run 'make check'"
   # Check the License & Notice info
   ls "LICENSE"
   ls "NOTICE"
+
+  make clean
 )
 
 # Delete temporary source directory
