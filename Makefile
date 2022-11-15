@@ -87,7 +87,7 @@ help: ## Display this help.
 
 clean: ## Clean build directories across the project
 ifneq ($(wildcard $(LOCALBIN)),)
-	chmod u+w -R $(LOCALBIN)
+	chmod -R u+w $(LOCALBIN)
 endif
 	rm -rf $(LOCALBIN)
 	rm -rf $(PROJECT_DIR)/testbin
