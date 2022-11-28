@@ -342,7 +342,12 @@ groups:
       commands_text: |
         Run this command to install the necessary dependencies for building the operator.
         You will likely be asked to provide your password during the installation.
+        Beware, before installing dependencies this step will clear your mod cache to make sure there are no weird
+        caches from previous go versions.
       commands:
+        - !Command
+          cmd: make mod-clean
+          logfile: mod-clean.log
         - !Command
           cmd: make install-dependencies
           logfile: install-dependencies.log
@@ -893,6 +898,8 @@ groups:
 
       You can run the full smoke tester directly with this command: (First checkout the {{ release_branch }} branch of the solr-operator)
 
+      # First clear your go-mod cache to make sure old cache entries don't cause smoke test failures
+      make mod-clean
       ./hack/release/smoke_test/smoke_test.sh -v "{{ release_version }}" -s "{{ build_rc.git_sha | default("<git_sha>", True) }}" -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
           -l 'https://dist.apache.org/repos/dist/dev/solr/solr-operator/{{ build_rc.rc_folder | default("<rc_folder>", True) }}'
 

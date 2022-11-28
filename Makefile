@@ -14,6 +14,7 @@
 # limitations under the License.
 
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
+LOCALBIN = $(PROJECT_DIR)/bin
 
 GO_VERSION = $(shell go version | sed -r 's/^.*([0-9]+\.[0-9]+\.[0-9]+).*$$/\1/g')
 REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | sed -r 's/^go ([0-9]+\.[0-9]+)$$/\1/g')
@@ -43,6 +44,8 @@ KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
 GO_LICENSES_VERSION=v1.5.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
+# ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
+ENVTEST_K8S_VERSION ?= 1.25.0
 
 GO111MODULE ?= on
 
@@ -83,15 +86,21 @@ help: ## Display this help.
 ##@ Setup
 
 clean: ## Clean build directories across the project
-	rm -rf ./bin
-	rm -rf ./testbin
-	rm -rf ./release-artifacts
-	rm -rf ./helm/*/charts ./helm/*/Chart.lock
-	rm -rf ./cover.out
-	rm -rf ./generated-check
+ifneq ($(wildcard $(LOCALBIN)),)
+	chmod -R u+w $(LOCALBIN)
+endif
+	rm -rf $(LOCALBIN)
+	rm -rf $(PROJECT_DIR)/testbin
+	rm -rf $(PROJECT_DIR)/release-artifacts
+	rm -rf $(PROJECT_DIR)/helm/*/charts $(PROJECT_DIR)/helm/*/Chart.lock
+	rm -rf $(PROJECT_DIR)/cover.out
+	rm -rf $(PROJECT_DIR)/generated-check
 
 mod-tidy: ## Make sure the go mod files are up-to-date
 	export GO111MODULE=on; go mod tidy
+
+mod-clean: ## Clean up mod caches, ideally do this when upgrading go versions
+	go clean -modcache
 
 
 ##@ Development
@@ -111,7 +120,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
-fetch-licenses-list: go-licenses ## Fetch the list of license types
+fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
 	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
 
 fetch-licenses-full: go-licenses ## Fetch all licenses
@@ -120,8 +129,13 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
 
-idea: ginkgo ## Setup the project so to be able to run tests via IntelliJ/GoLand
+.PHONY: idea
+idea: ginkgo setup-envtest ## Setup the project so to be able to run tests via IntelliJ/GoLand
 	cat hack/idea/idea-setup.txt
+
+.PHONY: kubebuilder-assets
+kubebuilder-assets:
+	@echo $(call kubebuilder-assets)
 
 ##@ Build
 
@@ -231,13 +245,11 @@ vet: ## Run go vet against code.
 check-git: ## Check to make sure the repo does not have uncommitted code
 	git diff --exit-code
 
-ENVTEST_ASSETS_DIR=$(shell pwd)/testbin
-test: manifests generate ## Run the unit tests
+test: manifests generate setup-envtest ## Run the unit tests
 	# Kubebuilder-tools doesn't have a darwin+arm (i.e. Apple Silicon) distribution but the amd one works fine for our purposes
-	if [[ "${GOOS}" == "darwin" && "${ARCH}" == "arm64" ]]; then export GOARCH=amd64; fi; \
-	mkdir -p ${ENVTEST_ASSETS_DIR}; \
-	test -f ${ENVTEST_ASSETS_DIR}/setup-envtest.sh || curl -sSLo ${ENVTEST_ASSETS_DIR}/setup-envtest.sh https://raw.githubusercontent.com/kubernetes-sigs/controller-runtime/v0.8.3/hack/setup-envtest.sh; \
-	source ${ENVTEST_ASSETS_DIR}/setup-envtest.sh; fetch_envtest_tools $(ENVTEST_ASSETS_DIR); setup_envtest_env $(ENVTEST_ASSETS_DIR); GINKGO_EDITOR_INTEGRATION=true go test ./... -coverprofile cover.out
+	if [[ "${GOOS}" == "darwin" && "${ARCH}" == "arm64" ]]; then export GOARCH=amd64; fi;
+
+	KUBEBUILDER_ASSETS="$(call kubebuilder-assets)" GINKGO_EDITOR_INTEGRATION=true go test ./... -coverprofile cover.out
 
 ##@ Helm
 
@@ -252,31 +264,53 @@ helm-deploy-operator: helm-dependency-build docker-build ## Deploy the current v
 
 
 ##@ Dependencies
+LOCALBIN ?= $(PROJECT_DIR)/bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
 
-install-dependencies: controller-gen kustomize go-licenses ## Install necessary dependencies for building and testing the Solr Operator
+install-dependencies: controller-gen kustomize go-licenses setup-envtest ## Install necessary dependencies for building and testing the Solr Operator
 
-CONTROLLER_GEN = $(PROJECT_DIR)/bin/controller-gen
-controller-gen: ## Download controller-gen locally if necessary.
+CONTROLLER_GEN = $(LOCALBIN)/controller-gen
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
+$(CONTROLLER_GEN): $(LOCALBIN)
 	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_GEN_VERSION))
 
-KUSTOMIZE = $(PROJECT_DIR)/bin/kustomize
-kustomize: ## Download kustomize locally if necessary.
+KUSTOMIZE = $(LOCALBIN)/kustomize
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
+$(KUSTOMIZE): $(LOCALBIN)
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION))
 
-GO_LICENSES = $(PROJECT_DIR)/bin/go-licenses
-go-licenses: ## Download go-licenses locally if necessary.
+GO_LICENSES = $(LOCALBIN)/go-licenses
+.PHONY: kustomize
+go-licenses: $(GO_LICENSES) ## Download go-licenses locally if necessary.
+$(GO_LICENSES): $(LOCALBIN)
 	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@$(GO_LICENSES_VERSION))
 
-GINKGO = $(PROJECT_DIR)/bin/ginkgo
-ginkgo: ## Download go-licenses locally if necessary.
-	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION})
+GINKGO = $(LOCALBIN)/ginkgo
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+ginkgo: ## Download ginkgo locally if necessary.
+	$(call go-get-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo@$(GINKGO_VERSION))
+
+SETUP_ENVTEST = $(LOCALBIN)/setup-envtest
+.PHONY: setup-envtest
+setup-envtest: $(SETUP_ENVTEST) ## Download setup-envtest locally if necessary.
+$(SETUP_ENVTEST): $(LOCALBIN)
+	$(call go-get-tool,$(SETUP_ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
-PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 define go-get-tool
 @[ -f $(1) ] || { \
 set -e ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
+GOBIN=$(LOCALBIN) go install $(2) ;\
 }
+endef
+
+# go-get-tool will 'go get' any package $2 and install it to $1.
+define kubebuilder-assets
+$(shell $(SETUP_ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)
 endef
