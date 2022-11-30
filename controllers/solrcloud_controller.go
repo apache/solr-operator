@@ -460,9 +460,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// PodDistruptionBudget(s)
-	pdb := util.GeneratePodDisruptionBudget(instance)
+	pdb := util.GeneratePodDisruptionBudget(instance, pvcLabelSelector)
 
-	// Check if the Ingress already exists
+	// Check if the PodDistruptionBudget already exists
 	pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
 	foundPDB := &policyv1.PodDisruptionBudget{}
 	err = r.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, foundPDB)
@@ -476,7 +476,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		needsUpdate, err = util.OvertakeControllerRef(instance, foundPDB, r.Scheme)
 		needsUpdate = util.CopyPodDisruptionBudgetFields(pdb, foundPDB, pdbLogger) || needsUpdate
 
-		// Update the found Ingress and write the result back if there are any changes
+		// Update the found PodDistruptionBudget and write the result back if there are any changes
 		if needsUpdate && err == nil {
 			pdbLogger.Info("Updating PodDisruptionBudget")
 			err = r.Update(ctx, foundPDB)
@@ -922,7 +922,8 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}). /* for authentication */
-		Owns(&netv1.Ingress{})
+		Owns(&netv1.Ingress{}).
+		Owns(&policyv1.PodDisruptionBudget{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)

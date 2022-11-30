@@ -28,6 +28,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
 	"strings"
 )
@@ -146,10 +147,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			By("making sure no Ingress was created")
 			expectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+
+			By("testing the PodDisruptionBudget")
+			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, intstr.FromString(util.DefaultMaxPodsUnavailable))
 		})
 	})
 
 	FContext("Solr Cloud with Custom Kube Options", func() {
+		three := intstr.FromInt(3)
 		BeforeEach(func() {
 			replicas := int32(4)
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -164,7 +169,10 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 					},
 				},
 				UpdateStrategy: solrv1beta1.SolrUpdateStrategy{
-					Method:          solrv1beta1.StatefulSetUpdate,
+					Method: solrv1beta1.StatefulSetUpdate,
+					ManagedUpdateOptions: solrv1beta1.ManagedUpdateOptions{
+						MaxPodsUnavailable: &three,
+					},
 					RestartSchedule: "@every 30m",
 				},
 				SolrGCTune: "gc Options",
@@ -280,6 +288,9 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
 			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
 			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on headless Service")
+
+			By("testing the PodDisruptionBudget")
+			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, three)
 		})
 	})
 

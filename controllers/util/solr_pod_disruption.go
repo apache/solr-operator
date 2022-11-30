@@ -20,11 +20,11 @@ package util
 import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-func GeneratePodDisruptionBudget(cloud *solr.SolrCloud) *policyv1.PodDisruptionBudget {
+func GeneratePodDisruptionBudget(cloud *solr.SolrCloud, selector map[string]string) *policyv1.PodDisruptionBudget {
 	// For this PDB, we can use an intOrString maxUnavailable (whatever the user provides),
 	// because we are matching the labelSelector used by the statefulSet.
 	var maxUnavailable intstr.IntOrString
@@ -34,13 +34,13 @@ func GeneratePodDisruptionBudget(cloud *solr.SolrCloud) *policyv1.PodDisruptionB
 		maxUnavailable = intstr.FromString(DefaultMaxPodsUnavailable)
 	}
 	return &policyv1.PodDisruptionBudget{
-		ObjectMeta: v1.ObjectMeta{
-			Name:      cloud.Name + "-nodes",
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cloud.StatefulSetName(),
 			Namespace: cloud.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			Selector: &v1.LabelSelector{
-				MatchLabels: cloud.SharedLabels(),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: selector,
 			},
 			MaxUnavailable: &maxUnavailable,
 		},
@@ -71,13 +71,13 @@ func createPodDisruptionBudgetForShard(cloud *solr.SolrCloud, collection string,
 	// Therefore, we cannot use the maxUnavailable straight from what the user provides.
 	minAvailable := intstr.FromInt(len(nodes) - maxUnavailable)
 	return policyv1.PodDisruptionBudget{
-		ObjectMeta: v1.ObjectMeta{
+		ObjectMeta: metav1.ObjectMeta{
 			Name:      cloud.Name + "-" + collection + "-" + shard,
 			Namespace: cloud.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			Selector: &v1.LabelSelector{
-				MatchExpressions: []v1.LabelSelectorRequirement{
+			Selector: &metav1.LabelSelector{
+				MatchExpressions: []metav1.LabelSelectorRequirement{
 					{
 						Key:      "statefulset.kubernetes.io/pod-name",
 						Operator: "In",
