@@ -120,6 +120,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 fmt: ## Run go fmt against code.
 	go fmt ./...
 
+# Ignore non-Go code warnings when it is supported natively: https://github.com/google/go-licenses/issues/120
 fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
 	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
 

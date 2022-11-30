@@ -16,10 +16,6 @@ FROM golang:1.19 as builder
 WORKDIR /workspace
 ARG GO111MODULE=on
 
-# Download necessary libraries
-RUN GOBIN=$(pwd)/bin go install sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0; \
-    GOBIN=$(pwd)/bin go install github.com/google/go-licenses@latest
-
 # Copy the Go Modules manifests
 COPY go.mod go.sum ./
 # cache deps before building and copying source so that we don't need to re-download as much
@@ -28,7 +24,6 @@ RUN go mod download
 
 # Copy development resources
 COPY .git/ .git/
-COPY hack/ hack/
 COPY build/build.sh build/build.sh
 COPY Makefile LICENSE NOTICE build/LICENSE-ADDITION build/NOTICE-ADDITION ./
 
@@ -38,7 +33,11 @@ RUN echo "\n\n" >> LICENSE; \
     echo "\n\n" >> NOTICE; \
     cat NOTICE-ADDITION >> NOTICE
 
-# Copy the go source
+# Download necessary libraries
+RUN make controller-gen go-licenses
+
+# Copy the go source and utilities
+COPY hack/ hack/
 COPY main.go ./
 COPY version/ version/
 COPY api/ api/
