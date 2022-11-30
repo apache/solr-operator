@@ -27,8 +27,8 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21` | `1.22`+ |
-|:---------------------:| :---: | :---: | :---: | :---: |
+| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21`   | `1.22`+ |
+|:---------------------:| :---: | :---: |:------------------:| :---: |
 |       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
@@ -36,6 +36,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
 |       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -48,6 +49,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.4.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.6.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.7.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
@@ -106,6 +108,11 @@ helm upgrade solr-operator apache-solr/solr-operator --version 0.7.0-prerelease
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
 ## Upgrade Warnings and Notes
+
+### v0.7.0
+- `PodDisruptionBudgets` are now created alongside SolrCloud instances.
+  The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
+  If this is not provided, the default setting (`25%`) is used.
 
 ### v0.6.0
 - The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.

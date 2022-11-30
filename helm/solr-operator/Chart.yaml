@@ -65,6 +65,15 @@ annotations:
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/480
+    - kind: added
+      description: SolrClouds now have PodDisruptionBudgets enabled
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/471
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/473
+        - name: PodDisruptionBudget Documentation
+          url: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
