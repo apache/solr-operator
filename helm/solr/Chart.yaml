@@ -17,7 +17,7 @@ name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
 version: 0.7.0-prerelease
 appVersion: 8.11.1
-kubeVersion: ">= 1.19.0-0"
+kubeVersion: ">= 1.21.0-0"
 home: https://solr.apache.org
 sources:
   - https://github.com/apache/solr
@@ -39,6 +39,11 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: Minimum Kubernetes version has been upped to 1.21
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/473
     - kind: added
       description: Support custom annotations on created ServiceAccount
       links:

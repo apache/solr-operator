@@ -110,6 +110,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.7.0
+- **Kubernetes support is now limited to 1.21+.**  
+  If you are unable to use a newer version of Kubernetes, please install the `v0.6.0` version of the Solr Operator for use with Kubernetes `1.20` and below.
+  See the [version compatibility matrix](#kubernetes-versions) for more information.
+
 - `PodDisruptionBudgets` are now created alongside SolrCloud instances.
   The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
   If this is not provided, the default setting (`25%`) is used.
