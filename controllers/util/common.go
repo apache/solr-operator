@@ -18,6 +18,7 @@
 package util
 
 import (
+	policyv1 "k8s.io/api/policy/v1"
 	"reflect"
 	"strconv"
 	"strings"
@@ -665,6 +666,30 @@ func CopyContainerResourceList(fromPtr, toPtr *corev1.ResourceList, basePath str
 	if copyEntireMap {
 		*toPtr = from
 	}
+	return requireUpdate
+}
+
+// CopyPodDisruptionBudgetFields copies the owned fields from one PodDisruptionBudget to another
+func CopyPodDisruptionBudgetFields(from, to *policyv1.PodDisruptionBudget, logger logr.Logger) bool {
+	logger = logger.WithValues("kind", "PodDisruptionBudget")
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
+
+	if !DeepEqualWithNils(to.Spec.MinAvailable, from.Spec.MinAvailable) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.MinAvailable", "from", to.Spec.MinAvailable, "to", from.Spec.MinAvailable)
+		to.Spec.MinAvailable = from.Spec.MinAvailable
+	}
+	if !DeepEqualWithNils(to.Spec.MaxUnavailable, from.Spec.MaxUnavailable) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.MaxUnavailable", "from", to.Spec.MaxUnavailable, "to", from.Spec.MaxUnavailable)
+		to.Spec.MaxUnavailable = from.Spec.MaxUnavailable
+	}
+	if !DeepEqualWithNils(to.Spec.Selector, from.Spec.Selector) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.Selector", "from", to.Spec.Selector, "to", from.Spec.Selector)
+		to.Spec.Selector = from.Spec.Selector
+	}
+
 	return requireUpdate
 }
 

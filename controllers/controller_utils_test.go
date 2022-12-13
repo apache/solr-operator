@@ -20,6 +20,7 @@ package controllers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	policyv1 "k8s.io/api/policy/v1"
 	"regexp"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -325,6 +326,40 @@ func expectNoIngress(ctx context.Context, parentResource client.Object, ingressN
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
+func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalOffset ...int) *policyv1.PodDisruptionBudget {
+	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
+}
+
+func expectPodDisruptionBudgetWithChecks(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalChecks func(Gomega, *policyv1.PodDisruptionBudget), additionalOffset ...int) *policyv1.PodDisruptionBudget {
+	podDisruptionBudget := &policyv1.PodDisruptionBudget{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(Succeed(), "Expected ConfigMap does not exist")
+
+		// Verify the PodDisruptionBudget Spec
+		g.Expect(podDisruptionBudget.Spec.Selector).To(Equal(selector), "PodDisruptionBudget does not have the correct selector.")
+		g.Expect(podDisruptionBudget.Spec.MaxUnavailable).To(Equal(&maxUnavailable), "PodDisruptionBudget does not have the correct maxUnavailable setting.")
+
+		if additionalChecks != nil {
+			additionalChecks(g, podDisruptionBudget)
+		}
+	}).Should(Succeed())
+
+	By("recreating the PodDisruptionBudget after it is deleted")
+	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, podDisruptionBudget)).To(Succeed())
+	EventuallyWithOffset(
+		resolveOffset(additionalOffset),
+		func() (types.UID, error) {
+			newResource := &policyv1.PodDisruptionBudget{}
+			err := k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), newResource)
+			if err != nil {
+				return "", err
+			}
+			return newResource.UID, nil
+		}).Should(And(Not(BeEmpty()), Not(Equal(podDisruptionBudget.UID))), "New PodDisruptionBudget, with new UID, not created.")
+
+	return podDisruptionBudget
 }
 
 func expectConfigMap(ctx context.Context, parentResource client.Object, configMapName string, configMapData map[string]string, additionalOffset ...int) *corev1.ConfigMap {
@@ -741,9 +776,9 @@ var (
 		"testS4": "valueS4",
 	}
 	testNodeSelectors = map[string]string{
-		"beta.kubernetes.io/arch": "amd64",
-		"beta.kubernetes.io/os":   "linux",
-		"solrclouds":              "true",
+		"kubernetes.io/arch": "amd64",
+		"kubernetes.io/os":   "linux",
+		"solrclouds":         "true",
 	}
 	testProbeLivenessNonDefaults = &corev1.Probe{
 		InitialDelaySeconds: 20,

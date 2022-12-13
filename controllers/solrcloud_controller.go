@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"sort"
@@ -73,6 +74,7 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
+//+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
@@ -455,6 +457,33 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err != nil {
 			return requeueOrNot, err
 		}
+	}
+
+	// PodDistruptionBudget(s)
+	pdb := util.GeneratePodDisruptionBudget(instance, pvcLabelSelector)
+
+	// Check if the PodDistruptionBudget already exists
+	pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
+	foundPDB := &policyv1.PodDisruptionBudget{}
+	err = r.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, foundPDB)
+	if err != nil && errors.IsNotFound(err) {
+		pdbLogger.Info("Creating PodDisruptionBudget")
+		if err = controllerutil.SetControllerReference(instance, pdb, r.Scheme); err == nil {
+			err = r.Create(ctx, pdb)
+		}
+	} else if err == nil {
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(instance, foundPDB, r.Scheme)
+		needsUpdate = util.CopyPodDisruptionBudgetFields(pdb, foundPDB, pdbLogger) || needsUpdate
+
+		// Update the found PodDistruptionBudget and write the result back if there are any changes
+		if needsUpdate && err == nil {
+			pdbLogger.Info("Updating PodDisruptionBudget")
+			err = r.Update(ctx, foundPDB)
+		}
+	}
+	if err != nil {
+		return requeueOrNot, err
 	}
 
 	extAddressabilityOpts := instance.Spec.SolrAddressability.External
@@ -893,7 +922,8 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}). /* for authentication */
-		Owns(&netv1.Ingress{})
+		Owns(&netv1.Ingress{}).
+		Owns(&policyv1.PodDisruptionBudget{})
 
 	var err error
 	ctrlBuilder, err = r.indexAndWatchForProvidedConfigMaps(mgr, ctrlBuilder)

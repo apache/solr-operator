@@ -17,7 +17,7 @@ name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
 version: 0.7.0-prerelease
 appVersion: v0.7.0-prerelease
-kubeVersion: ">= 1.19.0-0"
+kubeVersion: ">= 1.21.0-0"
 home: https://solr.apache.org/operator
 sources:
   - https://github.com/apache/solr-operator
@@ -53,6 +53,11 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: Minimum Kubernetes version has been upped to 1.21
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/473
     - kind: fixed
       description: Fix bug with named PVCs
       links:
@@ -65,6 +70,15 @@ annotations:
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/480
+    - kind: added
+      description: SolrClouds now have PodDisruptionBudgets enabled
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/471
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/473
+        - name: PodDisruptionBudget Documentation
+          url: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
