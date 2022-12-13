@@ -164,7 +164,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.address | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within the Kubernetes cluster. |
 | zk.externalAddress | string | | An existing ZooKeeper cluster address to use for Solr. Must be reachable within and outside the Kubernetes cluster. |
 | zk.provided.replicas | int | `3` | The number of replicas to run for your ZooKeeper cluster. |
-| zk.provided.image.repository | string | `"pravega/zookeeper"` | The repository of the Solr image |
+| zk.provided.image.repository | string | `"pravega/zookeeper"` | The repository of the Zookeeper image. NB: The operator will only work with this repository. |
 | zk.provided.image.tag | string | | The tag/version of Zookeeper to run. Generally leave this blank, so that the Zookeeper Operator can manage it. |
 | zk.provided.image.pullPolicy | string | `"IfNotPresent"` | PullPolicy for the ZooKeeper image |
 | zk.provided.image.imagePullSecret | string |  | PullSecret for the ZooKeeper image |
