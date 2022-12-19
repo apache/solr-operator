@@ -39,7 +39,7 @@ HELM_DIRECTORY="${HELM_DIRECTORY:-helm}"
 # Template the Solr Operator role as needed for Helm values
 {
   cat hack/headers/header.yaml.txt
-  printf '\n\n{{- if .Values.rbac.create }}\n{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}\n'
+  printf '\n\n{{- if .Values.rbac.create }}\n{{- range $namespace := (splitList "," (include "solr-operator.watchNamespaces" $)) }}\n'
   cat "${CONFIG_DIRECTORY}/rbac/role.yaml" \
     | awk '/^rules:$/{print "  namespace: {{ $namespace }}"}1' \
     | sed -E 's/^kind: ClusterRole$/kind: {{ include "solr-operator\.roleType" \$ }}/' \

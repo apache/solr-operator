@@ -17,6 +17,7 @@ apiVersion: solr.apache.org/v1beta1
 kind: SolrCloud
 metadata:
   name: {{ include "solr.fullname-no-suffix" . }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "solr.labels" . | nindent 4 }}
 spec:
