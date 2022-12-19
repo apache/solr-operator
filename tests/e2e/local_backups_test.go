@@ -19,20 +19,12 @@ package e2e
 
 import (
 	"context"
-	//"crypto/md5"
-	//"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	//"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
-	//. "github.com/onsi/gomega"
-	//appsv1 "k8s.io/api/apps/v1"
+	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
-var (
-	one = int32(1)
 )
 
 var _ = FDescribe("E2E - Backups", func() {
@@ -51,6 +43,7 @@ var _ = FDescribe("E2E - Backups", func() {
 				Namespace: "default",
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
+				Replicas: &four,
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
 						Replicas: &one,
@@ -72,24 +65,23 @@ var _ = FDescribe("E2E - Backups", func() {
 	})
 
 	JustBeforeEach(func() {
-		//By("creating the SolrCloud")
-		//Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
-		//
-		//By("defaulting the missing SolrCloud values")
-		//expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-		//	g.Expect(found.WithDefaults(logger)).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
-		//})
+		By("creating the SolrCloud")
+		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		By("Waiting for the SolrCloud to come up healthy")
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		})
 	})
 
 	AfterEach(func() {
-		//cleanupTest(ctx, solrCloud)
+		cleanupTest(ctx, solrCloud)
 	})
 
 	FContext("Recurring", func() {
 		FIt("has the correct resources", func() {
 			By("testing the Solr ConfigMap")
-			By(solrCloud.Name)
-			ctx.Value("temp")
+
 			//configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
 			//
 			//By("testing the Solr StatefulSet with explicit volumes and envVars before adding S3Repo credentials")

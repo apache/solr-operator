@@ -19,14 +19,27 @@ package e2e
 
 import (
 	"fmt"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/zk_api"
+	"github.com/go-logr/logr"
 	"helm.sh/helm/v3/pkg/release"
+	"k8s.io/client-go/kubernetes/scheme"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var solrOperatorRelease *release.Release
+var (
+	solrOperatorRelease *release.Release
+	k8sClient           client.Client
+	logger              logr.Logger
+)
 
 // Run e2e tests using the Ginkgo runner.
 func TestE2E(t *testing.T) {
@@ -36,14 +49,36 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
+	// Define testing timeouts/durations and intervals.
+	const (
+		timeout  = time.Second * 180
+		duration = time.Millisecond * 500
+		interval = time.Millisecond * 250
+	)
+	SetDefaultConsistentlyDuration(duration)
+	SetDefaultConsistentlyPollingInterval(interval)
+	SetDefaultEventuallyTimeout(timeout)
+	SetDefaultEventuallyPollingInterval(interval)
+
+	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	logf.SetLogger(logger)
+
 	By("starting the test solr operator")
-	solrOperatorRelease = RunSolrOperator()
+	solrOperatorRelease = runSolrOperator()
 	Expect(solrOperatorRelease).ToNot(BeNil())
+
+	By("setting up the k8s client")
+	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
+	Expect(zk_api.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
+
+	cfg, err := config.GetConfig()
+	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
+	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 })
 
 var _ = AfterSuite(func() {
 	if solrOperatorRelease != nil {
 		By("tearing down the test solr operator")
-		StopSolrOperator(solrOperatorRelease)
+		stopSolrOperator(solrOperatorRelease)
 	}
 })

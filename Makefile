@@ -302,9 +302,9 @@ int-tests: e2e-tests
 integration-tests: e2e-tests
 e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
 e2e-tests: kind docker-build
-	./tests/util/manage_cluster.sh create
+	./tests/scripts/manage_cluster.sh create
 	$(MAKE) run-e2e-tests
-	./tests/util/manage_cluster.sh destroy
+	./tests/scripts/manage_cluster.sh destroy
 
 ##@ Helm
 

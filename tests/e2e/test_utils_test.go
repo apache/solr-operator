@@ -37,16 +37,16 @@ var (
 )
 
 // Run Solr Operator for e2e testing of resources
-func RunSolrOperator() *release.Release {
+func runSolrOperator() *release.Release {
 	actionConfig := new(action.Configuration)
 	Expect(actionConfig.Init(settings.RESTClientGetter(), "solr-operator", helmDriver, GinkgoLogr.Info)).To(Succeed(), "Failed to create helm configuration")
 
 	installClient := action.NewInstall(actionConfig)
 
-	chartPath, err := installClient.LocateChart("../../helm/solr-operator", settings)
-	Expect(err).ToNot(HaveOccurred(), "Failed to locate solr-operator Helm chart")
+	//chartPath, err := installClient.LocateChart("../../helm/solr-operator", settings)
+	//Expect(err).ToNot(HaveOccurred(), "Failed to locate solr-operator Helm chart")
 
-	chart, err := loader.Load(chartPath)
+	chart, err := loader.Load("../../helm/solr-operator")
 	Expect(err).ToNot(HaveOccurred(), "Failed to load solr-operator Helm chart")
 
 	installClient.Namespace = "solr-operator"
@@ -70,7 +70,7 @@ func RunSolrOperator() *release.Release {
 }
 
 // Run Solr Operator for e2e testing of resources
-func StopSolrOperator(release *release.Release) {
+func stopSolrOperator(release *release.Release) {
 	actionConfig := new(action.Configuration)
 	Expect(actionConfig.Init(settings.RESTClientGetter(), "solr-operator", helmDriver, GinkgoLogr.Info)).To(Succeed(), "Failed to create helm configuration")
 
