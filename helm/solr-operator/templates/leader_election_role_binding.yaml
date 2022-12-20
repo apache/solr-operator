@@ -14,13 +14,12 @@
 # limitations under the License.
 
 {{- if .Values.leaderElection.enable }}
-{{- range $namespace := (split "," (include "solr-operator.watchNamespaces" $)) }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "solr-operator.fullname" $ }}-leader-election-rolebinding
-  namespace: {{ $namespace }}
+  namespace: {{ include "solr-operator.leaderElectionNamespace" $ }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -30,5 +29,4 @@ subjects:
     name: {{ include "solr-operator.serviceAccountName" $ }}
     namespace: {{ $.Release.Namespace }}
 
-{{- end }}
 {{- end }}

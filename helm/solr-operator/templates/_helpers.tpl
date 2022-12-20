@@ -76,6 +76,13 @@ If .Values.watchNamespaces is empty or false, return empty.
 {{- end -}}
 
 {{/*
+What namespace to do leader election in
+*/}}
+{{- define "solr-operator.leaderElectionNamespace" -}}
+{{- (splitList "," (include "solr-operator.watchNamespaces" $)) | first | default $.Release.Namespace -}}
+{{- end -}}
+
+{{/*
 Determine whether to use ClusterRoles or Roles
 */}}
 {{- define "solr-operator.roleType" -}}
