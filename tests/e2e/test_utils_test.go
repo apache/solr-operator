@@ -20,6 +20,7 @@ package e2e
 import (
 	"bytes"
 	"fmt"
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/action"
@@ -90,6 +91,35 @@ func getEnvWithDefault(envVar string, defaultValue string) string {
 		value = defaultValue
 	}
 	return value
+}
+
+func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string) {
+	createAndQueryCollectionWithGomega(solrCloud, collection, Default)
+}
+
+func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) {
+	pod := solrCloud.GetAllSolrPodNames()[0]
+	response, err := runExecForPod(
+		pod,
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			"http://localhost:8983/solr/admin/collections?action=CREATE&name=" + collection + "&replicationFactor=2&numShards=1",
+		},
+	)
+	g.Expect(err).To(Not(HaveOccurred()), "Error occured while creating Solr Collection")
+	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occured while creating Solr Collection")
+
+	response, err = runExecForPod(
+		pod,
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			"http://localhost:8983/solr/" + collection + "/select",
+		},
+	)
+	g.Expect(err).To(Not(HaveOccurred()), "Error occured while querying empty Solr Collection")
+	g.Expect(response).To(ContainSubstring("\"numFound\":0"), "Error occured while querying empty Solr Collection")
 }
 
 func runExecForPod(podName string, namespace string, command []string) (response string, err error) {

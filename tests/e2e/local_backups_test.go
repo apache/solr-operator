@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -49,7 +50,7 @@ var _ = FDescribe("E2E - Backups", func() {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
-				Namespace: "default",
+				Namespace: fmt.Sprintf("solr-backup-%d", GinkgoParallelProcess()),
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
 				Replicas: &three,
@@ -110,16 +111,7 @@ var _ = FDescribe("E2E - Backups", func() {
 		})
 
 		By("creating a Solr Collection to backup")
-		response, err := runExecForPod(
-			solrCloud.Name+"-solrcloud-0",
-			solrCloud.Namespace,
-			[]string{
-				"curl",
-				"http://localhost:8983/solr/admin/collections?action=CREATE&name=" + solrCollection + "&replicationFactor=2&numShards=1",
-			},
-		)
-		Expect(err).To(Not(HaveOccurred()), "Error occured while creating Solr Collection")
-		Expect(response).To(ContainSubstring("\"status\":0"), "Error occured while creating Solr Collection")
+		createAndQueryCollection(solrCloud, solrCollection)
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())
