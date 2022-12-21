@@ -84,6 +84,11 @@ annotations:
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/508
+    - kind: fixed
+      description: Fix bug in non-recurring SolrBackups
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/509
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease

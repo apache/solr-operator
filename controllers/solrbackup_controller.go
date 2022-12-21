@@ -92,6 +92,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	requeueOrNot := reconcile.Result{}
 
+	// Backup work needs to be done by default if the current backup is not finished
 	doBackupWork := !backup.Status.IndividualSolrBackupStatus.Finished
 
 	// Check if we should start the next backup
@@ -123,7 +124,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	// Do backup work if we are not waiting and the current backup is not finished
+	// Do backup work if a backup is in-progress or needs to be started
 	if doBackupWork {
 		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, &backup.Status.IndividualSolrBackupStatus, logger)
 		if err1 != nil {
