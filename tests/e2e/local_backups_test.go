@@ -19,7 +19,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +26,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"strings"
 	"time"
 )
@@ -50,7 +50,7 @@ var _ = FDescribe("E2E - Backups", func() {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
-				Namespace: fmt.Sprintf("solr-backup-%d", GinkgoParallelProcess()),
+				Namespace: testNamespace(),
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
 				Replicas: &three,
@@ -89,14 +89,14 @@ var _ = FDescribe("E2E - Backups", func() {
 		solrBackup = &solrv1beta1.SolrBackup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
-				Namespace: "default",
+				Namespace: testNamespace(),
 			},
 			Spec: solrv1beta1.SolrBackupSpec{
 				SolrCloud: "foo",
 				Collections: []string{
 					solrCollection,
 				},
-				Location: "test-dir/",
+				Location: "test-dir/dir-" + rand.String(5),
 			},
 		}
 	})
@@ -149,6 +149,50 @@ var _ = FDescribe("E2E - Backups", func() {
 			foundSolrBackup := expectSolrBackup(ctx, solrBackup)
 			Expect(foundSolrBackup.Status.History).To(HaveLen(solrBackup.Spec.Recurrence.MaxSaved), "The SolrBackup does not have the correct number of saved backups in its status")
 			Expect(foundSolrBackup.Status.History[len(foundSolrBackup.Status.History)-1].Successful).To(PointTo(BeTrue()), "The latest backup was not successful")
+
+			By("disabling further backup recurrence")
+			//patchedSolrBackup := foundSolrBackup.DeepCopy()
+			//patchedSolrBackup.Spec.Recurrence.Disabled = true
+			foundSolrBackup = expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
+				backup.Spec.Recurrence.Disabled = true
+				g.Expect(k8sClient.Update(ctx, backup)).To(Succeed(), "Could not update SolrBackup to disable recurrence")
+			})
+			time.Sleep(time.Second * 15)
+			nextFoundSolrBackup := expectSolrBackup(ctx, solrBackup)
+			// Use start time because we might have disabled the recurrence mid-backup, and the finish time might not have been set
+			Expect(nextFoundSolrBackup.Status.StartTime).To(Equal(foundSolrBackup.Status.StartTime), "The last backup start time should be unchanged after recurrence is disabled")
+		})
+	})
+
+	FContext("Local Directory - Single", func() {
+		BeforeEach(func() {
+			backupName := "local"
+			solrCloud.Spec.BackupRepositories = []solrv1beta1.SolrBackupRepository{
+				{
+					Name: backupName,
+					Volume: &solrv1beta1.VolumeRepository{
+						Source: corev1.VolumeSource{
+							HostPath: &corev1.HostPathVolumeSource{
+								Path: backupDirHostPath,
+							},
+						},
+					},
+				},
+			}
+			solrBackup.Spec.RepositoryName = backupName
+			solrBackup.Spec.Recurrence = nil
+		})
+
+		FIt("Takes a backup correctly", func() {
+			By("waiting until more backups have been taken than can be saved")
+			foundSolrBackup := expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
+				g.Expect(backup.Status.Successful).To(PointTo(BeTrue()), "Backup did not successfully complete")
+			})
+
+			expectSolrBackupWithConsistentChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
+				g.Expect(backup.Status.IndividualSolrBackupStatus).To(Equal(foundSolrBackup.Status.IndividualSolrBackupStatus), "Backup status changed")
+				g.Expect(backup.Status.History).To(BeEmpty(), "A non-recurring backup should have no history")
+			})
 		})
 	})
 })

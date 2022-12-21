@@ -29,8 +29,8 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/remotecommand"
+	"math/rand"
 	"os"
 	"strings"
 )
@@ -42,6 +42,10 @@ const (
 var (
 	settings = cli.New()
 )
+
+func testNamespace() string {
+	return fmt.Sprintf("solr-e2e-%d", GinkgoParallelProcess())
+}
 
 // Run Solr Operator for e2e testing of resources
 func runSolrOperator() *release.Release {
@@ -98,6 +102,7 @@ func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection strin
 }
 
 func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) {
+	rand.Seed(GinkgoRandomSeed() + int64(GinkgoParallelProcess()))
 	pod := solrCloud.GetAllSolrPodNames()[0]
 	response, err := runExecForPod(
 		pod,
@@ -123,11 +128,7 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 }
 
 func runExecForPod(podName string, namespace string, command []string) (response string, err error) {
-	client := &kubernetes.Clientset{}
-	if client, err = kubernetes.NewForConfig(k8sConfig); err != nil {
-		return "", err
-	}
-	req := client.CoreV1().RESTClient().Post().
+	req := rawK8sClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
 		Namespace(namespace).

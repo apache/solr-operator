@@ -18,12 +18,16 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/go-logr/logr"
 	"helm.sh/helm/v3/pkg/release"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,6 +52,7 @@ const (
 var (
 	solrOperatorRelease *release.Release
 	k8sClient           client.Client
+	rawK8sClient        *kubernetes.Clientset
 	k8sConfig           *rest.Config
 	logger              logr.Logger
 
@@ -62,7 +67,14 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "Solr Operator e2e suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func() {
+	// Run this once before all tests, not per-test-process
+	By("starting the test solr operator")
+	solrOperatorRelease = runSolrOperator()
+	Expect(solrOperatorRelease).ToNot(BeNil())
+}, func(ctx context.Context) {
+	// Run these in each parallel test process before the tests
+
 	// Define testing timeouts/durations and intervals.
 	const (
 		timeout  = time.Second * 180
@@ -77,11 +89,7 @@ var _ = BeforeSuite(func() {
 	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
 	logf.SetLogger(logger)
 
-	By("starting the test solr operator")
-	solrOperatorRelease = runSolrOperator()
-	Expect(solrOperatorRelease).ToNot(BeNil())
-
-	By("setting up the k8s client")
+	By("setting up the k8s clients")
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 	Expect(zk_api.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 
@@ -89,9 +97,33 @@ var _ = BeforeSuite(func() {
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
+
+	rawK8sClient, err = kubernetes.NewForConfig(k8sConfig)
+	Expect(err).NotTo(HaveOccurred(), "Could not create raw Kubernetes client")
+
+	By("creating a namespace for this parallel test process")
+	_, err = rawK8sClient.CoreV1().Namespaces().Create(
+		ctx,
+		&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: testNamespace(),
+			},
+		},
+		metav1.CreateOptions{},
+	)
+	Expect(err).To(Not(HaveOccurred()), "Failed to create testing namespace %s", testNamespace())
 })
 
-var _ = AfterSuite(func() {
+var _ = SynchronizedAfterSuite(func(ctx context.Context) {
+	// Run these in each parallel test process after the tests
+	By("deleting the namespace for this parallel test process")
+	deletePolicy := metav1.DeletePropagationForeground
+	Expect(rawK8sClient.CoreV1().Namespaces().Delete(ctx, testNamespace(), metav1.DeleteOptions{
+		PropagationPolicy: &deletePolicy,
+	})).To(Succeed(), "Failed to delete testing namespace %s", testNamespace())
+}, func() {
+	// Run this once after all tests, not per-test-process
 	if solrOperatorRelease != nil {
 		By("tearing down the test solr operator")
 		stopSolrOperator(solrOperatorRelease)

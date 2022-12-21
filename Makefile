@@ -40,6 +40,8 @@ GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
+E2E_PARALLELISM ?= 4
+
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
 GO_LICENSES_VERSION=v1.5.0
@@ -294,7 +296,7 @@ unit-tests: manifests generate setup-envtest ## Run the unit tests
 run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
 run-e2e-tests: manifests generate ginkgo
-	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) ./tests/e2e/...
+	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all -procs $(E2E_PARALLELISM) ./tests/e2e/...
 	printf "\n********************\nLocal end-to-end cluster test successfully run!\n\n"
 
 .PHONY: int-tests integration-tests e2e-tests
