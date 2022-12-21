@@ -21,9 +21,11 @@ import (
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/zk_api"
+	"github.com/apache/solr-operator/version"
 	"github.com/go-logr/logr"
 	"helm.sh/helm/v3/pkg/release"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,10 +37,22 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+const (
+	// Available environment variables to customize tests
+	operatorImageEnv = "OPERATOR_IMAGE"
+	solrImageEnv     = "SOLR_IMAGE"
+
+	backupDirHostPath = "/tmp/backup"
+)
+
 var (
 	solrOperatorRelease *release.Release
 	k8sClient           client.Client
+	k8sConfig           *rest.Config
 	logger              logr.Logger
+
+	defaultOperatorImage = "apache/solr-operator:" + version.Version
+	defaultSolrImage     = "solr:8.11"
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -71,9 +85,10 @@ var _ = BeforeSuite(func() {
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 	Expect(zk_api.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
 
-	cfg, err := config.GetConfig()
+	var err error
+	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 })
 
 var _ = AfterSuite(func() {

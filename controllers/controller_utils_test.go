@@ -123,8 +123,8 @@ func expectSolrPrometheusExporterWithChecks(ctx context.Context, solrPrometheusE
 	return foundSolrPrometheusExporter
 }
 
-func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
-	foundSolrPrometheusExporter := &solrv1beta1.SolrCloud{}
+func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, additionalChecks func(Gomega, *solrv1beta1.SolrPrometheusExporter), additionalOffset ...int) *solrv1beta1.SolrPrometheusExporter {
+	foundSolrPrometheusExporter := &solrv1beta1.SolrPrometheusExporter{}
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
 		g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, solrPrometheusExporter.Name), foundSolrPrometheusExporter)).To(Succeed(), "Expected SolrPrometheusExporter does not exist")
 		if additionalChecks != nil {
@@ -133,6 +133,34 @@ func expectSolrPrometheusExporterWithConsistentChecks(ctx context.Context, solrP
 	}).Should(Succeed())
 
 	return foundSolrPrometheusExporter
+}
+
+func expectSolrBackup(ctx context.Context, solrBackup *solrv1beta1.SolrBackup, additionalOffset ...int) *solrv1beta1.SolrBackup {
+	return expectSolrBackupWithChecks(ctx, solrBackup, nil, resolveOffset(additionalOffset))
+}
+
+func expectSolrBackupWithChecks(ctx context.Context, solrBackup *solrv1beta1.SolrBackup, additionalChecks func(Gomega, *solrv1beta1.SolrBackup), additionalOffset ...int) *solrv1beta1.SolrBackup {
+	foundSolrBackup := &solrv1beta1.SolrBackup{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrBackup, solrBackup.Name), foundSolrBackup)).To(Succeed(), "Expected SolrBackup does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrBackup)
+		}
+	}).Should(Succeed())
+
+	return foundSolrBackup
+}
+
+func expectSolrBackupWithConsistentChecks(ctx context.Context, solrBackup *solrv1beta1.SolrBackup, additionalChecks func(Gomega, *solrv1beta1.SolrBackup), additionalOffset ...int) *solrv1beta1.SolrBackup {
+	foundSolrBackup := &solrv1beta1.SolrBackup{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrBackup, solrBackup.Name), foundSolrBackup)).To(Succeed(), "Expected SolrBackup does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrBackup)
+		}
+	}).Should(Succeed())
+
+	return foundSolrBackup
 }
 
 func expectSecret(ctx context.Context, parentResource client.Object, secretName string, additionalOffset ...int) *corev1.Secret {

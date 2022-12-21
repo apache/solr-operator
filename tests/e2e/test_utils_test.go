@@ -18,12 +18,18 @@
 package e2e
 
 import (
+	"bytes"
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/remotecommand"
 	"os"
 	"strings"
 )
@@ -43,9 +49,6 @@ func runSolrOperator() *release.Release {
 
 	installClient := action.NewInstall(actionConfig)
 
-	//chartPath, err := installClient.LocateChart("../../helm/solr-operator", settings)
-	//Expect(err).ToNot(HaveOccurred(), "Failed to locate solr-operator Helm chart")
-
 	chart, err := loader.Load("../../helm/solr-operator")
 	Expect(err).ToNot(HaveOccurred(), "Failed to load solr-operator Helm chart")
 
@@ -53,10 +56,10 @@ func runSolrOperator() *release.Release {
 	installClient.ReleaseName = "solr-operator"
 	installClient.SkipCRDs = true
 	installClient.CreateNamespace = true
-	operatorImage := os.Getenv("OPERATOR_IMAGE")
+	operatorImage := getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	operatorRepo, operatorTag, found := strings.Cut(operatorImage, ":")
 	Expect(found).To(BeTrue(), "Invalid Operator image found in envVar OPERATOR_IMAGE: "+operatorImage)
-	solrOperatorRelease, err := installClient.Run(chart, map[string]interface{}{
+	solrOperatorHelmRelease, err := installClient.Run(chart, map[string]interface{}{
 		"image": map[string]interface{}{
 			"repostitory": operatorRepo,
 			"tag":         operatorTag,
@@ -64,9 +67,9 @@ func runSolrOperator() *release.Release {
 		},
 	})
 	Expect(err).ToNot(HaveOccurred(), "Failed to install solr-operator via Helm chart")
-	Expect(solrOperatorRelease).ToNot(BeNil(), "Failed to install solr-operator via Helm chart")
+	Expect(solrOperatorHelmRelease).ToNot(BeNil(), "Failed to install solr-operator via Helm chart")
 
-	return solrOperatorRelease
+	return solrOperatorHelmRelease
 }
 
 // Run Solr Operator for e2e testing of resources
@@ -78,4 +81,58 @@ func stopSolrOperator(release *release.Release) {
 
 	_, err := uninstallClient.Run(release.Name)
 	Expect(err).ToNot(HaveOccurred(), "Failed to uninstall solr-operator release: "+release.Name)
+}
+
+// Run Solr Operator for e2e testing of resources
+func getEnvWithDefault(envVar string, defaultValue string) string {
+	value := os.Getenv(envVar)
+	if value == "" {
+		value = defaultValue
+	}
+	return value
+}
+
+func runExecForPod(podName string, namespace string, command []string) (response string, err error) {
+	client := &kubernetes.Clientset{}
+	if client, err = kubernetes.NewForConfig(k8sConfig); err != nil {
+		return "", err
+	}
+	req := client.CoreV1().RESTClient().Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec")
+	scheme := runtime.NewScheme()
+	if err = corev1.AddToScheme(scheme); err != nil {
+		return "", fmt.Errorf("error adding to scheme: %v", err)
+	}
+
+	parameterCodec := runtime.NewParameterCodec(scheme)
+	req.VersionedParams(&corev1.PodExecOptions{
+		Command:   command,
+		Container: "solrcloud-node",
+		Stdin:     false,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}, parameterCodec)
+
+	var exec remotecommand.Executor
+	exec, err = remotecommand.NewSPDYExecutor(k8sConfig, "POST", req.URL())
+	if err != nil {
+		return "", fmt.Errorf("error while creating Executor: %v", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+		Tty:    false,
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("error in Stream: %v", err)
+	}
+
+	return stdout.String(), err
 }
