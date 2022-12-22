@@ -151,8 +151,6 @@ var _ = FDescribe("E2E - Backups", func() {
 			Expect(foundSolrBackup.Status.History[len(foundSolrBackup.Status.History)-1].Successful).To(PointTo(BeTrue()), "The latest backup was not successful")
 
 			By("disabling further backup recurrence")
-			//patchedSolrBackup := foundSolrBackup.DeepCopy()
-			//patchedSolrBackup.Spec.Recurrence.Disabled = true
 			foundSolrBackup = expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
 				backup.Spec.Recurrence.Disabled = true
 				g.Expect(k8sClient.Update(ctx, backup)).To(Succeed(), "Could not update SolrBackup to disable recurrence")
@@ -189,9 +187,11 @@ var _ = FDescribe("E2E - Backups", func() {
 				g.Expect(backup.Status.Successful).To(PointTo(BeTrue()), "Backup did not successfully complete")
 			})
 
+			// Make sure nothing else happens after the backup is complete
 			expectSolrBackupWithConsistentChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
 				g.Expect(backup.Status.IndividualSolrBackupStatus).To(Equal(foundSolrBackup.Status.IndividualSolrBackupStatus), "Backup status changed")
 				g.Expect(backup.Status.History).To(BeEmpty(), "A non-recurring backup should have no history")
+				g.Expect(backup.Status.NextScheduledTime).To(BeNil(), "There should be no nextScheduledTime for a non-recurring backup")
 			})
 		})
 	})
