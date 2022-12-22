@@ -106,12 +106,12 @@ var _ = FDescribe("E2E - Backups", func() {
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
 		By("Waiting for the SolrCloud to come up healthy")
-		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+		foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		})
 
 		By("creating a Solr Collection to backup")
-		createAndQueryCollection(solrCloud, solrCollection)
+		createAndQueryCollection(foundSolrCloud, solrCollection)
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())

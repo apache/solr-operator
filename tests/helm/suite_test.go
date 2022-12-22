@@ -15,36 +15,20 @@
  * limitations under the License.
  */
 
-package solr_api
+package helm
 
-import "fmt"
+import (
+	"fmt"
+	"testing"
 
-func CheckForCollectionsApiError(action string, header SolrResponseHeader) (hasError bool, err error) {
-	if header.Status > 0 {
-		hasError = true
-		err = APIError{
-			Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
-			Status: header.Status,
-		}
-	}
-	return hasError, err
-}
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
-func CollectionsAPIError(action string, responseStatus int) error {
-	return APIError{
-		Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
-		Status: responseStatus,
-	}
-}
+// Run e2e tests using the Ginkgo runner.
+func TestE2E(t *testing.T) {
+	RegisterFailHandler(Fail)
+	fmt.Fprintf(GinkgoWriter, "Starting Solr Operator E2E suite\n")
 
-type APIError struct {
-	Detail string
-	Status int // API-specific error code
-}
-
-func (e APIError) Error() string {
-	if e.Status == 0 {
-		return e.Detail
-	}
-	return fmt.Sprintf("Solr response status: %d. %s", e.Status, e.Detail)
+	RunSpecs(t, "Solr Operator e2e suite")
 }

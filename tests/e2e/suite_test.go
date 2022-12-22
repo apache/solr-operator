@@ -30,6 +30,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"math/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -74,6 +75,7 @@ var _ = SynchronizedBeforeSuite(func() {
 	Expect(solrOperatorRelease).ToNot(BeNil())
 }, func(ctx context.Context) {
 	// Run these in each parallel test process before the tests
+	rand.Seed(GinkgoRandomSeed() + int64(GinkgoParallelProcess()))
 
 	// Define testing timeouts/durations and intervals.
 	const (

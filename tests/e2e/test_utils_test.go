@@ -19,8 +19,10 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/action"
@@ -28,10 +30,11 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/remotecommand"
-	"math/rand"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
 
@@ -102,32 +105,80 @@ func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection strin
 }
 
 func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) {
-	rand.Seed(GinkgoRandomSeed() + int64(GinkgoParallelProcess()))
 	pod := solrCloud.GetAllSolrPodNames()[0]
-	response, err := runExecForPod(
+	response, err := runExecForContainer(
+		util.SolrNodeContainer,
 		pod,
 		solrCloud.Namespace,
 		[]string{
 			"curl",
-			"http://localhost:8983/solr/admin/collections?action=CREATE&name=" + collection + "&replicationFactor=2&numShards=1",
+			fmt.Sprintf("http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=2&numShards=1", solrCloud.Spec.SolrAddressability.PodPort, collection),
 		},
 	)
-	g.Expect(err).To(Not(HaveOccurred()), "Error occured while creating Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occured while creating Solr Collection")
+	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while creating Solr Collection")
+	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
 
-	response, err = runExecForPod(
+	response, err = runExecForContainer(
+		util.SolrNodeContainer,
 		pod,
 		solrCloud.Namespace,
 		[]string{
 			"curl",
+			fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
 			"http://localhost:8983/solr/" + collection + "/select",
 		},
 	)
-	g.Expect(err).To(Not(HaveOccurred()), "Error occured while querying empty Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"numFound\":0"), "Error occured while querying empty Solr Collection")
+	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while querying empty Solr Collection")
+	g.Expect(response).To(ContainSubstring("\"numFound\":0"), "Error occurred while querying empty Solr Collection")
 }
 
-func runExecForPod(podName string, namespace string, command []string) (response string, err error) {
+func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {
+	selectorLabels := solrPrometheusExporter.SharedLabels()
+	selectorLabels["technology"] = solrv1beta1.SolrPrometheusExporterTechnologyLabel
+
+	labelSelector := labels.SelectorFromSet(selectorLabels)
+	listOps := &client.ListOptions{
+		Namespace:     solrPrometheusExporter.Namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPods := &corev1.PodList{}
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch PrometheusExporter pod list")
+
+	for _, pod := range foundPods.Items {
+		if pod.Status.ContainerStatuses[0].Ready {
+			podName = pod.Name
+			break
+		}
+	}
+	Expect(podName).To(Not(BeEmpty()), "Could not find a ready pod to query the PrometheusExporter")
+	return podName
+}
+
+func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string) string {
+	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default)
+}
+
+func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) string {
+	response, err := runExecForContainer(
+		"solr-prometheus-exporter",
+		getPrometheusExporterPod(ctx, solrPrometheusExporter),
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			fmt.Sprintf("http://localhost:%d/metrics", util.SolrMetricsPort),
+		},
+	)
+	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while querying SolrPrometheusExporter metrics")
+	// Add in "cluster_id" to the test when all supported solr versions support the feature. (Solr 9.1)
+	g.Expect(response).To(
+		ContainSubstring("solr_metrics_core_query_mean_rate{category=\"QUERY\",searchHandler=\"/select\",core=\"%[1]s_shard1_replica_n1\",collection=\"%[1]s\",shard=\"shard1\",replica=\"replica_n1\",", collection),
+		"Could not find query metrics in the PrometheusExporter response",
+	)
+	return response
+}
+
+func runExecForContainer(container string, podName string, namespace string, command []string) (response string, err error) {
 	req := rawK8sClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
@@ -141,7 +192,7 @@ func runExecForPod(podName string, namespace string, command []string) (response
 	parameterCodec := runtime.NewParameterCodec(scheme)
 	req.VersionedParams(&corev1.PodExecOptions{
 		Command:   command,
-		Container: "solrcloud-node",
+		Container: container,
 		Stdin:     false,
 		Stdout:    true,
 		Stderr:    true,

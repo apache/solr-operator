@@ -37,7 +37,7 @@ Available actions are: create, destroy, kubeconfig
 EOF
 }
 
-ADDITIONAL_IMAGES=()
+ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.14")
 OPTIND=1
 while getopts hv:i:k:s:a: opt; do
     case $opt in
@@ -89,11 +89,18 @@ export ADDITIONAL_IMAGES=("${ADDITIONAL_IMAGES[@]}")
 
 function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
+  PULL_IF_NOT_LOCAL="$2"
   if (docker image inspect "${IMAGE}" &>/dev/null); then
     kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-    printf "\nUsing local version of image \"%s\".\nIf you want to use an updated version of this image, run \"docker pull %s\" before running the smoke test again.\n\n" "${IMAGE}" "${IMAGE}"
+    printf "\nUsing local version of image \"%s\".\nIf you want to use an updated version of this image, run \"docker pull %s\" before running the integration tests again.\n\n" "${IMAGE}" "${IMAGE}"
   else
-    printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
+    if [ "${PULL_IF_NOT_LOCAL}" = true ]; then
+      printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}" "${IMAGE}"
+      docker pull "${IMAGE}"
+      kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
+    else
+      printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
+    fi
   fi
 }
 
@@ -117,10 +124,10 @@ function start_cluster() {
   kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}" --config "${SCRIPT_DIR}/e2e-kind-config.yaml"
 
   # Load the docker images into the cluster
-  add_image_to_kind_repo_if_local "${OPERATOR_IMAGE}"
-  add_image_to_kind_repo_if_local "${SOLR_IMAGE}"
+  add_image_to_kind_repo_if_local "${OPERATOR_IMAGE}" false
+  add_image_to_kind_repo_if_local "${SOLR_IMAGE}" true
   for IMAGE in "${ADDITIONAL_IMAGES[@]}"; do
-    add_image_to_kind_repo_if_local "${IMAGE}"
+    add_image_to_kind_repo_if_local "${IMAGE}" true
   done
 }
 

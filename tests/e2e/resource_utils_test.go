@@ -720,7 +720,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 	serviceList := &corev1.ServiceList{}
 	Expect(k8sClient.List(ctx, serviceList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed(), "List all of the services to delete in the namespace")
 	for _, item := range serviceList.Items {
-		Expect(k8sClient.Delete(ctx, &item)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, &item)).To(Or(Succeed(), MatchError("services \""+item.Name+"\" not found")))
 	}
 }
 
