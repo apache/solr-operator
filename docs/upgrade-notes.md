@@ -118,6 +118,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
   If this is not provided, the default setting (`25%`) is used.
 
+- Provided Zookeeper pods use the `IfNotPresent` pullPolicy by default. Users that specify this field manually will not see a change.
+
 ### v0.6.0
 - The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.
   This will not affect any existing resources, as default versions are hard-written to the resources immediately.
