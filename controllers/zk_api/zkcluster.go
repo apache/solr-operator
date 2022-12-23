@@ -29,7 +29,7 @@ const (
 	DefaultZkContainerVersion = "0.2.14"
 
 	// DefaultZkContainerPolicy is the default container pull policy used
-	DefaultZkContainerPolicy = "Always"
+	DefaultZkContainerPolicy = v1.PullIfNotPresent
 
 	// DefaultTerminationGracePeriod is the default time given before the
 	// container is stopped. This gives clients time to disconnect from a
