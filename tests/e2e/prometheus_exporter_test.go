@@ -101,8 +101,8 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		})
 
-		By("creating a Solr Collection to backup")
-		createAndQueryCollection(foundSolrCloud, solrCollection)
+		By("creating a Solr Collection to query metrics for")
+		createAndQueryCollection(foundSolrCloud, solrCollection, 1, 2)
 
 		By("creating a SolrPrometheusExporter")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())

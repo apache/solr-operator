@@ -100,11 +100,11 @@ func getEnvWithDefault(envVar string, defaultValue string) string {
 	return value
 }
 
-func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string) {
-	createAndQueryCollectionWithGomega(solrCloud, collection, Default)
+func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int) {
+	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default)
 }
 
-func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) {
+func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega) {
 	pod := solrCloud.GetAllSolrPodNames()[0]
 	response, err := runExecForContainer(
 		util.SolrNodeContainer,
@@ -112,7 +112,12 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		solrCloud.Namespace,
 		[]string{
 			"curl",
-			fmt.Sprintf("http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=2&numShards=1", solrCloud.Spec.SolrAddressability.PodPort, collection),
+			fmt.Sprintf(
+				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d",
+				solrCloud.Spec.SolrAddressability.PodPort,
+				collection,
+				replicasPerShard,
+				shards),
 		},
 	)
 	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while creating Solr Collection")

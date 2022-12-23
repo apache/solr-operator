@@ -111,7 +111,7 @@ var _ = FDescribe("E2E - Backups", func() {
 		})
 
 		By("creating a Solr Collection to backup")
-		createAndQueryCollection(foundSolrCloud, solrCollection)
+		createAndQueryCollection(foundSolrCloud, solrCollection, 1, 2)
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())
