@@ -30,8 +30,6 @@ import (
 
 var _ = FDescribe("E2E - Prometheus Exporter", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 
 		solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter
@@ -42,8 +40,6 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -92,31 +88,31 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
 		By("waiting for the SolrCloud to come up healthy")
-		foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		})
 
 		By("creating a Solr Collection to query metrics for")
-		createAndQueryCollection(foundSolrCloud, solrCollection, 1, 2)
+		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
 
 		By("creating a SolrPrometheusExporter")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
 
 		By("waiting for the SolrPrometheusExporter to come up healthy")
-		foundPrometheusExporter := expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
+		solrPrometheusExporter = expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
 			g.Expect(found.Status.Ready).To(BeTrue(), "The SolrPrometheusExporter should come up healthy")
 		})
 
 		By("checking that some base metrics are correct")
-		checkMetrics(ctx, foundPrometheusExporter, foundSolrCloud, solrCollection)
+		checkMetrics(ctx, solrPrometheusExporter, solrCloud, solrCollection)
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 

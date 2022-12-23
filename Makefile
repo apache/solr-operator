@@ -291,7 +291,7 @@ unit-tests: manifests generate setup-envtest ## Run the unit tests
 .PHONY: run-int-tests run-integration-tests run-e2e-tests
 run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
-run-e2e-tests: manifests generate ginkgo
+run-e2e-tests: manifests generate ginkgo helm-dependency-build
 	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all -procs $(E2E_PARALLELISM) ./tests/e2e/...
 	printf "\n********************\nLocal end-to-end cluster test successfully run!\n\n"
 

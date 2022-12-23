@@ -115,20 +115,25 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			}
 		})
 
-		FIt("Takes a backup correctly", func(ctx context.Context) {
+		FIt("Fully Restarts", func(ctx context.Context) {
 			patchedSolrCloud := solrCloud.DeepCopy()
 			patchedSolrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
 				Annotations: map[string]string{
 					"test": "restart-1",
 				},
 			}
+			By("triggering a rolling restart via pod annotations")
 			Expect(k8sClient.Patch(ctx, patchedSolrCloud, client.MergeFrom(solrCloud))).To(Succeed(), "Could not add annotation to SolrCloud pod to initiate rolling restart")
+
+			By("waiting for the rolling restart to begin")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
 				g.Expect(cloud.Status.UpToDateNodes).To(BeZero(), "Cloud did not get to a state with zero up-to-date replicas when rolling restart began.")
 				for _, nodeStatus := range cloud.Status.SolrNodes {
 					g.Expect(nodeStatus.SpecUpToDate).To(BeFalse(), "Node not starting as out-of-date when rolling restart begins: %s", nodeStatus.Name)
 				}
 			})
+
+			By("waiting for the rolling restart to complete")
 			// Expect the SolrCloud to be in a valid restarting state - It will exit when in an invalid state or the restart is done
 			foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
 				if cloud.Status.UpToDateNodes == *cloud.Spec.Replicas {
@@ -147,6 +152,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				Expect(nodeStatus.SpecUpToDate).To(BeTrue(), "Node not finishing as up-to-date when rolling restart ends: %s", nodeStatus.Name)
 				Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
 			}
+
+			By("checking that the collections can be queried after the restart")
+			queryCollection(solrCloud, solrCollection1, 0)
+			queryCollection(solrCloud, solrCollection2, 0)
 		})
 	})
 })

@@ -20,9 +20,11 @@ package e2e
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"helm.sh/helm/v3/pkg/action"
@@ -120,21 +122,29 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 				shards),
 		},
 	)
-	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while creating Solr Collection")
+	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while creating Solr Collection")
 	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
 
-	response, err = runExecForContainer(
+	queryCollectionWithGomega(solrCloud, collection, 0, g)
+}
+
+func queryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int) {
+	queryCollectionWithGomega(solrCloud, collection, docCount, Default)
+}
+
+func queryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega) {
+	pod := solrCloud.GetAllSolrPodNames()[0]
+	response, err := runExecForContainer(
 		util.SolrNodeContainer,
 		pod,
 		solrCloud.Namespace,
 		[]string{
 			"curl",
 			fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
-			"http://localhost:8983/solr/" + collection + "/select",
 		},
 	)
-	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while querying empty Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"numFound\":0"), "Error occurred while querying empty Solr Collection")
+	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+	g.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
 }
 
 func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {
@@ -156,7 +166,7 @@ func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv
 			break
 		}
 	}
-	Expect(podName).To(Not(BeEmpty()), "Could not find a ready pod to query the PrometheusExporter")
+	Expect(podName).ToNot(BeEmpty(), "Could not find a ready pod to query the PrometheusExporter")
 	return podName
 }
 
@@ -166,7 +176,7 @@ func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrP
 
 func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) string {
 	response, err := runExecForContainer(
-		"solr-prometheus-exporter",
+		util.SolrPrometheusExporterContainer,
 		getPrometheusExporterPod(ctx, solrPrometheusExporter),
 		solrCloud.Namespace,
 		[]string{
@@ -174,13 +184,56 @@ func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1b
 			fmt.Sprintf("http://localhost:%d/metrics", util.SolrMetricsPort),
 		},
 	)
-	g.Expect(err).To(Not(HaveOccurred()), "Error occurred while querying SolrPrometheusExporter metrics")
+	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying SolrPrometheusExporter metrics")
 	// Add in "cluster_id" to the test when all supported solr versions support the feature. (Solr 9.1)
+	//g.Expect(response).To(
+	//	ContainSubstring("solr_collections_live_nodes", *solrCloud.Spec.Replicas),
+	//	"Could not find live_nodes metrics in the PrometheusExporter response",
+	//)
 	g.Expect(response).To(
 		ContainSubstring("solr_metrics_core_query_mean_rate{category=\"QUERY\",searchHandler=\"/select\",core=\"%[1]s_shard1_replica_n1\",collection=\"%[1]s\",shard=\"shard1\",replica=\"replica_n1\",", collection),
 		"Could not find query metrics in the PrometheusExporter response",
 	)
 	return response
+}
+
+func checkBackup(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(collection string, backupListResponse *solr_api.SolrBackupListResponse)) {
+	checkBackupWithGomega(solrCloud, solrBackup, checks, Default)
+}
+
+func checkBackupWithGomega(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(collection string, backupListResponse *solr_api.SolrBackupListResponse), g Gomega) {
+	solrCloudPod := solrCloud.GetAllSolrPodNames()[0]
+
+	repository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, solrBackup.Spec.RepositoryName)
+	repositoryName := repository.Name
+	if repositoryName == "" {
+		g.Expect(solrCloud.Spec.BackupRepositories).To(Not(BeEmpty()), "Solr BackupRepository list cannot be empty in backup test")
+	}
+	for _, collection := range solrBackup.Spec.Collections {
+		curlCommand := fmt.Sprintf(
+			"http://localhost:%d/solr/admin/collections?action=LISTBACKUP&name=%s&repository=%s&collection=%s&location=%s",
+			solrCloud.Spec.SolrAddressability.PodPort,
+			util.FullCollectionBackupName(collection, solrBackup.Name),
+			repositoryName,
+			collection,
+			util.BackupLocationPath(repository, solrBackup.Spec.Location))
+		response, err := runExecForContainer(
+			util.SolrNodeContainer,
+			solrCloudPod,
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				curlCommand,
+			},
+		)
+		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while fetching backup '%s' for collection '%s': %s", solrBackup.Name, collection, curlCommand)
+		backupListResponse := &solr_api.SolrBackupListResponse{}
+
+		Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
+
+		Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
+		checks(collection, backupListResponse)
+	}
 }
 
 func runExecForContainer(container string, podName string, namespace string, command []string) (response string, err error) {

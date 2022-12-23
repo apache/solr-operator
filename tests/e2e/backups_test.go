@@ -20,6 +20,7 @@ package e2e
 import (
 	"context"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	. "github.com/onsi/gomega/gstruct"
@@ -33,8 +34,6 @@ import (
 
 var _ = FDescribe("E2E - Backups", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 
 		solrBackup *solrv1beta1.SolrBackup
@@ -45,8 +44,6 @@ var _ = FDescribe("E2E - Backups", func() {
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -101,23 +98,23 @@ var _ = FDescribe("E2E - Backups", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
 		By("Waiting for the SolrCloud to come up healthy")
-		foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		})
 
 		By("creating a Solr Collection to backup")
-		createAndQueryCollection(foundSolrCloud, solrCollection, 1, 2)
+		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -143,12 +140,19 @@ var _ = FDescribe("E2E - Backups", func() {
 			}
 		})
 
-		FIt("Takes a backup correctly", func() {
+		FIt("Takes a backup correctly", func(ctx context.Context) {
 			By("waiting until more backups have been taken than can be saved")
 			time.Sleep(time.Second * 45)
 			foundSolrBackup := expectSolrBackup(ctx, solrBackup)
 			Expect(foundSolrBackup.Status.History).To(HaveLen(solrBackup.Spec.Recurrence.MaxSaved), "The SolrBackup does not have the correct number of saved backups in its status")
 			Expect(foundSolrBackup.Status.History[len(foundSolrBackup.Status.History)-1].Successful).To(PointTo(BeTrue()), "The latest backup was not successful")
+
+			lastBackupId := 0
+			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
+				lastBackupId = backupListResponse.Backups[len(backupListResponse.Backups)-1].BackupId
+				Expect(lastBackupId).To(BeNumerically(">", 3), "The last backup ID is too low")
+			})
 
 			By("disabling further backup recurrence")
 			foundSolrBackup = expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
@@ -159,6 +163,12 @@ var _ = FDescribe("E2E - Backups", func() {
 			nextFoundSolrBackup := expectSolrBackup(ctx, solrBackup)
 			// Use start time because we might have disabled the recurrence mid-backup, and the finish time might not have been set
 			Expect(nextFoundSolrBackup.Status.StartTime).To(Equal(foundSolrBackup.Status.StartTime), "The last backup start time should be unchanged after recurrence is disabled")
+
+			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
+				newLastBackupId := backupListResponse.Backups[len(backupListResponse.Backups)-1].BackupId
+				Expect(newLastBackupId).To(Equal(lastBackupId), "The last backup ID should not have been changed since the backup recurrence was disabled")
+			})
 		})
 	})
 
@@ -181,10 +191,14 @@ var _ = FDescribe("E2E - Backups", func() {
 			solrBackup.Spec.Recurrence = nil
 		})
 
-		FIt("Takes a backup correctly", func() {
+		FIt("Takes a backup correctly", func(ctx context.Context) {
 			By("waiting until more backups have been taken than can be saved")
 			foundSolrBackup := expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
 				g.Expect(backup.Status.Successful).To(PointTo(BeTrue()), "Backup did not successfully complete")
+			})
+
+			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
 			})
 
 			// Make sure nothing else happens after the backup is complete
@@ -192,6 +206,11 @@ var _ = FDescribe("E2E - Backups", func() {
 				g.Expect(backup.Status.IndividualSolrBackupStatus).To(Equal(foundSolrBackup.Status.IndividualSolrBackupStatus), "Backup status changed")
 				g.Expect(backup.Status.History).To(BeEmpty(), "A non-recurring backup should have no history")
 				g.Expect(backup.Status.NextScheduledTime).To(BeNil(), "There should be no nextScheduledTime for a non-recurring backup")
+			})
+
+			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
+				Expect(backupListResponse.Backups[0].BackupId).To(Equal(0), "A non-recurring backup should have an ID of 1")
 			})
 		})
 	})
