@@ -65,6 +65,7 @@ ACTION="${1:-}"
 if [[ -z "${ACTION:-}" ]]; then
   echo "You must specify a cluster action. Either 'create', 'destroy' or 'kubeconfig'." >&2 && exit 1
 fi
+ACTION_ARGS=("${@:2}")
 
 if [[ -z "${OPERATOR_IMAGE:-}" ]]; then
   echo "Specify a Docker image for the Solr Operator through -i, or through the OPERATOR_IMAGE env var" >&2 && exit 1
@@ -73,7 +74,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.21.14"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.0}"
+  SOLR_IMAGE="${SOLR_VERSION:-8.11}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
@@ -129,14 +130,24 @@ function start_cluster() {
   for IMAGE in "${ADDITIONAL_IMAGES[@]}"; do
     add_image_to_kind_repo_if_local "${IMAGE}" true
   done
+
+  kubectl create -f "config/crd/bases/" || kubectl replace -f "config/crd/bases/"
+  kubectl create -f "config/dependencies/" || kubectl replace -f "config/dependencies/"
 }
 
 case "$ACTION" in
+  run-with-cluster)
+    echo "Creating test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to run end-to-end tests."
+    start_cluster
+
+    "${ACTION_ARGS[@]}"
+
+    echo "Deleting test Kind Kubernetes cluster."
+    delete_cluster
+    ;;
   create)
     echo "Creating test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to run end-to-end tests."
     start_cluster
-    kubectl create -f "config/crd/bases/" || kubectl replace -f "config/crd/bases/"
-    kubectl create -f "config/dependencies/" || kubectl replace -f "config/dependencies/"
     ;;
   destroy)
     echo "Deleting test Kind Kubernetes cluster."

@@ -238,7 +238,7 @@ check-manifests: ## Ensure the manifest files (CRDs, RBAC, etc) are up-to-date a
 	mkdir -p generated-check
 	cp -r helm generated-check/helm
 	cp -r config generated-check/config
-	TMP_CONFIG_OUTPUT_DIRECTORY=generated-check/config TMP_HELM_OUTPUT_DIRECTORY=generated-check/helm make manifests
+	TMP_CONFIG_OUTPUT_DIRECTORY=generated-check/config TMP_HELM_OUTPUT_DIRECTORY=generated-check/helm $(MAKE) manifests
 	@echo "Check to make sure the manifests are up to date"
 	diff --recursive config generated-check/config
 	diff --recursive helm generated-check/helm
@@ -248,7 +248,7 @@ check-generated: ## Ensure the generated code is up-to-date
 	rm -rf generated-check
 	mkdir -p generated-check
 	cp -r api generated-check/api
-	TMP_API_DIRECTORY="./generated-check/api/..." make generate
+	TMP_API_DIRECTORY="./generated-check/api/..." $(MAKE) generate
 	@echo "Check to make sure the generated code is up to date"
 	diff --recursive api generated-check/api
 
@@ -257,7 +257,7 @@ check-mod: ## Ensure the go mod files are up-to-date
 	rm -rf generated-check
 	mkdir -p generated-check/existing-go-mod generated-check/go-mod
 	cp go.* generated-check/existing-go-mod/.
-	make mod-tidy
+	$(MAKE) mod-tidy
 	cp go.* generated-check/go-mod/.
 	mv generated-check/existing-go-mod/go.* .
 	@echo "Check to make sure the go mod info is up to date"
@@ -300,9 +300,7 @@ int-tests: e2e-tests
 integration-tests: e2e-tests
 e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
 e2e-tests: kind docker-build
-	./tests/scripts/manage_cluster.sh create
-	$(MAKE) run-e2e-tests
-	./tests/scripts/manage_cluster.sh destroy
+	PATH="$(LOCALBIN):${PATH}" ./tests/scripts/manage_cluster.sh run-with-cluster "$(MAKE)" run-e2e-tests
 
 ##@ Helm
 
@@ -336,7 +334,7 @@ $(KUSTOMIZE): $(LOCALBIN)
 	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@$(KUSTOMIZE_VERSION))
 
 GO_LICENSES = $(LOCALBIN)/go-licenses
-.PHONY: kustomize
+.PHONY: go-licenses
 go-licenses: $(GO_LICENSES) ## Download go-licenses locally if necessary.
 $(GO_LICENSES): $(LOCALBIN)
 	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@$(GO_LICENSES_VERSION))
