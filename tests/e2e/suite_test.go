@@ -57,7 +57,7 @@ var (
 	k8sConfig           *rest.Config
 	logger              logr.Logger
 
-	defaultOperatorImage = "apache/solr-operator:" + version.Version
+	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
 	defaultSolrImage     = "solr:8.11"
 )
 
@@ -68,10 +68,10 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "Solr Operator e2e suite")
 }
 
-var _ = SynchronizedBeforeSuite(func() {
+var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	// Run this once before all tests, not per-test-process
 	By("starting the test solr operator")
-	solrOperatorRelease = runSolrOperator()
+	solrOperatorRelease = runSolrOperator(ctx)
 	Expect(solrOperatorRelease).ToNot(BeNil())
 }, func(ctx context.Context) {
 	// Run these in each parallel test process before the tests
@@ -103,6 +103,24 @@ var _ = SynchronizedBeforeSuite(func() {
 
 	rawK8sClient, err = kubernetes.NewForConfig(k8sConfig)
 	Expect(err).NotTo(HaveOccurred(), "Could not create raw Kubernetes client")
+
+	// Delete the testing namespace if it already exists, then recreate it below
+	_, err = rawK8sClient.CoreV1().Namespaces().Get(
+		ctx,
+		testNamespace(),
+		metav1.GetOptions{},
+	)
+	if err == nil {
+		By("deleting the existing namespace for this parallel test process before recreating it")
+		foreground := metav1.DeletePropagationForeground
+
+		err = rawK8sClient.CoreV1().Namespaces().Delete(ctx, testNamespace(), metav1.DeleteOptions{PropagationPolicy: &foreground})
+		Expect(err).To(Not(HaveOccurred()), "Failed to delete existing testing namespace %s before recreating it", testNamespace())
+		Eventually(func() error {
+			_, err := rawK8sClient.CoreV1().Namespaces().Get(ctx, testNamespace(), metav1.GetOptions{})
+			return err
+		}).Should(HaveOccurred(), "Failed to delete existing testing namespace %s before recreating it", testNamespace())
+	}
 
 	By("creating a namespace for this parallel test process")
 	_, err = rawK8sClient.CoreV1().Namespaces().Create(

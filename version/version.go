@@ -24,3 +24,11 @@ var (
 	BuildTime     string
 	GitSHA        string
 )
+
+func FullVersion() string {
+	version := Version
+	if VersionSuffix != "" {
+		version += "-" + VersionSuffix
+	}
+	return version
+}

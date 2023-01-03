@@ -31,6 +31,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
+	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,6 +43,9 @@ import (
 
 const (
 	helmDriver = "configmap"
+
+	solrOperatorReleaseName      = "solr-operator"
+	solrOperatorReleaseNamespace = "solr-operator"
 )
 
 var (
@@ -53,29 +57,45 @@ func testNamespace() string {
 }
 
 // Run Solr Operator for e2e testing of resources
-func runSolrOperator() *release.Release {
+func runSolrOperator(ctx context.Context) *release.Release {
 	actionConfig := new(action.Configuration)
 	Expect(actionConfig.Init(settings.RESTClientGetter(), "solr-operator", helmDriver, GinkgoLogr.Info)).To(Succeed(), "Failed to create helm configuration")
 
-	installClient := action.NewInstall(actionConfig)
-
-	chart, err := loader.Load("../../helm/solr-operator")
-	Expect(err).ToNot(HaveOccurred(), "Failed to load solr-operator Helm chart")
-
-	installClient.Namespace = "solr-operator"
-	installClient.ReleaseName = "solr-operator"
-	installClient.SkipCRDs = true
-	installClient.CreateNamespace = true
 	operatorImage := getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	operatorRepo, operatorTag, found := strings.Cut(operatorImage, ":")
 	Expect(found).To(BeTrue(), "Invalid Operator image found in envVar OPERATOR_IMAGE: "+operatorImage)
-	solrOperatorHelmRelease, err := installClient.Run(chart, map[string]interface{}{
+	operatorValues := map[string]interface{}{
 		"image": map[string]interface{}{
 			"repostitory": operatorRepo,
 			"tag":         operatorTag,
 			"pullPolicy":  "Never",
 		},
-	})
+	}
+
+	chart, err := loader.Load("../../helm/solr-operator")
+	Expect(err).ToNot(HaveOccurred(), "Failed to load solr-operator Helm chart")
+
+	histClient := action.NewHistory(actionConfig)
+	histClient.Max = 1
+	var solrOperatorHelmRelease *release.Release
+	if _, err = histClient.Run(solrOperatorReleaseName); err == driver.ErrReleaseNotFound {
+		installClient := action.NewInstall(actionConfig)
+
+		installClient.ReleaseName = solrOperatorReleaseName
+		installClient.Namespace = solrOperatorReleaseNamespace
+		installClient.SkipCRDs = true
+		installClient.CreateNamespace = true
+
+		solrOperatorHelmRelease, err = installClient.RunWithContext(ctx, chart, operatorValues)
+	} else {
+		upgradeClient := action.NewUpgrade(actionConfig)
+
+		upgradeClient.Namespace = solrOperatorReleaseNamespace
+		upgradeClient.Install = true
+		upgradeClient.SkipCRDs = true
+
+		solrOperatorHelmRelease, err = upgradeClient.RunWithContext(ctx, solrOperatorReleaseName, chart, operatorValues)
+	}
 	Expect(err).ToNot(HaveOccurred(), "Failed to install solr-operator via Helm chart")
 	Expect(solrOperatorHelmRelease).ToNot(BeNil(), "Failed to install solr-operator via Helm chart")
 
@@ -191,7 +211,7 @@ func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1b
 	//	"Could not find live_nodes metrics in the PrometheusExporter response",
 	//)
 	g.Expect(response).To(
-		ContainSubstring("solr_metrics_core_query_mean_rate{category=\"QUERY\",searchHandler=\"/select\",core=\"%[1]s_shard1_replica_n1\",collection=\"%[1]s\",shard=\"shard1\",replica=\"replica_n1\",", collection),
+		MatchRegexp("solr_metrics_core_query_[^{]+\\{category=\"QUERY\",searchHandler=\"/select\",[^}]*collection=\"%s\",[^}]*shard=\"shard1\",[^}]*\\} [0-9]+.0", collection),
 		"Could not find query metrics in the PrometheusExporter response",
 	)
 	return response
