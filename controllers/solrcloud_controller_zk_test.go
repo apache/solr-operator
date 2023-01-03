@@ -19,6 +19,9 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	zk_crd "github.com/apache/solr-operator/controllers/zk_api"
@@ -29,7 +32,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
 )
 
 var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
@@ -281,11 +283,24 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(zkCluster.Spec.Pod.Resources).To(Equal(testResources), "Incorrect zkCluster resources")
 			Expect(zkCluster.Spec.Pod.Env).To(Equal(extraVars), "Incorrect zkCluster env vars")
 			Expect(zkCluster.Spec.Pod.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect zkCluster serviceAccountName")
-			Expect(zkCluster.Spec.Pod.Labels).To(Equal(util.MergeLabelsOrAnnotations(testSSLabels, map[string]string{"app": "foo-solrcloud-zookeeper", "release": "foo-solrcloud-zookeeper"})), "Incorrect zkCluster pod labels")
 			Expect(zkCluster.Spec.Pod.Annotations).To(Equal(testSSAnnotations), "Incorrect zkCluster pod annotations")
 			Expect(zkCluster.Spec.Pod.SecurityContext).To(Equal(&testPodSecurityContext), "Incorrect zkCluster pod securityContext")
 			Expect(zkCluster.Spec.Pod.TerminationGracePeriodSeconds).To(Equal(testTerminationGracePeriodSeconds), "Incorrect zkCluster pod terminationGracePeriodSeconds")
 			Expect(zkCluster.Spec.Pod.ImagePullSecrets).To(Equal(append(append(make([]corev1.LocalObjectReference, 0), testAdditionalImagePullSecrets...), corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect zkCluster imagePullSecrets")
+
+			// NOTE: Spec.Pod.Labels doesn't presently function as intended in the
+			// Zookeeper Operator, see https://github.com/pravega/zookeeper-operator/issues/511.
+			// Documentation indicates that Spec.Labels is for passing pod labels.
+			// This test will remain here in case the behavior changes on the
+			// Zookeeper Operator in the future.
+			Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue("app", "foo-solrcloud-zookeeper"), "Missing 'app' label from zkCluster pod labels")
+			Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue("release", "foo-solrcloud-zookeeper"), "Missing 'release' label zkCluster pod labels")
+			Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue("app", "foo-solrcloud-zookeeper"), "Missing 'app' label from zkCluster pod labels")
+			Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue("release", "foo-solrcloud-zookeeper"), "Missing 'release' label zkCluster pod labels")
+			for k, v := range testSSLabels {
+				Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue(k, v), fmt.Sprintf("Missing %s=%s from zkCluster pod labels", k, v))
+				Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue(k, v), fmt.Sprintf("Missing %s=%s from zkCluster labels", k, v))
+			}
 
 			// Check ZK Config Options
 			Expect(zkCluster.Spec.Conf.InitLimit).To(Equal(zkConf.InitLimit), "Incorrect zkCluster Config InitLimit")
