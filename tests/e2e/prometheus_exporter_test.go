@@ -28,7 +28,12 @@ import (
 	"strings"
 )
 
-var _ = FDescribe("E2E - Prometheus Exporter", func() {
+/*
+There is no need to spin up a lot of SolrClouds for a Prometheus Exporter test,
+so all tests will run in the same parallel process and execute serially.
+*/
+
+var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 	var (
 		solrCloud *solrv1beta1.SolrCloud
 
@@ -39,7 +44,10 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 		solrImage = getEnvWithDefault(solrImageEnv, defaultSolrImage)
 	)
 
-	BeforeEach(func() {
+	/*
+		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
+	*/
+	BeforeAll(func(ctx context.Context) {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -79,16 +87,6 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 			},
 		}
 
-		solrPrometheusExporter = &solrv1beta1.SolrPrometheusExporter{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: testNamespace(),
-			},
-			Spec: solrv1beta1.SolrPrometheusExporterSpec{},
-		}
-	})
-
-	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -99,7 +97,19 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 
 		By("creating a Solr Collection to query metrics for")
 		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
+	})
 
+	BeforeEach(func() {
+		solrPrometheusExporter = &solrv1beta1.SolrPrometheusExporter{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: testNamespace(),
+			},
+			Spec: solrv1beta1.SolrPrometheusExporterSpec{},
+		}
+	})
+
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating a SolrPrometheusExporter")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
 
@@ -113,6 +123,10 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 	})
 
 	AfterEach(func(ctx context.Context) {
+		deleteAndWait(ctx, solrPrometheusExporter)
+	})
+
+	AfterAll(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -121,6 +135,31 @@ var _ = FDescribe("E2E - Prometheus Exporter", func() {
 			solrPrometheusExporter.Spec.SolrReference = solrv1beta1.SolrReference{
 				Cloud: &solrv1beta1.SolrCloudReference{
 					Name: solrCloud.Name,
+				},
+			}
+		})
+
+		// The base metrics tests are run in the "JustBeforeEach" - no additional tests necessary
+		FIt("Has the correct metrics", func() {})
+	})
+
+	FContext("Default - Solr ZK Connection String", func() {
+		BeforeEach(func() {
+			solrPrometheusExporter.Spec.SolrReference = solrv1beta1.SolrReference{
+				Cloud: &solrv1beta1.SolrCloudReference{
+					ZookeeperConnectionInfo: &solrCloud.Status.ZookeeperConnectionInfo,
+				},
+			}
+		})
+
+		FIt("Has the correct metrics", func() {})
+	})
+
+	FContext("Default - Solr Host", func() {
+		BeforeEach(func() {
+			solrPrometheusExporter.Spec.SolrReference = solrv1beta1.SolrReference{
+				Standalone: &solrv1beta1.StandaloneSolrReference{
+					Address: solrCloud.Status.InternalCommonAddress + "/solr",
 				},
 			}
 		})
