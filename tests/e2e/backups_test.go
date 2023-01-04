@@ -58,16 +58,8 @@ var _ = FDescribe("E2E - Backups", func() {
 				},
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
 					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas: &one,
-						Persistence: &solrv1beta1.ZKPersistence{
-							PersistentVolumeClaimSpec: corev1.PersistentVolumeClaimSpec{
-								Resources: corev1.ResourceRequirements{
-									Requests: corev1.ResourceList{
-										corev1.ResourceStorage: resource.MustParse("5Gi"),
-									},
-								},
-							},
-						},
+						Replicas:  &one,
+						Ephemeral: &solrv1beta1.ZKEphemeral{},
 					},
 				},
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
