@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 	policyv1 "k8s.io/api/policy/v1"
 	"regexp"
+	"time"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -49,6 +50,19 @@ func resolveOffset(additionalOffset []int) (offset int) {
 
 func resourceKey(parentResource client.Object, name string) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
+}
+
+func deleteAndWait(ctx context.Context, object client.Object, additionalOffset ...int) {
+	key := resourceKey(object, object.GetName())
+	kinds, _, err := k8sClient.Scheme().ObjectKinds(object)
+	Expect(err).ToNot(HaveOccurred(), "Error fetching objectKind")
+	Expect(kinds).ToNot(BeEmpty(), "No objectKinds found for object")
+	objKind := kinds[0]
+	Expect(k8sClient.Delete(ctx, object)).To(Or(Succeed(), MatchError(HaveSuffix("%q not found", testNamespace()))), "Failed to delete %s %s after test", objKind.Kind, key.Name)
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, key, object)
+	}).Within(time.Minute).
+		Should(MatchError(HaveSuffix("%q not found", key.Name)), objKind.Kind+" exists when it should not")
 }
 
 func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
@@ -500,6 +514,12 @@ func expectNoDeployment(ctx context.Context, parentResource client.Object, deplo
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), &appsv1.Deployment{})
 	}).Should(MatchError("deployments.apps \""+deploymentName+"\" not found"), "Deployment exists when it should not")
+}
+
+func expectNoNamespace(ctx context.Context, name string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, client.ObjectKey{Name: name}, &corev1.Namespace{})
+	}).Should(MatchError("namespaces \""+name+"\" not found"), "Namespace exists when it should not")
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {

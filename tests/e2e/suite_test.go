@@ -91,57 +91,38 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
 	logf.SetLogger(logger)
 
-	By("setting up the k8s clients")
-	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
-	Expect(zk_api.AddToScheme(scheme.Scheme)).NotTo(HaveOccurred())
-
 	var err error
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
-	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
-	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
 	rawK8sClient, err = kubernetes.NewForConfig(k8sConfig)
 	Expect(err).NotTo(HaveOccurred(), "Could not create raw Kubernetes client")
 
+	By("setting up the k8s clients")
+	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(zk_api.AddToScheme(scheme.Scheme)).To(Succeed())
+
+	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
+
 	// Delete the testing namespace if it already exists, then recreate it below
-	_, err = rawK8sClient.CoreV1().Namespaces().Get(
-		ctx,
-		testNamespace(),
-		metav1.GetOptions{},
-	)
+	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}}
+	err = k8sClient.Get(ctx, client.ObjectKey{Name: testNamespace()}, namespace)
 	if err == nil {
 		By("deleting the existing namespace for this parallel test process before recreating it")
-		foreground := metav1.DeletePropagationForeground
-
-		err = rawK8sClient.CoreV1().Namespaces().Delete(ctx, testNamespace(), metav1.DeleteOptions{PropagationPolicy: &foreground})
-		Expect(err).To(Not(HaveOccurred()), "Failed to delete existing testing namespace %s before recreating it", testNamespace())
-		Eventually(func() error {
-			_, err := rawK8sClient.CoreV1().Namespaces().Get(ctx, testNamespace(), metav1.GetOptions{})
-			return err
-		}).Should(HaveOccurred(), "Failed to delete existing testing namespace %s before recreating it", testNamespace())
+		deleteAndWait(ctx, namespace)
 	}
 
 	By("creating a namespace for this parallel test process")
-	_, err = rawK8sClient.CoreV1().Namespaces().Create(
-		ctx,
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: testNamespace(),
-			},
-		},
-		metav1.CreateOptions{},
-	)
-	Expect(err).To(Not(HaveOccurred()), "Failed to create testing namespace %s", testNamespace())
+	Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}})).
+		To(Succeed(), "Failed to create testing namespace %s", testNamespace())
 })
 
 var _ = SynchronizedAfterSuite(func(ctx context.Context) {
 	// Run these in each parallel test process after the tests
 	By("deleting the namespace for this parallel test process")
-	deletePolicy := metav1.DeletePropagationForeground
-	Expect(rawK8sClient.CoreV1().Namespaces().Delete(ctx, testNamespace(), metav1.DeleteOptions{
-		PropagationPolicy: &deletePolicy,
-	})).To(Succeed(), "Failed to delete testing namespace %s", testNamespace())
+	Expect(k8sClient.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}}, client.PropagationPolicy(metav1.DeletePropagationForeground))).
+		To(Or(Succeed(), MatchError(HaveSuffix("%q not found", testNamespace()))), "Failed to delete testing namespace %s", testNamespace())
 }, func() {
 	// Run this once after all tests, not per-test-process
 	if solrOperatorRelease != nil {

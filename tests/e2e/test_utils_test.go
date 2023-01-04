@@ -39,6 +39,7 @@ import (
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
+	"time"
 )
 
 const (
@@ -194,26 +195,30 @@ func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrP
 	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default)
 }
 
-func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) string {
-	response, err := runExecForContainer(
-		util.SolrPrometheusExporterContainer,
-		getPrometheusExporterPod(ctx, solrPrometheusExporter),
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf("http://localhost:%d/metrics", util.SolrMetricsPort),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying SolrPrometheusExporter metrics")
-	// Add in "cluster_id" to the test when all supported solr versions support the feature. (Solr 9.1)
-	//g.Expect(response).To(
-	//	ContainSubstring("solr_collections_live_nodes", *solrCloud.Spec.Replicas),
-	//	"Could not find live_nodes metrics in the PrometheusExporter response",
-	//)
-	g.Expect(response).To(
-		MatchRegexp("solr_metrics_core_query_[^{]+\\{category=\"QUERY\",searchHandler=\"/select\",[^}]*collection=\"%s\",[^}]*shard=\"shard1\",[^}]*\\} [0-9]+.0", collection),
-		"Could not find query metrics in the PrometheusExporter response",
-	)
+func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) (response string) {
+	g.Eventually(func(innerG Gomega) {
+		var err error
+		response, err = runExecForContainer(
+			util.SolrPrometheusExporterContainer,
+			getPrometheusExporterPod(ctx, solrPrometheusExporter),
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf("http://localhost:%d/metrics", util.SolrMetricsPort),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying SolrPrometheusExporter metrics")
+		// Add in "cluster_id" to the test when all supported solr versions support the feature. (Solr 9.1)
+		//innerG.Expect(response).To(
+		//	ContainSubstring("solr_collections_live_nodes", *solrCloud.Spec.Replicas),
+		//	"Could not find live_nodes metrics in the PrometheusExporter response",
+		//)
+		innerG.Expect(response).To(
+			MatchRegexp("solr_metrics_core_query_[^{]+\\{category=\"QUERY\",searchHandler=\"/select\",[^}]*collection=\"%s\",[^}]*shard=\"shard1\",[^}]*\\} [0-9]+.0", collection),
+			"Could not find query metrics in the PrometheusExporter response",
+		)
+	}).WithContext(ctx).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
+
 	return response
 }
 
@@ -249,9 +254,9 @@ func checkBackupWithGomega(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1b
 		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while fetching backup '%s' for collection '%s': %s", solrBackup.Name, collection, curlCommand)
 		backupListResponse := &solr_api.SolrBackupListResponse{}
 
-		Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
+		g.Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
 
-		Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
+		g.Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
 		checks(collection, backupListResponse)
 	}
 }

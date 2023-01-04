@@ -293,7 +293,11 @@ run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
 run-e2e-tests: manifests generate ginkgo helm-dependency-build
 	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all -procs $(E2E_PARALLELISM) ./tests/e2e/...
-	printf "\n********************\nLocal end-to-end cluster test successfully run!\n\n"
+	@echo ""
+	@echo "********************"
+	@echo "Local end-to-end cluster test successfully run!"
+	@echo ""
+	@echo ""
 
 .PHONY: int-tests integration-tests e2e-tests
 int-tests: e2e-tests
