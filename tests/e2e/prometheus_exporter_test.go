@@ -40,8 +40,6 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter
 
 		solrCollection = "e2e"
-
-		solrImage = getEnvWithDefault(solrImageEnv, defaultSolrImage)
 	)
 
 	/*

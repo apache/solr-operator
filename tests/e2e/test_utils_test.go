@@ -62,7 +62,6 @@ func runSolrOperator(ctx context.Context) *release.Release {
 	actionConfig := new(action.Configuration)
 	Expect(actionConfig.Init(settings.RESTClientGetter(), "solr-operator", helmDriver, GinkgoLogr.Info)).To(Succeed(), "Failed to create helm configuration")
 
-	operatorImage := getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	operatorRepo, operatorTag, found := strings.Cut(operatorImage, ":")
 	Expect(found).To(BeTrue(), "Invalid Operator image found in envVar OPERATOR_IMAGE: "+operatorImage)
 	operatorValues := map[string]interface{}{

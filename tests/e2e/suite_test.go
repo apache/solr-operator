@@ -24,6 +24,7 @@ import (
 	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/go-logr/logr"
+	"github.com/onsi/ginkgo/v2/types"
 	"helm.sh/helm/v3/pkg/release"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +60,9 @@ var (
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
 	defaultSolrImage     = "solr:8.11"
+
+	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
+	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -128,5 +132,48 @@ var _ = SynchronizedAfterSuite(func(ctx context.Context) {
 	if solrOperatorRelease != nil {
 		By("tearing down the test solr operator")
 		stopSolrOperator(solrOperatorRelease)
+	}
+})
+
+type RetryCommand struct {
+	report        SpecReport
+	parallelism   int
+	randomSeed    int64
+	operatorImage string
+	solrImage     string
+}
+
+// ColorableString for ReportEntry to use
+func (rc RetryCommand) ColorableString() string {
+	return fmt.Sprintf("{{orange}}%s{{/}}", rc)
+}
+
+// non-colorable String() is used by go's string formatting support but ignored by ReportEntry
+func (rc RetryCommand) String() string {
+	return fmt.Sprintf(
+		"make e2e-tests TEST_FILES=%q TEST_FILTERS=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q",
+		rc.report.FileName(),
+		rc.report.FullText(),
+		rc.randomSeed,
+		rc.parallelism,
+		solrImageEnv, rc.solrImage,
+		operatorImageEnv, rc.operatorImage,
+	)
+}
+
+var _ = ReportAfterEach(func(report SpecReport) {
+	if report.Failed() {
+		ginkgoConfig, _ := GinkgoConfiguration()
+		AddReportEntry(
+			"Re-Run Failed Test Using Command",
+			types.CodeLocation{},
+			RetryCommand{
+				report:        report,
+				parallelism:   ginkgoConfig.ParallelTotal,
+				randomSeed:    GinkgoRandomSeed(),
+				operatorImage: operatorImage,
+				solrImage:     solrImage,
+			},
+		)
 	}
 })

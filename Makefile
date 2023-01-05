@@ -288,11 +288,20 @@ unit-tests: manifests generate setup-envtest ## Run the unit tests
 
 	KUBEBUILDER_ASSETS="$(call kubebuilder-assets)" GINKGO_EDITOR_INTEGRATION=true go test ./api/... ./controllers/... -coverprofile cover.out
 
+# Pass an envVar as an option if it exists
+define ENV_OPTION
+$(if $(2),$(1) "$(2)")
+endef
+
 .PHONY: run-int-tests run-integration-tests run-e2e-tests
 run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
-run-e2e-tests: manifests generate ginkgo helm-dependency-build
-	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all -procs $(E2E_PARALLELISM) ./tests/e2e/...
+run-e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
+run-e2e-tests: #manifests generate ginkgo helm-dependency-build
+	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all \
+		$(call ENV_OPTION,--seed,$(TEST_SEED)) $(call ENV_OPTION,--procs,$(TEST_PARALLELISM)) $(call ENV_OPTION,--focus-file,$(TEST_FILES)) \
+		$(call ENV_OPTION,--label-filter,$(TEST_LABELS)) $(call ENV_OPTION,--focus,$(TEST_FILTERS)) $(call ENV_OPTION,--skip,$(TEST_SKIP)) $(RAW_GINKGO) \
+		./tests/e2e/...
 	@echo ""
 	@echo "********************"
 	@echo "Local end-to-end cluster test successfully run!"

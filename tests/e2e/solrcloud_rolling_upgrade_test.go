@@ -37,8 +37,6 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 		solrCollection1 = "e2e-1"
 
 		solrCollection2 = "e2e-2"
-
-		solrImage = getEnvWithDefault(solrImageEnv, defaultSolrImage)
 	)
 
 	BeforeEach(func() {

@@ -39,8 +39,6 @@ var _ = FDescribe("E2E - Backups", func() {
 		solrBackup *solrv1beta1.SolrBackup
 
 		solrCollection = "e2e"
-
-		solrImage = getEnvWithDefault(solrImageEnv, defaultSolrImage)
 	)
 
 	BeforeEach(func() {
