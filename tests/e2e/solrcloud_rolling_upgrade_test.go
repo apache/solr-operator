@@ -126,20 +126,22 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			})
 
 			By("waiting for the rolling restart to complete")
-			// Expect the SolrCloud to be in a valid restarting state - It will exit when in an invalid state or the restart is done
+			// Expect the SolrCloud to be up-to-date, or in a valid restarting state
 			foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
-				if cloud.Status.UpToDateNodes == *cloud.Spec.Replicas {
-					// If all nodes are updated, then this is a regular "expect()" check that all nodes are ready
-					g.Expect(cloud.Status.ReadyReplicas).To(Equal(*cloud.Spec.Replicas), "The SolrCloud did not finish the rolling restart, all nodes are up-to-date, but not all are ready")
-				} else {
-					// If not all nodes are updated, then we flip it around and error if the cloud is in a valid restarting state.
-					// That way the Eventually() running this function continues to run.
-					// If the cloud is in an invalid state, then this expectSolrCloudWithChecks() will succeed and the next Expect() command afterwards will fail.
-					g.Expect(cloud.Status.ReadyReplicas).To(BeNumerically("<", *solrCloud.Spec.Replicas-int32(1)), "The SolrCloud is still restarting in a valid state")
+				// If there are more than 1 pods not ready, then fail because we have set MaxPodsUnavailable to 1
+				if cloud.Status.ReadyReplicas < *solrCloud.Spec.Replicas-int32(1) {
+					StopTrying("More than 1 pod (replica) is not ready, which is not allowed by the managed upgrade options").
+						Attach("Replicas", *solrCloud.Spec.Replicas).
+						Attach("ReadyReplicas", cloud.Status.ReadyReplicas).
+						Attach("SolrCloud Status", cloud.Status).
+						Now()
 				}
+				// As long as the current restart is in a healthy place, keep checking if the restart is finished
+				g.Expect(cloud.Status.UpToDateNodes).To(Equal(*cloud.Spec.Replicas), "The SolrCloud did not finish the rolling restart, not all nodes are up-to-date")
+				g.Expect(cloud.Status.ReadyReplicas).To(Equal(cloud.Status.UpToDateNodes), "The SolrCloud did not finish the rolling restart, all nodes are up-to-date, but not all are ready")
 			})
-			Expect(foundSolrCloud.Status.ReadyReplicas).To(BeNumerically(">=", *solrCloud.Spec.Replicas-int32(1)), "The SolrCloud has too many replicas down during a restart")
-			Expect(foundSolrCloud.Status.UpToDateNodes).To(Equal(*foundSolrCloud.Spec.Replicas), "The SolrCloud did not finish the rolling restart, not all nodes are up-to-date")
+
+			// Make sure that the status object is correct for the nodes
 			for _, nodeStatus := range foundSolrCloud.Status.SolrNodes {
 				Expect(nodeStatus.SpecUpToDate).To(BeTrue(), "Node not finishing as up-to-date when rolling restart ends: %s", nodeStatus.Name)
 				Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
