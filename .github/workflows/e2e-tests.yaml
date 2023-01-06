@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Build & Test
+name: E2E / Integration Tests
 
 on:
   pull_request:
@@ -22,14 +22,15 @@ on:
       - 'release-*'
 
 jobs:
-  test:
-    name: Build and Test Operator
+  e2eTests:
+    name: Run E2E / Integration Tests
 
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
         go: [ '1.19' ]
+        solr-version: [ '8', '9' ]
 
     steps:
       # Setup
@@ -39,23 +40,18 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
 
-      # Cleanup & Install dependencies
       - run: make clean
-      - run: make install-dependencies
 
-      - uses: actions/cache@v2
+      - name: Install dev dependencies
+        id: cache-bin
+        uses: actions/cache@v3
         with:
-          path: |
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-code-dependencies-${{ hashFiles('go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-code-dependencies
+          path: bin
+          key: ${{ runner.os }}-code-dependencies-${{ matrix.go }}-${{ hashFiles('Makefile') }}
+
+      - name: Install dev dependencies
+        if: steps.cache-bin.outputs.cache-hit != 'true'
+        run: make install-dependencies
 
       # Build
-      - run: make manifests
-      - run: make build
-
-      # Test
-      - run: make lint
-      - run: make test
-      - run: make check-git
+      - run: make e2e-tests SOLR_IMAGE="solr:${{ matrix.solr-version }}"
