@@ -86,7 +86,7 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		})
 
 		By("creating a Solr Collection to query metrics for")
-		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
+		createAndQueryCollection(solrCloud, solrCollection, 1, 3)
 	})
 
 	BeforeEach(func() {

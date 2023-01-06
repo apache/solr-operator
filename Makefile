@@ -30,11 +30,7 @@ IMG = $(REPOSITORY)/$(NAME)
 # Default tag from info in version/version.go
 VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:space:]]+)=' | sed 's/.*["'']\(.*\)["'']/\1/g')
 TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)=' | sed 's/.*["'"'"']\(.*\)["'"'"']/\1/g')
-ifneq (,$(VERSION_SUFFIX))
-VERSION = $(TMP_VERSION)-$(VERSION_SUFFIX)
-else
-VERSION = ${TMP_VERSION}
-endif
+VERSION = $(if $(VERSION_SUFFIX),$(TMP_VERSION)-$(VERSION_SUFFIX),$(TMP_VERSION))
 TAG ?= $(VERSION)
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
@@ -139,7 +135,7 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 
 .PHONY: build-release-artifacts
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
-build-release-artifacts: export PATH:="$(LOCALBIN):${PATH}"
+build-release-artifacts: export PATH:=$(LOCALBIN):${PATH}
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
 
@@ -205,7 +201,7 @@ undeploy: prepare-deploy-kustomize ## Undeploy controller from the K8s cluster s
 
 .PHONY: smoke-test
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
-smoke-test: export PATH:="$(LOCALBIN):${PATH}"
+smoke-test: export PATH:=$(LOCALBIN):${PATH}
 smoke-test: build-release-artifacts ## Run a full smoke test on a set of local release artifacts, based on the current working directory.
 	./hack/release/smoke_test/smoke_test.sh \
 		-l $(or $(ARTIFACTS_DIR),release-artifacts) \
@@ -297,6 +293,9 @@ define ENV_OPTION
 $(if $(2),$(1) "$(2)")
 endef
 
+# Default some of the testing options
+TEST_PARALLELISM ?= 4
+
 .PHONY: run-int-tests run-integration-tests run-e2e-tests
 run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
@@ -317,7 +316,7 @@ int-tests: e2e-tests
 integration-tests: e2e-tests
 e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
-e2e-tests: export PATH:="$(LOCALBIN):${PATH}"
+e2e-tests: export PATH:=$(LOCALBIN):${PATH}
 e2e-tests: kind docker-build ## Run e2e/integration tests
 	./tests/scripts/manage_cluster.sh run-with-cluster "$(MAKE)" run-e2e-tests
 
