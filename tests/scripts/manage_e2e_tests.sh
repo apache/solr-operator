@@ -21,13 +21,16 @@ set -o pipefail
 # error on unset variables
 set -u
 
+SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+REPO_DIR=$( cd -- "${SCRIPT_DIR}" &> /dev/null && cd -- ../.. &> /dev/null && pwd )
+
 show_help() {
 cat << EOF
-Usage: ./tests/util/setup_cluster.sh (create|destroy|kubeconfig) [-h] [-k KUBERNETES_VERSION] [-s SOLR_IMAGE] [-a ADDITIONAL_IMAGES (bash array)] -i OPERATOR_IMAGE
+Usage: ./tests/scripts/manage_e2e_tests.sh (run-tests|create-cluster|destroy-cluster|kubeconfig) [-h] [-k KUBERNETES_VERSION] [-s SOLR_IMAGE] [-a ADDITIONAL_IMAGES (bash array)] -i OPERATOR_IMAGE
 
-Manage a KinD cluster for Solr Operator e2e testing.
+Manage the Solr Operator E2E tests via a KinD cluster.
 
-Available actions are: create, destroy, kubeconfig
+Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
 
     -h  Display this help and exit
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
@@ -60,10 +63,9 @@ while getopts hv:i:k:s:a: opt; do
     esac
 done
 shift "$((OPTIND-1))"   # Discard the options and sentinel --
-echo $1
 ACTION="${1:-}"
 if [[ -z "${ACTION:-}" ]]; then
-  echo "You must specify a cluster action. Either 'create', 'destroy' or 'kubeconfig'." >&2 && exit 1
+  echo "You must specify a cluster action. Either 'run-tests', 'create-cluster', 'destroy-cluster' or 'kubeconfig'." >&2 && exit 1
 fi
 ACTION_ARGS=("${@:2}")
 
@@ -79,14 +81,20 @@ fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
 fi
+if [[ "${SOLR_IMAGE}" != *":"* ]]; then
+  SOLR_IMAGE="solr:${SOLR_IMAGE}"
+fi
 
 export CLUSTER_NAME="solr-op-${OPERATOR_IMAGE##*:}-e2e-tests-solr-${SOLR_IMAGE##*:}"
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
-export KUBERNETES_VERSION="${KUBERNETES_VERSION}"
-export OPERATOR_IMAGE="${OPERATOR_IMAGE}"
-export SOLR_IMAGE="${SOLR_IMAGE}"
-export ADDITIONAL_IMAGES=("${ADDITIONAL_IMAGES[@]}")
+export KUBERNETES_VERSION
+export OPERATOR_IMAGE
+export SOLR_IMAGE
+export ADDITIONAL_IMAGES
 
+# Cluster Operation Options
+export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
+export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
 function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
@@ -105,6 +113,33 @@ function add_image_to_kind_repo_if_local() {
   fi
 }
 
+# These gingko params are customized via the following envVars
+GINKGO_PARAM_NAMES=(--seed    --procs          --focus-file --label-filter --focus      --skip)
+GINKGO_PARAM_ENVS=( TEST_SEED TEST_PARALLELISM TEST_FILES   TEST_LABELS    TEST_FILTER TEST_SKIP)
+function run_tests() {
+  start_cluster
+
+  GINKGO_PARAMS=()
+  for idx in "${!GINKGO_PARAM_NAMES[@]}"; do
+    param=${GINKGO_PARAM_NAMES[$idx]}
+    envName=${GINKGO_PARAM_ENVS[$idx]}
+    if [[ -n "${!envName:-}" ]]; then
+      GINKGO_PARAMS+=("${param}" "${!envName}")
+    fi
+  done
+  GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
+
+  GINKGO_EDITOR_INTEGRATION=true ginkgo --randomize-all "${GINKGO_PARAMS[@]}" "${REPO_DIR}"/tests/e2e/...
+
+  printf "\n********************\n"
+  printf "Local end-to-end cluster test successfully run!\n\n"
+
+  if [[ "${LEAVE_KIND_CLUSTER_ON_SUCCESS}" != true ]]; then
+    printf "Deleting test KinD Kubernetes cluster after a successful test run.\n\n"
+    delete_cluster
+  fi
+}
+
 function export_kubeconfig() {
   kind export kubeconfig --name "${CLUSTER_NAME}"
 }
@@ -115,15 +150,23 @@ function delete_cluster() {
 
 function start_cluster() {
   if (kind get clusters | grep "${CLUSTER_NAME}"); then
-    printf "Delete cluster, so the test starts with a clean slate.\n\n"
-    delete_cluster
+    if [[ "${REUSE_KIND_CLUSTER_IF_EXISTS}" = true ]]; then
+      printf "KinD cluster exists and REUSE_KIND_CLUSTER_IF_EXISTS = true, so using existing KinD cluster.\n\n"
+      setup_cluster
+      return
+    else
+      printf "Delete KinD cluster, so the test starts with a clean slate.\n\n"
+      delete_cluster
+    fi
   fi
 
-  SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
-  echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
+  echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in KinD. This will allow us to test the CRDs, Helm chart and the Docker image."
   kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}" --config "${SCRIPT_DIR}/e2e-kind-config.yaml"
 
+  setup_cluster
+}
+
+function setup_cluster() {
   # Load the docker images into the cluster
   add_image_to_kind_repo_if_local "${OPERATOR_IMAGE}" false
   add_image_to_kind_repo_if_local "${SOLR_IMAGE}" true
@@ -131,26 +174,22 @@ function start_cluster() {
     add_image_to_kind_repo_if_local "${IMAGE}" true
   done
 
-  kubectl create -f "config/crd/bases/" || kubectl replace -f "config/crd/bases/"
-  kubectl create -f "config/dependencies/" || kubectl replace -f "config/dependencies/"
+  printf "Installing Solr & Zookeeper CRDs\n"
+  kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
+  kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
+  echo ""
 }
 
 case "$ACTION" in
-  run-with-cluster)
-    echo "Creating test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to run end-to-end tests."
-    start_cluster
-
-    "${ACTION_ARGS[@]}"
-
-    echo "Deleting test Kind Kubernetes cluster."
-    delete_cluster
+  run-tests)
+    run_tests
     ;;
-  create)
-    echo "Creating test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to run end-to-end tests."
+  create-cluster)
+    echo "Creating test Kubernetes ${KUBERNETES_VERSION} cluster in KinD. This will allow us to run end-to-end tests."
     start_cluster
     ;;
-  destroy)
-    echo "Deleting test Kind Kubernetes cluster."
+  destroy-cluster)
+    echo "Deleting test KinD Kubernetes cluster."
     delete_cluster
     ;;
   kubeconfig)

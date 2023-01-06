@@ -151,7 +151,7 @@ func (rc RetryCommand) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (rc RetryCommand) String() string {
 	return fmt.Sprintf(
-		"make e2e-tests TEST_FILES=%q TEST_FILTERS=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q",
+		"make e2e-tests TEST_FILES=%q TEST_FILTER=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q",
 		rc.report.FileName(),
 		rc.report.FullText(),
 		rc.randomSeed,

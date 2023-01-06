@@ -36,7 +36,8 @@ GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
-E2E_PARALLELISM ?= 4
+# Default some of the testing options
+TEST_PARALLELISM ?= 4
 
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
@@ -174,8 +175,8 @@ docker-push: ## Push the docker image for the Solr Operator
 
 .PHONY: install
 install: manifests ## Install CRDs into the K8s cluster specified in ~/.kube/config
-	kubectl replace -k config/crd || kubectl create -k config/crd
-	kubectl replace -f config/dependencies || kubectl create -f config/dependencies
+	kubectl replace -k config/crd  2>/dev/null || kubectl create -k config/crd
+	kubectl replace -f config/dependencies  2>/dev/null || kubectl create -f config/dependencies
 
 .PHONY: uninstall
 uninstall: ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config
@@ -288,37 +289,17 @@ unit-tests: manifests generate setup-envtest ## Run the unit tests
 
 	KUBEBUILDER_ASSETS="$(call kubebuilder-assets)" GINKGO_EDITOR_INTEGRATION=true go test ./api/... ./controllers/... -coverprofile cover.out
 
-# Pass an envVar as an option if it exists
-define ENV_OPTION
-$(if $(2),$(1) "$(2)")
-endef
-
-# Default some of the testing options
-TEST_PARALLELISM ?= 4
-
-.PHONY: run-int-tests run-integration-tests run-e2e-tests
-run-int-tests: run-e2e-tests
-run-integration-tests: run-e2e-tests
-run-e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
-run-e2e-tests: manifests generate ginkgo helm-dependency-build ## Run e2e/integration tests
-	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all \
-		$(call ENV_OPTION,--seed,$(TEST_SEED)) $(call ENV_OPTION,--procs,$(TEST_PARALLELISM)) $(call ENV_OPTION,--focus-file,$(TEST_FILES)) \
-		$(call ENV_OPTION,--label-filter,$(TEST_LABELS)) $(call ENV_OPTION,--focus,$(TEST_FILTERS)) $(call ENV_OPTION,--skip,$(TEST_SKIP)) $(RAW_GINKGO) \
-		./tests/e2e/...
-	@echo ""
-	@echo "********************"
-	@echo "Local end-to-end cluster test successfully run!"
-	@echo ""
-	@echo ""
-
 .PHONY: int-tests integration-tests e2e-tests
 int-tests: e2e-tests
 integration-tests: e2e-tests
+# Export the variables defaulted in this Makefile that are used in the e2e tests
+# Variables provided by the user will automatically be passed through
 e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
+e2e-tests: export TEST_PARALLELISM?=4
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
 e2e-tests: export PATH:=$(LOCALBIN):${PATH}
-e2e-tests: kind docker-build ## Run e2e/integration tests
-	./tests/scripts/manage_cluster.sh run-with-cluster "$(MAKE)" run-e2e-tests
+e2e-tests: ginkgo kind manifests generate helm-dependency-build docker-build ## Run e2e/integration tests
+	./tests/scripts/manage_e2e_tests.sh run-tests
 
 ##@ Helm
 
