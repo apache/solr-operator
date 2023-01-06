@@ -138,6 +138,8 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 	$(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
 
 .PHONY: build-release-artifacts
+# Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
+build-release-artifacts: export PATH:="$(LOCALBIN):${PATH}"
 build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
 
@@ -202,6 +204,8 @@ undeploy: prepare-deploy-kustomize ## Undeploy controller from the K8s cluster s
 ##@ Tests and Checks
 
 .PHONY: smoke-test
+# Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
+smoke-test: export PATH:="$(LOCALBIN):${PATH}"
 smoke-test: build-release-artifacts ## Run a full smoke test on a set of local release artifacts, based on the current working directory.
 	./hack/release/smoke_test/smoke_test.sh \
 		-l $(or $(ARTIFACTS_DIR),release-artifacts) \
@@ -297,7 +301,7 @@ endef
 run-int-tests: run-e2e-tests
 run-integration-tests: run-e2e-tests
 run-e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
-run-e2e-tests: #manifests generate ginkgo helm-dependency-build
+run-e2e-tests: manifests generate ginkgo helm-dependency-build ## Run e2e/integration tests
 	GINKGO_EDITOR_INTEGRATION=true $(GINKGO) --randomize-all \
 		$(call ENV_OPTION,--seed,$(TEST_SEED)) $(call ENV_OPTION,--procs,$(TEST_PARALLELISM)) $(call ENV_OPTION,--focus-file,$(TEST_FILES)) \
 		$(call ENV_OPTION,--label-filter,$(TEST_LABELS)) $(call ENV_OPTION,--focus,$(TEST_FILTERS)) $(call ENV_OPTION,--skip,$(TEST_SKIP)) $(RAW_GINKGO) \
@@ -312,8 +316,10 @@ run-e2e-tests: #manifests generate ginkgo helm-dependency-build
 int-tests: e2e-tests
 integration-tests: e2e-tests
 e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
-e2e-tests: kind docker-build
-	PATH="$(LOCALBIN):${PATH}" ./tests/scripts/manage_cluster.sh run-with-cluster "$(MAKE)" run-e2e-tests
+# Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
+e2e-tests: export PATH:="$(LOCALBIN):${PATH}"
+e2e-tests: kind docker-build ## Run e2e/integration tests
+	./tests/scripts/manage_cluster.sh run-with-cluster "$(MAKE)" run-e2e-tests
 
 ##@ Helm
 
@@ -332,7 +338,7 @@ LOCALBIN ?= $(PROJECT_DIR)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
-install-dependencies: controller-gen kustomize go-licenses setup-envtest ## Install necessary dependencies for building and testing the Solr Operator
+install-dependencies: controller-gen kustomize go-licenses setup-envtest kind ginkgo ## Install necessary dependencies for building and testing the Solr Operator
 
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
