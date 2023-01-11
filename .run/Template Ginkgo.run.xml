@@ -1,7 +1,9 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="true" type="GinkgoRunConfigurationType">
+    <envs>
+      <env name="PROJ_DIR" value="$PROJECT_DIR$" />
+    </envs>
     <ginkgo-executable value="$PROJECT_DIR$/hack/idea/ginkgo-run.sh" />
-    <working-dir value="$PROJECT_DIR$" />
     <envs>
       <env name="PROJ_DIR" value="$PROJECT_DIR$" />
     </envs>

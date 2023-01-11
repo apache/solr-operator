@@ -84,6 +84,7 @@ fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
 fi
+IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 
 export CLUSTER_NAME="solr-op-${OPERATOR_IMAGE##*:}-e2e-tests-solr-${SOLR_IMAGE##*:}"
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
@@ -91,6 +92,7 @@ export KUBERNETES_VERSION
 export OPERATOR_IMAGE
 export SOLR_IMAGE
 export ADDITIONAL_IMAGES
+export RAW_GINKGO
 
 # Cluster Operation Options
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls

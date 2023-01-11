@@ -21,9 +21,22 @@ set -o pipefail
 # error on unset variables
 set -u
 
+WORKING_DIR="$(pwd -P)"
+
 cd "${PROJ_DIR}"
-make idea
-export KUBEBUILDER_ASSETS="$(make kubebuilder-assets)"
-cd -
-export GINKGO_EDITOR_INTEGRATION=true
-"${PROJ_DIR}/bin/ginkgo" "$@"
+
+# Add all possible entry points for tests
+if [[ "${WORKING_DIR}" == "${PROJ_DIR}/tests/e2e"* ]]; then
+  RAW_GINKGO_TMP=("${@:1}")
+  RAW_GINKGO=$(IFS=$'\036'; echo "${RAW_GINKGO_TMP[*]}")
+  export RAW_GINKGO
+  make e2e-tests
+else
+  # All other tests will be treated as unit tests
+  make idea
+  KUBEBUILDER_ASSETS="$(make kubebuilder-assets)"
+  export KUBEBUILDER_ASSETS
+  cd -
+  export GINKGO_EDITOR_INTEGRATION=true
+  "${PROJ_DIR}/bin/ginkgo" "$@"
+fi
