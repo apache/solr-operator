@@ -87,6 +87,13 @@ type SolrDeleteRequestStatus struct {
 	Status string `json:"status,omitempty"`
 }
 
+type SolrCollectionsListing struct {
+	ResponseHeader SolrResponseHeader `json:"responseHeader"`
+
+	// +optional
+	Collections []string `json:"collections,omitempty"`
+}
+
 func CheckAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (asyncState string, message string, err error) {
 	asyncStatus := &SolrAsyncStatusResponse{}
 

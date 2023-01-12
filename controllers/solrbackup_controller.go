@@ -223,8 +223,18 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		currentBackupStatus.StartTime = metav1.Now()
 	}
 
+	collectionsToBackup := backup.Spec.Collections
+
+	// If there are no collections specified, we need to list through collections available in Solr
+	if len(collectionsToBackup) == 0 {
+		collectionsToBackup, err = util.ListAllSolrCollections(ctx, solrCloud, logger)
+		if err != nil {
+			logger.Error(err, "Error listing collections", "solrCloud", solrCloud.Name)
+		}
+	}
+
 	// Go through each collection specified and reconcile the backup.
-	for _, collection := range backup.Spec.Collections {
+	for _, collection := range collectionsToBackup {
 		// This will in-place update the CollectionBackupStatus in the backup object
 		if _, err = reconcileSolrCollectionBackup(ctx, backup, currentBackupStatus, solrCloud, backupRepository, collection, logger); err != nil {
 			break
