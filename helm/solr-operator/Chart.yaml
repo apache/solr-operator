@@ -101,6 +101,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/514
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/490
+    - kind: fixed
+      description: Use correct user for chmod command in cp-solr-xml init container
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/520
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/519
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
