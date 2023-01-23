@@ -19,6 +19,10 @@ package util
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,9 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -594,6 +595,21 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
 
+	// Figure out the solrUser and solrGroup to use
+	solrUser := DefaultSolrUser
+	solrGroup := DefaultSolrGroup
+	solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
+
+	if solrPodSecurityContext.RunAsUser != nil {
+		solrUser = int(*solrPodSecurityContext.RunAsUser)
+
+		if solrPodSecurityContext.RunAsGroup != nil {
+			solrGroup = int(*solrPodSecurityContext.RunAsGroup)
+		} else {
+			solrGroup = solrUser
+		}
+	}
+
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
 	for _, repo := range solrCloud.Spec.BackupRepositories {
@@ -603,8 +619,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 				setupCommands = append(setupCommands, fmt.Sprintf(
 					"chown -R %d:%d %s",
-					DefaultSolrUser,
-					DefaultSolrGroup,
+					solrUser,
+					solrGroup,
 					volumeMount.MountPath))
 			}
 		}
