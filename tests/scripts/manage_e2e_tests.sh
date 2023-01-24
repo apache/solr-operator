@@ -86,7 +86,7 @@ if [[ "${SOLR_IMAGE}" != *":"* ]]; then
 fi
 IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 
-CLUSTER_NAME="$(echo "solr-op-${OPERATOR_IMAGE##*:}-e2e-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
+CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
 export CLUSTER_NAME
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
 export KUBERNETES_VERSION
@@ -103,8 +103,8 @@ function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
   PULL_IF_NOT_LOCAL="$2"
   if (docker image inspect "${IMAGE}" &>/dev/null); then
-    kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
     printf "\nUsing local version of image \"%s\".\nIf you want to use an updated version of this image, run \"docker pull %s\" before running the integration tests again.\n\n" "${IMAGE}" "${IMAGE}"
+    kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
   else
     if [ "${PULL_IF_NOT_LOCAL}" = true ]; then
       printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}" "${IMAGE}"
@@ -152,9 +152,10 @@ function delete_cluster() {
 }
 
 function start_cluster() {
-  if (kind get clusters | grep "${CLUSTER_NAME}"); then
+  if (kind get clusters | grep "^${CLUSTER_NAME}$"); then
     if [[ "${REUSE_KIND_CLUSTER_IF_EXISTS}" = true ]]; then
       printf "KinD cluster exists and REUSE_KIND_CLUSTER_IF_EXISTS = true, so using existing KinD cluster.\n\n"
+      kind export kubeconfig --name "${CLUSTER_NAME}"
       setup_cluster
       return
     else
