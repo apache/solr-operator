@@ -58,12 +58,13 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 						Ephemeral: &solrv1beta1.ZKEphemeral{},
 					},
 				},
+				SolrJavaMem: "-Xms512m -Xmx512m",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("512Mi"),
-								corev1.ResourceCPU:    resource.MustParse("300m"),
+								corev1.ResourceMemory: resource.MustParse("600Mi"),
+								corev1.ResourceCPU:    resource.MustParse("1"),
 							},
 						},
 					},

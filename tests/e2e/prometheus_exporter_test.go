@@ -52,7 +52,7 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 				Namespace: testNamespace(),
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
-				Replicas: &three,
+				Replicas: &two,
 				SolrImage: &solrv1beta1.ContainerImage{
 					Repository: strings.Split(solrImage, ":")[0],
 					Tag:        strings.Split(solrImage+":", ":")[1],
@@ -64,12 +64,13 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 						Ephemeral: &solrv1beta1.ZKEphemeral{},
 					},
 				},
+				SolrJavaMem: "-Xms512m -Xmx512m",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("512Mi"),
-								corev1.ResourceCPU:    resource.MustParse("300m"),
+								corev1.ResourceMemory: resource.MustParse("600Mi"),
+								corev1.ResourceCPU:    resource.MustParse("1"),
 							},
 						},
 					},
@@ -86,7 +87,7 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		})
 
 		By("creating a Solr Collection to query metrics for")
-		createAndQueryCollection(solrCloud, solrCollection, 1, 3)
+		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
 	})
 
 	BeforeEach(func() {

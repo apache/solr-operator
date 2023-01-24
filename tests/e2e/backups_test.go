@@ -32,23 +32,28 @@ import (
 	"time"
 )
 
-var _ = FDescribe("E2E - Backups", func() {
+var _ = FDescribe("E2E - Backups", Ordered, func() {
 	var (
 		solrCloud *solrv1beta1.SolrCloud
 
 		solrBackup *solrv1beta1.SolrBackup
 
 		solrCollection = "e2e"
+
+		localBackupRepository = "local"
 	)
 
-	BeforeEach(func() {
+	/*
+		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
+	*/
+	BeforeAll(func(ctx context.Context) {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
 				Namespace: testNamespace(),
 			},
 			Spec: solrv1beta1.SolrCloudSpec{
-				Replicas: &three,
+				Replicas: &two,
 				SolrImage: &solrv1beta1.ContainerImage{
 					Repository: strings.Split(solrImage, ":")[0],
 					Tag:        strings.Split(solrImage+":", ":")[1],
@@ -60,12 +65,25 @@ var _ = FDescribe("E2E - Backups", func() {
 						Ephemeral: &solrv1beta1.ZKEphemeral{},
 					},
 				},
+				SolrJavaMem: "-Xms512m -Xmx512m",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						Resources: corev1.ResourceRequirements{
 							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("512Mi"),
-								corev1.ResourceCPU:    resource.MustParse("300m"),
+								corev1.ResourceMemory: resource.MustParse("600Mi"),
+								corev1.ResourceCPU:    resource.MustParse("1"),
+							},
+						},
+					},
+				},
+				BackupRepositories: []solrv1beta1.SolrBackupRepository{
+					{
+						Name: localBackupRepository,
+						Volume: &solrv1beta1.VolumeRepository{
+							Source: corev1.VolumeSource{
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: backupDirHostPath,
+								},
 							},
 						},
 					},
@@ -73,22 +91,6 @@ var _ = FDescribe("E2E - Backups", func() {
 			},
 		}
 
-		solrBackup = &solrv1beta1.SolrBackup{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: testNamespace(),
-			},
-			Spec: solrv1beta1.SolrBackupSpec{
-				SolrCloud: "foo",
-				Collections: []string{
-					solrCollection,
-				},
-				Location: "test-dir/dir-" + rand.String(5),
-			},
-		}
-	})
-
-	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -99,31 +101,45 @@ var _ = FDescribe("E2E - Backups", func() {
 
 		By("creating a Solr Collection to backup")
 		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
+	})
+
+	BeforeEach(func() {
+		solrBackup = &solrv1beta1.SolrBackup{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: solrCloud.Namespace,
+			},
+			Spec: solrv1beta1.SolrBackupSpec{
+				SolrCloud: "foo",
+				Collections: []string{
+					solrCollection,
+				},
+				Location: "test-dir",
+			},
+		}
+	})
+
+	JustBeforeEach(func(ctx context.Context) {
+		backupName := rand.String(5)
+		solrBackup.Name += backupName
+		// We are using one cloud for each Solr backup, make sure that the location is different for each
+		solrBackup.Spec.Location += "/dir-" + backupName
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())
 	})
 
-	AfterEach(func(ctx context.Context) {
+	AfterAll(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
+	})
+
+	AfterEach(func(ctx context.Context) {
+		deleteAndWait(ctx, solrBackup)
 	})
 
 	FContext("Local Directory - Recurring", func() {
 		BeforeEach(func() {
-			backupName := "local"
-			solrCloud.Spec.BackupRepositories = []solrv1beta1.SolrBackupRepository{
-				{
-					Name: backupName,
-					Volume: &solrv1beta1.VolumeRepository{
-						Source: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: backupDirHostPath,
-							},
-						},
-					},
-				},
-			}
-			solrBackup.Spec.RepositoryName = backupName
+			solrBackup.Spec.RepositoryName = localBackupRepository
 			solrBackup.Spec.Recurrence = &solrv1beta1.BackupRecurrence{
 				Schedule: "@every 10s",
 				MaxSaved: 3,
@@ -164,20 +180,7 @@ var _ = FDescribe("E2E - Backups", func() {
 
 	FContext("Local Directory - Single", func() {
 		BeforeEach(func() {
-			backupName := "local"
-			solrCloud.Spec.BackupRepositories = []solrv1beta1.SolrBackupRepository{
-				{
-					Name: backupName,
-					Volume: &solrv1beta1.VolumeRepository{
-						Source: corev1.VolumeSource{
-							HostPath: &corev1.HostPathVolumeSource{
-								Path: backupDirHostPath,
-							},
-						},
-					},
-				},
-			}
-			solrBackup.Spec.RepositoryName = backupName
+			solrBackup.Spec.RepositoryName = localBackupRepository
 			solrBackup.Spec.Recurrence = nil
 		})
 
