@@ -37,7 +37,7 @@ GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
 
 # Default some of the testing options
-TEST_PARALLELISM ?= 4
+TEST_PARALLELISM ?= 3
 
 KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
