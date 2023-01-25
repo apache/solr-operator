@@ -31,8 +31,3 @@ nodes:
     extraMounts:
       - hostPath: /tmp/backup
         containerPath: /tmp/backup
-  - role: worker
-    # add a mount from /path/to/my/files on the host to /files on the node
-    extraMounts:
-      - hostPath: /tmp/backup
-        containerPath: /tmp/backup
