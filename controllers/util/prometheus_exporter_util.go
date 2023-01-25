@@ -205,7 +205,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				TimeoutSeconds:      2,
 				PeriodSeconds:       2,
 				SuccessThreshold:    1,
-				FailureThreshold:    5,
+				FailureThreshold:    10,
 			},
 			LivenessProbe: &corev1.Probe{
 				ProbeHandler:     defaultProbeHandler,
@@ -217,7 +217,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			ReadinessProbe: &corev1.Probe{
 				ProbeHandler:     defaultProbeHandler,
 				TimeoutSeconds:   2,
-				PeriodSeconds:    10,
+				PeriodSeconds:    5,
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 			},
