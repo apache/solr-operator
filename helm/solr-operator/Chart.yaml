@@ -84,6 +84,30 @@ annotations:
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/508
+    - kind: changed
+      description: Zookeeper images now use the IfNotPresent pullPolicy by default
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/512/files
+    - kind: fixed
+      description: Fix bug in non-recurring SolrBackups
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/509
+    - kind: fixed
+      description: Fix issue where Zookeeper specific labels are not propagated to Zookeeper pods
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/514
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/490
+    - kind: fixed
+      description: Fix SolrBackup not taking backups when the collections field is omitted 
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/516
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/515
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease

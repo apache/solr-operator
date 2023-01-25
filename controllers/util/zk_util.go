@@ -18,12 +18,13 @@
 package util
 
 import (
+	"strings"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 // GenerateZookeeperCluster returns a new ZookeeperCluster pointer generated for the SolrCloud instance
@@ -124,7 +125,19 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 	}
 
 	if len(zkSpec.ZookeeperPod.Labels) > 0 {
-		zkCluster.Spec.Pod.Labels = zkSpec.ZookeeperPod.Labels
+		// HACK: Include the pod labels on Spec.Labels due to
+		// https://github.com/pravega/zookeeper-operator/issues/511. See
+		// https://github.com/apache/solr-operator/issues/490 for more details.
+		// Note that the `labels` value should always take precedence over the pod
+		// specific labels.
+		podLabels := MergeLabelsOrAnnotations(labels, zkSpec.ZookeeperPod.Labels)
+
+		zkCluster.Spec.Pod.Labels = podLabels
+
+		// This override is applied to the zkCluster.Spec.Labels due to a bug in
+		// the zookeeper operator:
+		// https://github.com/pravega/zookeeper-operator/issues/511
+		zkCluster.Spec.Labels = podLabels
 	}
 
 	if len(zkSpec.ZookeeperPod.Annotations) > 0 {

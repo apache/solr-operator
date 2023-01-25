@@ -176,10 +176,10 @@ The command removes all the Kubernetes components associated with the chart and 
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
-| replicaCount | int | `1` | The number of Solr Operator pods to run
+| replicaCount | int | `1` | The number of Solr Operator pods to run |
 | rbac.create | boolean | `true` | Create the necessary RBAC rules, whether cluster-wide or namespaced, for the Solr Operator. |
 | serviceAccount.create | boolean | `true` | Create a serviceAccount to be used for this operator. This serviceAccount will be given the permissions specified in the operator's RBAC rules. |
-| serviceAccount.name | string | `""` | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. | |
+| serviceAccount.name | string | `""` | If `serviceAccount.create` is set to `false`, the name of an existing serviceAccount in the target namespace **must** be provided to run the Solr Operator with. This serviceAccount with be given the operator's RBAC rules. |
 | resources.limits | map[string]string |  | Provide Resource limits for the Solr Operator container |
 | resources.requests | map[string]string |  | Provide Resource requests for the Solr Operator container |
 | labels | map[string]string |  | Custom labels to add to the Solr Operator pod |

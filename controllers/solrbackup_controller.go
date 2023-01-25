@@ -92,17 +92,18 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	requeueOrNot := reconcile.Result{}
 
-	var backupNeedsToWait bool
+	// Backup work needs to be done by default if the current backup is not finished
+	doBackupWork := !backup.Status.IndividualSolrBackupStatus.Finished
 
 	// Check if we should start the next backup
-	if backup.Status.NextScheduledTime != nil {
-		// If the backup no longer enabled, remove the next scheduled time
+	// Do not check if already doing a backup
+	if !doBackupWork && backup.Status.NextScheduledTime != nil {
 		if !backup.Spec.Recurrence.IsEnabled() {
 			backup.Status.NextScheduledTime = nil
-			backupNeedsToWait = false
+			doBackupWork = false
 		} else if backup.Status.NextScheduledTime.UTC().Before(time.Now().UTC()) {
 			// We have hit the next scheduled restart time.
-			backupNeedsToWait = false
+			doBackupWork = true
 			backup.Status.NextScheduledTime = nil
 
 			// Add the current backup to the front of the history.
@@ -119,14 +120,12 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		} else {
 			// If we have not hit the next scheduled restart, wait to requeue until that is true.
 			updateRequeueAfter(&requeueOrNot, backup.Status.NextScheduledTime.UTC().Sub(time.Now().UTC()))
-			backupNeedsToWait = true
+			doBackupWork = false
 		}
-	} else {
-		backupNeedsToWait = false
 	}
 
-	// Do backup work if we are not waiting and the current backup is not finished
-	if !backupNeedsToWait && !backup.Status.IndividualSolrBackupStatus.Finished {
+	// Do backup work if a backup is in-progress or needs to be started
+	if doBackupWork {
 		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, &backup.Status.IndividualSolrBackupStatus, logger)
 		if err1 != nil {
 			// TODO Should we be failing the backup for some sub-set of errors here?
@@ -146,7 +145,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Schedule the next backupTime, if it doesn't have a next scheduled time, it has recurrence and the current backup is finished
-	if backup.Status.IndividualSolrBackupStatus.Finished {
+	if backup.Status.IndividualSolrBackupStatus.Finished && backup.Spec.Recurrence.IsEnabled() {
 		if nextBackupTime, err1 := util.ScheduleNextBackup(backup.Spec.Recurrence.Schedule, backup.Status.IndividualSolrBackupStatus.StartTime.Time); err1 != nil {
 			logger.Error(err1, "Could not update backup scheduling due to bad cron schedule", "cron", backup.Spec.Recurrence.Schedule)
 		} else {
@@ -224,8 +223,18 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		currentBackupStatus.StartTime = metav1.Now()
 	}
 
+	collectionsToBackup := backup.Spec.Collections
+
+	// If there are no collections specified, we need to list through collections available in Solr
+	if len(collectionsToBackup) == 0 {
+		collectionsToBackup, err = util.ListAllSolrCollections(ctx, solrCloud, logger)
+		if err != nil {
+			logger.Error(err, "Error listing collections", "solrCloud", solrCloud.Name)
+		}
+	}
+
 	// Go through each collection specified and reconcile the backup.
-	for _, collection := range backup.Spec.Collections {
+	for _, collection := range collectionsToBackup {
 		// This will in-place update the CollectionBackupStatus in the backup object
 		if _, err = reconcileSolrCollectionBackup(ctx, backup, currentBackupStatus, solrCloud, backupRepository, collection, logger); err != nil {
 			break
