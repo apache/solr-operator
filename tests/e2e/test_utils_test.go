@@ -128,6 +128,7 @@ func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection strin
 
 func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega) {
 	pod := solrCloud.GetAllSolrPodNames()[0]
+	asyncId := fmt.Sprintf("create-collection-%s-%d-%d", collection, shards, replicasPerShard)
 	response, err := runExecForContainer(
 		util.SolrNodeContainer,
 		pod,
@@ -135,15 +136,57 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		[]string{
 			"curl",
 			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d",
+				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d&async=%s",
 				solrCloud.Spec.SolrAddressability.PodPort,
 				collection,
 				replicasPerShard,
-				shards),
+				shards,
+				asyncId),
 		},
 	)
 	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while creating Solr Collection")
 	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
+
+	g.Eventually(func(innerG Gomega) {
+		response, err = runExecForContainer(
+			util.SolrNodeContainer,
+			pod,
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf(
+					"http://localhost:%d/solr/admin/collections?action=REQUESTSTATUS&requestid=%s",
+					solrCloud.Spec.SolrAddressability.PodPort,
+					asyncId),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while checking if Solr Collection has been created")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
+		if strings.Contains(response, "\"state\":\"failed\"") {
+			StopTrying("A failure occurred while creating the Solr Collection").
+				Attach("Collection", collection).
+				Attach("Shards", shards).
+				Attach("ReplicasPerShard", replicasPerShard).
+				Attach("Response", response).
+				Now()
+		}
+	}).Should(Succeed(), "Collection creation was not successful")
+
+	response, err = runExecForContainer(
+		util.SolrNodeContainer,
+		pod,
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			fmt.Sprintf(
+				"http://localhost:%d/solr/admin/collections?action=DELETESTATUS&requestid=%s",
+				solrCloud.Spec.SolrAddressability.PodPort,
+				asyncId),
+		},
+	)
+	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
 
 	queryCollectionWithGomega(solrCloud, collection, 0, g)
 }

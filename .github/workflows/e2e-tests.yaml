@@ -20,6 +20,21 @@ on:
     branches:
       - 'main'
       - 'release-*'
+    paths-ignore:
+      - '.github/workflows/**'
+      - '!.github/workflows/e2e-tests.yaml'
+      - '.run/**'
+      - 'config/**'
+      - 'dev-docs/**'
+      - 'docs/**'
+      - 'example/**'
+      - 'hack/**'
+      - '.gitignore'
+      - '.asf.yaml'
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - 'NOTICE'
 
 jobs:
   e2eTests:
