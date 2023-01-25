@@ -406,21 +406,30 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					Protocol:      "TCP",
 				},
 			},
-			LivenessProbe: &corev1.Probe{
-				InitialDelaySeconds: 20,
+			// Wait 60 seconds for Solr to startup
+			StartupProbe: &corev1.Probe{
+				InitialDelaySeconds: 10,
 				TimeoutSeconds:      defaultProbeTimeout,
 				SuccessThreshold:    1,
-				FailureThreshold:    3,
-				PeriodSeconds:       10,
-				ProbeHandler:        defaultHandler,
-			},
-			ReadinessProbe: &corev1.Probe{
-				InitialDelaySeconds: 15,
-				TimeoutSeconds:      defaultProbeTimeout,
-				SuccessThreshold:    1,
-				FailureThreshold:    3,
+				FailureThreshold:    10,
 				PeriodSeconds:       5,
 				ProbeHandler:        defaultHandler,
+			},
+			// Kill Solr if it is unavailable for any 60-second period
+			LivenessProbe: &corev1.Probe{
+				TimeoutSeconds:   defaultProbeTimeout,
+				SuccessThreshold: 1,
+				FailureThreshold: 3,
+				PeriodSeconds:    20,
+				ProbeHandler:     defaultHandler,
+			},
+			// Do not route requests to solr if it is not available for any 20-second period
+			ReadinessProbe: &corev1.Probe{
+				TimeoutSeconds:   defaultProbeTimeout,
+				SuccessThreshold: 1,
+				FailureThreshold: 2,
+				PeriodSeconds:    10,
+				ProbeHandler:     defaultHandler,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
