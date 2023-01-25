@@ -210,3 +210,17 @@ func ScheduleNextBackup(restartSchedule string, lastBackupTime time.Time) (nextB
 	}
 	return
 }
+
+func ListAllSolrCollections(ctx context.Context, cloud *solr.SolrCloud, logger logr.Logger) (collections []string, err error) {
+	logger.Info("Listing all Solr collections available", "solrCloud", cloud.Name)
+	resp := &solr_api.SolrCollectionsListing{}
+	queryParams := url.Values{}
+	queryParams.Add("action", "LIST")
+	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
+	if err == nil {
+		if hasError, apiErr := solr_api.CheckForCollectionsApiError("LIST", resp.ResponseHeader); hasError {
+			err = apiErr
+		}
+	}
+	return resp.Collections, err
+}
