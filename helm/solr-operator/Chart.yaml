@@ -108,6 +108,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/516
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/515
+    - kind: changed
+      description: Use better default startup, liveness and readiness probes for SolrCloud and SolrPrometheusExporter
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/511
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/510
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
