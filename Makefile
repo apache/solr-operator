@@ -298,7 +298,7 @@ e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
 e2e-tests: export TEST_PARALLELISM?=4
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
 e2e-tests: export PATH:=$(LOCALBIN):${PATH}
-e2e-tests: ginkgo kind manifests generate helm-dependency-build docker-build ## Run e2e/integration tests
+e2e-tests: ginkgo kind manifests generate helm-dependency-build docker-build ## Run e2e/integration tests. For help, refer to: dev-docs/e2e-testing.md
 	./tests/scripts/manage_e2e_tests.sh run-tests
 
 ##@ Helm
