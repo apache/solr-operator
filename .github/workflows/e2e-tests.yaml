@@ -40,10 +40,14 @@ jobs:
   e2eTests:
     name: Run E2E / Integration Tests
 
+    # Github runners do not currently have the resources to run these tests
+    if: false
+
     runs-on: ubuntu-latest
 
     strategy:
       matrix:
+        go-version: [ '1.19' ]
         kube-version: [ 'v1.21.14' ]
         solr-version: [ '9' ] # [ '8', '9' ]
 
@@ -53,7 +57,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v2
         with:
-          go-version: '1.19'
+          go-version: ${{ matrix.go-version }}
 
       - run: make clean
 
@@ -62,7 +66,7 @@ jobs:
         uses: actions/cache@v3
         with:
           path: bin
-          key: ${{ runner.os }}-code-dependencies-${{ matrix.go }}-${{ hashFiles('Makefile') }}
+          key: ${{ runner.os }}-code-dependencies-${{ matrix.go-version }}-${{ hashFiles('Makefile') }}
 
       - name: Install dev dependencies
         if: steps.cache-bin.outputs.cache-hit != 'true'
