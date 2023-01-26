@@ -69,4 +69,4 @@ jobs:
         run: make install-dependencies
 
       # Build
-      - run: make e2e-tests SOLR_IMAGE="solr:${{ matrix.solr-version }}" KUBERNETES_VERSION="solr:${{ matrix.kube-version }}" TEST_PARALLELISM=1
+      - run: make e2e-tests SOLR_IMAGE="solr:${{ matrix.solr-version }}" KUBERNETES_VERSION="${{ matrix.kube-version }}" TEST_PARALLELISM=1
