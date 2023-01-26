@@ -304,7 +304,8 @@ e2e-tests: ginkgo kind manifests generate helm-dependency-build docker-build ## 
 ##@ Helm
 
 # Build the dependencies for all Helm charts
-helm-dependency-build: ## Build the dependencies for all Helm charts
+helm-dependency-build: ## Build the dependencies for all Helm charts. This will also add any necessary helm repos
+	helm repo list | grep -q -w "https://charts.pravega.io" || helm repo add pravega https://charts.pravega.io
 	helm dependency build helm/solr-operator
 	helm dependency build helm/solr
 
