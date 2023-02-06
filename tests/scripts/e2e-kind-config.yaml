@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,29 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# exit immediately when a command fails
-set -e
-# only exit with zero if all commands of the pipeline exit successfully
-set -o pipefail
-# error on unset variables
-set -u
-
-WORKING_DIR="$(pwd -P)"
-
-cd "${PROJ_DIR}"
-
-# Add all possible entry points for tests
-if [[ "${WORKING_DIR}" == "${PROJ_DIR}/tests/e2e"* ]]; then
-  RAW_GINKGO_TMP=("${@:1}")
-  RAW_GINKGO=$(IFS=$'\036'; echo "${RAW_GINKGO_TMP[*]}")
-  export RAW_GINKGO
-  make e2e-tests
-else
-  # All other tests will be treated as unit tests
-  make idea
-  KUBEBUILDER_ASSETS="$(make kubebuilder-assets)"
-  export KUBEBUILDER_ASSETS
-  cd -
-  export GINKGO_EDITOR_INTEGRATION=true
-  "${PROJ_DIR}/bin/ginkgo" "$@"
-fi
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+nodes:
+  - role: control-plane
+    # add a mount from /path/to/my/files on the host to /files on the node
+    extraMounts:
+      - hostPath: /tmp/backup
+        containerPath: /tmp/backup
+  - role: worker
+    # add a mount from /path/to/my/files on the host to /files on the node
+    extraMounts:
+      - hostPath: /tmp/backup
+        containerPath: /tmp/backup
+  - role: worker
+    # add a mount from /path/to/my/files on the host to /files on the node
+    extraMounts:
+      - hostPath: /tmp/backup
+        containerPath: /tmp/backup

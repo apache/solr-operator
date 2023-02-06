@@ -17,34 +17,18 @@
 
 package solr_api
 
-import "fmt"
+type SolrBackupListResponse struct {
+	ResponseHeader SolrResponseHeader `json:"responseHeader"`
 
-func CheckForCollectionsApiError(action string, header SolrResponseHeader) (hasError bool, err error) {
-	if header.Status > 0 {
-		hasError = true
-		err = APIError{
-			Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
-			Status: header.Status,
-		}
-	}
-	return hasError, err
+	Collection string `json:"collection"`
+
+	// +optional
+	Backups []SolrBackupListInstance `json:"backups,omitempty"`
 }
 
-func CollectionsAPIError(action string, responseStatus int) error {
-	return APIError{
-		Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
-		Status: responseStatus,
-	}
-}
+type SolrBackupListInstance struct {
+	StartTime string `json:"startTime"`
 
-type APIError struct {
-	Detail string
-	Status int // API-specific error code
-}
-
-func (e APIError) Error() string {
-	if e.Status == 0 {
-		return e.Detail
-	}
-	return fmt.Sprintf("Solr response status: %d. %s", e.Status, e.Detail)
+	// +optional
+	BackupId int `json:"backupId,omitempty"`
 }

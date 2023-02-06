@@ -34,6 +34,7 @@ const (
 	SolrMetricsPortName = "solr-metrics"
 	ExtSolrMetricsPort  = 80
 
+	SolrPrometheusExporterContainer          = "solr-prometheus-exporter"
 	DefaultPrometheusExporterEntrypoint      = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
 	PrometheusExporterConfigMapKey           = "solr-prometheus-exporter.xml"
 	PrometheusExporterConfigXmlMd5Annotation = "solr.apache.org/exporterConfigXmlMd5"
@@ -190,7 +191,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 	containers := []corev1.Container{
 		{
-			Name:            "solr-prometheus-exporter",
+			Name:            SolrPrometheusExporterContainer,
 			Image:           containerImage.ToImageName(),
 			ImagePullPolicy: containerImage.PullPolicy,
 			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName, Protocol: corev1.ProtocolTCP}},
