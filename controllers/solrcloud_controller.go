@@ -64,7 +64,7 @@ func UseZkCRD(useCRD bool) {
 }
 
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
-//+kubebuilder:rbac:groups="",resources=pods/status,verbs=get
+//+kubebuilder:rbac:groups="",resources=pods/status,verbs=get;patch
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
@@ -408,7 +408,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// There is no use "safely" updating pods which have not been started yet.
 		podsToUpdate := outOfDatePodsNotStarted
 		for _, pod := range outOfDatePodsNotStarted {
-			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
+			updateLogger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
 
 		// If authn enabled on Solr, we need to pass the auth header
@@ -423,36 +423,28 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
 		additionalPodsToUpdate, podsHaveReplicas, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
+
+		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+
+		var retryLaterDuration time.Duration
 		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
-		for _, pod := range additionalPodsToUpdate {
-			if podsHaveReplicas[pod.Name] {
-				// Only evict pods that contain replicas in the clusterState
-				if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, &pod, updateLogger); evictError != nil {
-					err = evictError
-					updateLogger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
-				} else if canDeletePod {
-					podsToUpdate = append(podsToUpdate, pod)
-				} else {
-					// Try again in 5 seconds if cannot delete a pod.
-					updateRequeueAfter(&requeueOrNot, time.Second*5)
-				}
-			} else {
-				// If a pod has no replicas, then update it when asked to
-				podsToUpdate = append(podsToUpdate, pod)
+		for _, pod := range podsToUpdate {
+			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
+
+			// Use the retryLaterDuration of the pod that requires a retry the soonest (smallest duration > 0)
+			if retryLaterDurationTemp > 0 && retryLaterDurationTemp < retryLaterDuration {
+				retryLaterDuration = retryLaterDurationTemp
+			}
+			if errTemp != nil {
+				err = errTemp
 			}
 		}
 
-		for _, pod := range podsToUpdate {
-			err = r.Delete(ctx, &pod, client.Preconditions{
-				UID: &pod.UID,
-			})
-			if err != nil {
-				updateLogger.Error(err, "Error while killing solr pod for update", "pod", pod.Name)
+		if err != nil || retryLaterDuration > 0 || retryLater {
+			if retryLaterDuration == 0 {
+				retryLaterDuration = time.Second * 10
 			}
-			// TODO: Create event for the CRD.
-		}
-		if err != nil || retryLater {
-			updateRequeueAfter(&requeueOrNot, time.Second*15)
+			updateRequeueAfter(&requeueOrNot, retryLaterDuration)
 		}
 		if err != nil {
 			return requeueOrNot, err

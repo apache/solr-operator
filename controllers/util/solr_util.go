@@ -51,6 +51,8 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
+	SolrIsNotStoppedReadinessCondition = "solr.apache.org/isNotStopped"
+
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
 	DistLibs    = "/opt/solr/dist"
@@ -491,6 +493,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					InitContainers: initContainers,
 					HostAliases:    hostAliases,
 					Containers:     containers,
+					ReadinessGates: []corev1.PodReadinessGate{
+						{
+							ConditionType: SolrIsNotStoppedReadinessCondition,
+						},
+					},
 				},
 			},
 			VolumeClaimTemplates: pvcs,
