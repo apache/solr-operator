@@ -47,7 +47,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 		} else if canDeletePod {
 			deletePod = true
 		} else {
-			// Try again in 5 seconds if cannot delete a pod.
+			// Try again in 5 seconds if we cannot delete a pod.
 			requeueAfterDuration = time.Second * 5
 		}
 	} else {
@@ -74,6 +74,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 type PodStopReason string
 
 const (
+	PodStarted           PodStopReason = "PodStarted"
 	PodUpdate            PodStopReason = "PodUpdate"
 	StatefulSetScaleDown PodStopReason = "StatefulSetScaleDown"
 )
@@ -114,6 +115,48 @@ func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconci
 		}
 
 		// TODO: Create event for the CRD.
+	}
+
+	return
+}
+
+// InitializePodNotStoppedReadinessCondition set the pod's not-stopped readiness condition to true after pod creation.
+func InitializePodNotStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+	updatedPod = pod
+
+	readinessConditionNeedsInitializing := false
+	readinessConditionIndex := -1
+	for i, condition := range pod.Status.Conditions {
+		if condition.Type == util.SolrIsNotStoppedReadinessCondition {
+			readinessConditionNeedsInitializing = condition.Reason == ""
+			readinessConditionIndex = i
+			break
+		}
+	}
+
+	// The pod status does not contain the readiness condition.
+	// This is likely during an upgrade from a previous solr-operator version.
+	if readinessConditionIndex < 0 {
+		return
+	}
+
+	if readinessConditionNeedsInitializing {
+		patchedPod := pod.DeepCopy()
+
+		patchTime := metav1.Now()
+		patchedPod.Status.Conditions[readinessConditionIndex].Status = corev1.ConditionTrue
+		patchedPod.Status.Conditions[readinessConditionIndex].LastTransitionTime = patchTime
+		patchedPod.Status.Conditions[readinessConditionIndex].LastProbeTime = patchTime
+		patchedPod.Status.Conditions[readinessConditionIndex].Reason = string(PodStarted)
+		patchedPod.Status.Conditions[readinessConditionIndex].Message = "Pod has not yet been stopped, traffic to the pod is permitted"
+
+		if err = r.Patch(ctx, patchedPod, client.MergeFrom(patchedPod)); err != nil {
+			logger.Error(err, "Could not patch pod-stopped readiness condition for pod to start traffic", "pod", pod.Name)
+
+			// TODO: Create event for the CRD.
+		} else {
+			updatedPod = patchedPod
+		}
 	}
 
 	return

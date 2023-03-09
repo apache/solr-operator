@@ -520,6 +520,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return requeueOrNot, err
 }
 
+// Initialize the SolrCloud.Status object, and initialize and fetch information about the SolrCloud's pods.
 func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger,
 	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	foundPods := &corev1.PodList{}
@@ -532,31 +533,45 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		LabelSelector: labelSelector,
 	}
 
-	err = r.List(ctx, foundPods, listOps)
+	if err = r.List(ctx, foundPods, listOps); err != nil {
+		logger.Error(err, "Error listing pods for SolrCloud")
+		return
+	}
+	foundPodList := foundPods.Items
+
+	// Initialize the pod's notStopped readinessCondition so that they can receive traffic until they are stopped
+	for i, pod := range foundPodList {
+		if updatedPod, podError := InitializePodNotStoppedReadinessCondition(ctx, r, &pod, logger); podError != nil {
+			err = podError
+		} else if updatedPod != nil {
+			foundPodList[i] = *updatedPod
+		}
+	}
 	if err != nil {
-		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
+		return
 	}
 
 	var otherVersions []string
-	nodeNames := make([]string, len(foundPods.Items))
+	nodeNames := make([]string, len(foundPodList))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
 
 	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
-	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+	var selector labels.Selector
+	selector, err = metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchLabels: selectorLabels,
 	})
 	if err != nil {
 		logger.Error(err, "Error getting SolrCloud PodSelector labels")
-		return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err
+		return
 	}
 	newStatus.PodSelector = selector.String()
 	backupReposAvailable := make(map[string]bool, len(solrCloud.Spec.BackupRepositories))
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		backupReposAvailable[repo.Name] = false
 	}
-	for podIdx, p := range foundPods.Items {
+	for podIdx, p := range foundPodList {
 		nodeNames[podIdx] = p.Name
 		nodeStatus := solrv1beta1.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
@@ -578,6 +593,7 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		for _, condition := range p.Status.Conditions {
 			if condition.Type == corev1.PodReady {
 				nodeStatus.Ready = condition.Status == corev1.ConditionTrue
+				break
 			}
 		}
 		if nodeStatus.Ready {
