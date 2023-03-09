@@ -393,9 +393,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	// Get the SolrCloud's Pods and initialize them if necessary
+	var podList []corev1.Pod
+	var podSelector labels.Selector
+	if podSelector, podList, err = r.initializePods(ctx, instance, logger); err != nil {
+		return requeueOrNot, err
+	}
+
+	// Make sure the SolrCloud status is up-to-date with the state of the cluster
 	var outOfDatePods, outOfDatePodsNotStarted []corev1.Pod
 	var availableUpdatedPodCount int
-	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = r.reconcileCloudStatus(ctx, instance, logger, &newStatus, statefulSetStatus)
+	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSetStatus, podSelector, podList)
 	if err != nil {
 		return requeueOrNot, err
 	}
@@ -520,58 +528,64 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return requeueOrNot, err
 }
 
-// Initialize the SolrCloud.Status object, and initialize and fetch information about the SolrCloud's pods.
-func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger,
-	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
+// InitializePods Ensure that all SolrCloud Pods are initialized
+func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solrv1beta1.SolrTechnologyLabel
 
-	labelSelector := labels.SelectorFromSet(selectorLabels)
+	podSelector = labels.SelectorFromSet(selectorLabels)
 	listOps := &client.ListOptions{
 		Namespace:     solrCloud.Namespace,
-		LabelSelector: labelSelector,
+		LabelSelector: podSelector,
 	}
 
 	if err = r.List(ctx, foundPods, listOps); err != nil {
 		logger.Error(err, "Error listing pods for SolrCloud")
 		return
 	}
-	foundPodList := foundPods.Items
+	podList = foundPods.Items
 
 	// Initialize the pod's notStopped readinessCondition so that they can receive traffic until they are stopped
-	for i, pod := range foundPodList {
-		if updatedPod, podError := InitializePodNotStoppedReadinessCondition(ctx, r, &pod, logger); podError != nil {
+	for i, pod := range podList {
+		if updatedPod, podError := r.initializePod(ctx, &pod, logger); podError != nil {
 			err = podError
 		} else if updatedPod != nil {
-			foundPodList[i] = *updatedPod
+			podList[i] = *updatedPod
 		}
 	}
-	if err != nil {
+	return
+}
+
+// InitializePod Initialize Status Conditions for a SolrCloud Pod
+func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+	updatedPod = pod
+
+	if updatedPod, err = InitializePodNotStoppedReadinessCondition(ctx, r, updatedPod, logger); err != nil {
 		return
 	}
 
+	return
+}
+
+// Initialize the SolrCloud.Status object
+func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
+	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus, podSelector labels.Selector,
+	podList []corev1.Pod) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
 	var otherVersions []string
-	nodeNames := make([]string, len(foundPodList))
+	nodeNames := make([]string, len(podList))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
 
 	newStatus.Replicas = statefulSetStatus.Replicas
 	newStatus.UpToDateNodes = int32(0)
 	newStatus.ReadyReplicas = int32(0)
-	var selector labels.Selector
-	selector, err = metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
-		MatchLabels: selectorLabels,
-	})
-	if err != nil {
-		logger.Error(err, "Error getting SolrCloud PodSelector labels")
-		return
-	}
-	newStatus.PodSelector = selector.String()
+
+	newStatus.PodSelector = podSelector.String()
 	backupReposAvailable := make(map[string]bool, len(solrCloud.Spec.BackupRepositories))
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		backupReposAvailable[repo.Name] = false
 	}
-	for podIdx, p := range foundPodList {
+	for podIdx, p := range podList {
 		nodeNames[podIdx] = p.Name
 		nodeStatus := solrv1beta1.SolrNodeStatus{}
 		nodeStatus.Name = p.Name
