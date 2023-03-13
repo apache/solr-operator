@@ -108,7 +108,7 @@ func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconci
 		patchedPod.Status.Conditions[readinessConditionIndex].Reason = string(reason)
 		patchedPod.Status.Conditions[readinessConditionIndex].Message = "Pod is being deleted, traffic to the pod must be stopped"
 
-		if err = r.Patch(ctx, patchedPod, client.MergeFrom(patchedPod)); err != nil {
+		if err = r.Status().Patch(ctx, patchedPod, client.MergeFrom(pod)); err != nil {
 			logger.Error(err, "Could not patch readiness condition for pod to stop traffic", "pod", pod.Name)
 		} else {
 			updatedPod = patchedPod
@@ -124,7 +124,7 @@ func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconci
 func InitializePodNotStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	updatedPod = pod
 
-	readinessConditionNeedsInitializing := false
+	readinessConditionNeedsInitializing := true
 	readinessConditionIndex := -1
 	for i, condition := range pod.Status.Conditions {
 		if condition.Type == util.SolrIsNotStoppedReadinessCondition {
@@ -134,14 +134,17 @@ func InitializePodNotStoppedReadinessCondition(ctx context.Context, r *SolrCloud
 		}
 	}
 
-	// The pod status does not contain the readiness condition.
-	// This is likely during an upgrade from a previous solr-operator version.
-	if readinessConditionIndex < 0 {
-		return
-	}
-
 	if readinessConditionNeedsInitializing {
 		patchedPod := pod.DeepCopy()
+
+		// The pod status does not contain the readiness condition.
+		// Add it
+		if readinessConditionIndex < 0 {
+			patchedPod.Status.Conditions = append(patchedPod.Status.Conditions, corev1.PodCondition{
+				Type: util.SolrIsNotStoppedReadinessCondition,
+			})
+			readinessConditionIndex = len(patchedPod.Status.Conditions) - 1
+		}
 
 		patchTime := metav1.Now()
 		patchedPod.Status.Conditions[readinessConditionIndex].Status = corev1.ConditionTrue
@@ -150,7 +153,7 @@ func InitializePodNotStoppedReadinessCondition(ctx context.Context, r *SolrCloud
 		patchedPod.Status.Conditions[readinessConditionIndex].Reason = string(PodStarted)
 		patchedPod.Status.Conditions[readinessConditionIndex].Message = "Pod has not yet been stopped, traffic to the pod is permitted"
 
-		if err = r.Patch(ctx, patchedPod, client.MergeFrom(patchedPod)); err != nil {
+		if err = r.Status().Patch(ctx, patchedPod, client.StrategicMergeFrom(pod)); err != nil {
 			logger.Error(err, "Could not patch pod-stopped readiness condition for pod to start traffic", "pod", pod.Name)
 
 			// TODO: Create event for the CRD.
