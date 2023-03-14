@@ -86,6 +86,12 @@ func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations 
 	return
 }
 
+type OutOfDatePodSegmentation struct {
+	NotStarted           []corev1.Pod
+	ScheduledForDeletion []corev1.Pod
+	Running              []corev1.Pod
+}
+
 // DeterminePodsSafeToUpdate takes a list of solr Pods and returns a list of pods that are safe to upgrade now.
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
 //
@@ -95,12 +101,12 @@ func scheduleNextRestartWithTime(restartSchedule string, podTemplateAnnotations 
 // TODO:
 //   - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
 //   - Might be too much complexity for very little gain.
-func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, readyPods int, availableUpdatedPodCount int, outOfDatePodsNotStartedCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool) {
+func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods OutOfDatePodSegmentation, readyPods int, availableUpdatedPodCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool, err error) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
-	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, len(outOfDatePods), outOfDatePodsNotStartedCount, availableUpdatedPodCount)
+	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, len(outOfDatePods.Running), len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion), availableUpdatedPodCount)
 	if maxPodsToUpdate <= 0 {
 		logger.Info("Pod update selection canceled. The number of updated pods unavailable equals or exceeds the calculated maxPodsUnavailable.",
-			"unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", outOfDatePodsNotStartedCount, "maxPodsUnavailable", maxPodsUnavailable)
+			"unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", len(outOfDatePods.NotStarted), "alreadyScheduledForDeletion", len(outOfDatePods.ScheduledForDeletion), "maxPodsUnavailable", maxPodsUnavailable)
 	} else {
 		clusterResp := &solr_api.SolrClusterStatusResponse{}
 		overseerResp := &solr_api.SolrOverseerStatusResponse{}
@@ -108,7 +114,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 		if readyPods > 0 {
 			queryParams := url.Values{}
 			queryParams.Add("action", "CLUSTERSTATUS")
-			err := solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
+			err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
 			if err == nil {
 				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
 					err = apiErr
@@ -119,25 +125,30 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 						err = apiErr
 					}
 				}
-			} else {
+			}
+			if err != nil {
 				logger.Error(err, "Error retrieving cluster status, delaying pod update selection")
-				// If there is an error fetching the clusterState, retry later.
-				retryLater = true
 			}
 		}
 		// If the update logic already wants to retry later, then do not pick any pods
 		if !retryLater {
-			logger.Info("Pod update selection started.", "outOfDatePods", len(outOfDatePods), "maxPodsUnavailable", maxPodsUnavailable, "unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", outOfDatePodsNotStartedCount, "maxPodsToUpdate", maxPodsToUpdate)
+			logger.Info("Pod update selection started.",
+				"outOfDatePods", len(outOfDatePods.Running),
+				"maxPodsUnavailable", maxPodsUnavailable,
+				"unavailableUpdatedPods", unavailableUpdatedPodCount,
+				"outOfDatePodsNotStarted", len(outOfDatePods.NotStarted),
+				"alreadyScheduledForDeletion", len(outOfDatePods.ScheduledForDeletion),
+				"maxPodsToUpdate", maxPodsToUpdate)
 			podsToUpdate, podsHaveReplicas = pickPodsToUpdate(cloud, outOfDatePods, clusterResp.ClusterStatus, overseerResp.Leader, maxPodsToUpdate, logger)
 
 			// If there are no pods to upgrade, even though the maxPodsToUpdate is >0, then retry later because the issue stems from cluster state
 			// and clusterState changes will not call the reconciler.
-			if len(podsToUpdate) == 0 && len(outOfDatePods) > 0 {
+			if len(podsToUpdate) == 0 && len(outOfDatePods.Running) > 0 {
 				retryLater = true
 			}
 		}
 	}
-	return podsToUpdate, podsHaveReplicas, retryLater
+	return podsToUpdate, podsHaveReplicas, retryLater, err
 }
 
 // calculateMaxPodsToUpdate determines the maximum number of additional pods that can be updated.
@@ -154,11 +165,11 @@ func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, outOfDatePodCount int, outO
 	return maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate
 }
 
-func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, clusterStatus solr_api.SolrClusterStatus,
+func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods OutOfDatePodSegmentation, clusterStatus solr_api.SolrClusterStatus,
 	overseer string, maxPodsToUpdate int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool) {
 	podsHaveReplicas = make(map[string]bool, maxPodsToUpdate)
 	nodeContents, totalShardReplicas, shardReplicasNotActive, allManagedPodsLive := findSolrNodeContents(clusterStatus, overseer, GetAllManagedSolrNodeNames(cloud))
-	sortNodePodsBySafety(outOfDatePods, nodeContents, cloud)
+	sortNodePodsBySafety(outOfDatePods.Running, nodeContents, cloud)
 
 	updateOptions := cloud.Spec.UpdateStrategy.ManagedUpdateOptions
 	var maxShardReplicasUnavailableCache map[string]int
@@ -169,7 +180,20 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 		maxShardReplicasUnavailableCache = make(map[string]int, len(totalShardReplicas))
 	}
 
-	for _, pod := range outOfDatePods {
+	for _, pod := range outOfDatePods.ScheduledForDeletion {
+		nodeName := SolrNodeName(cloud, pod.Name)
+		nodeContent, isInClusterState := nodeContents[nodeName]
+
+		// This pod will be deleted, add its information to future down shards
+		podsHaveReplicas[pod.Name] = isInClusterState && nodeContent.replicas > 0
+		if isInClusterState && nodeContent.live {
+			for shard, additionalReplicaCount := range nodeContent.activeReplicasPerShard {
+				shardReplicasNotActive[shard] += additionalReplicaCount
+			}
+		}
+	}
+
+	for _, pod := range outOfDatePods.Running {
 		isSafeToUpdate := true
 		nodeName := SolrNodeName(cloud, pod.Name)
 		nodeContent, isInClusterState := nodeContents[nodeName]
@@ -187,7 +211,7 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 				// But we want to make sure it still follows the same replicasDown rules as the other nodes, so still use that logic
 				// This works if there are other solr nodes not managed by this SolrCloud resource, because we just check that this is the last
 				// pod managed for this SolrCloud that has not been updated.
-				if len(outOfDatePods) == 1 && allManagedPodsLive {
+				if len(outOfDatePods.Running) == 1 && allManagedPodsLive {
 					isSafeToUpdate = true
 					reason = "Pod is overseer and all other nodes have been updated."
 				} else {
@@ -237,7 +261,7 @@ func pickPodsToUpdate(cloud *solr.SolrCloud, outOfDatePods []corev1.Pod, cluster
 					shardReplicasNotActive[shard] += additionalReplicaCount
 				}
 			}
-			logger.Info("Pod killed for update.", "pod", pod.Name, "reason", reason)
+			logger.Info("Pod selected to be deleted for update.", "pod", pod.Name, "reason", reason)
 			podsToUpdate = append(podsToUpdate, pod)
 			podsHaveReplicas[pod.Name] = isInClusterState && nodeContent.replicas > 0
 

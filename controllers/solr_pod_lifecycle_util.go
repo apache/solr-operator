@@ -70,16 +70,16 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	return
 }
 
-// PodStopReason describes the reason why a Pod is being stopped.
-type PodStopReason string
+// PodConditionChangeReason describes the reason why a Pod is being stopped.
+type PodConditionChangeReason string
 
 const (
-	PodStarted           PodStopReason = "PodStarted"
-	PodUpdate            PodStopReason = "PodUpdate"
-	StatefulSetScaleDown PodStopReason = "StatefulSetScaleDown"
+	PodStarted           PodConditionChangeReason = "PodStarted"
+	PodUpdate            PodConditionChangeReason = "PodUpdate"
+	StatefulSetScaleDown PodConditionChangeReason = "StatefulSetScaleDown"
 )
 
-func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, reason PodStopReason, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, reason PodConditionChangeReason, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	updatedPod = pod
 
 	readinessConditionNeedsChange := true
@@ -120,46 +120,37 @@ func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconci
 	return
 }
 
-// InitializePodNotStoppedReadinessCondition set the pod's not-stopped readiness condition to true after pod creation.
-func InitializePodNotStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
-	updatedPod = pod
-
-	readinessConditionNeedsInitializing := true
-	readinessConditionIndex := -1
+// InitializeReadinessCondition set the default value for a pod's readiness condition after pod creation.
+func InitializePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason, message string, status bool) (conditionNeedsInitializing bool) {
+	conditionNeedsInitializing = true
+	conditionIndex := -1
 	for i, condition := range pod.Status.Conditions {
-		if condition.Type == util.SolrIsNotStoppedReadinessCondition {
-			readinessConditionNeedsInitializing = condition.Reason == ""
-			readinessConditionIndex = i
+		if condition.Type == conditionType {
+			conditionNeedsInitializing = condition.Reason == ""
+			conditionIndex = i
 			break
 		}
 	}
 
-	if readinessConditionNeedsInitializing {
-		patchedPod := pod.DeepCopy()
-
-		// The pod status does not contain the readiness condition.
-		// Add it
-		if readinessConditionIndex < 0 {
-			patchedPod.Status.Conditions = append(patchedPod.Status.Conditions, corev1.PodCondition{
+	if conditionNeedsInitializing {
+		// The pod status does not contain the readiness condition, so add it
+		if conditionIndex < 0 {
+			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
 				Type: util.SolrIsNotStoppedReadinessCondition,
 			})
-			readinessConditionIndex = len(patchedPod.Status.Conditions) - 1
+			conditionIndex = len(pod.Status.Conditions) - 1
 		}
 
 		patchTime := metav1.Now()
-		patchedPod.Status.Conditions[readinessConditionIndex].Status = corev1.ConditionTrue
-		patchedPod.Status.Conditions[readinessConditionIndex].LastTransitionTime = patchTime
-		patchedPod.Status.Conditions[readinessConditionIndex].LastProbeTime = patchTime
-		patchedPod.Status.Conditions[readinessConditionIndex].Reason = string(PodStarted)
-		patchedPod.Status.Conditions[readinessConditionIndex].Message = "Pod has not yet been stopped, traffic to the pod is permitted"
-
-		if err = r.Status().Patch(ctx, patchedPod, client.StrategicMergeFrom(pod)); err != nil {
-			logger.Error(err, "Could not patch pod-stopped readiness condition for pod to start traffic", "pod", pod.Name)
-
-			// TODO: Create event for the CRD.
+		if status {
+			pod.Status.Conditions[conditionIndex].Status = corev1.ConditionTrue
 		} else {
-			updatedPod = patchedPod
+			pod.Status.Conditions[conditionIndex].Status = corev1.ConditionFalse
 		}
+		pod.Status.Conditions[conditionIndex].LastTransitionTime = patchTime
+		pod.Status.Conditions[conditionIndex].LastProbeTime = patchTime
+		pod.Status.Conditions[conditionIndex].Reason = string(reason)
+		pod.Status.Conditions[conditionIndex].Message = message
 	}
 
 	return

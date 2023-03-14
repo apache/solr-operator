@@ -401,21 +401,21 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Make sure the SolrCloud status is up-to-date with the state of the cluster
-	var outOfDatePods, outOfDatePodsNotStarted []corev1.Pod
+	var outOfDatePods util.OutOfDatePodSegmentation
 	var availableUpdatedPodCount int
-	outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSetStatus, podSelector, podList)
+	outOfDatePods, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSetStatus, podSelector, podList)
 	if err != nil {
 		return requeueOrNot, err
 	}
 
 	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
-	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods)+len(outOfDatePodsNotStarted) > 0 {
+	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion)+len(outOfDatePods.Running) > 0 {
 		updateLogger := logger.WithName("ManagedUpdateSelector")
 
 		// The out of date pods that have not been started, should all be updated immediately.
 		// There is no use "safely" updating pods which have not been started yet.
-		podsToUpdate := outOfDatePodsNotStarted
-		for _, pod := range outOfDatePodsNotStarted {
+		podsToUpdate := append([]corev1.Pod{}, outOfDatePods.NotStarted...)
+		for _, pod := range outOfDatePods.NotStarted {
 			updateLogger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
 
@@ -430,9 +430,14 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, podsHaveReplicas, retryLater := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, len(outOfDatePodsNotStarted), updateLogger)
-
-		podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+		additionalPodsToUpdate, podsHaveReplicas, retryLater, clusterStateError := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, updateLogger)
+		// If we do not have the clusterState, it's not safe to update pods that are running
+		if clusterStateError != nil {
+			retryLater = true
+		} else {
+			podsToUpdate = append(podsToUpdate, outOfDatePods.ScheduledForDeletion...)
+			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+		}
 
 		var retryLaterDuration time.Duration
 		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
@@ -559,19 +564,29 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 
 // InitializePod Initialize Status Conditions for a SolrCloud Pod
 func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+	shouldPatchPod := false
+
 	updatedPod = pod
 
-	if updatedPod, err = InitializePodNotStoppedReadinessCondition(ctx, r, updatedPod, logger); err != nil {
-		return
-	}
+	shouldPatchPod = InitializePodReadinessCondition(updatedPod, util.SolrIsNotStoppedReadinessCondition, PodStarted, "Pod has not yet been stopped", true) || shouldPatchPod
+	shouldPatchPod = InitializePodReadinessCondition(updatedPod, util.SolrReplicasNotEvictedReadinessCondition, PodStarted, "Replicas have not yet been evicted", true) || shouldPatchPod
 
+	if shouldPatchPod {
+		if err = r.Status().Patch(ctx, updatedPod, client.StrategicMergeFrom(pod)); err != nil {
+			logger.Error(err, "Could not patch pod-stopped readiness condition for pod to start traffic", "pod", pod.Name)
+			// set the pod back to its original state since the patch failed
+			updatedPod = pod
+
+			// TODO: Create event for the CRD.
+		}
+	}
 	return
 }
 
 // Initialize the SolrCloud.Status object
 func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus, podSelector labels.Selector,
-	podList []corev1.Pod) (outOfDatePods []corev1.Pod, outOfDatePodsNotStarted []corev1.Pod, availableUpdatedPodCount int, err error) {
+	podList []corev1.Pod) (outOfDatePods util.OutOfDatePodSegmentation, availableUpdatedPodCount int, err error) {
 	var otherVersions []string
 	nodeNames := make([]string, len(podList))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
@@ -604,10 +619,14 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 
 		// Check whether the node is considered "ready" by kubernetes
 		nodeStatus.Ready = false
+		nodeStatus.ScheduledForDeletion = false
+		podIsScheduledForUpdate := false
 		for _, condition := range p.Status.Conditions {
 			if condition.Type == corev1.PodReady {
 				nodeStatus.Ready = condition.Status == corev1.ConditionTrue
-				break
+			} else if condition.Type == util.SolrIsNotStoppedReadinessCondition {
+				nodeStatus.ScheduledForDeletion = condition.Status == corev1.ConditionFalse
+				podIsScheduledForUpdate = nodeStatus.ScheduledForDeletion && condition.Reason == string(PodUpdate)
 			}
 		}
 		if nodeStatus.Ready {
@@ -646,10 +665,12 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 					}
 				}
 			}
-			if containerNotStarted {
-				outOfDatePodsNotStarted = append(outOfDatePodsNotStarted, p)
+			if podIsScheduledForUpdate {
+				outOfDatePods.ScheduledForDeletion = append(outOfDatePods.ScheduledForDeletion, p)
+			} else if containerNotStarted {
+				outOfDatePods.NotStarted = append(outOfDatePods.NotStarted, p)
 			} else {
-				outOfDatePods = append(outOfDatePods, p)
+				outOfDatePods.Running = append(outOfDatePods.Running, p)
 			}
 		}
 
@@ -688,7 +709,7 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 		newStatus.ExternalCommonAddress = &extAddress
 	}
 
-	return outOfDatePods, outOfDatePodsNotStarted, availableUpdatedPodCount, nil
+	return outOfDatePods, availableUpdatedPodCount, nil
 }
 
 func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, nodeName string) (err error, ip string) {
