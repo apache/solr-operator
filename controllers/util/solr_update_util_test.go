@@ -53,25 +53,37 @@ func TestPickPodsToUpgrade(t *testing.T) {
 		},
 	}
 
-	allPods := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-2"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-4"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-6"}, Spec: corev1.PodSpec{}},
+	allPods := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-2"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-4"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-6"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
-	halfPods := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+	halfPods := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
-	lastPod := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+	lastPod := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
 	/*
