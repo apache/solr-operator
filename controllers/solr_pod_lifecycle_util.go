@@ -28,9 +28,43 @@ import (
 	"time"
 )
 
+type podReadinessConditionChange struct {
+	// If this is provided, the change will only be made if the condition currently uses this reason
+	matchPreviousReason *PodConditionChangeReason
+	reason              PodConditionChangeReason
+	message             string
+	status              bool
+}
+
+// PodConditionChangeReason describes the reason why a Pod is being stopped.
+type PodConditionChangeReason string
+
+const (
+	PodStarted           PodConditionChangeReason = "PodStarted"
+	PodUpdate            PodConditionChangeReason = "PodUpdate"
+	EvictingReplicas     PodConditionChangeReason = "EvictingReplicas"
+	StatefulSetScaleDown PodConditionChangeReason = "StatefulSetScaleDown"
+)
+
 func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
 	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
-	if updatedPod, e := EnsurePodStoppedReadinessCondition(ctx, r, pod, PodUpdate, logger); e != nil {
+	ps := PodStarted
+	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
+		util.SolrIsNotStoppedReadinessCondition: {
+			reason:  PodUpdate,
+			message: "Pod is being deleted, traffic to the pod must be stopped",
+			status:  false,
+		},
+		util.SolrReplicasNotEvictedReadinessCondition: {
+			// Only set this condition if the condition hasn't been changed since pod start
+			// We do not want to over-write future states later down the eviction pipeline
+			matchPreviousReason: &ps,
+			reason:              EvictingReplicas,
+			message:             "Pod is being deleted, ephemeral data must be evicted",
+			status:              false,
+		},
+	}
+	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, podStoppedReadinessConditions, logger); e != nil {
 		err = e
 		return
 	} else {
@@ -39,9 +73,10 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 
 	// If the pod needs to be drained of replicas (i.e. upgrading a pod with ephemeral storage), do that before deleting the pod
 	deletePod := false
-	if podHasReplicas {
+	// TODO: After v0.7.0 release, can remove "podHasReplicas ||", as this is no longer needed
+	if podHasReplicas || PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, logger); evictError != nil {
+		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, logger); evictError != nil {
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
@@ -70,64 +105,39 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	return
 }
 
-// PodConditionChangeReason describes the reason why a Pod is being stopped.
-type PodConditionChangeReason string
+func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, ensureConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+	updatedPod = pod.DeepCopy()
 
-const (
-	PodStarted           PodConditionChangeReason = "PodStarted"
-	PodUpdate            PodConditionChangeReason = "PodUpdate"
-	StatefulSetScaleDown PodConditionChangeReason = "StatefulSetScaleDown"
-)
+	needsUpdate := false
 
-func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, reason PodConditionChangeReason, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
-	updatedPod = pod
-
-	readinessConditionNeedsChange := true
-	readinessConditionIndex := -1
-	for i, condition := range pod.Status.Conditions {
-		if condition.Type == util.SolrIsNotStoppedReadinessCondition {
-			readinessConditionNeedsChange = condition.Status == corev1.ConditionTrue
-			readinessConditionIndex = i
-			break
+	for conditionType, readinessCondition := range ensureConditions {
+		podHasCondition := false
+		for _, gate := range pod.Spec.ReadinessGates {
+			if gate.ConditionType == conditionType {
+				podHasCondition = true
+			}
+		}
+		if podHasCondition {
+			needsUpdate = EnsurePodReadinessCondition(updatedPod, conditionType, readinessCondition) || needsUpdate
 		}
 	}
 
-	// The pod status does not contain the readiness condition.
-	// This is likely during an upgrade from a previous solr-operator version.
-	if readinessConditionIndex < 0 {
-		return
-	}
+	if needsUpdate {
+		if err = r.Status().Patch(ctx, updatedPod, client.MergeFrom(pod)); err != nil {
+			logger.Error(err, "Could not patch readiness condition(s) for pod to stop traffic", "pod", pod.Name)
+			updatedPod = pod
 
-	if readinessConditionNeedsChange {
-		patchedPod := pod.DeepCopy()
-
-		patchTime := metav1.Now()
-		patchedPod.Status.Conditions[readinessConditionIndex].Status = corev1.ConditionFalse
-		patchedPod.Status.Conditions[readinessConditionIndex].LastTransitionTime = patchTime
-		patchedPod.Status.Conditions[readinessConditionIndex].LastProbeTime = patchTime
-		patchedPod.Status.Conditions[readinessConditionIndex].Reason = string(reason)
-		patchedPod.Status.Conditions[readinessConditionIndex].Message = "Pod is being deleted, traffic to the pod must be stopped"
-
-		if err = r.Status().Patch(ctx, patchedPod, client.MergeFrom(pod)); err != nil {
-			logger.Error(err, "Could not patch readiness condition for pod to stop traffic", "pod", pod.Name)
-		} else {
-			updatedPod = patchedPod
+			// TODO: Create event for the CRD.
 		}
-
-		// TODO: Create event for the CRD.
+	} else {
+		updatedPod = pod
 	}
 
 	return
 }
 
-type initialPodReadinessCondition struct {
-	reason  PodConditionChangeReason
-	message string
-	status  bool
-}
-
 var (
-	initialSolrPodReadinessConditions = map[corev1.PodConditionType]initialPodReadinessCondition{
+	initialSolrPodReadinessConditions = map[corev1.PodConditionType]podReadinessConditionChange{
 		util.SolrIsNotStoppedReadinessCondition: {
 			reason:  PodStarted,
 			message: "Pod has not yet been stopped",
@@ -183,11 +193,62 @@ func InitializeCustomPodReadinessCondition(pod *corev1.Pod, conditionType corev1
 			LastTransitionTime: patchTime,
 		}
 
-		// The pod status does not contain the readiness condition, so add it
 		if conditionIndex < 0 {
+			// The pod status does not contain the readiness condition, so add it
 			pod.Status.Conditions = append(pod.Status.Conditions, initializedCondition)
 		} else {
 			pod.Status.Conditions[conditionIndex] = initializedCondition
+		}
+	}
+
+	return
+}
+
+// EnsurePodReadinessCondition ensure the podCondition is set to the given values
+func EnsurePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodConditionType, ensureCondition podReadinessConditionChange) (conditionNeedsChange bool) {
+	conditionNeedsChange = false
+	conditionIndex := -1
+	for i, condition := range pod.Status.Conditions {
+		if condition.Type == conditionType {
+			if ensureCondition.matchPreviousReason != nil {
+				conditionNeedsChange = condition.Reason == string(*ensureCondition.matchPreviousReason)
+			} else {
+				conditionNeedsChange = condition.Reason != string(ensureCondition.reason)
+			}
+			if (condition.Status == corev1.ConditionTrue) != ensureCondition.status {
+				conditionNeedsChange = true
+			}
+			conditionIndex = i
+			break
+		}
+	}
+
+	if conditionNeedsChange {
+		patchTime := metav1.Now()
+		conditionStatus := corev1.ConditionFalse
+		if ensureCondition.status {
+			conditionStatus = corev1.ConditionTrue
+		}
+		initializedCondition := corev1.PodCondition{
+			Type:               conditionType,
+			Status:             conditionStatus,
+			Reason:             string(ensureCondition.reason),
+			Message:            ensureCondition.message,
+			LastProbeTime:      patchTime,
+			LastTransitionTime: patchTime,
+		}
+
+		pod.Status.Conditions[conditionIndex] = initializedCondition
+	}
+
+	return
+}
+
+// PodConditionEquals check if a podCondition equals what is expected
+func PodConditionEquals(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason) (equal bool) {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == conditionType {
+			equal = string(reason) == condition.Reason
 		}
 	}
 

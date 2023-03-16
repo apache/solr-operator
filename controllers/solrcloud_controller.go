@@ -445,7 +445,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
 
 			// Use the retryLaterDuration of the pod that requires a retry the soonest (smallest duration > 0)
-			if retryLaterDurationTemp > 0 && retryLaterDurationTemp < retryLaterDuration {
+			if retryLaterDurationTemp > 0 && (retryLaterDurationTemp < retryLaterDuration || retryLaterDuration == 0) {
 				retryLaterDuration = retryLaterDurationTemp
 			}
 			if errTemp != nil {

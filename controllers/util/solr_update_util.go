@@ -505,8 +505,10 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 // EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod, if the Pod is using ephemeral storage.
 // If the pod is using persistent storage, this function is a no-op.
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
-func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, logger logr.Logger) (err error, canDeletePod bool) {
+func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (err error, canDeletePod bool) {
 	var solrDataVolume *corev1.Volume
+
+	// TODO: Remove these checks after v0.7.0, since it will be taken care by the evictReplicas podReadinessCondition
 	dataVolumeName := solrCloud.DataVolumeName()
 	for _, volume := range pod.Spec.Volumes {
 		if volume.Name == dataVolumeName {
@@ -532,22 +534,27 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 			if asyncState, message, asyncErr := solr_api.CheckAsyncRequest(ctx, solrCloud, requestId); asyncErr != nil {
 				err = asyncErr
 			} else if asyncState == "notfound" {
-				// Submit new Replace Node request
-				replaceResponse := &solr_api.SolrAsyncResponse{}
-				queryParams := url.Values{}
-				queryParams.Add("action", "REPLACENODE")
-				queryParams.Add("parallel", "true")
-				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
-				queryParams.Add("async", requestId)
-				err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
-				if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
-					err = apiErr
-				}
-				if err == nil {
-					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
+				if podHasReplicas {
+					// Submit new Replace Node request
+					replaceResponse := &solr_api.SolrAsyncResponse{}
+					queryParams := url.Values{}
+					queryParams.Add("action", "REPLACENODE")
+					queryParams.Add("parallel", "true")
+					queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
+					queryParams.Add("async", requestId)
+					err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
+					if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
+						err = apiErr
+					}
+					if err == nil {
+						logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
+					} else {
+						logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
+					}
 				} else {
-					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
+					canDeletePod = true
 				}
+
 			} else {
 				logger.Info("Found async status", "requestId", requestId, "state", asyncState)
 				// Only continue to delete the pod if the ReplaceNode request is complete and successful
