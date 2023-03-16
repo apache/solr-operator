@@ -120,8 +120,44 @@ func EnsurePodStoppedReadinessCondition(ctx context.Context, r *SolrCloudReconci
 	return
 }
 
-// InitializeReadinessCondition set the default value for a pod's readiness condition after pod creation.
-func InitializePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason, message string, status bool) (conditionNeedsInitializing bool) {
+type initialPodReadinessCondition struct {
+	reason  PodConditionChangeReason
+	message string
+	status  bool
+}
+
+var (
+	initialSolrPodReadinessConditions = map[corev1.PodConditionType]initialPodReadinessCondition{
+		util.SolrIsNotStoppedReadinessCondition: {
+			reason:  PodStarted,
+			message: "Pod has not yet been stopped",
+			status:  true,
+		},
+		util.SolrReplicasNotEvictedReadinessCondition: {
+			reason:  PodStarted,
+			message: "Replicas have not yet been evicted",
+			status:  true,
+		},
+	}
+)
+
+// InitializePodReadinessCondition set the default value for a pod's readiness condition after pod creation.
+func InitializePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodConditionType) (conditionNeedsInitializing bool) {
+	if foundInitialPodReadinessCondition, found := initialSolrPodReadinessConditions[conditionType]; found {
+		return InitializeCustomPodReadinessCondition(
+			pod,
+			conditionType,
+			foundInitialPodReadinessCondition.reason,
+			foundInitialPodReadinessCondition.message,
+			foundInitialPodReadinessCondition.status)
+	} else {
+		// If there is no default given for this readinessCondition, do nothing
+		return false
+	}
+}
+
+// InitializeCustomPodReadinessCondition set the default value for a pod's readiness condition after pod creation, given all the default values to set
+func InitializeCustomPodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason, message string, status bool) (conditionNeedsInitializing bool) {
 	conditionNeedsInitializing = true
 	conditionIndex := -1
 	for i, condition := range pod.Status.Conditions {
@@ -133,24 +169,26 @@ func InitializePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodCo
 	}
 
 	if conditionNeedsInitializing {
-		// The pod status does not contain the readiness condition, so add it
-		if conditionIndex < 0 {
-			pod.Status.Conditions = append(pod.Status.Conditions, corev1.PodCondition{
-				Type: util.SolrIsNotStoppedReadinessCondition,
-			})
-			conditionIndex = len(pod.Status.Conditions) - 1
+		patchTime := metav1.Now()
+		conditionStatus := corev1.ConditionFalse
+		if status {
+			conditionStatus = corev1.ConditionTrue
+		}
+		initializedCondition := corev1.PodCondition{
+			Type:               conditionType,
+			Status:             conditionStatus,
+			Reason:             string(reason),
+			Message:            message,
+			LastProbeTime:      patchTime,
+			LastTransitionTime: patchTime,
 		}
 
-		patchTime := metav1.Now()
-		if status {
-			pod.Status.Conditions[conditionIndex].Status = corev1.ConditionTrue
+		// The pod status does not contain the readiness condition, so add it
+		if conditionIndex < 0 {
+			pod.Status.Conditions = append(pod.Status.Conditions, initializedCondition)
 		} else {
-			pod.Status.Conditions[conditionIndex].Status = corev1.ConditionFalse
+			pod.Status.Conditions[conditionIndex] = initializedCondition
 		}
-		pod.Status.Conditions[conditionIndex].LastTransitionTime = patchTime
-		pod.Status.Conditions[conditionIndex].LastProbeTime = patchTime
-		pod.Status.Conditions[conditionIndex].Reason = string(reason)
-		pod.Status.Conditions[conditionIndex].Message = message
 	}
 
 	return

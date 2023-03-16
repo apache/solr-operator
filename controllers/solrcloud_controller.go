@@ -566,10 +566,14 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	shouldPatchPod := false
 
-	updatedPod = pod
+	updatedPod = pod.DeepCopy()
 
-	shouldPatchPod = InitializePodReadinessCondition(updatedPod, util.SolrIsNotStoppedReadinessCondition, PodStarted, "Pod has not yet been stopped", true) || shouldPatchPod
-	shouldPatchPod = InitializePodReadinessCondition(updatedPod, util.SolrReplicasNotEvictedReadinessCondition, PodStarted, "Replicas have not yet been evicted", true) || shouldPatchPod
+	// Initialize all the readiness gates found for the pod
+	for _, readinessGate := range pod.Spec.ReadinessGates {
+		if InitializePodReadinessCondition(updatedPod, readinessGate.ConditionType) {
+			shouldPatchPod = true
+		}
+	}
 
 	if shouldPatchPod {
 		if err = r.Status().Patch(ctx, updatedPod, client.StrategicMergeFrom(pod)); err != nil {
