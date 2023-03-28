@@ -39,6 +39,7 @@ dependencies:
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
+  artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "true"

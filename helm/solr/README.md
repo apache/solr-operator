@@ -17,8 +17,8 @@ Check out the following tutorials on getting started with Solr.
 
 ## Dependencies
 
-This Helm chart relies on the [Solr Operator](https://solr.apache.org/operator) being installed.
-You can install the Solr Operator via it's [Helm chart](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+**This Helm chart relies on the [Solr Operator](https://solr.apache.org/operator) being installed.
+You can install the Solr Operator via it's [Helm chart](https://artifacthub.io/packages/helm/apache-solr/solr-operator).**
 
 If you are using a provided Zookeeper instance for your Solr Cloud, then you must also install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 However, it is [installed by default as a dependency](https://artifacthub.io/packages/helm/apache-solr/solr-operator#installing-the-zookeeper-operator) when using the Solr Operator Helm chart.
@@ -35,7 +35,7 @@ There may be breaking changes between the version you are using and the version 
 
 ### Installing the Chart
 
-To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
 helm install example apache-solr/solr --version 0.7.0-prerelease --set image.tag=8.8
