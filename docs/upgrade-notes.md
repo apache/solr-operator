@@ -120,6 +120,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 - Provided Zookeeper pods use the `IfNotPresent` pullPolicy by default. Users that specify this field manually will not see a change.
 
+- The Solr Operator now tries to limit connectivity to pods before they are deleted, for rolling updates or other reasons.
+  Before the pod is killed, and evicted of replicas if ephemeral storage is used, a readinessCondition will be set to `false`.
+  The Headless Service does not use readiness, so internode traffic will not be affected, however the ClusterIP service will no longer include these nodes until they have been restarted.
+  This change will improve request success rates during a rolling restart.
+  Refer to the [Managed Updates documentation](solr-cloud/managed-updates.md#pod-readiness-during-updates).
+
 ### v0.6.0
 - The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.
   This will not affect any existing resources, as default versions are hard-written to the resources immediately.

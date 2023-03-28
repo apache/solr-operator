@@ -89,3 +89,25 @@ spec:
       annotations:
         manualrestart: "2021-10-20T08:37:00Z"
 ```
+
+## Pod Readiness during updates
+
+The Solr Operator sets up at least two Services for every SolrCloud.
+- Always
+  - A clusterIP service for all solr nodes (What we call the "common service")
+- Either
+  - A [Headless Service](https://kubernetes.io/docs/concepts/services-networking/service/#headless-services) for individual Solr Node endpoints that are not exposed via an Ingress.
+  - Individual clusterIP services for Solr Nodes that are exposed via an Ingress
+
+Only the common service uses the `publishNotReadyAddresses: false` option, since the common service should load balance between all available nodes.
+The second two services have individual endpoints for each node, so there is no reason to de-list pods that are not available.
+
+When doing a rolling upgrade, or taking down a pod for anytime, we want to first stop all requests to this pod.
+Solr will do this while stopping by first taking itself out of the cluster's set of `liveNodes` , so that other Solr nodes and clients think it is not running.
+However, for ephemeral clusters we are also evicting data before the pod is deleted. So we want to stop requests to this node since the data will soon no-longer live there.
+
+Kubernetes allows the Solr Operator to control whether a pod is considered `ready`, or available for requests, via [readinessConditions/readinessGates](https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-readiness-gate).
+When the Solr Operator begins the shut-down procedure for a pod, it will first set a `readinessCondition` to `false`, so that no loadBalanced requests (through the common service) go to the pod.
+This readinessCondition will stay set to `false` until the pod is deleted and a new pod is created in its place.
+
+**For this reason, its a good idea to avoid very aggressive [Update Strategy](solr-cloud-crd.md#update-strategy), since a high `maxPodsUnavailable` will lead to all requests through the common service going to a small number of pods.**
