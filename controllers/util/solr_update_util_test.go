@@ -213,7 +213,7 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	// Normal inputs
 	maxshardReplicasUnavailable = intstr.FromInt(1)
 	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 6, log))
-	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. Do to replica placement, only the node with the least leaders can be upgraded and replicas.")
+	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. Due to replica placement, only the node with the least leaders can be upgraded and replicas.")
 
 	// Test the maxShardReplicasDownSpec
 	maxshardReplicasUnavailable = intstr.FromInt(2)

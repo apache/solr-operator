@@ -122,7 +122,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 - The Solr Operator now tries to limit connectivity to pods before they are deleted, for rolling updates or other reasons.
   Before the pod is killed, and evicted of replicas if ephemeral storage is used, a readinessCondition will be set to `false`.
-  The Headless Service does not use readiness, so internode traffic will not be affected, however the ClusterIP service will no longer include these nodes until they have been restarted.
+  The Headless Service does not use readiness, so internode traffic will not be affected, however the ClusterIP (common) service will no longer include these nodes until they have been restarted.
   This change will improve request success rates during a rolling restart.
   Refer to the [Managed Updates documentation](solr-cloud/managed-updates.md#pod-readiness-during-updates).
 

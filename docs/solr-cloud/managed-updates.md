@@ -100,7 +100,7 @@ The Solr Operator sets up at least two Services for every SolrCloud.
   - Individual clusterIP services for Solr Nodes that are exposed via an Ingress
 
 Only the common service uses the `publishNotReadyAddresses: false` option, since the common service should load balance between all available nodes.
-The second two services have individual endpoints for each node, so there is no reason to de-list pods that are not available.
+The other services have individual endpoints for each node, so there is no reason to de-list pods that are not available.
 
 When doing a rolling upgrade, or taking down a pod for anytime, we want to first stop all requests to this pod.
 Solr will do this while stopping by first taking itself out of the cluster's set of `liveNodes` , so that other Solr nodes and clients think it is not running.
