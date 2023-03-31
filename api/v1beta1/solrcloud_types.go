@@ -90,6 +90,10 @@ type SolrCloudSpec struct {
 	// +optional
 	UpdateStrategy SolrUpdateStrategy `json:"updateStrategy,omitempty"`
 
+	// Define how Solr nodes should be available.
+	// +optional
+	Availability SolrAvailabilityOptions `json:"availability,omitempty"`
+
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 
@@ -708,7 +712,7 @@ type SolrUpdateStrategy struct {
 }
 
 // SolrUpdateMethod is a string enumeration type that enumerates
-// all possible ways that a SolrCloud can having rolling updates managed.
+// all possible ways that a SolrCloud can have rolling updates managed.
 // +kubebuilder:validation:Enum=Managed;StatefulSet;Manual
 type SolrUpdateMethod string
 
@@ -734,7 +738,7 @@ func (opts *SolrUpdateStrategy) withDefaults() (changed bool) {
 	return changed
 }
 
-// Spec to control the desired behavior of managed rolling update.
+// ManagedUpdateOptions control the desired behavior of managed rolling update.
 type ManagedUpdateOptions struct {
 
 	// The maximum number of pods that can be unavailable during the update.
@@ -757,6 +761,33 @@ type ManagedUpdateOptions struct {
 	// +optional
 	MaxShardReplicasUnavailable *intstr.IntOrString `json:"maxShardReplicasUnavailable,omitempty"`
 }
+
+type SolrAvailabilityOptions struct {
+	// Define PodDisruptionBudget(s) to ensure availability of Solr
+	// +optional
+	PodDisruptionBudget SolrPodDisruptionBudgetOptions `json:"podDisruptionBudget,omitempty"`
+}
+
+type SolrPodDisruptionBudgetOptions struct {
+	// What method should be used when creating PodDisruptionBudget(s)
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+
+	// What method should be used when creating PodDisruptionBudget(s)
+	// +kubebuilder:default=ClusterWide
+	Method SolrPodDisruptionBudgetMethod `json:"method"`
+}
+
+// SolrPodDisruptionBudgetMethod is a string enumeration type that enumerates
+// all possible ways that a SolrCloud can have PodDisruptionBudgets managed.
+// +kubebuilder:validation:Enum=ClusterWide
+type SolrPodDisruptionBudgetMethod string
+
+const (
+	// ClusterWidePDB will result in a single cluster-wide PDB being created to ensure availability of the SolrCloud.
+	// This will not take replica/shard readiness into account.
+	ClusterWidePDB SolrPodDisruptionBudgetMethod = "ClusterWide"
+)
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
