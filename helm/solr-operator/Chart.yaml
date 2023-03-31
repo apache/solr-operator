@@ -116,6 +116,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/511
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/510
+    - kind: fixed
+      description: Don't give port annotation for PrometheusExporter, let Prometheus find the port itself
+      links:
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/539
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/483
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
