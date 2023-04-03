@@ -1138,6 +1138,10 @@ type SolrNodeStatus struct {
 
 	// This Solr Node pod is using the latest version of solrcloud pod spec.
 	SpecUpToDate bool `json:"specUpToDate"`
+
+	// This Solr Node pod is scheduled for deletion
+	// +optional
+	ScheduledForDeletion bool `json:"scheduledForDeletion"`
 }
 
 //+kubebuilder:object:root=true

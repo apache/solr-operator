@@ -126,6 +126,8 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 
 			By("waiting for the rolling restart to complete")
 			// Expect the SolrCloud to be up-to-date, or in a valid restarting state
+			lastCheckNodeStatuses := make(map[string]solrv1beta1.SolrNodeStatus, *solrCloud.Spec.Replicas)
+			lastCheckReplicas := *solrCloud.Spec.Replicas
 			foundSolrCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
 				// If there are more than 1 pods not ready, then fail because we have set MaxPodsUnavailable to 1
 				if cloud.Status.ReadyReplicas < *solrCloud.Spec.Replicas-int32(1) {
@@ -138,6 +140,34 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				// As long as the current restart is in a healthy place, keep checking if the restart is finished
 				g.Expect(cloud.Status.UpToDateNodes).To(Equal(*cloud.Spec.Replicas), "The SolrCloud did not finish the rolling restart, not all nodes are up-to-date")
 				g.Expect(cloud.Status.ReadyReplicas).To(Equal(cloud.Status.UpToDateNodes), "The SolrCloud did not finish the rolling restart, all nodes are up-to-date, but not all are ready")
+
+				// Make sure that if a pod is deleted/recreated, it was first taken offline and "scheduledForDeletion" was set to true
+				// TODO: Try to find a better way to make sure that the deletion readinessCondition works
+				if cloud.Status.Replicas < lastCheckReplicas {
+					// We only want to check the statuses of nodes that the pods have been deleted, or they have been re-created since our last check
+					for _, nodeStatus := range cloud.Status.SolrNodes {
+						if !nodeStatus.SpecUpToDate || lastCheckNodeStatuses[nodeStatus.Name].SpecUpToDate {
+							delete(lastCheckNodeStatuses, nodeStatus.Name)
+						}
+					}
+					for _, nodeStatus := range cloud.Status.SolrNodes {
+						oldNodeStatus := lastCheckNodeStatuses[nodeStatus.Name]
+						g.Expect(oldNodeStatus.ScheduledForDeletion).To(BeTrue(), "Before SolrNode %s is taken down, scheduledForDeletion should be true", nodeStatus.Name)
+						g.Expect(oldNodeStatus.Ready).To(BeFalse(), "Before SolrNode %s is taken down, it should not be ready", nodeStatus.Name)
+					}
+				}
+
+				// Update the nodeStatuses for the next iteration's readinessCondition check
+				lastCheckReplicas = cloud.Status.Replicas
+				for _, nodeStatus := range cloud.Status.SolrNodes {
+					lastCheckNodeStatuses[nodeStatus.Name] = nodeStatus
+
+					if nodeStatus.Ready || nodeStatus.SpecUpToDate {
+						g.Expect(nodeStatus.ScheduledForDeletion).To(BeFalse(), "SolrNode %s cannot be scheduledForDeletion while being 'ready' or 'upToDate'", nodeStatus.Name)
+					} else {
+						g.Expect(nodeStatus.ScheduledForDeletion).To(BeTrue(), "SolrNode %s must be scheduledForDeletion while not being 'ready' or 'upToDate', so it was taken down for the update", nodeStatus.Name)
+					}
+				}
 			})
 
 			// Make sure that the status object is correct for the nodes
