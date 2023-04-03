@@ -183,7 +183,7 @@ kubectl get solrclouds -w
 The SolrCloud CRD is setup so that it is able to run with the HPA.
 Merely use the following when creating an HPA object:
 ```yaml
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: example-solr
@@ -191,7 +191,7 @@ spec:
   maxReplicas: 6
   minReplicas: 3
   scaleTargetRef:
-    apiVersion: solr.apache.com/v1beta1
+    apiVersion: solr.apache.org/v1beta1
     kind: SolrCloud
     name: example
   metrics:
