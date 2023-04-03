@@ -102,7 +102,7 @@ The Solr Operator sets up at least two Services for every SolrCloud.
 Only the common service uses the `publishNotReadyAddresses: false` option, since the common service should load balance between all available nodes.
 The other services have individual endpoints for each node, so there is no reason to de-list pods that are not available.
 
-When doing a rolling upgrade, or taking down a pod for anytime, we want to first stop all requests to this pod.
+When doing a rolling upgrade, or taking down a pod for any reason, we want to first stop all requests to this pod.
 Solr will do this while stopping by first taking itself out of the cluster's set of `liveNodes` , so that other Solr nodes and clients think it is not running.
 However, for ephemeral clusters we are also evicting data before the pod is deleted. So we want to stop requests to this node since the data will soon no-longer live there.
 
@@ -110,4 +110,5 @@ Kubernetes allows the Solr Operator to control whether a pod is considered `read
 When the Solr Operator begins the shut-down procedure for a pod, it will first set a `readinessCondition` to `false`, so that no loadBalanced requests (through the common service) go to the pod.
 This readinessCondition will stay set to `false` until the pod is deleted and a new pod is created in its place.
 
-**For this reason, its a good idea to avoid very aggressive [Update Strategy](solr-cloud-crd.md#update-strategy), since a high `maxPodsUnavailable` will lead to all requests through the common service going to a small number of pods.**
+**For this reason, it's a good idea to avoid very aggressive [Update Strategies](solr-cloud-crd.md#update-strategy).
+During a rolling restart with a high `maxPodsUnavailable`, requests that go through the common service might be routed to a very small number of pods.**

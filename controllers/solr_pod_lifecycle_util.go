@@ -245,12 +245,12 @@ func EnsurePodReadinessCondition(pod *corev1.Pod, conditionType corev1.PodCondit
 }
 
 // PodConditionEquals check if a podCondition equals what is expected
-func PodConditionEquals(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason) (equal bool) {
+func PodConditionEquals(pod *corev1.Pod, conditionType corev1.PodConditionType, reason PodConditionChangeReason) bool {
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == conditionType {
-			equal = string(reason) == condition.Reason
+			return string(reason) == condition.Reason
 		}
 	}
 
-	return
+	return false
 }
