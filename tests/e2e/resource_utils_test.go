@@ -728,7 +728,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 		&corev1.ConfigMap{}, &netv1.Ingress{},
 		&corev1.PersistentVolumeClaim{}, &corev1.PersistentVolume{},
 		&appsv1.StatefulSet{}, &appsv1.Deployment{}, &appsv1.ReplicaSet{}, &corev1.Pod{}, &corev1.PersistentVolumeClaim{},
-		&corev1.Secret{},
+		&corev1.Secret{}, &policyv1.PodDisruptionBudget{},
 	}
 	By("deleting all managed resources")
 	for _, obj := range cleanupObjects {

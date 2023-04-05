@@ -1071,18 +1071,26 @@ type ZookeeperPodPolicy struct {
 // SolrCloudStatus defines the observed state of SolrCloud
 type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
+	//+listType:=map
+	//+listMapKey:=name
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
 	// Replicas is the number of desired replicas in the cluster
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	Replicas int32 `json:"replicas"`
 
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
 	// ReadyReplicas is the number of ready replicas in the cluster
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	ReadyReplicas int32 `json:"readyReplicas"`
 
 	// UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -1106,6 +1114,7 @@ type SolrCloudStatus struct {
 
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
+	// +optional
 	BackupRestoreReady bool `json:"backupRestoreReady"`
 
 	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
