@@ -406,7 +406,6 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		"prometheus.io/scrape": "true",
 		"prometheus.io/scheme": "http",
 		"prometheus.io/path":   "/metrics",
-		"prometheus.io/port":   strconv.Itoa(ExtSolrMetricsPort),
 	}
 
 	selectorLabels := solrPrometheusExporter.SharedLabels()
