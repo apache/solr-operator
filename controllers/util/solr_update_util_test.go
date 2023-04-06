@@ -53,25 +53,50 @@ func TestPickPodsToUpgrade(t *testing.T) {
 		},
 	}
 
-	allPods := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-2"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-4"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-6"}, Spec: corev1.PodSpec{}},
+	allPods := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-2"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-4"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-6"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
-	halfPods := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+	halfPods := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
-	lastPod := []corev1.Pod{
-		{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+	lastPod := OutOfDatePodSegmentation{
+		NotStarted:           []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+		},
+	}
+
+	someScheduledForDeletionPods := OutOfDatePodSegmentation{
+		NotStarted: []corev1.Pod{},
+		ScheduledForDeletion: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-2"}, Spec: corev1.PodSpec{}},
+		},
+		Running: []corev1.Pod{
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-0"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-1"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-3"}, Spec: corev1.PodSpec{}},
+			{ObjectMeta: metav1.ObjectMeta{Name: "foo-solrcloud-5"}, Spec: corev1.PodSpec{}},
+		},
 	}
 
 	/*
@@ -180,6 +205,26 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	solrCloud.Spec.Replicas = Replicas(4)
 	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterStatus, overseerLeader, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be upgraded when everything is healthy and it is the last node, even though this SolrCloud resource doesn't manage all Nodes")
+
+	/*
+		Test when some pods have already been selected for deletion
+	*/
+
+	// Normal inputs
+	maxshardReplicasUnavailable = intstr.FromInt(1)
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. Due to replica placement, only the node with the least leaders can be upgraded and replicas.")
+
+	// Test the maxShardReplicasDownSpec
+	maxshardReplicasUnavailable = intstr.FromInt(2)
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	assert.ElementsMatch(t, []string{"foo-solrcloud-1", "foo-solrcloud-3"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
+
+	// Test the maxNodes
+	maxshardReplicasUnavailable = intstr.FromInt(2)
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 2, log))
+	assert.ElementsMatch(t, []string{"foo-solrcloud-1", "foo-solrcloud-3"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
+
 }
 
 func TestPodUpgradeOrdering(t *testing.T) {

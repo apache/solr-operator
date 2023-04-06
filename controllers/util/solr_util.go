@@ -51,6 +51,9 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
+	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
+	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
+
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
 	DistLibs    = "/opt/solr/dist"
@@ -115,6 +118,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.TerminationGracePeriodSeconds != nil {
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
+	}
+
+	// The isNotStopped readiness gate will always be used for managedUpdates
+	podReadinessGates := []corev1.PodReadinessGate{
+		{
+			ConditionType: SolrIsNotStoppedReadinessCondition,
+		},
 	}
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
@@ -197,6 +207,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			ephemeralVolume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
+
+		// Add an evictPodReadinessCondition for when deleting pods with ephemeral storage
+		podReadinessGates = append(podReadinessGates, corev1.PodReadinessGate{
+			ConditionType: SolrReplicasNotEvictedReadinessCondition,
+		})
 	}
 
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
@@ -491,6 +506,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					InitContainers: initContainers,
 					HostAliases:    hostAliases,
 					Containers:     containers,
+					ReadinessGates: podReadinessGates,
 				},
 			},
 			VolumeClaimTemplates: pvcs,
