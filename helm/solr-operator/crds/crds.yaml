@@ -12024,6 +12024,9 @@ spec:
                     ready:
                       description: Is the node up and running
                       type: boolean
+                    scheduledForDeletion:
+                      description: This Solr Node pod is scheduled for deletion
+                      type: boolean
                     specUpToDate:
                       description: This Solr Node pod is using the latest version
                         of solrcloud pod spec.
