@@ -164,6 +164,10 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 		}
 	}
 
+	if zkSpec.Probes != nil {
+		zkCluster.Spec.Probes = zkSpec.Probes
+	}
+
 	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.
 	// Also it will default the spec.Probes object which cannot be set to null.
 	// TODO: Might be able to remove when the following is resolved and the dependency is upgraded:

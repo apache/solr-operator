@@ -10489,6 +10489,57 @@ spec:
                                 type: string
                             type: object
                         type: object
+                      probes:
+                        description: Probes specifies the timeout values for the Readiness
+                          and Liveness Probes for the zookeeper pods.
+                        properties:
+                          livenessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                            type: object
+                          readinessProbe:
+                            properties:
+                              failureThreshold:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              initialDelaySeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              periodSeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              successThreshold:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                              timeoutSeconds:
+                                format: int32
+                                minimum: 0
+                                type: integer
+                            type: object
+                        type: object
                       readOnlyAcl:
                         description: ZooKeeper ACL to use when connecting with ZK
                           for reading operations. This ACL should have READ permission

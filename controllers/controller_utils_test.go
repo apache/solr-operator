@@ -1005,4 +1005,18 @@ var (
 	testIngressClass = "test-ingress-class"
 	testSolrZKOpts   = "-Dsolr.zk.opts=this"
 	testSolrOpts     = "-Dsolr.opts=this"
+	testZkProbes     = zk_api.Probes{
+		ReadinessProbe: &zk_api.Probe{
+			PeriodSeconds:    3,
+			SuccessThreshold: 5,
+			TimeoutSeconds:   10,
+		},
+		LivenessProbe: &zk_api.Probe{
+			InitialDelaySeconds: 6,
+			PeriodSeconds:       4,
+			FailureThreshold:    0,
+			SuccessThreshold:    3,
+			TimeoutSeconds:      0,
+		},
+	}
 )

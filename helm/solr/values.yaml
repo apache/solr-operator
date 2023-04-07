@@ -177,6 +177,8 @@ zk:
       # resources: {}
       # # Set ZK service account individually instead of the global "serviceAccount.name"
       # serviceAccountName: ""
+    # Override the default Zookeeper probes
+    probes: {}
 
     # Storage defaults to the type of storage you use for Solr, which is ephemeral by default.
     # Explicitly set the storage type, only necessary when wishing to use an empty persistence or ephemeral object.
