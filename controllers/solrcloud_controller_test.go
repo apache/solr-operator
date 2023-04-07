@@ -88,6 +88,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						InitContainers:     extraContainers2,
 					},
 				},
+				Availability: solrv1beta1.SolrAvailabilityOptions{
+					PodDisruptionBudget: solrv1beta1.SolrPodDisruptionBudgetOptions{
+						Enabled: true,
+						Method:  "ClusterWide",
+					},
+				},
 			}
 		})
 		FIt("has the correct resources", func() {
@@ -151,6 +157,11 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			By("testing the PodDisruptionBudget")
 			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, intstr.FromString(util.DefaultMaxPodsUnavailable))
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.Availability.PodDisruptionBudget.Enabled = false
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Disable the PDB for the solrcloud")
+			})
+			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
 		})
 	})
 
@@ -175,6 +186,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						MaxPodsUnavailable: &three,
 					},
 					RestartSchedule: "@every 30m",
+				},
+				Availability: solrv1beta1.SolrAvailabilityOptions{
+					PodDisruptionBudget: solrv1beta1.SolrPodDisruptionBudgetOptions{
+						Enabled: true,
+						Method:  "ClusterWide",
+					},
 				},
 				SolrGCTune: "gc Options",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
@@ -292,6 +309,11 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			By("testing the PodDisruptionBudget")
 			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, three)
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.Availability.PodDisruptionBudget.Enabled = false
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Disable the PDB for the solrcloud")
+			})
+			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
 		})
 	})
 

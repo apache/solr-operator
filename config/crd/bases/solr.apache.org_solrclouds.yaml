@@ -108,7 +108,6 @@ spec:
                         type: string
                     required:
                     - enabled
-                    - method
                     type: object
                 type: object
               backupRepositories:

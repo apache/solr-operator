@@ -464,31 +464,37 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// PodDistruptionBudget(s)
+	// Upsert or delete solrcloud-wide PodDisruptionBudget(s) based on 'Enabled' flag.
 	pdb := util.GeneratePodDisruptionBudget(instance, pvcLabelSelector)
+	if instance.Spec.Availability.PodDisruptionBudget.Enabled {
+		// Check if the PodDistruptionBudget already exists
+		pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
+		foundPDB := &policyv1.PodDisruptionBudget{}
+		err = r.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, foundPDB)
+		if err != nil && errors.IsNotFound(err) {
+			pdbLogger.Info("Creating PodDisruptionBudget")
+			if err = controllerutil.SetControllerReference(instance, pdb, r.Scheme); err == nil {
+				err = r.Create(ctx, pdb)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundPDB, r.Scheme)
+			needsUpdate = util.CopyPodDisruptionBudgetFields(pdb, foundPDB, pdbLogger) || needsUpdate
 
-	// Check if the PodDistruptionBudget already exists
-	pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
-	foundPDB := &policyv1.PodDisruptionBudget{}
-	err = r.Get(ctx, types.NamespacedName{Name: pdb.Name, Namespace: pdb.Namespace}, foundPDB)
-	if err != nil && errors.IsNotFound(err) {
-		pdbLogger.Info("Creating PodDisruptionBudget")
-		if err = controllerutil.SetControllerReference(instance, pdb, r.Scheme); err == nil {
-			err = r.Create(ctx, pdb)
+			// Update the found PodDistruptionBudget and write the result back if there are any changes
+			if needsUpdate && err == nil {
+				pdbLogger.Info("Updating PodDisruptionBudget")
+				err = r.Update(ctx, foundPDB)
+			}
 		}
-	} else if err == nil {
-		var needsUpdate bool
-		needsUpdate, err = util.OvertakeControllerRef(instance, foundPDB, r.Scheme)
-		needsUpdate = util.CopyPodDisruptionBudgetFields(pdb, foundPDB, pdbLogger) || needsUpdate
-
-		// Update the found PodDistruptionBudget and write the result back if there are any changes
-		if needsUpdate && err == nil {
-			pdbLogger.Info("Updating PodDisruptionBudget")
-			err = r.Update(ctx, foundPDB)
+		if err != nil {
+			return requeueOrNot, err
 		}
-	}
-	if err != nil {
-		return requeueOrNot, err
+	} else { // PDB is disabled, make sure that we delete any previously created pdb that might exist.
+		err = r.Client.Delete(ctx, pdb)
+		if err != nil && !errors.IsNotFound(err) {
+			return requeueOrNot, err
+		}
 	}
 
 	extAddressabilityOpts := instance.Spec.SolrAddressability.External

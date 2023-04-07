@@ -775,7 +775,7 @@ type SolrPodDisruptionBudgetOptions struct {
 
 	// What method should be used when creating PodDisruptionBudget(s)
 	// +kubebuilder:default=ClusterWide
-	Method SolrPodDisruptionBudgetMethod `json:"method"`
+	Method SolrPodDisruptionBudgetMethod `json:"method,omitempty"`
 }
 
 // SolrPodDisruptionBudgetMethod is a string enumeration type that enumerates
