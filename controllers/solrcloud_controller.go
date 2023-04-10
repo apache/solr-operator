@@ -466,7 +466,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Upsert or delete solrcloud-wide PodDisruptionBudget(s) based on 'Enabled' flag.
 	pdb := util.GeneratePodDisruptionBudget(instance, pvcLabelSelector)
-	if instance.Spec.Availability.PodDisruptionBudget.Enabled {
+	if instance.Spec.Availability.PodDisruptionBudget.Enabled != nil && *instance.Spec.Availability.PodDisruptionBudget.Enabled {
 		// Check if the PodDistruptionBudget already exists
 		pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
 		foundPDB := &policyv1.PodDisruptionBudget{}

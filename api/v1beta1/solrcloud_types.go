@@ -771,7 +771,7 @@ type SolrAvailabilityOptions struct {
 type SolrPodDisruptionBudgetOptions struct {
 	// What method should be used when creating PodDisruptionBudget(s)
 	// +kubebuilder:default=true
-	Enabled bool `json:"enabled"`
+	Enabled *bool `json:"enabled"`
 
 	// What method should be used when creating PodDisruptionBudget(s)
 	// +kubebuilder:default=ClusterWide
