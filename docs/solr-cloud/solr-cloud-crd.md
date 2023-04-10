@@ -99,7 +99,7 @@ Under `SolrCloud.Spec.updateStrategy`:
 ### Pod Disruption Budgets
 _Since v0.7.0_
 
-The Solr Operator can optionally create a [`PodDisruptionBudget`](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets) to ensure that Kubernetes does not take down more than acceptable amount of SolrCloud nodes at a time.
+The Solr Operator can optionally create a [`PodDisruptionBudget`](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets) to ensure that Kubernetes does not take down more than an acceptable amount of SolrCloud nodes at a time.
 This behavior is controlled by the `.spec.availability.podDisruptionBudget.enabled` setting, which defaults to "true" but can be disabled if desired as in the snippet below:
 
 ```yaml
