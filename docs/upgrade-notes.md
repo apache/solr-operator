@@ -114,6 +114,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   If you are unable to use a newer version of Kubernetes, please install the `v0.6.0` version of the Solr Operator for use with Kubernetes `1.20` and below.
   See the [version compatibility matrix](#kubernetes-versions) for more information.
 
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.14` to `v0.2.15`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
+  Make sure to install the correct version of the Zookeeper Operator CRDs, as [shown above](#upgrading-the-zookeeper-operator).
+
 - `PodDisruptionBudgets` are now created alongside SolrCloud instances.
   The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
   If this is not provided, the default setting (`25%`) is used.
