@@ -23,7 +23,7 @@
 package v1beta1
 
 import (
-	"github.com/apache/solr-operator/controllers/zk_api"
+	apiv1beta1 "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -1598,7 +1598,7 @@ func (in *ZookeeperSpec) DeepCopyInto(out *ZookeeperSpec) {
 	in.Config.DeepCopyInto(&out.Config)
 	if in.Probes != nil {
 		in, out := &in.Probes, &out.Probes
-		*out = new(zk_api.Probes)
+		*out = new(apiv1beta1.Probes)
 		(*in).DeepCopyInto(*out)
 	}
 }

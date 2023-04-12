@@ -30,8 +30,8 @@ import (
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -765,7 +765,7 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 
 		// Check if the ZookeeperCluster already exists
 		zkLogger := logger.WithValues("zookeeperCluster", zkCluster.Name)
-		foundZkCluster := &zk_api.ZookeeperCluster{}
+		foundZkCluster := &zkApi.ZookeeperCluster{}
 		err := r.Get(ctx, types.NamespacedName{Name: zkCluster.Name, Namespace: zkCluster.Namespace}, foundZkCluster)
 		if err != nil && errors.IsNotFound(err) {
 			zkLogger.Info("Creating Zookeeer Cluster")
@@ -990,7 +990,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if useZkCRD {
-		ctrlBuilder = ctrlBuilder.Owns(&zk_api.ZookeeperCluster{})
+		ctrlBuilder = ctrlBuilder.Owns(&zkApi.ZookeeperCluster{})
 	}
 
 	return ctrlBuilder.Complete(r)
