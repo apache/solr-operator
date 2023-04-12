@@ -19,6 +19,7 @@ package v1beta1
 
 import (
 	"fmt"
+	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
 	"strconv"
 	"strings"
@@ -847,6 +848,11 @@ type ZookeeperSpec struct {
 	// Additional Zookeeper Configuration settings
 	// +optional
 	Config ZookeeperConfig `json:"config,omitempty"`
+
+	// Probes specifies the timeout values for the Readiness and Liveness Probes
+	// for the zookeeper pods.
+	// +optional
+	Probes *zk_api.Probes `json:"probes,omitempty"`
 }
 
 type ZKPersistence struct {

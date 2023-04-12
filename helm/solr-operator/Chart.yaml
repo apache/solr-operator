@@ -139,6 +139,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/544
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/545
+    - kind: added
+      description: Support custom Zookeeper probes
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/477
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/546
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
