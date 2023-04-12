@@ -21,10 +21,10 @@ import (
 	"context"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/apache/solr-operator/version"
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"helm.sh/helm/v3/pkg/release"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,7 +104,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 
 	By("setting up the k8s clients")
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
-	Expect(zk_api.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")

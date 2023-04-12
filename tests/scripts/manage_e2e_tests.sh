@@ -40,7 +40,7 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
 EOF
 }
 
-ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.14")
+ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.15")
 OPTIND=1
 while getopts hv:i:k:s:a: opt; do
     case $opt in
