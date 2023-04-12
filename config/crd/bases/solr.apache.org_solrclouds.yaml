@@ -11770,13 +11770,17 @@ spec:
                 description: PodSelector for SolrCloud pods, required by the HPA
                 type: string
               readyReplicas:
+                default: 0
                 description: ReadyReplicas is the number of ready replicas in the
                   cluster
                 format: int32
+                minimum: 0
                 type: integer
               replicas:
+                default: 0
                 description: Replicas is the number of desired replicas in the cluster
                 format: int32
+                minimum: 0
                 type: integer
               solrNodes:
                 description: SolrNodes contain the statuses of each solr node running
@@ -11823,14 +11827,19 @@ spec:
                   - version
                   type: object
                 type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               targetVersion:
                 description: The version of solr that the cloud is meant to be running.
                   Will only be provided when the cloud is migrating between versions
                 type: string
               upToDateNodes:
+                default: 0
                 description: UpToDateNodes is the number of Solr Node pods that are
                   running the latest pod spec
                 format: int32
+                minimum: 0
                 type: integer
               version:
                 description: The version of solr that the cloud is running
@@ -11901,7 +11910,6 @@ spec:
                     type: object
                 type: object
             required:
-            - backupRestoreReady
             - internalCommonAddress
             - podSelector
             - readyReplicas

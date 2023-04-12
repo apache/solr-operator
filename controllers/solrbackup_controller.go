@@ -88,7 +88,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	oldStatus := backup.Status.DeepCopy()
+	unmodifiedBackupResource := backup.DeepCopy()
 
 	requeueOrNot := reconcile.Result{}
 
@@ -159,9 +159,9 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	if !reflect.DeepEqual(*oldStatus, backup.Status) {
-		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", oldStatus)
-		err = r.Status().Update(ctx, backup)
+	if !reflect.DeepEqual(unmodifiedBackupResource.Status, backup.Status) {
+		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", unmodifiedBackupResource.Status)
+		err = r.Status().Patch(ctx, backup, client.MergeFrom(unmodifiedBackupResource))
 	}
 
 	return requeueOrNot, err
