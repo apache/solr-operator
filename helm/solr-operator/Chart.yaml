@@ -132,6 +132,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/483
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/539
+    - kind: fixed
+      description: Solr resource status are now patched instead of updated, this should reduce "error" logging in the operator.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/544
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/545
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
