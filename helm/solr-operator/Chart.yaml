@@ -107,10 +107,10 @@ annotations:
     - kind: fixed
       description: Fix issue where Zookeeper specific labels are not propagated to Zookeeper pods
       links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/514
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/490
+        - name: Zookeeper Operator Issue
+          url: https://github.com/pravega/zookeeper-operator/issues/511
     - kind: fixed
       description: Fix SolrBackup not taking backups when the collections field is omitted 
       links:

@@ -19,7 +19,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -295,14 +294,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			// Documentation indicates that Spec.Labels is for passing pod labels.
 			// This test will remain here in case the behavior changes on the
 			// Zookeeper Operator in the future.
-			Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue("app", "foo-solrcloud-zookeeper"), "Missing 'app' label from zkCluster pod labels")
-			Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue("release", "foo-solrcloud-zookeeper"), "Missing 'release' label zkCluster pod labels")
-			Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue("app", "foo-solrcloud-zookeeper"), "Missing 'app' label from zkCluster pod labels")
-			Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue("release", "foo-solrcloud-zookeeper"), "Missing 'release' label zkCluster pod labels")
-			for k, v := range testSSLabels {
-				Expect(zkCluster.Spec.Pod.Labels).To(HaveKeyWithValue(k, v), fmt.Sprintf("Missing %s=%s from zkCluster pod labels", k, v))
-				Expect(zkCluster.Spec.Labels).To(HaveKeyWithValue(k, v), fmt.Sprintf("Missing %s=%s from zkCluster labels", k, v))
-			}
+			testZkPodLabels := util.MergeLabelsOrAnnotations(testSSLabels, map[string]string{"app": "foo-solrcloud-zookeeper", "release": "foo-solrcloud-zookeeper"})
+			Expect(zkCluster.Spec.Pod.Labels).To(Equal(testZkPodLabels), "Wrong zkCluster pod labels")
+			Expect(zkCluster.Spec.Labels).To(Not(Equal(testZkPodLabels)), "Wrong zkCluster labels")
 
 			// Check ZK Config Options
 			Expect(zkCluster.Spec.Conf.InitLimit).To(Equal(zkConf.InitLimit), "Incorrect zkCluster Config InitLimit")
