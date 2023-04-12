@@ -125,6 +125,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/530
         - name: Feature Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/managed-updates.html#pod-readiness-during-updates
+    - kind: added
+      description: Support custom Zookeeper probes
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/477
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/546
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
