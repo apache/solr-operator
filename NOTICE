@@ -40,4 +40,4 @@ The Zookeeper Operator is used as an optional dependency, however the ZookeeperC
     config/dependencies/zookeeper_cluster_crd.yaml
 The API code was also copied to the following directory
     controllers/zk_api
-This was taken from https://github.com/pravega/zookeeper-operator (version v0.2.14)
+This was taken from https://github.com/pravega/zookeeper-operator (version v0.2.15)

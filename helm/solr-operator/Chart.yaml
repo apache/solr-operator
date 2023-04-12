@@ -35,7 +35,7 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 dependencies:
   - name: 'zookeeper-operator'
-    version: 0.2.14
+    version: 0.2.15
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
