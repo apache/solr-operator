@@ -146,6 +146,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/477
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/546
+    - kind: fixed
+      description: Avoid backup directory chown when directories are already writable
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/537
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/548
     - kind: added
       description: Added Option to enable/disable the PodDisruptionBudget for the cluster.
       links:
