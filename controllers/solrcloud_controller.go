@@ -528,9 +528,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
+		logger.Info("Updating SolrCloud Status", "status", newStatus)
+		oldInstance := instance.DeepCopy()
 		instance.Status = newStatus
-		logger.Info("Updating SolrCloud Status", "status", instance.Status)
-		err = r.Status().Update(ctx, instance)
+		err = r.Status().Patch(ctx, instance, client.MergeFrom(oldInstance))
 		if err != nil {
 			return requeueOrNot, err
 		}

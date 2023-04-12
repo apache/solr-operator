@@ -227,6 +227,10 @@ spec:
       zookeeperPodPolicy:
         {{- include "solr.zk.zookeeperPodPolicy" . | nindent 8 }}
       {{- end }}
+      {{- if .Values.zk.provided.probes }}
+      probes:
+        {{- toYaml .Values.zk.provided.probes | nindent 8 }}
+      {{- end }}
       {{- if .Values.zk.acl }}
       acl:
         {{- toYaml .Values.zk.acl | nindent 8 }}

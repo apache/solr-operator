@@ -188,6 +188,8 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.securityContext | object |  | Security context for the entire ZooKeeper pod. More information can be found in the [Kubernetes docs](More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context). |
 | zk.provided.zookeeperPodPolicy.terminationGracePeriodSeconds | int | `30` | The amount of time that Kubernetes will give for a zookeeper pod instance to shutdown normally. |
 | zk.provided.zookeeperPodPolicy.imagePullSecrets | []object |  | List of image pull secrets to inject into the Zookeeper pod. |
+| zk.provided.probes.readinessProbe | object |  | Override the default readinessProbe for Zookeeper Pods. |
+| zk.provided.probes.livenessProbe | object |  | Override the default livenessProbe for Zookeeper Pods. |
 | zk.acl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK admin ACL information |
 | zk.acl.usernameKey | string |  | Key in the Admin ACL Secret that stores the ACL username |
 | zk.acl.passwordKey | string |  | Key in the Admin ACL Secret that stores the ACL password |

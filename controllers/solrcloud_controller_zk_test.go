@@ -220,6 +220,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 						},
 						Config: zkConf,
 						ChRoot: "a-ch/root",
+						Probes: &testZkProbes,
 					},
 				},
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
@@ -275,6 +276,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(zkCluster.Spec.Ephemeral).To(Not(BeNil()), "ZkCluster.spec.ephemeral should not be nil")
 			Expect(zkCluster.Spec.Ephemeral.EmptyDirVolumeSource.Medium).To(BeEquivalentTo("Memory"), "Incorrect EmptyDir medium for ZK Cluster ephemeral storage")
 			Expect(zkCluster.Spec.Persistence).To(BeNil(), "ZkCluster.spec.persistence should be nil when using ephermeral storage")
+			Expect(zkCluster.Spec.Probes).To(Equal(&testZkProbes), "Incorrect zkCluster probes")
 
 			// Check ZK Pod Options
 			Expect(zkCluster.Spec.Pod.Affinity).To(Equal(testAffinity), "Incorrect zkCluster affinity")

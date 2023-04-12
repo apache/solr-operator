@@ -262,9 +262,10 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	if ready != prometheusExporter.Status.Ready {
+		originalPrometheusExporter := prometheusExporter.DeepCopy()
 		prometheusExporter.Status.Ready = ready
 		logger.Info("Updating status for solr-prometheus-exporter")
-		err = r.Status().Update(ctx, prometheusExporter)
+		err = r.Status().Patch(ctx, prometheusExporter, client.MergeFrom(originalPrometheusExporter))
 	}
 
 	return requeueOrNot, err
