@@ -19,8 +19,8 @@ package controllers
 
 import (
 	"context"
-	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"testing"
@@ -88,7 +88,7 @@ var _ = BeforeSuite(func() {
 	Expect(cfg).NotTo(BeNil())
 
 	err = solrv1beta1.AddToScheme(scheme.Scheme)
-	err = zk_api.AddToScheme(scheme.Scheme)
+	err = zkApi.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

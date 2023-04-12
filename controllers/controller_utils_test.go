@@ -20,12 +20,12 @@ package controllers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
 	"regexp"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	zk_api "github.com/apache/solr-operator/controllers/zk_api"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -702,7 +702,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 	cleanupObjects := []client.Object{
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
-		&zk_api.ZookeeperCluster{},
+		&zkApi.ZookeeperCluster{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &netv1.Ingress{},
@@ -1005,13 +1005,13 @@ var (
 	testIngressClass = "test-ingress-class"
 	testSolrZKOpts   = "-Dsolr.zk.opts=this"
 	testSolrOpts     = "-Dsolr.opts=this"
-	testZkProbes     = zk_api.Probes{
-		ReadinessProbe: &zk_api.Probe{
+	testZkProbes     = zkApi.Probes{
+		ReadinessProbe: &zkApi.Probe{
 			PeriodSeconds:    3,
 			SuccessThreshold: 5,
 			TimeoutSeconds:   10,
 		},
-		LivenessProbe: &zk_api.Probe{
+		LivenessProbe: &zkApi.Probe{
 			InitialDelaySeconds: 6,
 			PeriodSeconds:       4,
 			FailureThreshold:    0,

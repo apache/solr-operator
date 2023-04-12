@@ -24,9 +24,9 @@ import (
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
-	zk_crd "github.com/apache/solr-operator/controllers/zk_api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -577,12 +577,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 	})
 })
 
-func expectZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) *zk_crd.ZookeeperCluster {
+func expectZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) *zkApi.ZookeeperCluster {
 	return expectZookeeperClusterWithChecks(ctx, parentResource, zkName, nil, resolveOffset(additionalOffset))
 }
 
-func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client.Object, zkName string, additionalChecks func(Gomega, *zk_crd.ZookeeperCluster), additionalOffset ...int) *zk_crd.ZookeeperCluster {
-	found := &zk_crd.ZookeeperCluster{}
+func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client.Object, zkName string, additionalChecks func(Gomega, *zkApi.ZookeeperCluster), additionalOffset ...int) *zkApi.ZookeeperCluster {
+	found := &zkApi.ZookeeperCluster{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
 		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), found)).To(Succeed(), "Expected ZookeeperCluster does not exist")
 		if additionalChecks != nil {
@@ -594,7 +594,7 @@ func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client
 	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, found)).To(Succeed())
 	Eventually(
 		func(g Gomega) types.UID {
-			newResource := &zk_crd.ZookeeperCluster{}
+			newResource := &zkApi.ZookeeperCluster{}
 			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), newResource)).To(Succeed(), "ZookeeperCluster not recreated after deletion")
 			return newResource.UID
 		}).Should(And(Not(BeEmpty()), Not(Equal(found.UID))), "New ZookeeperCluster, with new UID, not created.")
@@ -603,6 +603,6 @@ func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client
 
 func expectNoZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
-		return k8sClient.Get(ctx, resourceKey(parentResource, zkName), &zk_crd.ZookeeperCluster{})
+		return k8sClient.Get(ctx, resourceKey(parentResource, zkName), &zkApi.ZookeeperCluster{})
 	}).Should(MatchError("zookeeperclusters.zookeeper.pravega.io \""+zkName+"\" not found"), "ZookeeperCluster exists when it should not")
 }
