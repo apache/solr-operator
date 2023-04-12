@@ -125,6 +125,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/530
         - name: Feature Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/managed-updates.html#pod-readiness-during-updates
+    - kind: fixed
+      description: Don't give port annotation for PrometheusExporter, let Prometheus find the port itself
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/483
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/539
     - kind: added
       description: Support custom Zookeeper probes
       links:
