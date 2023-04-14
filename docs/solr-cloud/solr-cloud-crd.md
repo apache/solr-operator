@@ -99,8 +99,17 @@ Under `SolrCloud.Spec.updateStrategy`:
 ### Pod Disruption Budgets
 _Since v0.7.0_
 
-The Solr Operator will create a [`PodDisruptionBudget`](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets) to ensure that Kubernetes does not take down more than acceptable amount of SolrCloud nodes at a time.
-The PDB's `maxUnavailable` setting is populated from the `maxPodsUnavailable` setting in `SolrCloud.Spec.updateStrategy.managed`.
+The Solr Operator can optionally create a [`PodDisruptionBudget`](https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets) to ensure that Kubernetes does not take down more than an acceptable amount of SolrCloud nodes at a time.
+This behavior is controlled by the `.spec.availability.podDisruptionBudget.enabled` setting, which defaults to "true" but can be disabled if desired as in the snippet below:
+
+```yaml
+spec:
+  availability:
+    podDisruptionBudget:
+      enabled: false
+```
+
+When not disabled, the PDB's `maxUnavailable` setting is populated from the `maxPodsUnavailable` setting in `SolrCloud.Spec.updateStrategy.managed`.
 If this option is not set, it will use the default value (`25%`).
 
 Currently, the implementation does not take shard/replica topology into account, like the update strategy does.

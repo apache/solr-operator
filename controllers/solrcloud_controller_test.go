@@ -33,6 +33,11 @@ import (
 	"strings"
 )
 
+func newBoolPtr(value bool) *bool {
+	newBool := value
+	return &newBool
+}
+
 var _ = FDescribe("SolrCloud controller - General", func() {
 	var (
 		ctx context.Context
@@ -86,6 +91,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						Resources:          testResources,
 						SidecarContainers:  extraContainers1,
 						InitContainers:     extraContainers2,
+					},
+				},
+				Availability: solrv1beta1.SolrAvailabilityOptions{
+					PodDisruptionBudget: solrv1beta1.SolrPodDisruptionBudgetOptions{
+						Enabled: newBoolPtr(true),
+						Method:  "ClusterWide",
 					},
 				},
 			}
@@ -151,6 +162,11 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			By("testing the PodDisruptionBudget")
 			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, intstr.FromString(util.DefaultMaxPodsUnavailable))
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.Availability.PodDisruptionBudget.Enabled = newBoolPtr(false)
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Disable the PDB for the solrcloud")
+			})
+			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
 		})
 	})
 
@@ -175,6 +191,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						MaxPodsUnavailable: &three,
 					},
 					RestartSchedule: "@every 30m",
+				},
+				Availability: solrv1beta1.SolrAvailabilityOptions{
+					PodDisruptionBudget: solrv1beta1.SolrPodDisruptionBudgetOptions{
+						Enabled: newBoolPtr(false),
+						Method:  "ClusterWide",
+					},
 				},
 				SolrGCTune: "gc Options",
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
@@ -291,7 +313,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on headless Service")
 
 			By("testing the PodDisruptionBudget")
-			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, three)
+			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
 		})
 	})
 
@@ -335,6 +357,10 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Incorrect statefulSet annotations")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(ConsistOf("sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"), "Incorrect post-start command")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
+
+			// PodDisruptionBudget creation should be enabled by default
+			By("testing the PodDisruptionBudget")
+			expectPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName(), statefulSet.Spec.Selector, intstr.FromString(util.DefaultMaxPodsUnavailable))
 		})
 	})
 

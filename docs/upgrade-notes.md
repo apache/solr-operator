@@ -120,9 +120,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
   Make sure to install the correct version of the Zookeeper Operator CRDs, as [shown above](#upgrading-the-zookeeper-operator).
 
-- `PodDisruptionBudgets` are now created alongside SolrCloud instances.
+- `PodDisruptionBudgets` are now created by default alongside SolrCloud instances.
   The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
   If this is not provided, the default setting (`25%`) is used.
+  `PodDisruptionBudget` creation can be disabled for a solrcloud resource, by setting `spec.availability.podDisruptionBudget.enabled` to false.
 
 - Provided Zookeeper pods use the `IfNotPresent` pullPolicy by default. Users that specify this field manually will not see a change.
 

@@ -162,6 +162,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/537
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/548
+    - kind: added
+      description: Added Option to enable/disable the PodDisruptionBudget for the cluster.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/538
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/540
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease

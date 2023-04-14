@@ -108,6 +108,12 @@ spec:
     {{- end }}
   {{- end }}
 
+  {{- if and (.Values.availability) (.Values.availability.podDisruptionBudget) }}
+  availability:
+    podDisruptionBudget:
+      {{- toYaml .Values.availability.podDisruptionBudget | nindent 6 }}
+  {{- end }}
+
   {{- if .Values.dataStorage }}
   dataStorage:
     {{- if eq .Values.dataStorage.type "persistent" }}

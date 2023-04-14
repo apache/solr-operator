@@ -338,6 +338,27 @@ spec:
                 items:
                   type: string
                 type: array
+              availability:
+                description: Define how Solr nodes should be available.
+                properties:
+                  podDisruptionBudget:
+                    description: Define PodDisruptionBudget(s) to ensure availability
+                      of Solr
+                    properties:
+                      enabled:
+                        default: true
+                        description: What method should be used when creating PodDisruptionBudget(s)
+                        type: boolean
+                      method:
+                        default: ClusterWide
+                        description: What method should be used when creating PodDisruptionBudget(s)
+                        enum:
+                        - ClusterWide
+                        type: string
+                    required:
+                    - enabled
+                    type: object
+                type: object
               backupRepositories:
                 description: Allows specification of multiple different "repositories"
                   for Solr to use when backing up data.

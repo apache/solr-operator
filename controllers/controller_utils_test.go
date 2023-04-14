@@ -360,10 +360,17 @@ func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object
 	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
 }
 
+func expectNoPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, additionalOffset ...int) {
+	podDisruptionBudget := &policyv1.PodDisruptionBudget{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(MatchError("poddisruptionbudgets.policy \""+podDisruptionBudgetName+"\" not found"), "Expected pdb to eventually not exist")
+	}).Should(Succeed())
+}
+
 func expectPodDisruptionBudgetWithChecks(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalChecks func(Gomega, *policyv1.PodDisruptionBudget), additionalOffset ...int) *policyv1.PodDisruptionBudget {
 	podDisruptionBudget := &policyv1.PodDisruptionBudget{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(Succeed(), "Expected ConfigMap does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(Succeed(), "Expected PodDisruptionBudget does not exist")
 
 		// Verify the PodDisruptionBudget Spec
 		g.Expect(podDisruptionBudget.Spec.Selector).To(Equal(selector), "PodDisruptionBudget does not have the correct selector.")

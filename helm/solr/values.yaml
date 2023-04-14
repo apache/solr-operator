@@ -136,6 +136,13 @@ dataStorage:
       annotations: {}
       storageClassName: ""
 
+# How to control availability for Solr Nodes
+availability:
+  # Create PodDisruptionBudget(s) to ensure availability of Solr Nodes
+  podDisruptionBudget:
+    enabled: true
+    method: ClusterWide
+
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
 # - https://apache.github.io/solr-operator/docs/solr-backup
