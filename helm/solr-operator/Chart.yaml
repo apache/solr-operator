@@ -169,6 +169,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/538
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/540
+    - kind: removed
+      description: Options deprecated in v0.6.0 have been been removed.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/553
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/554
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
