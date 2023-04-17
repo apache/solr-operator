@@ -125,19 +125,7 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 	}
 
 	if len(zkSpec.ZookeeperPod.Labels) > 0 {
-		// HACK: Include the pod labels on Spec.Labels due to
-		// https://github.com/pravega/zookeeper-operator/issues/511. See
-		// https://github.com/apache/solr-operator/issues/490 for more details.
-		// Note that the `labels` value should always take precedence over the pod
-		// specific labels.
-		podLabels := MergeLabelsOrAnnotations(labels, zkSpec.ZookeeperPod.Labels)
-
-		zkCluster.Spec.Pod.Labels = podLabels
-
-		// This override is applied to the zkCluster.Spec.Labels due to a bug in
-		// the zookeeper operator:
-		// https://github.com/pravega/zookeeper-operator/issues/511
-		zkCluster.Spec.Labels = podLabels
+		zkCluster.Spec.Pod.Labels = zkSpec.ZookeeperPod.Labels
 	}
 
 	if len(zkSpec.ZookeeperPod.Annotations) > 0 {
@@ -169,9 +157,6 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 	}
 
 	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.
-	// Also it will default the spec.Probes object which cannot be set to null.
-	// TODO: Might be able to remove when the following is resolved and the dependency is upgraded:
-	// https://github.com/pravega/zookeeper-operator/issues/378
 	zkCluster.WithDefaults()
 	return zkCluster
 }
