@@ -23,7 +23,7 @@ func CheckForCollectionsApiError(action string, header SolrResponseHeader) (hasE
 	if header.Status > 0 {
 		hasError = true
 		err = APIError{
-			Detail: fmt.Sprintf("Error occured while calling the Collections api for action=%s", action),
+			Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
 			Status: header.Status,
 		}
 	}
@@ -32,7 +32,7 @@ func CheckForCollectionsApiError(action string, header SolrResponseHeader) (hasE
 
 func CollectionsAPIError(action string, responseStatus int) error {
 	return APIError{
-		Detail: fmt.Sprintf("Error occured while calling the Collections api for action=%s", action),
+		Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
 		Status: responseStatus,
 	}
 }

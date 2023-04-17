@@ -34,6 +34,7 @@ const (
 	SolrMetricsPortName = "solr-metrics"
 	ExtSolrMetricsPort  = 80
 
+	SolrPrometheusExporterContainer          = "solr-prometheus-exporter"
 	DefaultPrometheusExporterEntrypoint      = "/opt/solr/contrib/prometheus-exporter/bin/solr-exporter"
 	PrometheusExporterConfigMapKey           = "solr-prometheus-exporter.xml"
 	PrometheusExporterConfigXmlMd5Annotation = "solr.apache.org/exporterConfigXmlMd5"
@@ -180,9 +181,17 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		containerImage = solrCloudImage
 	}
 
+	defaultProbeHandler := corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Scheme: corev1.URISchemeHTTP,
+			Path:   "/metrics",
+			Port:   intstr.FromInt(SolrMetricsPort),
+		},
+	}
+
 	containers := []corev1.Container{
 		{
-			Name:            "solr-prometheus-exporter",
+			Name:            SolrPrometheusExporterContainer,
 			Image:           containerImage.ToImageName(),
 			ImagePullPolicy: containerImage.PullPolicy,
 			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName, Protocol: corev1.ProtocolTCP}},
@@ -191,19 +200,27 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Args:            exporterArgs,
 			Env:             envVars,
 
-			LivenessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Scheme: corev1.URISchemeHTTP,
-						Path:   "/metrics",
-						Port:   intstr.FromInt(SolrMetricsPort),
-					},
-				},
-				InitialDelaySeconds: 20,
-				TimeoutSeconds:      1,
-				PeriodSeconds:       10,
+			StartupProbe: &corev1.Probe{
+				ProbeHandler:        defaultProbeHandler,
+				InitialDelaySeconds: 2,
+				TimeoutSeconds:      2,
+				PeriodSeconds:       2,
 				SuccessThreshold:    1,
-				FailureThreshold:    3,
+				FailureThreshold:    10,
+			},
+			LivenessProbe: &corev1.Probe{
+				ProbeHandler:     defaultProbeHandler,
+				TimeoutSeconds:   2,
+				PeriodSeconds:    10,
+				SuccessThreshold: 1,
+				FailureThreshold: 3,
+			},
+			ReadinessProbe: &corev1.Probe{
+				ProbeHandler:     defaultProbeHandler,
+				TimeoutSeconds:   2,
+				PeriodSeconds:    5,
+				SuccessThreshold: 1,
+				FailureThreshold: 3,
 			},
 		},
 	}
@@ -389,7 +406,6 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 		"prometheus.io/scrape": "true",
 		"prometheus.io/scheme": "http",
 		"prometheus.io/path":   "/metrics",
-		"prometheus.io/port":   strconv.Itoa(ExtSolrMetricsPort),
 	}
 
 	selectorLabels := solrPrometheusExporter.SharedLabels()

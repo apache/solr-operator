@@ -136,6 +136,13 @@ dataStorage:
       annotations: {}
       storageClassName: ""
 
+# How to control availability for Solr Nodes
+availability:
+  # Create PodDisruptionBudget(s) to ensure availability of Solr Nodes
+  podDisruptionBudget:
+    enabled: true
+    method: ClusterWide
+
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
 # - https://apache.github.io/solr-operator/docs/solr-backup
@@ -177,6 +184,8 @@ zk:
       # resources: {}
       # # Set ZK service account individually instead of the global "serviceAccount.name"
       # serviceAccountName: ""
+    # Override the default Zookeeper probes
+    probes: {}
 
     # Storage defaults to the type of storage you use for Solr, which is ephemeral by default.
     # Explicitly set the storage type, only necessary when wishing to use an empty persistence or ephemeral object.

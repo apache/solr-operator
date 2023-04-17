@@ -35,10 +35,11 @@ maintainers:
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 dependencies:
   - name: 'zookeeper-operator'
-    version: 0.2.14
+    version: 0.2.15
     repository: https://charts.pravega.io
     condition: zookeeper-operator.install
 annotations:
+  artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
   artifacthub.io/prerelease: "true"
@@ -58,6 +59,15 @@ annotations:
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/473
+    - kind: changed
+      description: The required Zookeeper Operator version has been upgraded to v0.2.15
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/549
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/550
+        - name: Zookeeper Operator v0.2.15 Release
+          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.15
     - kind: fixed
       description: Fix bug with named PVCs
       links:
@@ -101,6 +111,71 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/514
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/490
+    - kind: fixed
+      description: Fix SolrBackup not taking backups when the collections field is omitted 
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/515
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/516
+    - kind: changed
+      description: Use better default startup, liveness and readiness probes for SolrCloud and SolrPrometheusExporter
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/510
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/511
+    - kind: added
+      description: The SolrCloud common service now removes nodes that are about to be upgraded
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/529
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/530
+        - name: Feature Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/managed-updates.html#pod-readiness-during-updates
+    - kind: fixed
+      description: Don't give port annotation for PrometheusExporter, let Prometheus find the port itself
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/483
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/539
+    - kind: fixed
+      description: Solr resource status are now patched instead of updated, this should reduce "error" logging in the operator.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/544
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/545
+    - kind: added
+      description: Support custom Zookeeper probes
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/477
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/546
+    - kind: fixed
+      description: Avoid backup directory chown when directories are already writable
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/537
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/548
+    - kind: added
+      description: Added Option to enable/disable the PodDisruptionBudget for the cluster.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/538
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/540
+    - kind: removed
+      description: Options deprecated in v0.6.0 have been been removed.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/553
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/554
     - kind: fixed
       description: Use correct user for chmod command in cp-solr-xml init container
       links:

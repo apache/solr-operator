@@ -19,7 +19,7 @@ package util
 
 import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/zk_api"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +37,7 @@ func TestDefaultStorageOptions(t *testing.T) {
 	}
 	zkSpec.WithDefaults()
 
-	var zkCluster *zk_api.ZookeeperCluster
+	var zkCluster *zkApi.ZookeeperCluster
 
 	// Solr uses nothing (defaults to ephemeral)
 	zkCluster = GenerateZookeeperCluster(solrCloud, zkSpec)

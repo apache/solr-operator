@@ -27,16 +27,16 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21`   | `1.22`+ |
-|:---------------------:| :---: | :---: |:------------------:| :---: |
-|       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: |
+| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.20`   |       `1.21`        |      `1.22`+       |
+|:---------------------:| :---: | :---: |:------------------:|:------------------:|:------------------:|
+|       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -114,11 +114,32 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   If you are unable to use a newer version of Kubernetes, please install the `v0.6.0` version of the Solr Operator for use with Kubernetes `1.20` and below.
   See the [version compatibility matrix](#kubernetes-versions) for more information.
 
-- `PodDisruptionBudgets` are now created alongside SolrCloud instances.
+- The required version of the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) to use with this version has been upgraded from `v0.2.14` to `v0.2.15`.
+  If you use the Solr Operator helm chart, then by default the new version of the Zookeeper Operator will be installed as well.
+  Refer to the helm chart documentation if you want to manage the Zookeeper Operator installation yourself.  
+  Please refer to the [Zookeeper Operator release notes](https://github.com/pravega/zookeeper-operator/releases) before upgrading.
+  Make sure to install the correct version of the Zookeeper Operator CRDs, as [shown above](#upgrading-the-zookeeper-operator).
+
+- `PodDisruptionBudgets` are now created by default alongside SolrCloud instances.
   The maximum number of pods allowed down at any given time is aligned with the [Managed Update settings](solr-cloud/solr-cloud-crd.md#update-strategy) provided in the spec.
   If this is not provided, the default setting (`25%`) is used.
+  `PodDisruptionBudget` creation can be disabled for a solrcloud resource, by setting `spec.availability.podDisruptionBudget.enabled` to false.
 
 - Provided Zookeeper pods use the `IfNotPresent` pullPolicy by default. Users that specify this field manually will not see a change.
+
+- The Solr Operator now tries to limit connectivity to pods before they are deleted, for rolling updates or other reasons.
+  Before the pod is killed, and evicted of replicas if ephemeral storage is used, a readinessCondition will be set to `false`.
+  The Headless Service does not use readiness, so internode traffic will not be affected, however the ClusterIP (common) service will no longer include these nodes until they have been restarted.
+  This change will improve request success rates during a rolling restart.
+  Refer to the [Managed Updates documentation](solr-cloud/managed-updates.md#pod-readiness-during-updates).
+
+- The deprecated SolrCloud CRD field `Spec.solrAddressability.external.ingressTLSTerminationSecret` has been removed, please use `Spec.solrAddressability.external.ingressTLSTermination.tlsSecret` instead.
+  In order to have these fields changed automatically, upgrade to the `v0.6.0` version of the Solr operator before upgrading to the `v0.7.0` version.
+  However, all new SolrCloud resources will need to respect this field change.
+
+- The deprecated SolrCloud CRD field `Spec.solrAddressability.external.additionalDomains` has been removed, please use `Spec.solrAddressability.external.additionalDomainNames` instead.
+  In order to have these fields changed automatically, upgrade to the `v0.6.0` version of the Solr operator before upgrading to the `v0.7.0` version.
+  However, all new SolrCloud resources will need to respect this field change.
 
 ### v0.6.0
 - The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.

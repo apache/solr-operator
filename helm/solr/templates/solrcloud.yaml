@@ -108,6 +108,12 @@ spec:
     {{- end }}
   {{- end }}
 
+  {{- if and (.Values.availability) (.Values.availability.podDisruptionBudget) }}
+  availability:
+    podDisruptionBudget:
+      {{- toYaml .Values.availability.podDisruptionBudget | nindent 6 }}
+  {{- end }}
+
   {{- if .Values.dataStorage }}
   dataStorage:
     {{- if eq .Values.dataStorage.type "persistent" }}
@@ -220,6 +226,10 @@ spec:
       {{- if (include "solr.zk.zookeeperPodPolicy" .) }}
       zookeeperPodPolicy:
         {{- include "solr.zk.zookeeperPodPolicy" . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.probes }}
+      probes:
+        {{- toYaml .Values.zk.provided.probes | nindent 8 }}
       {{- end }}
       {{- if .Values.zk.acl }}
       acl:

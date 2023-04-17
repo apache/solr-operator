@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package controllers
+package e2e
 
 import (
 	. "github.com/onsi/ginkgo/v2"
@@ -23,6 +23,7 @@ import (
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
 	"regexp"
+	"time"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -49,6 +50,19 @@ func resolveOffset(additionalOffset []int) (offset int) {
 
 func resourceKey(parentResource client.Object, name string) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
+}
+
+func deleteAndWait(ctx context.Context, object client.Object, additionalOffset ...int) {
+	key := resourceKey(object, object.GetName())
+	kinds, _, err := k8sClient.Scheme().ObjectKinds(object)
+	Expect(err).ToNot(HaveOccurred(), "Error fetching objectKind")
+	Expect(kinds).ToNot(BeEmpty(), "No objectKinds found for object")
+	objKind := kinds[0]
+	Expect(k8sClient.Delete(ctx, object)).To(Or(Succeed(), MatchError(HaveSuffix("%q not found", testNamespace()))), "Failed to delete %s %s after test", objKind.Kind, key.Name)
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, key, object)
+	}).Within(time.Minute).
+		Should(MatchError(HaveSuffix("%q not found", key.Name)), objKind.Kind+" exists when it should not")
 }
 
 func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
@@ -360,17 +374,10 @@ func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object
 	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
 }
 
-func expectNoPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, additionalOffset ...int) {
-	podDisruptionBudget := &policyv1.PodDisruptionBudget{}
-	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(MatchError("poddisruptionbudgets.policy \""+podDisruptionBudgetName+"\" not found"), "Expected pdb to eventually not exist")
-	}).Should(Succeed())
-}
-
 func expectPodDisruptionBudgetWithChecks(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalChecks func(Gomega, *policyv1.PodDisruptionBudget), additionalOffset ...int) *policyv1.PodDisruptionBudget {
 	podDisruptionBudget := &policyv1.PodDisruptionBudget{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(Succeed(), "Expected PodDisruptionBudget does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), podDisruptionBudget)).To(Succeed(), "Expected ConfigMap does not exist")
 
 		// Verify the PodDisruptionBudget Spec
 		g.Expect(podDisruptionBudget.Spec.Selector).To(Equal(selector), "PodDisruptionBudget does not have the correct selector.")
@@ -507,6 +514,12 @@ func expectNoDeployment(ctx context.Context, parentResource client.Object, deplo
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), &appsv1.Deployment{})
 	}).Should(MatchError("deployments.apps \""+deploymentName+"\" not found"), "Deployment exists when it should not")
+}
+
+func expectNoNamespace(ctx context.Context, name string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, client.ObjectKey{Name: name}, &corev1.Namespace{})
+	}).Should(MatchError("namespaces \""+name+"\" not found"), "Namespace exists when it should not")
 }
 
 func createBasicAuthSecret(name string, key string, ns string) *corev1.Secret {
@@ -904,13 +917,16 @@ var (
 			},
 		},
 	}
-	one                    = int64(1)
-	two                    = int64(2)
+	one                    = int32(1)
+	two                    = int32(2)
+	three                  = int32(3)
 	four                   = int32(4)
 	five                   = int32(5)
+	one64                  = int64(1)
+	two64                  = int64(2)
 	testPodSecurityContext = corev1.PodSecurityContext{
-		RunAsUser:  &one,
-		RunAsGroup: &two,
+		RunAsUser:  &one64,
+		RunAsGroup: &two64,
 	}
 	extraVolumes = []solrv1beta1.AdditionalVolume{
 		{
@@ -1012,18 +1028,4 @@ var (
 	testIngressClass = "test-ingress-class"
 	testSolrZKOpts   = "-Dsolr.zk.opts=this"
 	testSolrOpts     = "-Dsolr.opts=this"
-	testZkProbes     = zkApi.Probes{
-		ReadinessProbe: &zkApi.Probe{
-			PeriodSeconds:    3,
-			SuccessThreshold: 5,
-			TimeoutSeconds:   10,
-		},
-		LivenessProbe: &zkApi.Probe{
-			InitialDelaySeconds: 6,
-			PeriodSeconds:       4,
-			FailureThreshold:    0,
-			SuccessThreshold:    3,
-			TimeoutSeconds:      0,
-		},
-	}
 )

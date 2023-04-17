@@ -88,7 +88,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{Requeue: true}, nil
 	}
 
-	oldStatus := backup.Status.DeepCopy()
+	unmodifiedBackupResource := backup.DeepCopy()
 
 	requeueOrNot := reconcile.Result{}
 
@@ -159,9 +159,9 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
-	if !reflect.DeepEqual(*oldStatus, backup.Status) {
-		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", oldStatus)
-		err = r.Status().Update(ctx, backup)
+	if !reflect.DeepEqual(unmodifiedBackupResource.Status, backup.Status) {
+		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", unmodifiedBackupResource.Status)
+		err = r.Status().Patch(ctx, backup, client.MergeFrom(unmodifiedBackupResource))
 	}
 
 	return requeueOrNot, err
@@ -223,8 +223,18 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		currentBackupStatus.StartTime = metav1.Now()
 	}
 
+	collectionsToBackup := backup.Spec.Collections
+
+	// If there are no collections specified, we need to list through collections available in Solr
+	if len(collectionsToBackup) == 0 {
+		collectionsToBackup, err = util.ListAllSolrCollections(ctx, solrCloud, logger)
+		if err != nil {
+			logger.Error(err, "Error listing collections", "solrCloud", solrCloud.Name)
+		}
+	}
+
 	// Go through each collection specified and reconcile the backup.
-	for _, collection := range backup.Spec.Collections {
+	for _, collection := range collectionsToBackup {
 		// This will in-place update the CollectionBackupStatus in the backup object
 		if _, err = reconcileSolrCollectionBackup(ctx, backup, currentBackupStatus, solrCloud, backupRepository, collection, logger); err != nil {
 			break

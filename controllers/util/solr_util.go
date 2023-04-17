@@ -51,6 +51,9 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
+	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
+	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
+
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
 	DistLibs    = "/opt/solr/dist"
@@ -115,6 +118,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.TerminationGracePeriodSeconds != nil {
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
+	}
+
+	// The isNotStopped readiness gate will always be used for managedUpdates
+	podReadinessGates := []corev1.PodReadinessGate{
+		{
+			ConditionType: SolrIsNotStoppedReadinessCondition,
+		},
 	}
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
@@ -197,6 +207,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			ephemeralVolume.VolumeSource.EmptyDir = &corev1.EmptyDirVolumeSource{}
 		}
 		solrVolumes = append(solrVolumes, ephemeralVolume)
+
+		// Add an evictPodReadinessCondition for when deleting pods with ephemeral storage
+		podReadinessGates = append(podReadinessGates, corev1.PodReadinessGate{
+			ConditionType: SolrReplicasNotEvictedReadinessCondition,
+		})
 	}
 
 	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
@@ -406,21 +421,30 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					Protocol:      "TCP",
 				},
 			},
-			LivenessProbe: &corev1.Probe{
-				InitialDelaySeconds: 20,
+			// Wait 60 seconds for Solr to startup
+			StartupProbe: &corev1.Probe{
+				InitialDelaySeconds: 10,
 				TimeoutSeconds:      defaultProbeTimeout,
 				SuccessThreshold:    1,
-				FailureThreshold:    3,
-				PeriodSeconds:       10,
-				ProbeHandler:        defaultHandler,
-			},
-			ReadinessProbe: &corev1.Probe{
-				InitialDelaySeconds: 15,
-				TimeoutSeconds:      defaultProbeTimeout,
-				SuccessThreshold:    1,
-				FailureThreshold:    3,
+				FailureThreshold:    10,
 				PeriodSeconds:       5,
 				ProbeHandler:        defaultHandler,
+			},
+			// Kill Solr if it is unavailable for any 60-second period
+			LivenessProbe: &corev1.Probe{
+				TimeoutSeconds:   defaultProbeTimeout,
+				SuccessThreshold: 1,
+				FailureThreshold: 3,
+				PeriodSeconds:    20,
+				ProbeHandler:     defaultHandler,
+			},
+			// Do not route requests to solr if it is not available for any 20-second period
+			ReadinessProbe: &corev1.Probe{
+				TimeoutSeconds:   defaultProbeTimeout,
+				SuccessThreshold: 1,
+				FailureThreshold: 2,
+				PeriodSeconds:    10,
+				ProbeHandler:     defaultHandler,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
@@ -482,6 +506,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					InitContainers: initContainers,
 					HostAliases:    hostAliases,
 					Containers:     containers,
+					ReadinessGates: podReadinessGates,
 				},
 			},
 			VolumeClaimTemplates: pvcs,
@@ -593,19 +618,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		},
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
+	setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -H -D solr", DefaultSolrUser))
 
 	// Figure out the solrUser and solrGroup to use
 	solrUser := DefaultSolrUser
 	solrGroup := DefaultSolrGroup
 	solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
 
-	if solrPodSecurityContext.RunAsUser != nil {
-		solrUser = int(*solrPodSecurityContext.RunAsUser)
-
+	if solrPodSecurityContext != nil {
+		if solrPodSecurityContext.RunAsUser != nil {
+			solrUser = int(*solrPodSecurityContext.RunAsUser)
+		}
 		if solrPodSecurityContext.RunAsGroup != nil {
 			solrGroup = int(*solrPodSecurityContext.RunAsGroup)
-		} else {
-			solrGroup = solrUser
 		}
 	}
 
@@ -617,7 +642,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 				volumeMounts = append(volumeMounts, *volumeMount)
 
 				setupCommands = append(setupCommands, fmt.Sprintf(
-					"chown -R %d:%d %s",
+					"(su solr -c 'test -w %s' || chown -R %d:%d %s)",
+					volumeMount.MountPath,
 					solrUser,
 					solrGroup,
 					volumeMount.MountPath))

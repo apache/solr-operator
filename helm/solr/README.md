@@ -17,8 +17,8 @@ Check out the following tutorials on getting started with Solr.
 
 ## Dependencies
 
-This Helm chart relies on the [Solr Operator](https://solr.apache.org/operator) being installed.
-You can install the Solr Operator via it's [Helm chart](https://artifacthub.io/packages/helm/apache-solr/solr-operator).
+**This Helm chart relies on the [Solr Operator](https://solr.apache.org/operator) being installed.
+You can install the Solr Operator via it's [Helm chart](https://artifacthub.io/packages/helm/apache-solr/solr-operator).**
 
 If you are using a provided Zookeeper instance for your Solr Cloud, then you must also install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator).
 However, it is [installed by default as a dependency](https://artifacthub.io/packages/helm/apache-solr/solr-operator#installing-the-zookeeper-operator) when using the Solr Operator Helm chart.
@@ -35,7 +35,7 @@ There may be breaking changes between the version you are using and the version 
 
 ### Installing the Chart
 
-To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
 helm install example apache-solr/solr --version 0.7.0-prerelease --set image.tag=8.8
@@ -107,6 +107,8 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
+| availability.podDisruptionBudget.enabled | boolean | `true` | Create [PodDisruptionBudget(s)](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) to ensure the availability of SolrNodes. |
+| availability.podDisruptionBudget.method | string | `"ClusterWide"` | The method by which PodDisruptionBudgets should be created. The only option currently is `ClusterWide`. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
 | backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
@@ -186,6 +188,8 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.zookeeperPodPolicy.securityContext | object |  | Security context for the entire ZooKeeper pod. More information can be found in the [Kubernetes docs](More info: https://kubernetes.io/docs/tasks/configure-pod-container/security-context). |
 | zk.provided.zookeeperPodPolicy.terminationGracePeriodSeconds | int | `30` | The amount of time that Kubernetes will give for a zookeeper pod instance to shutdown normally. |
 | zk.provided.zookeeperPodPolicy.imagePullSecrets | []object |  | List of image pull secrets to inject into the Zookeeper pod. |
+| zk.provided.probes.readinessProbe | object |  | Override the default readinessProbe for Zookeeper Pods. |
+| zk.provided.probes.livenessProbe | object |  | Override the default livenessProbe for Zookeeper Pods. |
 | zk.acl.secret | string |  | Name of a secret in the same namespace as the Solr cloud that stores the ZK admin ACL information |
 | zk.acl.usernameKey | string |  | Key in the Admin ACL Secret that stores the ACL username |
 | zk.acl.passwordKey | string |  | Key in the Admin ACL Secret that stores the ACL password |

@@ -130,6 +130,7 @@ type IndividualSolrBackupStatus struct {
 	Successful *bool `json:"successful,omitempty"`
 
 	// Whether the backup has finished
+	// +optional
 	Finished bool `json:"finished,omitempty"`
 }
 

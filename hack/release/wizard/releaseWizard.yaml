@@ -450,13 +450,13 @@ groups:
         cmd: git pull --ff-only
         tee: true
       - !Command
-        cmd: ./hack/release/version/remove_version_specific_info.sh
+        cmd: make remove-version-specific-info
         tee: true
       - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
         tee: true
       - !Command
-        cmd: ./hack/release/version/propagate_version.sh
+        cmd: make propagate-version
         tee: true
       - !Command
         comment: Make sure the edits done by propagating the version are ok, then push
@@ -482,13 +482,13 @@ groups:
         cmd: git pull --ff-only
         tee: true
       - !Command
-        cmd: ./hack/release/version/remove_version_specific_info.sh
+        cmd: make remove-version-specific-info
         tee: true
       - !Command
         cmd: ./hack/release/version/update_version.sh -v {{ next_version }}
         tee: true
       - !Command
-        cmd: ./hack/release/version/propagate_version.sh
+        cmd: make propagate-version
         tee: true
       - !Command
         comment: Make sure the edits done by propagating the version are ok, then push
@@ -1055,10 +1055,10 @@ groups:
           cmd: ./hack/release/version/change_suffix.sh -s "prerelease"
           tee: true
         - !Command
-          cmd: ./hack/release/version/propagate_version.sh
+          cmd: make propagate-version
           tee: true
         - !Command
-          cmd: ./hack/release/version/remove_version_specific_info.sh
+          cmd: make remove-version-specific-info
           tee: true
         - !Command
           cmd: git diff

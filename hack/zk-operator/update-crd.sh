@@ -26,6 +26,7 @@ ZK_OP_VERSION="$(cat versions.props | grep -E 'zookeeper-operator' | grep -o 'v[
 # Fetch the correct dependency Zookeeper CRD, package with other CRDS
 {
   cat hack/headers/zookeeper-operator-header.yaml.txt;
+  printf "# Find source at: https://github.com/pravega/zookeeper-operator/tree/${ZK_OP_VERSION}"
   printf "\n\n---\n"
   curl -sL "https://raw.githubusercontent.com/pravega/zookeeper-operator/${ZK_OP_VERSION}/config/crd/bases/zookeeper.pravega.io_zookeeperclusters.yaml" \
     | sed -e "/^  annotations:$/a \\

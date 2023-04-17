@@ -34,6 +34,8 @@ maintainers:
     email: houston@apache.org
 icon: https://solr.apache.org/theme/images/identity/Solr_Logo_on_white.png
 annotations:
+  artifacthub.io/alternativeName: "solrcloud"
+  artifacthub.io/category: "database"
   artifacthub.io/operator: "false"
   artifacthub.io/prerelease: "true"
   # Add change log for a single release here.

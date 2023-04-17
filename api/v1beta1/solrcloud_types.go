@@ -20,6 +20,7 @@ package v1beta1
 import (
 	"fmt"
 	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"strconv"
 	"strings"
 
@@ -89,6 +90,10 @@ type SolrCloudSpec struct {
 	// Define how Solr rolling updates are executed.
 	// +optional
 	UpdateStrategy SolrUpdateStrategy `json:"updateStrategy,omitempty"`
+
+	// Define how Solr nodes should be available.
+	// +optional
+	Availability SolrAvailabilityOptions `json:"availability,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -530,14 +535,6 @@ type ExternalAddressability struct {
 	// +optional
 	AdditionalDomainNames []string `json:"additionalDomainNames,omitempty"`
 
-	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
-	// This option is ignored with the LoadBalancer method.
-	//
-	// DEPRECATED: Please use additionalDomainNames instead. This will be removed in a future version.
-	//
-	// +optional
-	AdditionalDomains []string `json:"additionalDomains,omitempty"`
-
 	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
 	// This overrides the default usage of the podPort.
 	//
@@ -550,18 +547,6 @@ type ExternalAddressability struct {
 	// Defaults to 80 (without TLS) or 443 (with TLS) if HideNodes=false and method=Ingress, otherwise this is optional.
 	// +optional
 	NodePortOverride int `json:"nodePortOverride,omitempty"`
-
-	// IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress.
-	//
-	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
-	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr.
-	//
-	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
-	//
-	// DEPRECATED: Use ingressTLSTermination.tlsSecret instead
-	//
-	// +optional
-	IngressTLSTerminationSecret string `json:"ingressTLSTerminationSecret,omitempty"`
 
 	// IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections.
 	//
@@ -592,59 +577,10 @@ const (
 )
 
 func (opts *ExternalAddressability) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
-	// TODO: Remove in v0.7.0
-	// If the deprecated IngressTLSTerminationSecret exists, use it to default the new location of the value.
-	// If that location already exists, then merely remove the deprecated option.
-	if opts.IngressTLSTerminationSecret != "" {
-		terminationSecretLogger := logger.WithValues("option", "spec.solrAddressability.external.ingressTLSTerminationSecret").WithValues("newLocation", "spec.solrAddressability.external.ingressTLSTermination.tlsSecret")
-		var loggingAction string
-		if !opts.HasIngressTLSTermination() {
-			opts.IngressTLSTermination = &SolrIngressTLSTermination{
-				TLSSecret: opts.IngressTLSTerminationSecret,
-			}
-			loggingAction = "Moving"
-		} else {
-			terminationSecretLogger = terminationSecretLogger.WithValues("reason", "Cannot move deprecated option because ingressTLSTermination is already defined")
-			loggingAction = "Removing"
-		}
-		opts.IngressTLSTerminationSecret = ""
-		terminationSecretLogger.Info(loggingAction + " deprecated CRD option")
-		changed = true
-	}
-
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
 	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTermination != nil) {
 		changed = true
 		opts.UseExternalAddress = false
-	}
-
-	// Add the values from the deprecated "additionalDomains" to the new "additionalDomainNames" field
-	// But make sure you aren't creating duplicates
-	// TODO: Remove in v0.7.0
-	if opts.AdditionalDomains != nil {
-		// Only modify AdditionalDomainNames if AdditionalDomains is empty
-		// But if it is non-nil and empty, still set AdditionalDomains to nil
-		if len(opts.AdditionalDomains) > 0 {
-			if len(opts.AdditionalDomainNames) == 0 {
-				opts.AdditionalDomainNames = opts.AdditionalDomains
-			} else {
-				for _, domain := range opts.AdditionalDomains {
-					hasDomain := false
-					for _, containsDomain := range opts.AdditionalDomainNames {
-						if domain == containsDomain {
-							hasDomain = true
-							break
-						}
-					}
-					if !hasDomain {
-						opts.AdditionalDomainNames = append(opts.AdditionalDomainNames, domain)
-					}
-				}
-			}
-		}
-		logger.Info("Moving deprecated CRD option", "option", "spec.solrAddressability.external.additionalDomains", "newLocation", "spec.solrAddressability.external.additionalDomainNames")
-		changed = true
-		opts.AdditionalDomains = nil
 	}
 
 	// If the Ingress method is used, default the nodePortOverride to 80 or 443, since that is the port that most ingress controllers listen on.
@@ -708,7 +644,7 @@ type SolrUpdateStrategy struct {
 }
 
 // SolrUpdateMethod is a string enumeration type that enumerates
-// all possible ways that a SolrCloud can having rolling updates managed.
+// all possible ways that a SolrCloud can have rolling updates managed.
 // +kubebuilder:validation:Enum=Managed;StatefulSet;Manual
 type SolrUpdateMethod string
 
@@ -734,7 +670,7 @@ func (opts *SolrUpdateStrategy) withDefaults() (changed bool) {
 	return changed
 }
 
-// Spec to control the desired behavior of managed rolling update.
+// ManagedUpdateOptions control the desired behavior of managed rolling update.
 type ManagedUpdateOptions struct {
 
 	// The maximum number of pods that can be unavailable during the update.
@@ -757,6 +693,33 @@ type ManagedUpdateOptions struct {
 	// +optional
 	MaxShardReplicasUnavailable *intstr.IntOrString `json:"maxShardReplicasUnavailable,omitempty"`
 }
+
+type SolrAvailabilityOptions struct {
+	// Define PodDisruptionBudget(s) to ensure availability of Solr
+	// +optional
+	PodDisruptionBudget SolrPodDisruptionBudgetOptions `json:"podDisruptionBudget,omitempty"`
+}
+
+type SolrPodDisruptionBudgetOptions struct {
+	// What method should be used when creating PodDisruptionBudget(s)
+	// +kubebuilder:default=true
+	Enabled *bool `json:"enabled"`
+
+	// What method should be used when creating PodDisruptionBudget(s)
+	// +kubebuilder:default=ClusterWide
+	Method SolrPodDisruptionBudgetMethod `json:"method,omitempty"`
+}
+
+// SolrPodDisruptionBudgetMethod is a string enumeration type that enumerates
+// all possible ways that a SolrCloud can have PodDisruptionBudgets managed.
+// +kubebuilder:validation:Enum=ClusterWide
+type SolrPodDisruptionBudgetMethod string
+
+const (
+	// ClusterWidePDB will result in a single cluster-wide PDB being created to ensure availability of the SolrCloud.
+	// This will not take replica/shard readiness into account.
+	ClusterWidePDB SolrPodDisruptionBudgetMethod = "ClusterWide"
+)
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
@@ -847,6 +810,11 @@ type ZookeeperSpec struct {
 	// Additional Zookeeper Configuration settings
 	// +optional
 	Config ZookeeperConfig `json:"config,omitempty"`
+
+	// Probes specifies the timeout values for the Readiness and Liveness Probes
+	// for the zookeeper pods.
+	// +optional
+	Probes *zkApi.Probes `json:"probes,omitempty"`
 }
 
 type ZKPersistence struct {
@@ -1071,18 +1039,26 @@ type ZookeeperPodPolicy struct {
 // SolrCloudStatus defines the observed state of SolrCloud
 type SolrCloudStatus struct {
 	// SolrNodes contain the statuses of each solr node running in this solr cloud.
+	//+listType:=map
+	//+listMapKey:=name
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
 	// Replicas is the number of desired replicas in the cluster
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	Replicas int32 `json:"replicas"`
 
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
 	// ReadyReplicas is the number of ready replicas in the cluster
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	ReadyReplicas int32 `json:"readyReplicas"`
 
 	// UpToDateNodes is the number of Solr Node pods that are running the latest pod spec
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:default=0
 	UpToDateNodes int32 `json:"upToDateNodes"`
 
 	// The version of solr that the cloud is running
@@ -1106,6 +1082,7 @@ type SolrCloudStatus struct {
 
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
+	// +optional
 	BackupRestoreReady bool `json:"backupRestoreReady"`
 
 	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
@@ -1138,6 +1115,10 @@ type SolrNodeStatus struct {
 
 	// This Solr Node pod is using the latest version of solrcloud pod spec.
 	SpecUpToDate bool `json:"specUpToDate"`
+
+	// This Solr Node pod is scheduled for deletion
+	// +optional
+	ScheduledForDeletion bool `json:"scheduledForDeletion"`
 }
 
 //+kubebuilder:object:root=true
