@@ -906,11 +906,13 @@ var (
 	}
 	one                    = int64(1)
 	two                    = int64(2)
+	three                  = int64(2)
 	four                   = int32(4)
 	five                   = int32(5)
 	testPodSecurityContext = corev1.PodSecurityContext{
 		RunAsUser:  &one,
 		RunAsGroup: &two,
+		FSGroup:    &three,
 	}
 	extraVolumes = []solrv1beta1.AdditionalVolume{
 		{

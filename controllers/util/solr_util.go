@@ -75,7 +75,7 @@ var (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
-	fsGroup := int64(DefaultSolrGroup)
+	defaultFSGroup := int64(DefaultSolrGroup)
 
 	probeScheme := corev1.URISchemeHTTP
 	if tls != nil {
@@ -500,7 +500,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &fsGroup,
+						FSGroup: &defaultFSGroup,
 					},
 					Volumes:        solrVolumes,
 					InitContainers: initContainers,
@@ -545,6 +545,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.PodSecurityContext != nil {
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
+			if stateful.Spec.Template.Spec.SecurityContext.FSGroup == nil {
+				stateful.Spec.Template.Spec.SecurityContext.FSGroup = &defaultFSGroup
+			}
 		}
 
 		if customPodOptions.Lifecycle != nil {
@@ -622,15 +625,18 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	// Figure out the solrUser and solrGroup to use
 	solrUser := DefaultSolrUser
-	solrGroup := DefaultSolrGroup
-	solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
+	solrFSGroup := DefaultSolrGroup
 
-	if solrPodSecurityContext != nil {
-		if solrPodSecurityContext.RunAsUser != nil {
-			solrUser = int(*solrPodSecurityContext.RunAsUser)
-		}
-		if solrPodSecurityContext.RunAsGroup != nil {
-			solrGroup = int(*solrPodSecurityContext.RunAsGroup)
+	if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil {
+		solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
+
+		if solrPodSecurityContext != nil {
+			if solrPodSecurityContext.RunAsUser != nil {
+				solrUser = int(*solrPodSecurityContext.RunAsUser)
+			}
+			if solrPodSecurityContext.FSGroup != nil {
+				solrFSGroup = int(*solrPodSecurityContext.FSGroup)
+			}
 		}
 	}
 
@@ -645,7 +651,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 					"(su solr -c 'test -w %s' || chown -R %d:%d %s)",
 					volumeMount.MountPath,
 					solrUser,
-					solrGroup,
+					solrFSGroup,
 					volumeMount.MountPath))
 			}
 		}

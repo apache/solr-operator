@@ -177,7 +177,7 @@ annotations:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/554
     - kind: fixed
-      description: Use correct user for chmod command in cp-solr-xml init container
+      description: Use correct user & group for chmod command in cp-solr-xml init container
       links:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/520
