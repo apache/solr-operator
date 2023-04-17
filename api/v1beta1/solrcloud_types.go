@@ -535,14 +535,6 @@ type ExternalAddressability struct {
 	// +optional
 	AdditionalDomainNames []string `json:"additionalDomainNames,omitempty"`
 
-	// Provide additional domainNames that the Ingress or ExternalDNS should listen on.
-	// This option is ignored with the LoadBalancer method.
-	//
-	// DEPRECATED: Please use additionalDomainNames instead. This will be removed in a future version.
-	//
-	// +optional
-	AdditionalDomains []string `json:"additionalDomains,omitempty"`
-
 	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
 	// This overrides the default usage of the podPort.
 	//
@@ -555,18 +547,6 @@ type ExternalAddressability struct {
 	// Defaults to 80 (without TLS) or 443 (with TLS) if HideNodes=false and method=Ingress, otherwise this is optional.
 	// +optional
 	NodePortOverride int `json:"nodePortOverride,omitempty"`
-
-	// IngressTLSTerminationSecret defines a TLS Secret to use for TLS termination of all exposed addresses in the ingress.
-	//
-	// This is option is only available when Method=Ingress, because ExternalDNS and LoadBalancer Services do not support TLS termination.
-	// This option is also unavailable when the SolrCloud has TLS enabled via `spec.solrTLS`, in this case the Ingress cannot terminate TLS before reaching Solr.
-	//
-	// When using this option, the UseExternalAddress option will be disabled, since Solr cannot be running in HTTP mode and making internal requests in HTTPS.
-	//
-	// DEPRECATED: Use ingressTLSTermination.tlsSecret instead
-	//
-	// +optional
-	IngressTLSTerminationSecret string `json:"ingressTLSTerminationSecret,omitempty"`
 
 	// IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections.
 	//
@@ -597,59 +577,10 @@ const (
 )
 
 func (opts *ExternalAddressability) withDefaults(usesTLS bool, logger logr.Logger) (changed bool) {
-	// TODO: Remove in v0.7.0
-	// If the deprecated IngressTLSTerminationSecret exists, use it to default the new location of the value.
-	// If that location already exists, then merely remove the deprecated option.
-	if opts.IngressTLSTerminationSecret != "" {
-		terminationSecretLogger := logger.WithValues("option", "spec.solrAddressability.external.ingressTLSTerminationSecret").WithValues("newLocation", "spec.solrAddressability.external.ingressTLSTermination.tlsSecret")
-		var loggingAction string
-		if !opts.HasIngressTLSTermination() {
-			opts.IngressTLSTermination = &SolrIngressTLSTermination{
-				TLSSecret: opts.IngressTLSTerminationSecret,
-			}
-			loggingAction = "Moving"
-		} else {
-			terminationSecretLogger = terminationSecretLogger.WithValues("reason", "Cannot move deprecated option because ingressTLSTermination is already defined")
-			loggingAction = "Removing"
-		}
-		opts.IngressTLSTerminationSecret = ""
-		terminationSecretLogger.Info(loggingAction + " deprecated CRD option")
-		changed = true
-	}
-
 	// You can't use an externalAddress for Solr Nodes if the Nodes are hidden externally
 	if opts.UseExternalAddress && (opts.HideNodes || opts.IngressTLSTermination != nil) {
 		changed = true
 		opts.UseExternalAddress = false
-	}
-
-	// Add the values from the deprecated "additionalDomains" to the new "additionalDomainNames" field
-	// But make sure you aren't creating duplicates
-	// TODO: Remove in v0.7.0
-	if opts.AdditionalDomains != nil {
-		// Only modify AdditionalDomainNames if AdditionalDomains is empty
-		// But if it is non-nil and empty, still set AdditionalDomains to nil
-		if len(opts.AdditionalDomains) > 0 {
-			if len(opts.AdditionalDomainNames) == 0 {
-				opts.AdditionalDomainNames = opts.AdditionalDomains
-			} else {
-				for _, domain := range opts.AdditionalDomains {
-					hasDomain := false
-					for _, containsDomain := range opts.AdditionalDomainNames {
-						if domain == containsDomain {
-							hasDomain = true
-							break
-						}
-					}
-					if !hasDomain {
-						opts.AdditionalDomainNames = append(opts.AdditionalDomainNames, domain)
-					}
-				}
-			}
-		}
-		logger.Info("Moving deprecated CRD option", "option", "spec.solrAddressability.external.additionalDomains", "newLocation", "spec.solrAddressability.external.additionalDomainNames")
-		changed = true
-		opts.AdditionalDomains = nil
 	}
 
 	// If the Ingress method is used, default the nodePortOverride to 80 or 443, since that is the port that most ingress controllers listen on.

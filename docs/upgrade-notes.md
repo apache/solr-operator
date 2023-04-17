@@ -133,6 +133,14 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   This change will improve request success rates during a rolling restart.
   Refer to the [Managed Updates documentation](solr-cloud/managed-updates.md#pod-readiness-during-updates).
 
+- The deprecated SolrCloud CRD field `Spec.solrAddressability.external.ingressTLSTerminationSecret` has been removed, please use `Spec.solrAddressability.external.ingressTLSTermination.tlsSecret` instead.
+  In order to have these fields changed automatically, upgrade to the `v0.6.0` version of the Solr operator before upgrading to the `v0.7.0` version.
+  However, all new SolrCloud resources will need to respect this field change.
+
+- The deprecated SolrCloud CRD field `Spec.solrAddressability.external.additionalDomains` has been removed, please use `Spec.solrAddressability.external.additionalDomainNames` instead.
+  In order to have these fields changed automatically, upgrade to the `v0.6.0` version of the Solr operator before upgrading to the `v0.7.0` version.
+  However, all new SolrCloud resources will need to respect this field change.
+
 ### v0.6.0
 - The default Solr version for the `SolrCloud` and `SolrPrometheusExporter` resources has been upgraded from `8.9` to `8.11`.
   This will not affect any existing resources, as default versions are hard-written to the resources immediately.

@@ -9198,15 +9198,6 @@ spec:
                         items:
                           type: string
                         type: array
-                      additionalDomains:
-                        description: "Provide additional domainNames that the Ingress
-                          or ExternalDNS should listen on. This option is ignored
-                          with the LoadBalancer method. \n DEPRECATED: Please use
-                          additionalDomainNames instead. This will be removed in a
-                          future version."
-                        items:
-                          type: string
-                        type: array
                       domainName:
                         description: "Override the domainName provided as startup
                           parameters to the operator, used by ingresses and externalDNS.
@@ -9254,19 +9245,6 @@ spec:
                               https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate"
                             type: boolean
                         type: object
-                      ingressTLSTerminationSecret:
-                        description: "IngressTLSTerminationSecret defines a TLS Secret
-                          to use for TLS termination of all exposed addresses in the
-                          ingress. \n This is option is only available when Method=Ingress,
-                          because ExternalDNS and LoadBalancer Services do not support
-                          TLS termination. This option is also unavailable when the
-                          SolrCloud has TLS enabled via `spec.solrTLS`, in this case
-                          the Ingress cannot terminate TLS before reaching Solr. \n
-                          When using this option, the UseExternalAddress option will
-                          be disabled, since Solr cannot be running in HTTP mode and
-                          making internal requests in HTTPS. \n DEPRECATED: Use ingressTLSTermination.tlsSecret
-                          instead"
-                        type: string
                       method:
                         description: The way in which this SolrCloud's service(s)
                           should be made addressable externally.
