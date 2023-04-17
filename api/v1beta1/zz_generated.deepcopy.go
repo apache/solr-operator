@@ -259,11 +259,6 @@ func (in *ExternalAddressability) DeepCopyInto(out *ExternalAddressability) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.AdditionalDomains != nil {
-		in, out := &in.AdditionalDomains, &out.AdditionalDomains
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.IngressTLSTermination != nil {
 		in, out := &in.IngressTLSTermination, &out.IngressTLSTermination
 		*out = new(SolrIngressTLSTermination)
