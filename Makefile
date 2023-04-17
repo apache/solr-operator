@@ -44,6 +44,7 @@ CONTROLLER_GEN_VERSION=v0.10.0
 GO_LICENSES_VERSION=v1.5.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.17.0
+YQ_VERSION=v4.33.3
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION ?= 1.25.0
 
@@ -137,8 +138,20 @@ fetch-licenses-full: go-licenses ## Fetch all licenses
 .PHONY: build-release-artifacts
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
 build-release-artifacts: export PATH:=$(LOCALBIN):${PATH}
-build-release-artifacts: clean prepare docker-build ## Build all release artifacts for the Solr Operator
+build-release-artifacts: clean prepare docker-build yq kind ## Build all release artifacts for the Solr Operator
 	./hack/release/artifacts/create_artifacts.sh -d $(or $(ARTIFACTS_DIR),release-artifacts) -v $(VERSION)
+
+.PHONY: remove-version-specific-info
+# Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
+remove-version-specific-info: export PATH:=$(LOCALBIN):${PATH}
+remove-version-specific-info: yq ## Remove information specific to a version throughout the codebase
+	./hack/release/version/remove_version_specific_info.sh
+
+.PHONY: propagate-version
+# Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
+propagate-version: export PATH:=$(LOCALBIN):${PATH}
+propagate-version: yq ## Remove information specific to a version throughout the codebase
+	./hack/release/version/propagate_version.sh
 
 .PHONY: idea
 idea: ginkgo setup-envtest ## Setup the project so to be able to run tests via IntelliJ/GoLand
@@ -230,7 +243,8 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
 
 .PHONY: check-zk-op-version
-check-zk-op-version: ## Ensure the zookeeper-operator version is standard throughout the codebase
+check-zk-op-version: export PATH:=$(LOCALBIN):${PATH}
+check-zk-op-version: yq ## Ensure the zookeeper-operator version is standard throughout the codebase
 	./hack/zk-operator/check-version.sh
 
 .PHONY: check-manifests
@@ -350,6 +364,12 @@ KIND = $(LOCALBIN)/kind
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@$(KIND_VERSION))
+
+YQ = $(LOCALBIN)/yq
+.PHONY: yq
+yq: $(YQ) ## Download yq locally if necessary.
+$(YQ): $(LOCALBIN)
+	$(call go-get-tool,$(YQ),github.com/mikefarah/yq/v4@$(YQ_VERSION))
 
 SETUP_ENVTEST = $(LOCALBIN)/setup-envtest
 .PHONY: setup-envtest

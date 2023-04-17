@@ -27,16 +27,16 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.21`   | `1.22`+ |
-|:---------------------:| :---: | :---: |:------------------:| :---: |
-|       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: |
+| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.20`   |       `1.21`        |      `1.22`+       |
+|:---------------------:| :---: | :---: |:------------------:|:------------------:|:------------------:|
+|       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.2.8`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.3.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.4.x`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
+|       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
 
 ### Solr Versions
 

@@ -30,6 +30,11 @@ This page details the steps for developing the Solr Operator, and all necessary 
  
 ## Setup
 
+### Install a newer version of Bash
+
+If you are running on a Mac, you need to download a newer version of bash and have it used as your default version of bash.
+An easy way to do this is via Homebrew.
+
 ### Setup Docker for Mac with K8S with an Ingress Controller
 
 Please follow the instructions from the [local tutorial](local_tutorial.md#setup-docker-for-mac-with-k8s).
