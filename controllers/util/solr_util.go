@@ -621,7 +621,6 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		},
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
-	setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -H -D solr", DefaultSolrUser))
 
 	// Figure out the solrUser and solrGroup to use
 	solrUser := DefaultSolrUser
@@ -642,11 +641,16 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
+	addedSolrUser := false
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		if IsRepoVolume(&repo) {
 			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
 				volumeMounts = append(volumeMounts, *volumeMount)
 
+				if !addedSolrUser {
+					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -H -D solr", solrUser))
+					addedSolrUser = true
+				}
 				setupCommands = append(setupCommands, fmt.Sprintf(
 					"(su solr -c 'test -w %s' || chown -R %d:%d %s)",
 					volumeMount.MountPath,
