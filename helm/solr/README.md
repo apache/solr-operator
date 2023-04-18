@@ -176,6 +176,17 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 | zk.provided.persistence.annotations | object | | Annotations to use for the ZooKeeper PVC(s) |
 | zk.provided.ephemeral.emptydirvolumesource | object | | An emptyDir volume source for the ZooKeeper Storage on each pod. |
 | zk.provided.config | object | | Zookeeper Config Options to set for the provided cluster. For all possible options, run: `kubectl explain solrcloud.spec.zookeeperRef.provided.config` |
+| zk.provided.labels | map[string]string | | Set the `ZookeeperCluster.spec.labels` option, providing labels for all Zookeeper child resources. |
+| zk.provided.initContainers | []object | | Add additional initContainers for Zookeeper Pods. |
+| zk.provided.containers | []object | | Add additional containers for Zookeeper Pods. |
+| zk.provided.volumes | []object | | Add additional volumes for Zookeeper Pods. |
+| zk.provided.volumeMounts | []object | | Add additional volumeMounts for Zookeeper Pods. |
+| zk.provided.maxUnavailableReplicas | int | `1` | Customize the `maxUnavailableReplicas` for the Zookeeper's `PodDisruptionBudget`. |
+| zk.provided.adminServerService.annotations | map[string]string | | Add annotations to the Zookeeper Admin Service. |
+| zk.provided.adminServerService.external | boolean | `false` | Make the Zookeeper Admin Service available externally. |
+| zk.provided.clientService.annotations | map[string]string | | Add annotations to the Zookeeper Client Service. |
+| zk.provided.headlessService.annotations | map[string]string | | Add annotations to the Zookeeper Headless Service. |
+| zk.provided.zookeeperPodPolicy.topologySpreadConstraints | []object | | Set PodTopologySpreadConstraints for Zookeeper pods. |
 | zk.provided.zookeeperPodPolicy.labels | map[string]string |  | List of additional labels to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.annotations | map[string]string |  | List of additional annotations to add to the Zookeeper pod |
 | zk.provided.zookeeperPodPolicy.serviceAccountName | string |  | Optional serviceAccount to run the ZK Pod under |

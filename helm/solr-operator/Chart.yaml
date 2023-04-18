@@ -176,6 +176,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/553
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/554
+    - kind: added
+      description: Add missing ZookeeperCluster customization options.
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/557
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/558
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.7.0-prerelease
