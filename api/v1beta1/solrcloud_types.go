@@ -772,11 +772,19 @@ type ZookeeperSpec struct {
 	// Number of members to create up for the ZK ensemble
 	// Defaults to 3
 	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=3
 	Replicas *int32 `json:"replicas,omitempty"`
 
 	// Image of Zookeeper to run
 	// +optional
 	Image *ContainerImage `json:"image,omitempty"`
+
+	// Labels specifies the labels to attach to all resources the operator
+	// creates for the zookeeper cluster, including StatefulSet, Pod,
+	// PersistentVolumeClaim, Service, ConfigMap, et al.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
 
 	// Persistence is the configuration for zookeeper persistent layer.
 	// PersistentVolumeClaimSpec and VolumeReclaimPolicy can be specified in here.
@@ -815,6 +823,42 @@ type ZookeeperSpec struct {
 	// for the zookeeper pods.
 	// +optional
 	Probes *zkApi.Probes `json:"probes,omitempty"`
+
+	// Volumes defines to support customized volumes
+	// +optional
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
+
+	// VolumeMounts defines to support customized volumeMounts
+	// +optional
+	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
+
+	// MaxUnavailableReplicas defines the
+	// MaxUnavailable Replicas in pdb.
+	// Default is 1.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:default=1
+	MaxUnavailableReplicas int32 `json:"maxUnavailableReplicas,omitempty"`
+
+	// Containers defines to support multi containers
+	// +optional
+	Containers []corev1.Container `json:"containers,omitempty"`
+
+	// Init containers to support initialization
+	// +optional
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+
+	// AdminServerService defines the policy to create AdminServer Service
+	// for the zookeeper cluster.
+	AdminServerService zkApi.AdminServerServicePolicy `json:"adminServerService,omitempty"`
+
+	// ClientService defines the policy to create client Service
+	// for the zookeeper cluster.
+	ClientService zkApi.ClientServicePolicy `json:"clientService,omitempty"`
+
+	// HeadlessService defines the policy to create headless Service
+	// for the zookeeper cluster.
+	HeadlessService zkApi.HeadlessServicePolicy `json:"headlessService,omitempty"`
 }
 
 type ZKPersistence struct {
@@ -1034,6 +1078,10 @@ type ZookeeperPodPolicy struct {
 	// ImagePullSecrets is a list of references to secrets in the same namespace to use for pulling any images
 	// +optional
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+
+	// TopologySpreadConstraints to apply to the pods
+	// +optional
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 }
 
 // SolrCloudStatus defines the observed state of SolrCloud

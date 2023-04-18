@@ -34,6 +34,11 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	labels["technology"] = solrv1beta1.ZookeeperTechnologyLabel
 
+	zkSpecLabels := labels
+	if len(zkSpec.Labels) > 0 {
+		zkSpecLabels = MergeLabelsOrAnnotations(labels, zkSpecLabels)
+	}
+
 	zkCluster := &zkApi.ZookeeperCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrCloud.ProvidedZookeeperName(),
@@ -46,7 +51,7 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 				Tag:        zkSpec.Image.Tag,
 				PullPolicy: zkSpec.Image.PullPolicy,
 			},
-			Labels:   labels,
+			Labels:   zkSpecLabels,
 			Replicas: *zkSpec.Replicas,
 			Ports: []corev1.ContainerPort{
 				{
@@ -62,7 +67,30 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 					ContainerPort: 3888,
 				},
 			},
-			Conf: zkApi.ZookeeperConfig(zkSpec.Config),
+			Pod: zkApi.PodPolicy{
+				Labels:                        zkSpec.ZookeeperPod.Labels,
+				NodeSelector:                  zkSpec.ZookeeperPod.NodeSelector,
+				Affinity:                      zkSpec.ZookeeperPod.Affinity,
+				TopologySpreadConstraints:     zkSpec.ZookeeperPod.TopologySpreadConstraints,
+				Resources:                     zkSpec.ZookeeperPod.Resources,
+				Tolerations:                   zkSpec.ZookeeperPod.Tolerations,
+				Env:                           zkSpec.ZookeeperPod.Env,
+				Annotations:                   zkSpec.ZookeeperPod.Annotations,
+				SecurityContext:               zkSpec.ZookeeperPod.SecurityContext,
+				TerminationGracePeriodSeconds: zkSpec.ZookeeperPod.TerminationGracePeriodSeconds,
+				ServiceAccountName:            zkSpec.ZookeeperPod.ServiceAccountName,
+				ImagePullSecrets:              zkSpec.ZookeeperPod.ImagePullSecrets,
+			},
+			AdminServerService:     zkSpec.AdminServerService,
+			ClientService:          zkSpec.ClientService,
+			HeadlessService:        zkSpec.HeadlessService,
+			Conf:                   zkApi.ZookeeperConfig(zkSpec.Config),
+			Containers:             zkSpec.Containers,
+			InitContainers:         zkSpec.InitContainers,
+			Volumes:                zkSpec.Volumes,
+			VolumeMounts:           zkSpec.VolumeMounts,
+			Probes:                 zkSpec.Probes,
+			MaxUnavailableReplicas: zkSpec.MaxUnavailableReplicas,
 		},
 	}
 
@@ -95,53 +123,8 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 		}
 	}
 
-	// Append Pod Policies if provided by user
-	if zkSpec.ZookeeperPod.Affinity != nil {
-		zkCluster.Spec.Pod.Affinity = zkSpec.ZookeeperPod.Affinity
-	}
-
-	if zkSpec.ZookeeperPod.Resources.Limits != nil || zkSpec.ZookeeperPod.Resources.Requests != nil {
-		zkCluster.Spec.Pod.Resources = zkSpec.ZookeeperPod.Resources
-	}
-
-	if zkSpec.ZookeeperPod.Tolerations != nil {
-		zkCluster.Spec.Pod.Tolerations = zkSpec.ZookeeperPod.Tolerations
-	}
-
-	if zkSpec.ZookeeperPod.NodeSelector != nil {
-		zkCluster.Spec.Pod.NodeSelector = zkSpec.ZookeeperPod.NodeSelector
-	}
-
-	if zkSpec.ZookeeperPod.Env != nil {
-		zkCluster.Spec.Pod.Env = zkSpec.ZookeeperPod.Env
-	}
-
 	if solrCloud.Spec.SolrAddressability.KubeDomain != "" {
 		zkCluster.Spec.KubernetesClusterDomain = solrCloud.Spec.SolrAddressability.KubeDomain
-	}
-
-	if zkSpec.ZookeeperPod.ServiceAccountName != "" {
-		zkCluster.Spec.Pod.ServiceAccountName = zkSpec.ZookeeperPod.ServiceAccountName
-	}
-
-	if len(zkSpec.ZookeeperPod.Labels) > 0 {
-		zkCluster.Spec.Pod.Labels = zkSpec.ZookeeperPod.Labels
-	}
-
-	if len(zkSpec.ZookeeperPod.Annotations) > 0 {
-		zkCluster.Spec.Pod.Annotations = zkSpec.ZookeeperPod.Annotations
-	}
-
-	if zkSpec.ZookeeperPod.SecurityContext != nil {
-		zkCluster.Spec.Pod.SecurityContext = zkSpec.ZookeeperPod.SecurityContext
-	}
-
-	if zkSpec.ZookeeperPod.TerminationGracePeriodSeconds != 0 {
-		zkCluster.Spec.Pod.TerminationGracePeriodSeconds = zkSpec.ZookeeperPod.TerminationGracePeriodSeconds
-	}
-
-	if len(zkSpec.ZookeeperPod.ImagePullSecrets) > 0 {
-		zkCluster.Spec.Pod.ImagePullSecrets = zkSpec.ZookeeperPod.ImagePullSecrets
 	}
 
 	if zkSpec.Image.ImagePullSecret != "" {
@@ -150,10 +133,6 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 		} else {
 			zkCluster.Spec.Pod.ImagePullSecrets = []corev1.LocalObjectReference{{Name: zkSpec.Image.ImagePullSecret}}
 		}
-	}
-
-	if zkSpec.Probes != nil {
-		zkCluster.Spec.Probes = zkSpec.Probes
 	}
 
 	// Add defaults that the ZK Operator should set itself, otherwise we will have problems with reconcile loops.
@@ -172,6 +151,12 @@ func CopyZookeeperClusterFields(from, to *zkApi.ZookeeperCluster, logger logr.Lo
 		requireUpdate = true
 	}
 	to.Spec.Replicas = from.Spec.Replicas
+
+	if !DeepEqualWithNils(to.Spec.Labels, from.Spec.Labels) {
+		logger.Info("Update required because field changed", "field", "Spec.Labels", "from", to.Spec.Labels, "to", from.Spec.Labels)
+		requireUpdate = true
+		to.Spec.Labels = from.Spec.Labels
+	}
 
 	if !DeepEqualWithNils(to.Spec.Image.Repository, from.Spec.Image.Repository) {
 		logger.Info("Update required because field changed", "field", "Spec.Image.Repository", "from", to.Spec.Image.Repository, "to", from.Spec.Image.Repository)
@@ -337,6 +322,12 @@ func CopyZookeeperClusterFields(from, to *zkApi.ZookeeperCluster, logger logr.Lo
 		to.Spec.Pod.ImagePullSecrets = from.Spec.Pod.ImagePullSecrets
 	}
 
+	if !DeepEqualWithNils(to.Spec.Pod.TopologySpreadConstraints, from.Spec.Pod.TopologySpreadConstraints) {
+		logger.Info("Update required because field changed", "field", "Spec.Pod.TopologySpreadConstraints", "from", to.Spec.Pod.TopologySpreadConstraints, "to", from.Spec.Pod.TopologySpreadConstraints)
+		requireUpdate = true
+		to.Spec.Pod.TopologySpreadConstraints = from.Spec.Pod.TopologySpreadConstraints
+	}
+
 	if !DeepEqualWithNils(to.Spec.KubernetesClusterDomain, from.Spec.KubernetesClusterDomain) && from.Spec.KubernetesClusterDomain != "" {
 		logger.Info("Update required because field changed", "field", "Spec.KubernetesClusterDomain", "from", to.Spec.KubernetesClusterDomain, "to", from.Spec.KubernetesClusterDomain)
 		requireUpdate = true
@@ -353,6 +344,54 @@ func CopyZookeeperClusterFields(from, to *zkApi.ZookeeperCluster, logger logr.Lo
 		logger.Info("Update required because field changed", "field", "Spec.Conf", "from", to.Spec.Conf, "to", from.Spec.Conf)
 		requireUpdate = true
 		to.Spec.Conf = from.Spec.Conf
+	}
+
+	if !DeepEqualWithNils(to.Spec.Containers, from.Spec.Containers) {
+		logger.Info("Update required because field changed", "field", "Spec.Containers", "from", to.Spec.Containers, "to", from.Spec.Containers)
+		requireUpdate = true
+		to.Spec.Containers = from.Spec.Containers
+	}
+
+	if !DeepEqualWithNils(to.Spec.InitContainers, from.Spec.InitContainers) {
+		logger.Info("Update required because field changed", "field", "Spec.InitContainers", "from", to.Spec.InitContainers, "to", from.Spec.InitContainers)
+		requireUpdate = true
+		to.Spec.InitContainers = from.Spec.InitContainers
+	}
+
+	if !DeepEqualWithNils(to.Spec.Volumes, from.Spec.Volumes) {
+		logger.Info("Update required because field changed", "field", "Spec.Volumes", "from", to.Spec.Volumes, "to", from.Spec.Volumes)
+		requireUpdate = true
+		to.Spec.Volumes = from.Spec.Volumes
+	}
+
+	if !DeepEqualWithNils(to.Spec.VolumeMounts, from.Spec.VolumeMounts) {
+		logger.Info("Update required because field changed", "field", "Spec.VolumeMounts", "from", to.Spec.VolumeMounts, "to", from.Spec.VolumeMounts)
+		requireUpdate = true
+		to.Spec.VolumeMounts = from.Spec.VolumeMounts
+	}
+
+	if !DeepEqualWithNils(to.Spec.AdminServerService, from.Spec.AdminServerService) {
+		logger.Info("Update required because field changed", "field", "Spec.AdminServerService", "from", to.Spec.AdminServerService, "to", from.Spec.AdminServerService)
+		requireUpdate = true
+		to.Spec.AdminServerService = from.Spec.AdminServerService
+	}
+
+	if !DeepEqualWithNils(to.Spec.ClientService, from.Spec.ClientService) {
+		logger.Info("Update required because field changed", "field", "Spec.ClientService", "from", to.Spec.ClientService, "to", from.Spec.ClientService)
+		requireUpdate = true
+		to.Spec.ClientService = from.Spec.ClientService
+	}
+
+	if !DeepEqualWithNils(to.Spec.HeadlessService, from.Spec.HeadlessService) {
+		logger.Info("Update required because field changed", "field", "Spec.ClientService", "from", to.Spec.HeadlessService, "to", from.Spec.HeadlessService)
+		requireUpdate = true
+		to.Spec.HeadlessService = from.Spec.HeadlessService
+	}
+
+	if !DeepEqualWithNils(to.Spec.MaxUnavailableReplicas, from.Spec.MaxUnavailableReplicas) {
+		logger.Info("Update required because field changed", "field", "Spec.MaxUnavailableReplicas", "from", to.Spec.MaxUnavailableReplicas, "to", from.Spec.MaxUnavailableReplicas)
+		requireUpdate = true
+		to.Spec.MaxUnavailableReplicas = from.Spec.MaxUnavailableReplicas
 	}
 
 	return requireUpdate
