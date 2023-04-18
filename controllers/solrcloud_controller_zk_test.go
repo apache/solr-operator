@@ -216,10 +216,20 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 							SecurityContext:               &testPodSecurityContext,
 							TerminationGracePeriodSeconds: testTerminationGracePeriodSeconds,
 							ImagePullSecrets:              testAdditionalImagePullSecrets,
+							TopologySpreadConstraints:     testTopologySpreadConstraints,
 						},
-						Config: zkConf,
-						ChRoot: "a-ch/root",
-						Probes: &testZkProbes,
+						Config:                 zkConf,
+						ChRoot:                 "a-ch/root",
+						Probes:                 &testZkProbes,
+						InitContainers:         extraContainers1,
+						Containers:             extraContainers2,
+						Labels:                 testConfigMapLabels,
+						MaxUnavailableReplicas: 5,
+						AdminServerService:     testZKAdminServerServicePolicy,
+						ClientService:          testZKClientServicePolicy,
+						HeadlessService:        testZKHeadlessServicePolicy,
+						Volumes:                testZkVolumes,
+						VolumeMounts:           testZkVolumeMounts,
 					},
 				},
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
@@ -276,6 +286,14 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(zkCluster.Spec.Ephemeral.EmptyDirVolumeSource.Medium).To(BeEquivalentTo("Memory"), "Incorrect EmptyDir medium for ZK Cluster ephemeral storage")
 			Expect(zkCluster.Spec.Persistence).To(BeNil(), "ZkCluster.spec.persistence should be nil when using ephermeral storage")
 			Expect(zkCluster.Spec.Probes).To(Equal(&testZkProbes), "Incorrect zkCluster probes")
+			Expect(zkCluster.Spec.InitContainers).To(Equal(extraContainers1), "Incorrect zkCluster initContainers")
+			Expect(zkCluster.Spec.Containers).To(Equal(extraContainers2), "Incorrect zkCluster containers")
+			Expect(zkCluster.Spec.MaxUnavailableReplicas).To(BeEquivalentTo(5), "Incorrect zkCluster maxUnavailableReplicas")
+			Expect(zkCluster.Spec.AdminServerService).To(Equal(testZKAdminServerServicePolicy), "Incorrect zkCluster adminServerService")
+			Expect(zkCluster.Spec.ClientService).To(Equal(testZKClientServicePolicy), "Incorrect zkCluster clientService")
+			Expect(zkCluster.Spec.HeadlessService).To(Equal(testZKHeadlessServicePolicy), "Incorrect zkCluster headlessService")
+			Expect(zkCluster.Spec.Volumes).To(Equal(testZkVolumes), "Incorrect zkCluster volumes")
+			Expect(zkCluster.Spec.VolumeMounts).To(Equal(testZkVolumeMounts), "Incorrect zkCluster volumeMounts")
 
 			// Check ZK Pod Options
 			Expect(zkCluster.Spec.Pod.Affinity).To(Equal(testAffinity), "Incorrect zkCluster affinity")
@@ -288,15 +306,15 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(zkCluster.Spec.Pod.SecurityContext).To(Equal(&testPodSecurityContext), "Incorrect zkCluster pod securityContext")
 			Expect(zkCluster.Spec.Pod.TerminationGracePeriodSeconds).To(Equal(testTerminationGracePeriodSeconds), "Incorrect zkCluster pod terminationGracePeriodSeconds")
 			Expect(zkCluster.Spec.Pod.ImagePullSecrets).To(Equal(append(append(make([]corev1.LocalObjectReference, 0), testAdditionalImagePullSecrets...), corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect zkCluster imagePullSecrets")
+			Expect(zkCluster.Spec.Pod.TopologySpreadConstraints).To(Equal(testTopologySpreadConstraints), "Incorrect zkCluster pod topologySpreadConstraints")
 
-			// NOTE: Spec.Pod.Labels doesn't presently function as intended in the
-			// Zookeeper Operator, see https://github.com/pravega/zookeeper-operator/issues/511.
-			// Documentation indicates that Spec.Labels is for passing pod labels.
-			// This test will remain here in case the behavior changes on the
-			// Zookeeper Operator in the future.
 			testZkPodLabels := util.MergeLabelsOrAnnotations(testSSLabels, map[string]string{"app": "foo-solrcloud-zookeeper", "release": "foo-solrcloud-zookeeper"})
 			Expect(zkCluster.Spec.Pod.Labels).To(Equal(testZkPodLabels), "Wrong zkCluster pod labels")
-			Expect(zkCluster.Spec.Labels).To(Not(Equal(testZkPodLabels)), "Wrong zkCluster labels")
+			testZkClusterLabels := map[string]string{"solr-cloud": "foo", "technology": "zookeeper"}
+			Expect(zkCluster.Labels).To(Equal(testZkClusterLabels), "Wrong zkCluster labels")
+			testZkSpecLabels := util.MergeLabelsOrAnnotations(testConfigMapLabels, testZkClusterLabels)
+			testZkSpecLabels = util.MergeLabelsOrAnnotations(testZkSpecLabels, map[string]string{"app": "foo-solrcloud-zookeeper", "release": "foo-solrcloud-zookeeper"})
+			Expect(zkCluster.Spec.Labels).To(Equal(testZkSpecLabels), "Wrong zkCluster spec labels")
 
 			// Check ZK Config Options
 			Expect(zkCluster.Spec.Conf.InitLimit).To(Equal(zkConf.InitLimit), "Incorrect zkCluster Config InitLimit")

@@ -36,7 +36,7 @@ func GenerateZookeeperCluster(solrCloud *solrv1beta1.SolrCloud, zkSpec *solrv1be
 
 	zkSpecLabels := labels
 	if len(zkSpec.Labels) > 0 {
-		zkSpecLabels = MergeLabelsOrAnnotations(labels, zkSpecLabels)
+		zkSpecLabels = MergeLabelsOrAnnotations(zkSpec.Labels, zkSpecLabels)
 	}
 
 	zkCluster := &zkApi.ZookeeperCluster{

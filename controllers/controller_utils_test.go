@@ -1026,4 +1026,39 @@ var (
 			TimeoutSeconds:      0,
 		},
 	}
+	testZKAdminServerServicePolicy = zkApi.AdminServerServicePolicy{
+		External: true,
+		Annotations: map[string]string{
+			"testZKAS1": "valueS1",
+			"testZKAS2": "valueS2",
+		},
+	}
+	testZKClientServicePolicy = zkApi.ClientServicePolicy{
+		Annotations: map[string]string{
+			"testZKCS1": "valueS1",
+			"testZKCS2": "valueS2",
+		},
+	}
+	testZKHeadlessServicePolicy = zkApi.HeadlessServicePolicy{
+		Annotations: map[string]string{
+			"testZKCS1": "valueS1",
+			"testZKCS2": "valueS2",
+		},
+	}
+	testZkVolumes = []corev1.Volume{
+		{
+			Name: "vol1",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+	testZkVolumeMounts = []corev1.VolumeMount{
+		{
+			Name:      "vol1",
+			ReadOnly:  false,
+			MountPath: "/test/mount/path",
+			SubPath:   "sub/",
+		},
+	}
 )
