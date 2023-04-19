@@ -641,13 +641,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
+	addedUsers := false
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		if IsRepoVolume(&repo) {
 			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
 				volumeMounts = append(volumeMounts, *volumeMount)
 
+				if !addedUsers {
+					setupCommands = append(setupCommands, fmt.Sprintf("addgroup -g %d solr", solrFSGroup))
+					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", solrUser))
+					addedUsers = true
+				}
 				setupCommands = append(setupCommands, fmt.Sprintf(
-					"(test -w %s || chown -R %d:%d %s)",
+					"(su solr -c 'test -w %s') || chown -R %d:%d %s",
 					volumeMount.MountPath,
 					solrUser,
 					solrFSGroup,
