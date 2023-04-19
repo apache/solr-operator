@@ -683,8 +683,8 @@ class TodoGroup(SecretYamlObject):
         return "%s%s (%d/%d)" % (prefix, self.title, self.num_done(), self.num_applies())
 
     def get_submenu(self):
-        menu = UpdatableConsoleMenu(title=self.title, subtitle=self.get_subtitle, prologue_text=self.get_description(),
-                           screen=MyScreen())
+        menu = ConsoleMenu(title=self.title, subtitle=self.get_subtitle, prologue_text=self.get_description(),
+                           clear_screen=False)
         menu.exit_item = CustomExitItem("Return")
         for todo in self.get_todos():
             if todo.applies(state.release_type):
@@ -692,7 +692,7 @@ class TodoGroup(SecretYamlObject):
         return menu
 
     def get_menu_item(self):
-        item = UpdatableSubmenuItem(self.get_title, self.get_submenu())
+        item = SubmenuItem(self.get_title, self.get_submenu())
         return item
 
     def get_todos(self):
@@ -850,7 +850,7 @@ class Todo(SecretYamlObject):
             print("ERROR while executing todo %s (%s)" % (self.get_title(), e))
 
     def get_menu_item(self):
-        return UpdatableFunctionItem(self.get_title, self.display_and_confirm)
+        return FunctionItem(self.get_title, self.display_and_confirm)
 
     def clone(self):
         clone = Todo(self.id, self.title, description=self.description)
@@ -1279,76 +1279,6 @@ class UpdatableConsoleMenu(ConsoleMenu):
     def get_epilogue_text(self):
         return self.epilogue_text() if callable(self.epilogue_text) else self.epilogue_text
 
-
-class UpdatableSubmenuItem(SubmenuItem):
-    def __init__(self, text, submenu, menu=None, should_exit=False):
-        """
-        :ivar ConsoleMenu self.submenu: The submenu to be opened when this item is selected
-        """
-        super(SubmenuItem, self).__init__(text=text, menu=menu, should_exit=should_exit)
-
-        self.submenu = submenu
-        if menu:
-            self.get_submenu().parent = menu
-
-    def show(self, index):
-        return "%2d - %s" % (index + 1, self.get_text())
-
-    # Getters to get text in case method reference
-    def get_text(self):
-        return self.text() if callable(self.text) else self.text
-
-    def set_menu(self, menu):
-        """
-        Sets the menu of this item.
-        Should be used instead of directly accessing the menu attribute for this class.
-
-        :param ConsoleMenu menu: the menu
-        """
-        self.menu = menu
-        self.get_submenu().parent = menu
-
-    def action(self):
-        """
-        This class overrides this method
-        """
-        self.get_submenu().start()
-
-    def clean_up(self):
-        """
-        This class overrides this method
-        """
-        self.get_submenu().join()
-        self.menu.clear_screen()
-        self.menu.resume()
-
-    def get_return(self):
-        """
-        :return: The returned value in the submenu
-        """
-        return self.get_submenu().returned_value
-
-    def get_submenu(self):
-        """
-        We unwrap the submenu variable in case it is a reference to a method that returns a submenu
-        """
-        return self.submenu if not callable(self.submenu) else self.submenu()
-
-
-class UpdatableFunctionItem(FunctionItem):
-    def show(self, index):
-        return "%2d - %s" % (index + 1, self.get_text())
-
-    # Getters to get text in case method reference
-    def get_text(self):
-        return self.text() if callable(self.text) else self.text
-
-
-class MyScreen(Screen):
-    def clear(self):
-        return
-
-
 class CustomExitItem(ExitItem):
     def show(self, index):
         return super(ExitItem, self).show(index)
@@ -1365,6 +1295,11 @@ def main():
     print("Solr Operator releaseWizard %s" % getScriptVersion())
     c = parse_config()
 
+    try:
+        ConsoleMenu(clear_screen=True)
+    except Exception as e:
+        sys.exit("You need to install 'consolemenu' package version 0.7.1 for the Wizard to function. Please run 'pip "
+                 "install -r requirements.txt'")
     if c.dry:
         print("Entering dry-run mode where all commands will be echoed instead of executed")
         dry_run = True
@@ -1411,18 +1346,18 @@ def main():
 
     state.save()
 
-    main_menu = UpdatableConsoleMenu(title="Solr Operator ReleaseWizard",
+    main_menu = ConsoleMenu(title="Solr Operator ReleaseWizard",
                             subtitle=get_releasing_text,
                             prologue_text="Welcome to the release wizard. From here you can manage the process including creating new RCs. "
                                           "All changes are persisted, so you can exit any time and continue later. Make sure to read the Help section.",
                             epilogue_text="® 2020 The Solr Operator project. Licensed under the Apache License 2.0\nScript version %s)" % getScriptVersion(),
-                            screen=MyScreen())
+                            clear_screen=False)
 
-    todo_menu = UpdatableConsoleMenu(title=get_releasing_text,
+    todo_menu = ConsoleMenu(title=get_releasing_text,
                             subtitle=get_subtitle,
                             prologue_text=None,
                             epilogue_text=None,
-                            screen=MyScreen())
+                            clear_screen=False)
     todo_menu.exit_item = CustomExitItem("Return")
 
     for todo_group in state.todo_groups:
@@ -1431,14 +1366,14 @@ def main():
             menu_item.set_menu(todo_menu)
             todo_menu.append_item(menu_item)
 
-    main_menu.append_item(UpdatableSubmenuItem(get_todo_menuitem_title, todo_menu, menu=main_menu))
-    main_menu.append_item(UpdatableFunctionItem(get_start_new_rc_menu_title, start_new_rc))
-    main_menu.append_item(UpdatableFunctionItem('Clear and restart current RC', state.clear_rc))
-    main_menu.append_item(UpdatableFunctionItem("Clear all state, restart the %s release" % state.release_version, reset_state))
-    main_menu.append_item(UpdatableFunctionItem('Start release for a different version', release_other_version))
-    main_menu.append_item(UpdatableFunctionItem('Generate Asciidoc guide for this release', generate_asciidoc))
-    # main_menu.append_item(UpdatableFunctionItem('Dump YAML', dump_yaml))
-    main_menu.append_item(UpdatableFunctionItem('Help', help))
+    main_menu.append_item(SubmenuItem(get_todo_menuitem_title, todo_menu, menu=main_menu))
+    main_menu.append_item(FunctionItem(get_start_new_rc_menu_title, start_new_rc))
+    main_menu.append_item(FunctionItem('Clear and restart current RC', state.clear_rc))
+    main_menu.append_item(FunctionItem("Clear all state, restart the %s release" % state.release_version, reset_state))
+    main_menu.append_item(FunctionItem('Start release for a different version', release_other_version))
+    main_menu.append_item(FunctionItem('Generate Asciidoc guide for this release', generate_asciidoc))
+    # main_menu.append_item(FunctionItem('Dump YAML', dump_yaml))
+    main_menu.append_item(FunctionItem('Help', help))
 
     main_menu.show()
 
@@ -1964,7 +1899,7 @@ today = datetime.utcnow().date()
 sundays = {(today + timedelta(days=x)): 'Sunday' for x in range(10) if (today + timedelta(days=x)).weekday() == 6}
 y = datetime.utcnow().year
 years = [y, y+1]
-non_working = holidays.CA(years=years) + holidays.US(years=years) + holidays.England(years=years) \
+non_working = holidays.CA(years=years) + holidays.US(years=years) + holidays.UK(years=years) \
               + holidays.DE(years=years) + holidays.NO(years=years) + holidays.IND(years=years) + holidays.RU(years=years)
 
 
