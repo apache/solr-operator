@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.7.0-prerelease
-appVersion: v0.7.0-prerelease
+version: 0.7.0
+appVersion: v0.7.0
 kubeVersion: ">= 1.21.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -42,157 +42,21 @@ annotations:
   artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: <fingerprint>
+    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
-  artifacthub.io/changes: |
-    - kind: changed
-      description: Minimum Kubernetes version has been upped to 1.21
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/473
-    - kind: changed
-      description: The required Zookeeper Operator version has been upgraded to v0.2.15
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/549
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/550
-        - name: Zookeeper Operator v0.2.15 Release
-          url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.15
-    - kind: fixed
-      description: Fix bug with named PVCs
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/479
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/481
-    - kind: added
-      description: Support custom annotations on created ServiceAccount
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/480
-    - kind: added
-      description: SolrClouds now have PodDisruptionBudgets enabled
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/471
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/473
-        - name: PodDisruptionBudget Documentation
-          url: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets
-    - kind: fixed
-      description: Fix namespace support for helm installation and leader election
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/508
-    - kind: changed
-      description: Zookeeper images now use the IfNotPresent pullPolicy by default
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/512/files
-    - kind: fixed
-      description: Fix bug in non-recurring SolrBackups
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/509
-    - kind: fixed
-      description: Fix issue where Zookeeper specific labels are not propagated to Zookeeper pods
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/490
-        - name: Zookeeper Operator Issue
-          url: https://github.com/pravega/zookeeper-operator/issues/511
-    - kind: fixed
-      description: Fix SolrBackup not taking backups when the collections field is omitted 
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/515
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/516
-    - kind: changed
-      description: Use better default startup, liveness and readiness probes for SolrCloud and SolrPrometheusExporter
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/510
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/511
-    - kind: added
-      description: The SolrCloud common service now removes nodes that are about to be upgraded
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/529
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/530
-        - name: Feature Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/managed-updates.html#pod-readiness-during-updates
-    - kind: fixed
-      description: Don't give port annotation for PrometheusExporter, let Prometheus find the port itself
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/483
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/539
-    - kind: fixed
-      description: Solr resource status are now patched instead of updated, this should reduce "error" logging in the operator.
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/544
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/545
-    - kind: added
-      description: Support custom Zookeeper probes
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/477
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/546
-    - kind: fixed
-      description: Avoid backup directory chown when directories are already writable
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/537
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/548
-    - kind: added
-      description: Added Option to enable/disable the PodDisruptionBudget for the cluster.
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/538
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/540
-    - kind: removed
-      description: Options deprecated in v0.6.0 have been been removed.
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/553
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/554
-    - kind: fixed
-      description: Use correct user & group for chmod command in cp-solr-xml init container
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/519
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/520
-    - kind: added
-      description: Add missing ZookeeperCluster customization options.
-      links:
-        - name: GitHub Issue
-          url: https://github.com/apache/solr-operator/issues/557
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/558
+  artifacthub.io/changes: "- kind: changed\n  description: Minimum Kubernetes version has been upped to 1.21\n  links:\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/473\n- kind: changed\n  description: The required Zookeeper Operator version has been upgraded to v0.2.15\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/549\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/550\n    - name: Zookeeper Operator v0.2.15 Release\n      url: https://github.com/pravega/zookeeper-operator/releases/tag/v0.2.15\n- kind: fixed\n  description: Fix bug with named PVCs\n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/479\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/481\n- kind: added\n  description: Support custom annotations on created ServiceAccount\n  links:\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/480\n- kind: added\n  description: SolrClouds now have PodDisruptionBudgets enabled\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/471\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/473\n    - name: PodDisruptionBudget Documentation\n      url: https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets\n- kind: fixed\n  description: Fix namespace support for helm installation and leader election\n  links:\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/508\n- kind: changed\n  description: Zookeeper images now use the IfNotPresent pullPolicy by default\n  links:\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/512/files\n- kind: fixed\n  description: Fix bug in non-recurring SolrBackups\n  links:\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/509\n- kind: fixed\n  description: Fix issue where Zookeeper specific labels are not propagated to Zookeeper pods\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/490\n    - name: Zookeeper Operator Issue\n      url: https://github.com/pravega/zookeeper-operator/issues/511\n- kind: fixed\n  description: Fix SolrBackup not taking backups when the collections field is omitted \n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/515\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/516\n- kind: changed\n  description: Use better default startup, liveness and readiness probes for SolrCloud and SolrPrometheusExporter\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/510\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/511\n- kind: added\n  description: The SolrCloud common service now removes nodes that are about to be upgraded\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/529\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/530\n    - name: Feature Documentation\n      url: https://apache.github.io/solr-operator/docs/solr-cloud/managed-updates.html#pod-readiness-during-updates\n- kind: fixed\n  description: Don't give port annotation for PrometheusExporter, let Prometheus find the port itself\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/483\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/539\n- kind: fixed\n  description: Solr resource status are now patched instead of updated, this should reduce \"error\" logging in the operator.\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/544\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/545\n- kind: added\n  description: Support custom Zookeeper probes\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/477\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/546\n- kind: fixed\n  description: Avoid backup directory chown when directories are already writable\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/537\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/548\n- kind: added\n  description: Added Option to enable/disable the PodDisruptionBudget for the cluster.\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/538\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/540\n- kind: removed\n  description: Options deprecated in v0.6.0 have been been removed.\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/553\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/554\n- kind: fixed\n  description: Use correct user & group for chmod command in cp-solr-xml init container\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/519\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/520\n- kind: added\n  description: Add missing ZookeeperCluster customization options.\n  links:\n    - name: GitHub Issue\n      url: https://github.com/apache/solr-operator/issues/557\n    - name: GitHub PR\n      url: https://github.com/apache/solr-operator/pull/558\n"
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.7.0-prerelease
+      image: apache/solr-operator:v0.7.0
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
