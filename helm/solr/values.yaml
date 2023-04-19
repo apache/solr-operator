@@ -171,12 +171,14 @@ zk:
   # If no "address" is provided, this defines the ZookeeperCluster created for this SolrCloud
   provided:
     replicas: 3
+    labels: {}
     image: {}
       # repository: "pravega/zookeeper"
       # tag: ""
       # pullPolicy: IfNotPresent
       # imagePullSecret: ""
     zookeeperPodPolicy: {}
+      # labels: {}
       # affinity: {}
       # tolerations: []
       # nodeSelector: {}
@@ -184,8 +186,22 @@ zk:
       # resources: {}
       # # Set ZK service account individually instead of the global "serviceAccount.name"
       # serviceAccountName: ""
+      # topologySpreadConstraints: []
     # Override the default Zookeeper probes
     probes: {}
+    # Add additional containers
+    containers: {}
+    initContainers: {}
+    # Configure the PodDisruptionBudget created for ZK
+    maxUnavailableReplicas: 1
+    # Add custom volumes
+    volumes: []
+    volumeMounts: []
+
+    # Customize the ZK services
+    adminServerService: {}
+    clientService: {}
+    headlessService: {}
 
     # Storage defaults to the type of storage you use for Solr, which is ephemeral by default.
     # Explicitly set the storage type, only necessary when wishing to use an empty persistence or ephemeral object.

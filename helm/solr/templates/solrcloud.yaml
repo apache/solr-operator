@@ -208,6 +208,10 @@ spec:
       {{- if .Values.zk.provided.replicas }}
       replicas: {{ .Values.zk.provided.replicas }}
       {{- end }}
+      {{- if .Values.zk.provided.labels }}
+      labels:
+        {{- toYaml .Values.zk.provided.labels | nindent 8 }}
+      {{- end }}
       {{- if .Values.zk.provided.image }}
       image:
         {{- toYaml .Values.zk.provided.image | nindent 8 }}
@@ -230,6 +234,37 @@ spec:
       {{- if .Values.zk.provided.probes }}
       probes:
         {{- toYaml .Values.zk.provided.probes | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.volumes }}
+      volumes:
+        {{- toYaml .Values.zk.provided.volumes | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.volumeMounts }}
+      volumeMounts:
+        {{- toYaml .Values.zk.provided.volumeMounts | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.initContainers }}
+      initContainers:
+        {{- toYaml .Values.zk.provided.initContainers | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.containers }}
+      containers:
+        {{- toYaml .Values.zk.provided.containers | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.adminServerService }}
+      adminServerService:
+        {{- toYaml .Values.zk.provided.adminServerService | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.clientService }}
+      clientService:
+        {{- toYaml .Values.zk.provided.clientService | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.headlessService }}
+      headlessService:
+        {{- toYaml .Values.zk.provided.headlessService | nindent 8 }}
+      {{- end }}
+      {{- if .Values.zk.provided.maxUnavailableReplicas }}
+      maxUnavailableReplicas: {{ .Values.zk.provided.maxUnavailableReplicas }}
       {{- end }}
       {{- if .Values.zk.acl }}
       acl:
