@@ -9,6 +9,7 @@
     </envs>
     <ginkgo-scope value="ALL" />
     <focus-expression value="" />
+    <working-dir value="$PROJECT_DIR$" />
     <package-name />
     <method v="2" />
   </configuration>
