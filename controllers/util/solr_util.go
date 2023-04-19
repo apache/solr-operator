@@ -626,12 +626,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	solrUser := DefaultSolrUser
 	solrFSGroup := DefaultSolrGroup
 
+	// Only add a user to the initContainer if one isn't provided in the podSecurityContext
+	// This is so that we can check if the backupDir is writable given the default user (since no user is provided)
+	addUserToInitContainer := true
 	if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil {
 		solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
 
 		if solrPodSecurityContext != nil {
 			if solrPodSecurityContext.RunAsUser != nil {
 				solrUser = int(*solrPodSecurityContext.RunAsUser)
+				addUserToInitContainer = false
+			} else if solrPodSecurityContext.RunAsNonRoot != nil && *solrPodSecurityContext.RunAsNonRoot {
+				// we can't add users to the initContainer, even if we want to, since we cannot run as root.
+				addUserToInitContainer = false
 			}
 			if solrPodSecurityContext.FSGroup != nil {
 				solrFSGroup = int(*solrPodSecurityContext.FSGroup)
@@ -641,20 +648,25 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
-	addedUsers := false
+	solrUserAdded := false
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		if IsRepoVolume(&repo) {
 			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
 				volumeMounts = append(volumeMounts, *volumeMount)
 
-				if !addedUsers {
+				if addUserToInitContainer && !solrUserAdded {
 					setupCommands = append(setupCommands, fmt.Sprintf("addgroup -g %d solr", solrFSGroup))
-					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", solrUser))
-					addedUsers = true
+					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", DefaultSolrUser))
+					// Only add users once even if there are many backup repos
+					solrUserAdded = true
+				}
+				testDirCommand := "test -w " + volumeMount.MountPath
+				if addUserToInitContainer {
+					testDirCommand = fmt.Sprintf("su solr -c '%s'", testDirCommand)
 				}
 				setupCommands = append(setupCommands, fmt.Sprintf(
-					"(su solr -c 'test -w %s') || chown -R %d:%d %s",
-					volumeMount.MountPath,
+					"(%s || chown -R %d:%d %s)",
+					testDirCommand,
 					solrUser,
 					solrFSGroup,
 					volumeMount.MountPath))
