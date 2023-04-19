@@ -75,7 +75,7 @@ var (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
-	fsGroup := int64(DefaultSolrGroup)
+	defaultFSGroup := int64(DefaultSolrGroup)
 
 	probeScheme := corev1.URISchemeHTTP
 	if tls != nil {
@@ -500,7 +500,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &fsGroup,
+						FSGroup: &defaultFSGroup,
 					},
 					Volumes:        solrVolumes,
 					InitContainers: initContainers,
@@ -545,6 +545,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.PodSecurityContext != nil {
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
+			if stateful.Spec.Template.Spec.SecurityContext.FSGroup == nil {
+				stateful.Spec.Template.Spec.SecurityContext.FSGroup = &defaultFSGroup
+			}
 		}
 
 		if customPodOptions.Lifecycle != nil {
@@ -618,20 +621,54 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		},
 	}
 	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
-	setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -H -D solr", DefaultSolrUser))
+
+	// Figure out the solrUser and solrGroup to use
+	solrUser := DefaultSolrUser
+	solrFSGroup := DefaultSolrGroup
+
+	// Only add a user to the initContainer if one isn't provided in the podSecurityContext
+	// This is so that we can check if the backupDir is writable given the default user (since no user is provided)
+	addUserToInitContainer := true
+	if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil {
+		solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
+
+		if solrPodSecurityContext != nil {
+			if solrPodSecurityContext.RunAsUser != nil {
+				solrUser = int(*solrPodSecurityContext.RunAsUser)
+				addUserToInitContainer = false
+			} else if solrPodSecurityContext.RunAsNonRoot != nil && *solrPodSecurityContext.RunAsNonRoot {
+				// we can't add users to the initContainer, even if we want to, since we cannot run as root.
+				addUserToInitContainer = false
+			}
+			if solrPodSecurityContext.FSGroup != nil {
+				solrFSGroup = int(*solrPodSecurityContext.FSGroup)
+			}
+		}
+	}
 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
+	solrUserAdded := false
 	for _, repo := range solrCloud.Spec.BackupRepositories {
 		if IsRepoVolume(&repo) {
 			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
 				volumeMounts = append(volumeMounts, *volumeMount)
 
+				if addUserToInitContainer && !solrUserAdded {
+					setupCommands = append(setupCommands, fmt.Sprintf("addgroup -g %d solr", solrFSGroup))
+					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", DefaultSolrUser))
+					// Only add users once even if there are many backup repos
+					solrUserAdded = true
+				}
+				testDirCommand := "test -w " + volumeMount.MountPath
+				if addUserToInitContainer {
+					testDirCommand = fmt.Sprintf("su solr -c '%s'", testDirCommand)
+				}
 				setupCommands = append(setupCommands, fmt.Sprintf(
-					"(su solr -c 'test -w %s' || chown -R %d:%d %s)",
-					volumeMount.MountPath,
-					DefaultSolrUser,
-					DefaultSolrGroup,
+					"(%s || chown -R %d:%d %s)",
+					testDirCommand,
+					solrUser,
+					solrFSGroup,
 					volumeMount.MountPath))
 			}
 		}

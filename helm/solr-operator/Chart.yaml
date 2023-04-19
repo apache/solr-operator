@@ -176,6 +176,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/553
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/554
+    - kind: fixed
+      description: Use correct user & group for chmod command in cp-solr-xml init container
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/519
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/520
     - kind: added
       description: Add missing ZookeeperCluster customization options.
       links:
