@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
@@ -107,7 +108,79 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	return
 }
 
-func ScaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownTo int, podList []corev1.Pod, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
+// TODO: Move to new cluster operations file
+
+func acquireScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, podList []corev1.Pod, logger logr.Logger) (clusterOpLock string, clusterOpLockMetadata string, retryLaterDuration time.Duration, err error) {
+	desiredPods := int(*instance.Spec.Replicas)
+	configuredPods := int(*statefulSet.Spec.Replicas)
+	if desiredPods != configuredPods {
+		scaleTo := -1
+		// Start a scaling operation
+		if desiredPods < configuredPods {
+			// Scale down!
+			// TODO: Check if replicasScaleDown is enabled, if not it's not a clusterOp, just do the patch
+			if desiredPods > 0 {
+				// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
+				scaleTo = configuredPods - 1
+			}
+		} else if desiredPods > configuredPods {
+			// Scale up!
+			// TODO: replicasScaleUp is not supported, so do not make a cluserOp out of it, just do the patch
+		}
+		if scaleTo > -1 {
+			clusterOpLock = util.ScaleLock
+			clusterOpMetadata = strconv.Itoa(scaleTo)
+		}
+	}
+}
+
+func handleLockedClusterOpScale(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, podList []corev1.Pod, logger logr.Logger) (retryLaterDuration time.Duration, err error) {
+	if scalingToNodes, hasAnn := statefulSet.Annotations[util.ClusterOpsMetadataAnnotation]; hasAnn {
+		if scalingToNodesInt, convErr := strconv.Atoi(scalingToNodes); convErr != nil {
+			logger.Error(convErr, "Could not convert statefulSet annotation to int for scale-down-to information", "annotation", util.ClusterOpsMetadataAnnotation, "value", scalingToNodes)
+			err = convErr
+		} else {
+			if scalingToNodesInt < int(*statefulSet.Spec.Replicas) {
+				// Manage scaling up or down of the SolrCloud
+				retryLaterDuration, err = scaleDownPods(ctx, r, instance, statefulSet, scalingToNodesInt, podList, logger)
+			} else if scalingToNodesInt > int(*statefulSet.Spec.Replicas) {
+				// TODO: Utilize the scaled-up nodes in the future, however Solr does not currently have APIs for this.
+				patchedStatefulSet := statefulSet.DeepCopy()
+				patchedStatefulSet.Spec.Replicas = pointer.Int32(int32(scalingToNodesInt))
+				delete(patchedStatefulSet.Labels, util.ClusterOpsLockAnnotation)
+				delete(patchedStatefulSet.Labels, util.ClusterOpsMetadataAnnotation)
+				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
+					logger.Error(err, "Error while patching StatefulSet to remove uneeded scalingToNodes annotation")
+				} else {
+					statefulSet = patchedStatefulSet
+				}
+				// TODO: Think about the order of scale-up and restart when individual nodeService IPs are injected into the pods.
+				// TODO: Will likely want to do a scale-up of the service first, then do the rolling restart of the cluster, then utilize the node.
+			} else {
+				// This shouldn't happen. The ScalingToNodesAnnotation is removed when the statefulSet size changes, through a Patch.
+				// But if it does happen, we should just remove the annotation and move forward.
+				patchedStatefulSet := statefulSet.DeepCopy()
+				delete(patchedStatefulSet.Labels, util.ClusterOpsLockAnnotation)
+				delete(patchedStatefulSet.Labels, util.ClusterOpsMetadataAnnotation)
+				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
+					logger.Error(err, "Error while patching StatefulSet to remove uneeded scalingToNodes annotation")
+				} else {
+					statefulSet = patchedStatefulSet
+				}
+			}
+		}
+		// If everything succeeded, the statefulSet will have an annotation updated
+		// and the reconcile loop will be called again.
+
+		return
+	} else {
+		err = errors.New("no clusterOpMetadata annotation is present in the statefulSet")
+		logger.Error(err, "Cannot perform scaling operation when no scale-to-nodes is provided via the clusterOpMetadata")
+		return time.Second * 10, err
+	}
+}
+
+func scaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownTo int, podList []corev1.Pod, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
 	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
 	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
 		util.SolrIsNotStoppedReadinessCondition: {
@@ -121,7 +194,7 @@ func ScaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1
 	if scaleDownTo == 0 {
 		// Delete all collections & data, the user wants no data left if scaling the solrcloud down to 0
 		// This is a much different operation to deleting the SolrCloud/StatefulSet all-together
-		if podsAreEmpty, evictError := EvictAllPods(ctx, r, instance, podList, podStoppedReadinessConditions, logger); evictError != nil {
+		if podsAreEmpty, evictError := evictAllPods(ctx, r, instance, podList, podStoppedReadinessConditions, logger); evictError != nil {
 			err = evictError
 		} else if podsAreEmpty {
 			// There is no data, so there should be no utilized nodes
@@ -133,7 +206,7 @@ func ScaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1
 	} else {
 		// Only evict the last pod, even if we are trying to scale down multiple pods.
 		// Scale down will happen one pod at a time.
-		if podIsEmpty, evictError := EvictSinglePod(ctx, r, instance, scaleDownTo, podList, podStoppedReadinessConditions, logger); evictError != nil {
+		if podIsEmpty, evictError := evictSinglePod(ctx, r, instance, scaleDownTo, podList, podStoppedReadinessConditions, logger); evictError != nil {
 			err = evictError
 		} else if podIsEmpty {
 			// We have only evicted data from one pod (solr node)
@@ -163,7 +236,7 @@ func ScaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1
 	return
 }
 
-func EvictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podsAreEmpty bool, err error) {
+func evictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podsAreEmpty bool, err error) {
 	// If there are no pods, we can't empty them. Just return true
 	if len(podList) == 0 {
 		return true, nil
@@ -189,7 +262,7 @@ func EvictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1b
 	return
 }
 
-func EvictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, scaleDownTo int, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podIsEmpty bool, err error) {
+func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, scaleDownTo int, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podIsEmpty bool, err error) {
 	var pod *corev1.Pod
 	podName := instance.GetSolrPodName(scaleDownTo)
 	for _, p := range podList {

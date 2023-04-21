@@ -51,10 +51,10 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
-	SolrClusterOpsLockAnnotation = "solr.apache.org/clusterOpsLock"
+	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
 	ScaleLock                    = "scaling"
 	UpdateLock                   = "rollingUpdate"
-	SolrClusterOpsMetadata       = "solr.apache.org/clusterOpsMetadata"
+	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"

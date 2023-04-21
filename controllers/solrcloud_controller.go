@@ -23,7 +23,6 @@ import (
 	"fmt"
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/pointer"
 	"reflect"
 	"sort"
 	"strconv"
@@ -446,57 +445,65 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, err
 	}
 
-	// We only want to do an Update or a Scale at a time. We do not want to do both.
-	// TODO: Think about the order of scale-up and restart when individual nodeService IPs are injected into the pods.
-	// TODO: Will likely want to do a scale-up of the service first, then do the rolling restart of the cluster, then utilize the node.
-	if scalingToNodes, hasAnn := statefulSet.Annotations[util.ScalingToNodesAnnotation]; hasAnn {
-		if scalingToNodesInt, convErr := strconv.Atoi(scalingToNodes); convErr != nil {
-			logger.Error(convErr, "Could not convert statefulSet annotation to int", "annotation", util.ScalingToNodesAnnotation, "value", scalingToNodes)
-			err = convErr
-		} else {
-			if scalingToNodesInt < int(*statefulSet.Spec.Replicas) {
-				// Manage scaling up or down of the SolrCloud
-				retryLaterDuration, scaleErr := ScaleDownPods(ctx, r, instance, statefulSet, scalingToNodesInt, podList, logger)
-				if scaleErr != nil {
-					err = scaleErr
-					if retryLaterDuration == 0 {
-						retryLaterDuration = time.Second * 10
-					}
-				}
-				if retryLaterDuration > 0 {
-					updateRequeueAfter(&requeueOrNot, retryLaterDuration)
-				}
-			} else if scalingToNodesInt > int(*statefulSet.Spec.Replicas) {
-				// TODO: Utilize the scaled-up nodes in the future, however Solr does not currently have APIs for this.
-				patchedStatefulSet := statefulSet.DeepCopy()
-				patchedStatefulSet.Spec.Replicas = pointer.Int32(int32(scalingToNodesInt))
-				patchedStatefulSet.Labels[util.UtilizedNodesAnnotation] = strconv.Itoa(scalingToNodesInt)
-				delete(patchedStatefulSet.Labels, util.ScalingToNodesAnnotation)
-				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
-					logger.Error(err, "Error while patching StatefulSet to remove uneeded scalingToNodes annotation")
-				} else {
-					statefulSet = patchedStatefulSet
-				}
-			} else {
-				// This shouldn't happen. The ScalingToNodesAnnotation is removed when the statefulSet size changes, through a Patch.
-				// But if it does happen, we should just remove the annotation and move forward.
-				patchedStatefulSet := statefulSet.DeepCopy()
-				delete(patchedStatefulSet.Labels, util.ScalingToNodesAnnotation)
-				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
-					logger.Error(err, "Error while patching StatefulSet to remove uneeded scalingToNodes annotation")
-				} else {
-					statefulSet = patchedStatefulSet
-				}
-			}
-		}
-		// If everything succeeded, the statefulSet will have an annotation updated
-		// and the reconcile loop will be called again.
+	// We only want to do one cluster operation at a time, so we use a lock to ensure that.
+	// Update or a Scale at a time. We do not want to do both.
 
+	if clusterOpLock, hasAnn := statefulSet.Annotations[util.ClusterOpsLockAnnotation]; hasAnn {
+		var retryLaterDuration time.Duration
+		switch clusterOpLock {
+		case util.ScaleLock:
+			retryLaterDuration, err = handleLockedClusterOpScale(ctx, r, instance, statefulSet, podList, logger)
+		}
+		if err != nil && retryLaterDuration == 0 {
+			retryLaterDuration = time.Second * 5
+		}
+		if retryLaterDuration > 0 {
+			updateRequeueAfter(&requeueOrNot, retryLaterDuration)
+		}
 		if err != nil {
 			return requeueOrNot, err
 		}
+	} else {
+		// Start cluster operations if needed.
+		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
+		// And that lock will tell future reconcile loops that the operation needs to be done.
+		clusterOpLock = ""
+		clusterOpMetadata := ""
 
-	} else if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion)+len(outOfDatePods.Running) > 0 {
+		desiredPods := int(*instance.Spec.Replicas)
+		configuredPods := int(*statefulSet.Spec.Replicas)
+		if desiredPods != configuredPods {
+			scaleTo := -1
+			// Start a scaling operation
+			if desiredPods < configuredPods {
+				// Scale down!
+				// TODO: Check if replicasScaleDown is enabled, if not it's not a clusterOp, just do the patch
+				if desiredPods > 0 {
+					// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
+					scaleTo = configuredPods - 1
+				}
+			} else if desiredPods > configuredPods {
+				// Scale up!
+				// TODO: replicasScaleUp is not supported, so do not make a cluserOp out of it, just do the patch
+			}
+			if scaleTo > -1 {
+				clusterOpLock = util.ScaleLock
+				clusterOpMetadata = strconv.Itoa(scaleTo)
+			}
+		}
+		if clusterOpLock != "" {
+			patchedStatefulSet := statefulSet.DeepCopy()
+			patchedStatefulSet.Annotations[util.ClusterOpsLockAnnotation] = clusterOpLock
+			patchedStatefulSet.Annotations[util.ClusterOpsLockAnnotation] = clusterOpMetadata
+			if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
+				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", clusterOpLock, "clusterOpMetadata", clusterOpMetadata)
+			} else {
+				statefulSet = patchedStatefulSet
+			}
+		}
+	}
+	// TODO: Move this logic into the ClusterOpLock, with the "rollingUpdate" lock
+	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion)+len(outOfDatePods.Running) > 0 {
 		// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
 		updateLogger := logger.WithName("ManagedUpdateSelector")
 
