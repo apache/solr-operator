@@ -503,82 +503,66 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 }
 
 // EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod, if the Pod is using ephemeral storage.
-// If the pod is using persistent storage, this function is a no-op.
-// This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
-func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (err error, canDeletePod bool) {
-	var solrDataVolume *corev1.Volume
+// For updates this will only be called for pods using ephemeral data.
+// For scale-down operations, this can be called for pods using ephemeral or persistent data.
+func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, logger logr.Logger) (err error, canDeletePod bool) {
+	logger = logger.WithValues("evictionReason", evictionReason)
+	// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
+	// Otherwise, move the replicas to other pods
+	if (solrCloud.Spec.Replicas == nil || *solrCloud.Spec.Replicas < 2) && strings.HasSuffix(pod.Name, "-0") {
+		queryParams := url.Values{}
+		queryParams.Add("action", "DELETENODE")
+		queryParams.Add("node", SolrNodeName(solrCloud, pod.Name))
+		// TODO: Figure out a way to do this, since DeleteNode will not delete the last replica of every type...
+		canDeletePod = true
+	} else {
+		requestId := "move-replicas-" + pod.Name
 
-	// TODO: Remove these checks after v0.7.0, since it will be taken care by the evictReplicas podReadinessCondition
-	dataVolumeName := solrCloud.DataVolumeName()
-	for _, volume := range pod.Spec.Volumes {
-		if volume.Name == dataVolumeName {
-			solrDataVolume = &volume
-			break
-		}
-	}
-
-	// Only evict if the Data volume is not persistent
-	if solrDataVolume != nil && solrDataVolume.VolumeSource.PersistentVolumeClaim == nil {
-		// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
-		// Otherwise, move the replicas to other pods
-		if (solrCloud.Spec.Replicas == nil || *solrCloud.Spec.Replicas < 2) && strings.HasSuffix(pod.Name, "-0") {
-			queryParams := url.Values{}
-			queryParams.Add("action", "DELETENODE")
-			queryParams.Add("node", SolrNodeName(solrCloud, pod.Name))
-			// TODO: Figure out a way to do this, since DeleteNode will not delete the last replica of every type...
-			canDeletePod = true
-		} else {
-			requestId := "move-replicas-" + pod.Name
-
-			// First check to see if the Async Replace request has started
-			if asyncState, message, asyncErr := solr_api.CheckAsyncRequest(ctx, solrCloud, requestId); asyncErr != nil {
-				err = asyncErr
-			} else if asyncState == "notfound" {
-				if podHasReplicas {
-					// Submit new Replace Node request
-					replaceResponse := &solr_api.SolrAsyncResponse{}
-					queryParams := url.Values{}
-					queryParams.Add("action", "REPLACENODE")
-					queryParams.Add("parallel", "true")
-					queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
-					queryParams.Add("async", requestId)
-					err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
-					if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
-						err = apiErr
-					}
-					if err == nil {
-						logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
-					} else {
-						logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
-					}
+		// First check to see if the Async Replace request has started
+		if asyncState, message, asyncErr := solr_api.CheckAsyncRequest(ctx, solrCloud, requestId); asyncErr != nil {
+			err = asyncErr
+		} else if asyncState == "notfound" {
+			if podHasReplicas {
+				// Submit new Replace Node request
+				replaceResponse := &solr_api.SolrAsyncResponse{}
+				queryParams := url.Values{}
+				queryParams.Add("action", "REPLACENODE")
+				queryParams.Add("parallel", "true")
+				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
+				queryParams.Add("async", requestId)
+				err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
+				if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
+					err = apiErr
+				}
+				if err == nil {
+					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
 				} else {
-					canDeletePod = true
+					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
 				}
-
 			} else {
-				logger.Info("Found async status", "requestId", requestId, "state", asyncState)
-				// Only continue to delete the pod if the ReplaceNode request is complete and successful
-				if asyncState == "completed" {
-					canDeletePod = true
-					logger.Info("Migration of all replicas off of pod before deletion complete. Pod can now be deleted.", "pod", pod.Name)
-				} else if asyncState == "failed" {
-					logger.Info("Migration of all replicas off of pod before deletion failed. Will try again.", "pod", pod.Name, "message", message)
-				}
+				canDeletePod = true
+			}
 
-				// Delete the async request Id if the async request is successful or failed.
-				// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
-				if asyncState == "completed" || asyncState == "failed" {
-					if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
-						logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
-					} else {
-						canDeletePod = false
-					}
+		} else {
+			logger.Info("Found async status", "requestId", requestId, "state", asyncState)
+			// Only continue to delete the pod if the ReplaceNode request is complete and successful
+			if asyncState == "completed" {
+				canDeletePod = true
+				logger.Info("Migration of all replicas off of pod before deletion complete. Pod can now be deleted.", "pod", pod.Name)
+			} else if asyncState == "failed" {
+				logger.Info("Migration of all replicas off of pod before deletion failed. Will try again.", "pod", pod.Name, "message", message)
+			}
+
+			// Delete the async request Id if the async request is successful or failed.
+			// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
+			if asyncState == "completed" || asyncState == "failed" {
+				if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
+					logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
+				} else {
+					canDeletePod = false
 				}
 			}
 		}
-	} else {
-		// The pod can be deleted, since it is using persistent data storage
-		canDeletePod = true
 	}
 	return err, canDeletePod
 }

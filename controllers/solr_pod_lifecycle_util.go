@@ -22,9 +22,12 @@ import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 	"time"
 )
 
@@ -40,10 +43,10 @@ type podReadinessConditionChange struct {
 type PodConditionChangeReason string
 
 const (
-	PodStarted           PodConditionChangeReason = "PodStarted"
-	PodUpdate            PodConditionChangeReason = "PodUpdate"
-	EvictingReplicas     PodConditionChangeReason = "EvictingReplicas"
-	StatefulSetScaleDown PodConditionChangeReason = "StatefulSetScaleDown"
+	PodStarted       PodConditionChangeReason = "PodStarted"
+	PodUpdate        PodConditionChangeReason = "PodUpdate"
+	EvictingReplicas PodConditionChangeReason = "EvictingReplicas"
+	ScaleDown        PodConditionChangeReason = "ScaleDown"
 )
 
 func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
@@ -73,10 +76,9 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 
 	// If the pod needs to be drained of replicas (i.e. upgrading a pod with ephemeral storage), do that before deleting the pod
 	deletePod := false
-	// TODO: After v0.7.0 release, can remove "podHasReplicas ||", as this is no longer needed
-	if podHasReplicas || PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
+	if PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, logger); evictError != nil {
+		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
@@ -100,6 +102,121 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 		}
 
 		// TODO: Create event for the CRD.
+	}
+
+	return
+}
+
+func ScaleDownPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownTo int, podList []corev1.Pod, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
+	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
+	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
+		util.SolrIsNotStoppedReadinessCondition: {
+			reason:  ScaleDown,
+			message: "Pod is being deleted, traffic to the pod must be stopped",
+			status:  false,
+		},
+	}
+
+	utilizedPods := *statefulSet.Spec.Replicas
+	if scaleDownTo == 0 {
+		// Delete all collections & data, the user wants no data left if scaling the solrcloud down to 0
+		// This is a much different operation to deleting the SolrCloud/StatefulSet all-together
+		if podsAreEmpty, evictError := EvictAllPods(ctx, r, instance, podList, podStoppedReadinessConditions, logger); evictError != nil {
+			err = evictError
+		} else if podsAreEmpty {
+			// There is no data, so there should be no utilized nodes
+			utilizedPods = 0
+		} else {
+			// Try again in 5 seconds if we cannot delete a pod.
+			requeueAfterDuration = time.Second * 5
+		}
+	} else {
+		// Only evict the last pod, even if we are trying to scale down multiple pods.
+		// Scale down will happen one pod at a time.
+		if podIsEmpty, evictError := EvictSinglePod(ctx, r, instance, scaleDownTo, podList, podStoppedReadinessConditions, logger); evictError != nil {
+			err = evictError
+		} else if podIsEmpty {
+			// We have only evicted data from one pod (solr node)
+			utilizedPods = int32(scaleDownTo)
+		} else {
+			// Try again in 5 seconds if we cannot delete a pod.
+			requeueAfterDuration = time.Second * 5
+		}
+	}
+	// TODO: It would be great to support a multi-node scale down when Solr supports evicting many SolrNodes at once.
+
+	// Scale down the statefulSet to represent the new number of utilizedPods, if it is lower than the current number of pods
+	// Also remove the "scalingToNodes" annotation, as that acts as a lock on the cluster, so that other operations,
+	// such as scale-up, pod updates and further scale-down cannot happen at the same time.
+	if utilizedPods < *statefulSet.Spec.Replicas {
+		patchedStatefulSet := statefulSet.DeepCopy()
+		patchedStatefulSet.Spec.Replicas = pointer.Int32(utilizedPods)
+		patchedStatefulSet.Labels[util.UtilizedNodesAnnotation] = strconv.Itoa(int(utilizedPods))
+		delete(patchedStatefulSet.Labels, util.ScalingToNodesAnnotation)
+		if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to scale down SolrCloud", "newUtilizedNodes", utilizedPods)
+		}
+
+		// TODO: Create event for the CRD.
+	}
+
+	return
+}
+
+func EvictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podsAreEmpty bool, err error) {
+	// If there are no pods, we can't empty them. Just return true
+	if len(podList) == 0 {
+		return true, nil
+	}
+
+	for i, pod := range podList {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+			err = e
+			return
+		} else {
+			podList[i] = *updatedPod
+		}
+	}
+
+	// Delete all collections & data, the user wants no data left if scaling the solrcloud down to 0
+	// This is a much different operation to deleting the SolrCloud/StatefulSet all-together
+	// TODO: Implement delete all collections. Currently just leave the data
+	//if err, podsAreEmpty = util.DeleteAllCollectionsIfNecessary(ctx, instance, "scaleDown", logger); err != nil {
+	//	logger.Error(err, "Error while evicting all collections in SolrCloud, when scaling down SolrCloud to 0 pods")
+	//}
+	podsAreEmpty = true
+
+	return
+}
+
+func EvictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, scaleDownTo int, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podIsEmpty bool, err error) {
+	var pod *corev1.Pod
+	podName := instance.GetSolrPodName(scaleDownTo)
+	for _, p := range podList {
+		if p.Name == podName {
+			pod = &p
+			break
+		}
+	}
+
+	// TODO: Get whether the pod has replicas or not
+	podHasReplicas := true
+
+	// The pod doesn't exist, we cannot empty it
+	if pod == nil {
+		return !podHasReplicas, nil
+	}
+
+	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, readinessConditions, logger); e != nil {
+		err = e
+		return
+	} else {
+		pod = updatedPod
+	}
+
+	// Only evict from the pod if it contains replicas in the clusterState
+	if err, podIsEmpty = util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "scaleDown", logger); err != nil {
+		logger.Error(err, "Error while evicting replicas on Pod, when scaling down SolrCloud", "pod", pod.Name)
 	}
 
 	return
