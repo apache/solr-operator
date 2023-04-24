@@ -343,7 +343,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	statefulSet := &appsv1.StatefulSet{}
+	var statefulSet *appsv1.StatefulSet
 
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet that should exist
@@ -386,7 +386,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// Check to see if the StatefulSet needs an update
 			var needsUpdate bool
 			needsUpdate, err = util.OvertakeControllerRef(instance, foundStatefulSet, r.Scheme)
-			needsUpdate = util.CopyStatefulSetFields(statefulSet, foundStatefulSet, statefulSetLogger) || needsUpdate
+			needsUpdate = util.CopyStatefulSetFields(expectedStatefulSet, foundStatefulSet, statefulSetLogger) || needsUpdate
 
 			// Update the found StatefulSet and write the result back if there are any changes
 			if needsUpdate && err == nil {
