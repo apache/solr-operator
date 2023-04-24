@@ -122,13 +122,21 @@ func getEnvWithDefault(envVar string, defaultValue string) string {
 	return value
 }
 
-func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int) {
-	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default)
+func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, nodes ...int) {
+	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default, nodes...)
 }
 
-func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega) {
+func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega, nodes ...int) {
 	pod := solrCloud.GetAllSolrPodNames()[0]
 	asyncId := fmt.Sprintf("create-collection-%s-%d-%d", collection, shards, replicasPerShard)
+	var nodeSet []string
+	for _, node := range nodes {
+		nodeSet = append(nodeSet, util.SolrNodeName(solrCloud, solrCloud.GetSolrPodName(node)))
+	}
+	createNodeSet := ""
+	if len(nodeSet) > 0 {
+		createNodeSet = "&createNodeSet=" + strings.Join(nodeSet, ",")
+	}
 	response, err := runExecForContainer(
 		util.SolrNodeContainer,
 		pod,
@@ -136,11 +144,12 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		[]string{
 			"curl",
 			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d&async=%s",
+				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
 				solrCloud.Spec.SolrAddressability.PodPort,
 				collection,
 				replicasPerShard,
 				shards,
+				createNodeSet,
 				asyncId),
 		},
 	)

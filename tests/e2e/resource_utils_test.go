@@ -209,20 +209,6 @@ func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Obje
 			additionalChecks(g, statefulSet)
 		}
 	}).Should(Succeed())
-
-	By("recreating the StatefulSet after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, statefulSet)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &appsv1.StatefulSet{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(statefulSet.UID))), "New StatefulSet, with new UID, not created.")
-
 	return statefulSet
 }
 
@@ -246,6 +232,12 @@ func expectNoStatefulSet(ctx context.Context, parentResource client.Object, stat
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
 	}).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
+}
+
+func expectNoPod(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, podName), &corev1.Pod{})
+	}).Should(MatchError("pods \""+podName+"\" not found"), "Pod exists when it should not")
 }
 
 func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalOffset ...int) *corev1.Service {

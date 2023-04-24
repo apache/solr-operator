@@ -558,7 +558,6 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 			if asyncState == "completed" || asyncState == "failed" {
 				if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
 					logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
-				} else {
 					canDeletePod = false
 				}
 			}
