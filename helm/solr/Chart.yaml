@@ -15,7 +15,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
-version: 0.7.0
+version: 0.7.1-prerelease
 appVersion: 8.11.1
 kubeVersion: ">= 1.21.0-0"
 home: https://solr.apache.org
@@ -37,25 +37,20 @@ annotations:
   artifacthub.io/alternativeName: "solrcloud"
   artifacthub.io/category: "database"
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: changed
-      description: Minimum Kubernetes version has been upped to 1.21
-      links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/473
     - kind: added
-      description: Support custom annotations on created ServiceAccount
+      description: Addition 1
       links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/480
-    - kind: fixed
-      description: Fix namespace support for helm installation
+        - name: Github Issue
+          url: https://github.com/issue-url
+    - kind: changed
+      description: Change 2
       links:
-        - name: GitHub PR
-          url: https://github.com/apache/solr-operator/pull/508
+        - name: Github PR
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -73,5 +68,5 @@ annotations:
       image: solr:8.11
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
