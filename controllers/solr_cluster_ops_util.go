@@ -95,7 +95,6 @@ func handleLockedClusterOpScale(ctx context.Context, r *SolrCloudReconciler, ins
 			if replicaManagementComplete {
 				patchedStatefulSet := statefulSet.DeepCopy()
 				patchedStatefulSet.Spec.Replicas = pointer.Int32(int32(scalingToNodesInt))
-				patchedStatefulSet.Annotations[util.UtilizedNodesAnnotation] = strconv.Itoa(scalingToNodesInt)
 				delete(patchedStatefulSet.Annotations, util.ClusterOpsLockAnnotation)
 				delete(patchedStatefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
 				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {

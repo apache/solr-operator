@@ -354,6 +354,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		foundStatefulSet := &appsv1.StatefulSet{}
 		err = r.Get(ctx, types.NamespacedName{Name: expectedStatefulSet.Name, Namespace: expectedStatefulSet.Namespace}, foundStatefulSet)
 
+		// TODO: Move this logic down to the cluster ops and save the existing annotation in util.MaintainPreservedStatefulSetFields()
 		// Set the annotation for a scheduled restart, if necessary.
 		if nextRestartAnnotation, reconcileWaitDuration, schedulingErr := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); schedulingErr != nil {
 			logger.Error(schedulingErr, "Cannot parse restartSchedule cron", "cron", instance.Spec.UpdateStrategy.RestartSchedule)
@@ -378,12 +379,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if err = controllerutil.SetControllerReference(instance, expectedStatefulSet, r.Scheme); err == nil {
 				err = r.Create(ctx, expectedStatefulSet)
 			}
-			// Find which labels the PVCs will be using, to use for the finalizer
 			statefulSet = expectedStatefulSet
 		} else if err == nil {
-			// Do not scale the statefulSet replicas here.
-			// Scaling is handled further down.
-			statefulSet.Spec.Replicas = foundStatefulSet.Spec.Replicas
+			util.MaintainPreservedStatefulSetFields(expectedStatefulSet, foundStatefulSet)
 
 			// Check to see if the StatefulSet needs an update
 			var needsUpdate bool
@@ -516,7 +514,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 		}
 
-		var retryLaterDuration time.Duration
 		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
 		for _, pod := range podsToUpdate {
 			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
