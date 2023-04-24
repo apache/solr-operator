@@ -51,10 +51,13 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
+	// Protected StatefulSet annotations
+	// These are to be saved on a statefulSet update
 	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
 	ScaleLock                    = "scaling"
 	UpdateLock                   = "rollingUpdate"
 	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
+	UtilizedNodesAnnotation      = "solr.apache.org/utilizedNodes"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
