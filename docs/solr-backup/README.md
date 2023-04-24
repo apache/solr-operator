@@ -97,6 +97,7 @@ spec:
 ```
 
 This will create a backup of both the 'techproducts' and 'books' collections, storing the data on the 'collection-backup-pvc' volume.
+If you don't specify the collections field, every available SolrCloud collection will be backed up.
 The status of our triggered backup can be checked with the command below.
 
 ```bash

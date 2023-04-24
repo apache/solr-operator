@@ -90,9 +90,9 @@ This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-
 
 ```bash
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.6.0/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.7.0/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.6.0
+$ helm install solr-operator apache-solr/solr-operator --version 0.7.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -123,7 +123,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 
 ```bash
 # Create a 3-node cluster v8.3 with 300m Heap each:
-helm install example-solr apache-solr/solr --version 0.6.0 \
+helm install example-solr apache-solr/solr --version 0.7.0 \
   --set image.tag=8.3 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
@@ -183,7 +183,7 @@ kubectl get solrclouds -w
 The SolrCloud CRD is setup so that it is able to run with the HPA.
 Merely use the following when creating an HPA object:
 ```yaml
-apiVersion: autoscaling/v2beta2
+apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: example-solr
@@ -191,7 +191,7 @@ spec:
   maxReplicas: 6
   minReplicas: 3
   scaleTargetRef:
-    apiVersion: solr.apache.com/v1beta1
+    apiVersion: solr.apache.org/v1beta1
     kind: SolrCloud
     name: example
   metrics:
@@ -211,7 +211,7 @@ So we wish to upgrade to a newer Solr version:
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
-helm upgrade example-solr apache-solr/solr --version 0.6.0 \
+helm upgrade example-solr apache-solr/solr --version 0.7.0 \
   --reuse-values \
   --set image.tag=8.7
 

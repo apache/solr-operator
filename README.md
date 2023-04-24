@@ -83,6 +83,9 @@ Otherwise the GitHub checks are likely to fail.
 
 If you are trying to run tests locally in IntelliJ/GoLand, refer to [the IDEA tests docs](dev-docs/idea-tests.md).
 
+Please refer to the [E2E/Integration Testing guide](dev-docs/e2e-testing.md) for information on how to run full integration tests
+for your changes.
+
 ## License
 
 Please read the [LICENSE](LICENSE) file here.
