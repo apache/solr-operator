@@ -1211,6 +1211,10 @@ func (sc *SolrCloud) GetAllSolrPodNames() []string {
 	return podNames
 }
 
+func (sc *SolrCloud) GetSolrPodName(podNumber int) string {
+	return fmt.Sprintf("%s-%d", sc.StatefulSetName(), podNumber)
+}
+
 func (sc *SolrCloud) BasicAuthSecretName() string {
 	if sc.Spec.SolrSecurity != nil && sc.Spec.SolrSecurity.BasicAuthSecret != "" {
 		return sc.Spec.SolrSecurity.BasicAuthSecret

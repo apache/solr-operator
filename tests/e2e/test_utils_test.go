@@ -27,12 +27,14 @@ import (
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/chart/loader"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/remotecommand"
@@ -47,6 +49,10 @@ const (
 
 	solrOperatorReleaseName      = "solr-operator"
 	solrOperatorReleaseNamespace = "solr-operator"
+
+	sharedZookeeperName             = "shared"
+	sharedZookeeperNamespace        = "zk"
+	sharedZookeeperConnectionString = sharedZookeeperName + "-client." + sharedZookeeperNamespace + ":2181"
 )
 
 var (
@@ -66,9 +72,9 @@ func runSolrOperator(ctx context.Context) *release.Release {
 	Expect(found).To(BeTrue(), "Invalid Operator image found in envVar OPERATOR_IMAGE: "+operatorImage)
 	operatorValues := map[string]interface{}{
 		"image": map[string]interface{}{
-			"repostitory": operatorRepo,
-			"tag":         operatorTag,
-			"pullPolicy":  "Never",
+			"repository": operatorRepo,
+			"tag":        operatorTag,
+			"pullPolicy": "Never",
 		},
 	}
 
@@ -99,6 +105,11 @@ func runSolrOperator(ctx context.Context) *release.Release {
 	Expect(err).ToNot(HaveOccurred(), "Failed to install solr-operator via Helm chart")
 	Expect(solrOperatorHelmRelease).ToNot(BeNil(), "Failed to install solr-operator via Helm chart")
 
+	DeferCleanup(func(ctx context.Context) {
+		By("tearing down the test solr operator")
+		stopSolrOperator(solrOperatorHelmRelease)
+	})
+
 	return solrOperatorHelmRelease
 }
 
@@ -113,7 +124,46 @@ func stopSolrOperator(release *release.Release) {
 	Expect(err).ToNot(HaveOccurred(), "Failed to uninstall solr-operator release: "+release.Name)
 }
 
+// Run a Zookeeper Cluster to be used for most of the SolrClouds across the e2e tests.
+// This will speed up the tests considerably, as each SolrCloud does not need to wait on Zookeeper to become available.
+func runSharedZookeeperCluster(ctx context.Context) *zkApi.ZookeeperCluster {
+	createOrRecreateNamespace(ctx, sharedZookeeperNamespace)
+
+	zookeeper := &zkApi.ZookeeperCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sharedZookeeperName,
+			Namespace: sharedZookeeperNamespace,
+		},
+		Spec: zkApi.ZookeeperClusterSpec{
+			Replicas:    one,
+			StorageType: "Ephemeral",
+		},
+	}
+
+	By("creating the shared ZK cluster")
+	Expect(k8sClient.Create(ctx, zookeeper)).To(Succeed(), "Failed to create shared Zookeeper Cluster")
+
+	By("Waiting for the Zookeeper to come up healthy")
+	zookeeper = expectZookeeperClusterWithChecks(ctx, zookeeper, zookeeper.Name, func(g Gomega, found *zkApi.ZookeeperCluster) {
+		g.Expect(found.Status.ReadyReplicas).To(Equal(found.Spec.Replicas), "The ZookeeperCluster should have all nodes come up healthy")
+	})
+
+	DeferCleanup(func(ctx context.Context) {
+		By("tearing down the shared Zookeeper Cluster")
+		stopSharedZookeeperCluster(ctx, zookeeper)
+	})
+
+	return zookeeper
+}
+
 // Run Solr Operator for e2e testing of resources
+func stopSharedZookeeperCluster(ctx context.Context, sharedZk *zkApi.ZookeeperCluster) {
+	err := k8sClient.Get(ctx, client.ObjectKey{Namespace: sharedZk.Namespace, Name: sharedZk.Name}, sharedZk)
+	if err == nil {
+		Expect(k8sClient.Delete(ctx, sharedZk)).To(Succeed(), "Failed to delete shared Zookeeper Cluster")
+	}
+}
+
 func getEnvWithDefault(envVar string, defaultValue string) string {
 	value := os.Getenv(envVar)
 	if value == "" {
@@ -122,13 +172,42 @@ func getEnvWithDefault(envVar string, defaultValue string) string {
 	return value
 }
 
-func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int) {
-	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default)
+// Delete the given namespace if it already exists, then create/recreate it
+func createOrRecreateNamespace(ctx context.Context, namespaceName string) {
+	namespace := &corev1.Namespace{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: namespaceName}, namespace)
+	if err == nil {
+		By("deleting the existing namespace " + namespaceName)
+		deleteAndWait(ctx, namespace)
+	}
+
+	namespace = &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}
+	Expect(k8sClient.Create(ctx, namespace)).To(Succeed(), "Failed to create namespace %s", namespaceName)
+
+	DeferCleanup(func(ctx context.Context) {
+		By("tearing down the testingNamespace " + namespaceName)
+		Expect(k8sClient.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespaceName}}, client.PropagationPolicy(metav1.DeletePropagationForeground))).
+			To(Or(Succeed(), MatchError(HaveSuffix("%q not found", namespaceName))), "Failed to delete testing namespace %s", namespaceName)
+	})
 }
 
-func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega) {
+func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, nodes ...int) {
+	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default, nodes...)
+}
+
+func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega, nodes ...int) {
 	pod := solrCloud.GetAllSolrPodNames()[0]
 	asyncId := fmt.Sprintf("create-collection-%s-%d-%d", collection, shards, replicasPerShard)
+
+	var nodeSet []string
+	for _, node := range nodes {
+		nodeSet = append(nodeSet, util.SolrNodeName(solrCloud, solrCloud.GetSolrPodName(node)))
+	}
+	createNodeSet := ""
+	if len(nodeSet) > 0 {
+		createNodeSet = "&createNodeSet=" + strings.Join(nodeSet, ",")
+	}
+
 	response, err := runExecForContainer(
 		util.SolrNodeContainer,
 		pod,
@@ -136,11 +215,12 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		[]string{
 			"curl",
 			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d&async=%s",
+				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
 				solrCloud.Spec.SolrAddressability.PodPort,
 				collection,
 				replicasPerShard,
 				shards,
+				createNodeSet,
 				asyncId),
 		},
 	)

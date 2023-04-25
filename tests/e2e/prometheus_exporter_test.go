@@ -25,6 +25,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"strings"
 )
 
@@ -59,9 +60,9 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 					PullPolicy: corev1.PullIfNotPresent,
 				},
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas:  &one,
-						Ephemeral: &solrv1beta1.ZKEphemeral{},
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: sharedZookeeperConnectionString,
+						ChRoot:                   "/" + rand.String(5),
 					},
 				},
 				SolrJavaMem: "-Xms512m -Xmx512m",
@@ -80,6 +81,10 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		DeferCleanup(func(ctx context.Context) {
+			cleanupTest(ctx, solrCloud)
+		})
 
 		By("waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
@@ -104,6 +109,10 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		By("creating a SolrPrometheusExporter")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
 
+		DeferCleanup(func(ctx context.Context) {
+			deleteAndWait(ctx, solrPrometheusExporter)
+		})
+
 		By("waiting for the SolrPrometheusExporter to come up healthy")
 		solrPrometheusExporter = expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
 			g.Expect(found.Status.Ready).To(BeTrue(), "The SolrPrometheusExporter should come up healthy")
@@ -111,14 +120,6 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 
 		By("checking that some base metrics are correct")
 		checkMetrics(ctx, solrPrometheusExporter, solrCloud, solrCollection)
-	})
-
-	AfterEach(func(ctx context.Context) {
-		deleteAndWait(ctx, solrPrometheusExporter)
-	})
-
-	AfterAll(func(ctx context.Context) {
-		cleanupTest(ctx, solrCloud)
 	})
 
 	FContext("Default - Solr Reference", func() {

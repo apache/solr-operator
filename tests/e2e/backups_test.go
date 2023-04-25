@@ -60,9 +60,9 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 					PullPolicy: corev1.PullIfNotPresent,
 				},
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas:  &one,
-						Ephemeral: &solrv1beta1.ZKEphemeral{},
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: sharedZookeeperConnectionString,
+						ChRoot:                   "/" + rand.String(5),
 					},
 				},
 				SolrJavaMem: "-Xms512m -Xmx512m",
@@ -93,6 +93,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		DeferCleanup(func(ctx context.Context) {
+			cleanupTest(ctx, solrCloud)
+		})
 
 		By("Waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
@@ -127,14 +131,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 
 		By("creating a SolrBackup")
 		Expect(k8sClient.Create(ctx, solrBackup)).To(Succeed())
-	})
 
-	AfterAll(func(ctx context.Context) {
-		cleanupTest(ctx, solrCloud)
-	})
-
-	AfterEach(func(ctx context.Context) {
-		deleteAndWait(ctx, solrBackup)
+		DeferCleanup(func(ctx context.Context) {
+			deleteAndWait(ctx, solrBackup)
+		})
 	})
 
 	FContext("Local Directory - Recurring", func() {

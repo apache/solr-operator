@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 )
@@ -53,9 +54,9 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 					PullPolicy: corev1.PullIfNotPresent,
 				},
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas:  &one,
-						Ephemeral: &solrv1beta1.ZKEphemeral{},
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: sharedZookeeperConnectionString,
+						ChRoot:                   "/" + rand.String(5),
 					},
 				},
 				SolrJavaMem: "-Xms512m -Xmx512m",
@@ -77,6 +78,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
+		DeferCleanup(func(ctx context.Context) {
+			cleanupTest(ctx, solrCloud)
+		})
+
 		By("Waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
@@ -87,10 +92,6 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 
 		By("creating a second Solr Collection")
 		createAndQueryCollection(solrCloud, solrCollection2, 2, 1)
-	})
-
-	AfterEach(func(ctx context.Context) {
-		cleanupTest(ctx, solrCloud)
 	})
 
 	FContext("Managed Update - Ephemeral Data - Slow", func() {
