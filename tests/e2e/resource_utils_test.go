@@ -177,6 +177,35 @@ func expectSolrBackupWithConsistentChecks(ctx context.Context, solrBackup *solrv
 	return foundSolrBackup
 }
 
+func expectZookeeperCluster(ctx context.Context, parentResource client.Object, zkName string, additionalOffset ...int) *zkApi.ZookeeperCluster {
+	return expectZookeeperClusterWithChecks(ctx, parentResource, zkName, nil, resolveOffset(additionalOffset))
+}
+
+func expectZookeeperClusterWithChecks(ctx context.Context, parentResource client.Object, zkName string, additionalChecks func(Gomega, *zkApi.ZookeeperCluster), additionalOffset ...int) *zkApi.ZookeeperCluster {
+	found := &zkApi.ZookeeperCluster{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), found)).To(Succeed(), "Expected ZookeeperCluster does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, found)
+		}
+	}).Should(Succeed())
+
+	return found
+}
+
+func expectZookeeperClusterWithConsistentChecks(ctx context.Context, parentResource client.Object, zkName string, additionalChecks func(Gomega, *zkApi.ZookeeperCluster), additionalOffset ...int) *zkApi.ZookeeperCluster {
+	found := &zkApi.ZookeeperCluster{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, zkName), found)).To(Succeed(), "Expected ZookeeperCluster does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, found)
+		}
+	}).Should(Succeed())
+
+	return found
+}
+
 func expectSecret(ctx context.Context, parentResource client.Object, secretName string, additionalOffset ...int) *corev1.Secret {
 	return expectSecretWithChecks(ctx, parentResource, secretName, nil, resolveOffset(additionalOffset))
 }

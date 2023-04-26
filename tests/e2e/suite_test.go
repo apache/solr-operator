@@ -25,9 +25,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
-	"helm.sh/helm/v3/pkg/release"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -49,14 +46,18 @@ const (
 	solrImageEnv     = "SOLR_IMAGE"
 
 	backupDirHostPath = "/tmp/backup"
+
+	// Shared testing specs
+	timeout  = time.Second * 180
+	duration = time.Millisecond * 500
+	interval = time.Millisecond * 250
 )
 
 var (
-	solrOperatorRelease *release.Release
-	k8sClient           client.Client
-	rawK8sClient        *kubernetes.Clientset
-	k8sConfig           *rest.Config
-	logger              logr.Logger
+	k8sClient    client.Client
+	rawK8sClient *kubernetes.Clientset
+	k8sConfig    *rest.Config
+	logger       logr.Logger
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
 	defaultSolrImage     = "solr:8.11"
@@ -73,20 +74,34 @@ func TestE2E(t *testing.T) {
 }
 
 var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
+	// Define testing timeouts/durations and intervals.
+	SetDefaultEventuallyTimeout(timeout)
+	SetDefaultEventuallyPollingInterval(interval)
+
+	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
+	logf.SetLogger(logger)
+
 	// Run this once before all tests, not per-test-process
 	By("starting the test solr operator")
-	solrOperatorRelease = runSolrOperator(ctx)
+	solrOperatorRelease := runSolrOperator(ctx)
 	Expect(solrOperatorRelease).ToNot(BeNil())
+
+	var err error
+	k8sConfig, err = config.GetConfig()
+	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
+	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
+
+	// Set up a shared Zookeeper Cluster to be used for most SolrClouds
+	// This will significantly speed up tests
+	By("starting a shared zookeeper cluster")
+	runSharedZookeeperCluster(ctx)
 }, func(ctx context.Context) {
 	// Run these in each parallel test process before the tests
 	rand.Seed(GinkgoRandomSeed() + int64(GinkgoParallelProcess()))
 
 	// Define testing timeouts/durations and intervals.
-	const (
-		timeout  = time.Second * 180
-		duration = time.Millisecond * 500
-		interval = time.Millisecond * 250
-	)
 	SetDefaultConsistentlyDuration(duration)
 	SetDefaultConsistentlyPollingInterval(interval)
 	SetDefaultEventuallyTimeout(timeout)
@@ -109,30 +124,8 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
-	// Delete the testing namespace if it already exists, then recreate it below
-	namespace := &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}}
-	err = k8sClient.Get(ctx, client.ObjectKey{Name: testNamespace()}, namespace)
-	if err == nil {
-		By("deleting the existing namespace for this parallel test process before recreating it")
-		deleteAndWait(ctx, namespace)
-	}
-
 	By("creating a namespace for this parallel test process")
-	Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}})).
-		To(Succeed(), "Failed to create testing namespace %s", testNamespace())
-})
-
-var _ = SynchronizedAfterSuite(func(ctx context.Context) {
-	// Run these in each parallel test process after the tests
-	By("deleting the namespace for this parallel test process")
-	Expect(k8sClient.Delete(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: testNamespace()}}, client.PropagationPolicy(metav1.DeletePropagationForeground))).
-		To(Or(Succeed(), MatchError(HaveSuffix("%q not found", testNamespace()))), "Failed to delete testing namespace %s", testNamespace())
-}, func() {
-	// Run this once after all tests, not per-test-process
-	if solrOperatorRelease != nil {
-		By("tearing down the test solr operator")
-		stopSolrOperator(solrOperatorRelease)
-	}
+	createOrRecreateNamespace(ctx, testNamespace())
 })
 
 type RetryCommand struct {

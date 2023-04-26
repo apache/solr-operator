@@ -22,10 +22,7 @@ import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 /*
@@ -46,40 +43,14 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
 	*/
 	BeforeAll(func(ctx context.Context) {
-		solrCloud = &solrv1beta1.SolrCloud{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: testNamespace(),
-			},
-			Spec: solrv1beta1.SolrCloudSpec{
-				Replicas: &two,
-				SolrImage: &solrv1beta1.ContainerImage{
-					Repository: strings.Split(solrImage, ":")[0],
-					Tag:        strings.Split(solrImage+":", ":")[1],
-					PullPolicy: corev1.PullIfNotPresent,
-				},
-				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas:  &one,
-						Ephemeral: &solrv1beta1.ZKEphemeral{},
-					},
-				},
-				SolrJavaMem: "-Xms512m -Xmx512m",
-				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
-					PodOptions: &solrv1beta1.PodOptions{
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("600Mi"),
-								corev1.ResourceCPU:    resource.MustParse("1"),
-							},
-						},
-					},
-				},
-			},
-		}
+		solrCloud = generateBaseSolrCloud(2)
 
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+		DeferCleanup(func(ctx context.Context) {
+			cleanupTest(ctx, solrCloud)
+		})
 
 		By("waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
@@ -104,6 +75,10 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		By("creating a SolrPrometheusExporter")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
 
+		DeferCleanup(func(ctx context.Context) {
+			deleteAndWait(ctx, solrPrometheusExporter)
+		})
+
 		By("waiting for the SolrPrometheusExporter to come up healthy")
 		solrPrometheusExporter = expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
 			g.Expect(found.Status.Ready).To(BeTrue(), "The SolrPrometheusExporter should come up healthy")
@@ -111,14 +86,6 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 
 		By("checking that some base metrics are correct")
 		checkMetrics(ctx, solrPrometheusExporter, solrCloud, solrCollection)
-	})
-
-	AfterEach(func(ctx context.Context) {
-		deleteAndWait(ctx, solrPrometheusExporter)
-	})
-
-	AfterAll(func(ctx context.Context) {
-		cleanupTest(ctx, solrCloud)
 	})
 
 	FContext("Default - Solr Reference", func() {
