@@ -24,11 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 var _ = FDescribe("E2E - SolrCloud - Scaling", func() {
@@ -39,37 +35,7 @@ var _ = FDescribe("E2E - SolrCloud - Scaling", func() {
 	)
 
 	BeforeEach(func() {
-		solrCloud = &solrv1beta1.SolrCloud{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "foo",
-				Namespace: testNamespace(),
-			},
-			Spec: solrv1beta1.SolrCloudSpec{
-				Replicas: &two,
-				SolrImage: &solrv1beta1.ContainerImage{
-					Repository: strings.Split(solrImage, ":")[0],
-					Tag:        strings.Split(solrImage+":", ":")[1],
-					PullPolicy: corev1.PullIfNotPresent,
-				},
-				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
-						Replicas:  &one,
-						Ephemeral: &solrv1beta1.ZKEphemeral{},
-					},
-				},
-				SolrJavaMem: "-Xms512m -Xmx512m",
-				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
-					PodOptions: &solrv1beta1.PodOptions{
-						Resources: corev1.ResourceRequirements{
-							Requests: corev1.ResourceList{
-								corev1.ResourceMemory: resource.MustParse("600Mi"),
-								corev1.ResourceCPU:    resource.MustParse("1"),
-							},
-						},
-					},
-				},
-			},
-		}
+		solrCloud = generateBaseSolrCloud(2)
 	})
 
 	JustBeforeEach(func(ctx context.Context) {

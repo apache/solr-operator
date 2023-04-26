@@ -211,27 +211,29 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		createNodeSet = "&createNodeSet=" + strings.Join(nodeSet, ",")
 	}
 
-	response, err := runExecForContainer(
-		util.SolrNodeContainer,
-		pod,
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
-				solrCloud.Spec.SolrAddressability.PodPort,
-				collection,
-				replicasPerShard,
-				shards,
-				createNodeSet,
-				asyncId),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while creating Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
+	g.Eventually(func(innerG Gomega) {
+		response, err := runExecForContainer(
+			util.SolrNodeContainer,
+			pod,
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf(
+					"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
+					solrCloud.Spec.SolrAddressability.PodPort,
+					collection,
+					replicasPerShard,
+					shards,
+					createNodeSet,
+					asyncId),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while creating Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
+	}).Should(Succeed(), "Collection creation was not successful")
 
 	g.Eventually(func(innerG Gomega) {
-		response, err = runExecForContainer(
+		response, err := runExecForContainer(
 			util.SolrNodeContainer,
 			pod,
 			solrCloud.Namespace,
@@ -246,7 +248,7 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while checking if Solr Collection has been created")
 		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
-		if strings.Contains(response, "\"state\":\"failed\"") {
+		if strings.Contains(response, "\"state\":\"failed\"") || strings.Contains(response, "\"state\":\"notfound\"") {
 			StopTrying("A failure occurred while creating the Solr Collection").
 				Attach("Collection", collection).
 				Attach("Shards", shards).
@@ -256,20 +258,22 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		}
 	}).Should(Succeed(), "Collection creation was not successful")
 
-	response, err = runExecForContainer(
-		util.SolrNodeContainer,
-		pod,
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=DELETESTATUS&requestid=%s",
-				solrCloud.Spec.SolrAddressability.PodPort,
-				asyncId),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
-	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+	g.Eventually(func(innerG Gomega) {
+		response, err := runExecForContainer(
+			util.SolrNodeContainer,
+			pod,
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf(
+					"http://localhost:%d/solr/admin/collections?action=DELETESTATUS&requestid=%s",
+					solrCloud.Spec.SolrAddressability.PodPort,
+					asyncId),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+	}).Should(Succeed(), "Could not delete aysncId after collection creation")
 
 	queryCollectionWithGomega(solrCloud, collection, 0, g)
 }
