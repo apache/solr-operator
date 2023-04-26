@@ -34,10 +34,13 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/utils/pointer"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
@@ -422,4 +425,41 @@ func runExecForContainer(container string, podName string, namespace string, com
 	}
 
 	return stdout.String(), err
+}
+
+func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
+	return &solrv1beta1.SolrCloud{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "foo",
+			Namespace: testNamespace(),
+		},
+		Spec: solrv1beta1.SolrCloudSpec{
+			Replicas: pointer.Int32(int32(replicas)),
+			// Set the image to reflect the inputs given via EnvVars.
+			SolrImage: &solrv1beta1.ContainerImage{
+				Repository: strings.Split(solrImage, ":")[0],
+				Tag:        strings.Split(solrImage+":", ":")[1],
+				PullPolicy: corev1.PullIfNotPresent,
+			},
+			// Use the shared Zookeeper by default, with a unique chRoot for this test
+			ZookeeperRef: &solrv1beta1.ZookeeperRef{
+				ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+					InternalConnectionString: sharedZookeeperConnectionString,
+					ChRoot:                   "/" + rand.String(5),
+				},
+			},
+			// This seems to be the lowest memory & CPU that allow the tests to pass
+			SolrJavaMem: "-Xms512m -Xmx512m",
+			CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
+				PodOptions: &solrv1beta1.PodOptions{
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{
+							corev1.ResourceMemory: resource.MustParse("600Mi"),
+							corev1.ResourceCPU:    resource.MustParse("1"),
+						},
+					},
+				},
+			},
+		},
+	}
 }
