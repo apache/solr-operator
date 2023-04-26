@@ -39,12 +39,14 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 		// Start a scaling operation
 		if desiredPods < configuredPods {
 			// Scale down!
-			// TODO: Check if replicasScaleDown is enabled, if not it's not a clusterOp, just do the patch
-			if desiredPods > 0 {
-				// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
-				scaleTo = configuredPods - 1
-			} else if desiredPods == 0 {
-				scaleTo = 0
+			// The option is enabled by default, so treat "nil" like "true"
+			if instance.Spec.Autoscaling.VacatePodsOnScaleDown == nil || *instance.Spec.Autoscaling.VacatePodsOnScaleDown {
+				if desiredPods > 0 {
+					// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
+					scaleTo = configuredPods - 1
+				} else {
+					scaleTo = 0
+				}
 			} else {
 				// The cloud is not setup to use managed scale-down
 				err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)

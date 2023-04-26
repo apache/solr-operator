@@ -95,6 +95,10 @@ type SolrCloudSpec struct {
 	// +optional
 	Availability SolrAvailabilityOptions `json:"availability,omitempty"`
 
+	// Define how Solr nodes should be autoscaled.
+	// +optional
+	Autoscaling SolrAutoscalingOptions `json:"autoscaling,omitempty"`
+
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 
@@ -720,6 +724,13 @@ const (
 	// This will not take replica/shard readiness into account.
 	ClusterWidePDB SolrPodDisruptionBudgetMethod = "ClusterWide"
 )
+
+type SolrAutoscalingOptions struct {
+	// VacatePodsOnScaleDown determines whether Solr replicas are moved off of a Pod before the Pod is
+	// deleted due to the SolrCloud scaling down.
+	// +kubebuilder:default=true
+	VacatePodsOnScaleDown *bool `json:"vacatePodsOnScaleDown,omitempty"`
+}
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
