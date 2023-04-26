@@ -275,14 +275,14 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
 	}).Should(Succeed(), "Could not delete aysncId after collection creation")
 
-	queryCollectionWithGomega(solrCloud, collection, 0, g)
+	queryCollectionWithGomega(solrCloud, collection, 0, g, 1)
 }
 
-func queryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int) {
-	queryCollectionWithGomega(solrCloud, collection, docCount, Default)
+func queryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	queryCollectionWithGomega(solrCloud, collection, docCount, Default, resolveOffset(additionalOffset))
 }
 
-func queryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega) {
+func queryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
 	pod := solrCloud.GetAllSolrPodNames()[0]
 	response, err := runExecForContainer(
 		util.SolrNodeContainer,
@@ -293,8 +293,23 @@ func queryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection stri
 			fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
 		},
 	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
+	g.ExpectWithOffset(resolveOffset(additionalOffset), err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+	g.ExpectWithOffset(resolveOffset(additionalOffset), response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
+}
+
+func queryCollectionWithNoReplicaAvailable(solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) {
+	pod := solrCloud.GetAllSolrPodNames()[0]
+	response, err := runExecForContainer(
+		util.SolrNodeContainer,
+		pod,
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
+		},
+	)
+	ExpectWithOffset(resolveOffset(additionalOffset), err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+	ExpectWithOffset(resolveOffset(additionalOffset), response).To(ContainSubstring("Error trying to proxy request for url"), "Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
 }
 
 func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {
@@ -320,11 +335,11 @@ func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv
 	return podName
 }
 
-func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string) string {
-	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default)
+func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) string {
+	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default, resolveOffset(additionalOffset))
 }
 
-func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) (response string) {
+func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega, additionalOffset ...int) (response string) {
 	g.Eventually(func(innerG Gomega) {
 		var err error
 		response, err = runExecForContainer(
@@ -346,7 +361,7 @@ func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1b
 			MatchRegexp("solr_metrics_core_query_[^{]+\\{category=\"QUERY\",searchHandler=\"/select\",[^}]*collection=\"%s\",[^}]*shard=\"shard1\",[^}]*\\} [0-9]+.0", collection),
 			"Could not find query metrics in the PrometheusExporter response",
 		)
-	}).WithContext(ctx).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
+	}).WithContext(ctx).WithOffset(resolveOffset(additionalOffset)).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
 
 	return response
 }

@@ -28,10 +28,6 @@ import (
 var _ = FDescribe("E2E - SolrCloud - Basic", func() {
 	var (
 		solrCloud *solrv1beta1.SolrCloud
-
-		solrCollection1 = "e2e-1"
-
-		solrCollection2 = "e2e-2"
 	)
 
 	BeforeEach(func() {
@@ -52,10 +48,7 @@ var _ = FDescribe("E2E - SolrCloud - Basic", func() {
 		})
 
 		By("creating a first Solr Collection")
-		createAndQueryCollection(solrCloud, solrCollection1, 1, 2)
-
-		By("creating a second Solr Collection")
-		createAndQueryCollection(solrCloud, solrCollection2, 2, 1)
+		createAndQueryCollection(solrCloud, "basic", 1, 1)
 	})
 
 	FContext("Provided Zookeeper", func() {

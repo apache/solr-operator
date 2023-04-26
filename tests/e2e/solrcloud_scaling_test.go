@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -70,13 +71,39 @@ var _ = FDescribe("E2E - SolrCloud - Scaling", func() {
 			})
 			queryCollection(solrCloud, solrCollection1, 0)
 			By("waiting for the scaleDown to finish")
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, statefulSet *appsv1.StatefulSet) {
+			statefulSet := expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, statefulSet *appsv1.StatefulSet) {
 				g.Expect(statefulSet.Spec.Replicas).To(HaveValue(BeEquivalentTo(1)), "StatefulSet should now have 2 pods, after the replicas have been moved.")
+			})
+			// Once the scale down actually occurs, the statefulSet annotations should already be removed
+			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock after scaling is complete.")
+			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have scaling lock metadata after scaling is complete.")
+
+			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
+			queryCollection(solrCloud, solrCollection1, 0)
+		})
+	})
+
+	FContext("Scale Down without replica migration", func() {
+
+		BeforeEach(func() {
+			solrCloud.Spec.Autoscaling.VacatePodsOnScaleDown = pointer.Bool(false)
+		})
+
+		FIt("Scales Down", func(ctx context.Context) {
+			originalSolrCloud := solrCloud.DeepCopy()
+			solrCloud.Spec.Replicas = &one
+			By("triggering a scale down via solrCloud replicas")
+			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to initiate scale down")
+
+			By("make sure scaleDown happens without a clusterLock and eventually the replicas are removed")
+			statefulSet := expectStatefulSetWithConsistentChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, statefulSet *appsv1.StatefulSet) {
 				g.Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock after scaling is complete.")
 				g.Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have scaling lock metadata after scaling is complete.")
 			})
+			Expect(statefulSet.Spec.Replicas).To(HaveValue(BeEquivalentTo(1)), "StatefulSet should now have 2 pods, after the replicas have been moved.")
+
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
-			queryCollection(solrCloud, solrCollection1, 0)
+			queryCollectionWithNoReplicaAvailable(solrCloud, solrCollection1)
 		})
 	})
 })
