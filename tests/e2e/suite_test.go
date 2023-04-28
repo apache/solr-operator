@@ -81,11 +81,6 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
 	logf.SetLogger(logger)
 
-	// Run this once before all tests, not per-test-process
-	By("starting the test solr operator")
-	solrOperatorRelease := runSolrOperator(ctx)
-	Expect(solrOperatorRelease).ToNot(BeNil())
-
 	var err error
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
@@ -94,9 +89,19 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
 	// Set up a shared Zookeeper Cluster to be used for most SolrClouds
-	// This will significantly speed up tests
-	By("starting a shared zookeeper cluster")
-	runSharedZookeeperCluster(ctx)
+	// This will significantly speed up tests.
+	// The zookeeper will not be healthy until after the zookeeper operator is released with the solr operator
+	By("creating a shared zookeeper cluster")
+	zookeeper := runSharedZookeeperCluster(ctx)
+
+	// Run this once before all tests, not per-test-process
+	By("starting the test solr operator")
+	solrOperatorRelease := runSolrOperator(ctx)
+	Expect(solrOperatorRelease).ToNot(BeNil())
+
+	By("Waiting for the Zookeeper to come up healthy")
+	// This check must be done after the solr operator is installed
+	waitForSharedZookeeperCluster(ctx, zookeeper)
 }, func(ctx context.Context) {
 	// Run these in each parallel test process before the tests
 	rand.Seed(GinkgoRandomSeed() + int64(GinkgoParallelProcess()))
