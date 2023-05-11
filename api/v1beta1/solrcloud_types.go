@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	"math/rand"
 	"strconv"
 	"strings"
 
@@ -1209,6 +1210,14 @@ func (sc *SolrCloud) GetAllSolrPodNames() []string {
 		podNames[i] = fmt.Sprintf("%s-%d", statefulSetName, i)
 	}
 	return podNames
+}
+
+func (sc *SolrCloud) GetRandomSolrPodName() string {
+	replicas := 1
+	if sc.Spec.Replicas != nil {
+		replicas = int(*sc.Spec.Replicas)
+	}
+	return sc.GetSolrPodName(rand.Intn(replicas))
 }
 
 func (sc *SolrCloud) GetSolrPodName(podNumber int) string {

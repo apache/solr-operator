@@ -143,26 +143,35 @@ func runSharedZookeeperCluster(ctx context.Context) *zkApi.ZookeeperCluster {
 		},
 	}
 
-	By("creating the shared ZK cluster")
 	Expect(k8sClient.Create(ctx, zookeeper)).To(Succeed(), "Failed to create shared Zookeeper Cluster")
 
-	By("Waiting for the Zookeeper to come up healthy")
-	zookeeper = expectZookeeperClusterWithChecks(ctx, zookeeper, zookeeper.Name, func(g Gomega, found *zkApi.ZookeeperCluster) {
-		g.Expect(found.Status.ReadyReplicas).To(Equal(found.Spec.Replicas), "The ZookeeperCluster should have all nodes come up healthy")
-	})
-
 	DeferCleanup(func(ctx context.Context) {
-		By("tearing down the shared Zookeeper Cluster")
 		stopSharedZookeeperCluster(ctx, zookeeper)
 	})
 
 	return zookeeper
 }
 
-// Run Solr Operator for e2e testing of resources
+// Check if the sharedZookeeper Cluster is running
+func waitForSharedZookeeperCluster(ctx context.Context, sharedZk *zkApi.ZookeeperCluster) *zkApi.ZookeeperCluster {
+	sharedZk = expectZookeeperClusterWithChecks(ctx, sharedZk, sharedZk.Name, func(g Gomega, found *zkApi.ZookeeperCluster) {
+		g.Expect(found.Status.ReadyReplicas).To(Equal(found.Spec.Replicas), "The ZookeeperCluster should have all nodes come up healthy")
+	}, 1)
+
+	// Cleanup here, because we want to delete the zk before deleting the Zookeeper Operator.
+	// DeferCleanup() is a stack, so this cleanup needs to be called after the solr operator DeferCleanup().
+	DeferCleanup(func(ctx context.Context) {
+		stopSharedZookeeperCluster(ctx, sharedZk)
+	})
+
+	return sharedZk
+}
+
+// Stop the sharedZookeeperCluster
 func stopSharedZookeeperCluster(ctx context.Context, sharedZk *zkApi.ZookeeperCluster) {
 	err := k8sClient.Get(ctx, client.ObjectKey{Namespace: sharedZk.Namespace, Name: sharedZk.Name}, sharedZk)
 	if err == nil {
+		By("tearing down the shared Zookeeper Cluster")
 		Expect(k8sClient.Delete(ctx, sharedZk)).To(Succeed(), "Failed to delete shared Zookeeper Cluster")
 	}
 }
@@ -194,12 +203,11 @@ func createOrRecreateNamespace(ctx context.Context, namespaceName string) {
 	})
 }
 
-func createAndQueryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, nodes ...int) {
-	createAndQueryCollectionWithGomega(solrCloud, collection, shards, replicasPerShard, Default, nodes...)
+func createAndQueryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, nodes ...int) {
+	createAndQueryCollectionWithGomega(ctx, solrCloud, collection, shards, replicasPerShard, Default, 1, nodes...)
 }
 
-func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega, nodes ...int) {
-	pod := solrCloud.GetAllSolrPodNames()[0]
+func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, shards int, replicasPerShard int, g Gomega, additionalOffset int, nodes ...int) {
 	asyncId := fmt.Sprintf("create-collection-%s-%d-%d", collection, shards, replicasPerShard)
 
 	var nodeSet []string
@@ -211,29 +219,35 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 		createNodeSet = "&createNodeSet=" + strings.Join(nodeSet, ",")
 	}
 
-	response, err := runExecForContainer(
-		util.SolrNodeContainer,
-		pod,
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
-				solrCloud.Spec.SolrAddressability.PodPort,
-				collection,
-				replicasPerShard,
-				shards,
-				createNodeSet,
-				asyncId),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while creating Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
-
-	g.Eventually(func(innerG Gomega) {
-		response, err = runExecForContainer(
+	additionalOffset += 1
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+		response, err := runExecForContainer(
+			ctx,
 			util.SolrNodeContainer,
-			pod,
+			solrCloud.GetRandomSolrPodName(),
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf(
+					"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
+					solrCloud.Spec.SolrAddressability.PodPort,
+					collection,
+					replicasPerShard,
+					shards,
+					createNodeSet,
+					asyncId),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while starting async command to create Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while starting async command to create Solr Collection")
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
+	// Only wait 5 seconds when trying to create the asyncCommand
+
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+		response, err := runExecForContainer(
+			ctx,
+			util.SolrNodeContainer,
+			solrCloud.GetRandomSolrPodName(),
 			solrCloud.Namespace,
 			[]string{
 				"curl",
@@ -243,10 +257,8 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 					asyncId),
 			},
 		)
-		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while checking if Solr Collection has been created")
-		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while creating Solr Collection")
-		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
-		if strings.Contains(response, "\"state\":\"failed\"") {
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while checking if Solr Collection creation command was successful")
+		if strings.Contains(response, "\"state\":\"failed\"") || strings.Contains(response, "\"state\":\"notfound\"") {
 			StopTrying("A failure occurred while creating the Solr Collection").
 				Attach("Collection", collection).
 				Attach("Shards", shards).
@@ -254,43 +266,69 @@ func createAndQueryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collec
 				Attach("Response", response).
 				Now()
 		}
-	}).Should(Succeed(), "Collection creation was not successful")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "A failure occurred while creating the Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
+	}).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
 
-	response, err = runExecForContainer(
-		util.SolrNodeContainer,
-		pod,
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf(
-				"http://localhost:%d/solr/admin/collections?action=DELETESTATUS&requestid=%s",
-				solrCloud.Spec.SolrAddressability.PodPort,
-				asyncId),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
-	g.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+		response, err := runExecForContainer(
+			ctx,
+			util.SolrNodeContainer,
+			solrCloud.GetRandomSolrPodName(),
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf(
+					"http://localhost:%d/solr/admin/collections?action=DELETESTATUS&requestid=%s",
+					solrCloud.Spec.SolrAddressability.PodPort,
+					asyncId),
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not delete aysncId after collection creation")
+	// Only wait 5 seconds when trying to delete the async requestId
 
-	queryCollectionWithGomega(solrCloud, collection, 0, g)
+	queryCollectionWithGomega(ctx, solrCloud, collection, 0, g, additionalOffset)
 }
 
-func queryCollection(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int) {
-	queryCollectionWithGomega(solrCloud, collection, docCount, Default)
+func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	queryCollectionWithGomega(ctx, solrCloud, collection, docCount, Default, resolveOffset(additionalOffset))
 }
 
-func queryCollectionWithGomega(solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega) {
-	pod := solrCloud.GetAllSolrPodNames()[0]
-	response, err := runExecForContainer(
-		util.SolrNodeContainer,
-		pod,
-		solrCloud.Namespace,
-		[]string{
-			"curl",
-			fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
-		},
-	)
-	g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
-	g.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
+func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+		response, err := runExecForContainer(
+			ctx,
+			util.SolrNodeContainer,
+			solrCloud.GetRandomSolrPodName(),
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf("http://localhost:%d/solr/%s/select?rows=0", solrCloud.Spec.SolrAddressability.PodPort, collection),
+			},
+		)
+		g.ExpectWithOffset(resolveOffset(additionalOffset), err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+		g.ExpectWithOffset(resolveOffset(additionalOffset), response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection")
+	// Only wait 5 seconds for the collection to be query-able
+}
+
+func queryCollectionWithNoReplicaAvailable(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		response, err := runExecForContainer(
+			ctx,
+			util.SolrNodeContainer,
+			solrCloud.GetRandomSolrPodName(),
+			solrCloud.Namespace,
+			[]string{
+				"curl",
+				fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
+			},
+		)
+		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+		g.Expect(response).To(ContainSubstring("Error trying to proxy request for url"), "Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection")
 }
 
 func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {
@@ -316,14 +354,15 @@ func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv
 	return podName
 }
 
-func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string) string {
-	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default)
+func checkMetrics(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) string {
+	return checkMetricsWithGomega(ctx, solrPrometheusExporter, solrCloud, collection, Default, resolveOffset(additionalOffset))
 }
 
-func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega) (response string) {
+func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega, additionalOffset ...int) (response string) {
 	g.Eventually(func(innerG Gomega) {
 		var err error
 		response, err = runExecForContainer(
+			ctx,
 			util.SolrPrometheusExporterContainer,
 			getPrometheusExporterPod(ctx, solrPrometheusExporter),
 			solrCloud.Namespace,
@@ -342,18 +381,16 @@ func checkMetricsWithGomega(ctx context.Context, solrPrometheusExporter *solrv1b
 			MatchRegexp("solr_metrics_core_query_[^{]+\\{category=\"QUERY\",searchHandler=\"/select\",[^}]*collection=\"%s\",[^}]*shard=\"shard1\",[^}]*\\} [0-9]+.0", collection),
 			"Could not find query metrics in the PrometheusExporter response",
 		)
-	}).WithContext(ctx).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
+	}).WithContext(ctx).WithOffset(resolveOffset(additionalOffset)).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
 
 	return response
 }
 
-func checkBackup(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(collection string, backupListResponse *solr_api.SolrBackupListResponse)) {
-	checkBackupWithGomega(solrCloud, solrBackup, checks, Default)
+func checkBackup(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse)) {
+	checkBackupWithGomega(ctx, solrCloud, solrBackup, checks, Default)
 }
 
-func checkBackupWithGomega(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(collection string, backupListResponse *solr_api.SolrBackupListResponse), g Gomega) {
-	solrCloudPod := solrCloud.GetAllSolrPodNames()[0]
-
+func checkBackupWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1beta1.SolrBackup, checks func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse), g Gomega) {
 	repository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, solrBackup.Spec.RepositoryName)
 	repositoryName := repository.Name
 	if repositoryName == "" {
@@ -367,26 +404,29 @@ func checkBackupWithGomega(solrCloud *solrv1beta1.SolrCloud, solrBackup *solrv1b
 			repositoryName,
 			collection,
 			util.BackupLocationPath(repository, solrBackup.Spec.Location))
-		response, err := runExecForContainer(
-			util.SolrNodeContainer,
-			solrCloudPod,
-			solrCloud.Namespace,
-			[]string{
-				"curl",
-				curlCommand,
-			},
-		)
-		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while fetching backup '%s' for collection '%s': %s", solrBackup.Name, collection, curlCommand)
-		backupListResponse := &solr_api.SolrBackupListResponse{}
+		g.Eventually(func(innerG Gomega) {
+			response, err := runExecForContainer(
+				ctx,
+				util.SolrNodeContainer,
+				solrCloud.GetRandomSolrPodName(),
+				solrCloud.Namespace,
+				[]string{
+					"curl",
+					curlCommand,
+				},
+			)
+			innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while fetching backup '%s' for collection '%s': %s", solrBackup.Name, collection, curlCommand)
+			backupListResponse := &solr_api.SolrBackupListResponse{}
 
-		g.Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
+			innerG.Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
 
-		g.Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
-		checks(collection, backupListResponse)
+			innerG.Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
+			checks(innerG, collection, backupListResponse)
+		}).WithContext(ctx).Within(time.Second * 5).ProbeEvery(time.Millisecond * 200).Should(Succeed())
 	}
 }
 
-func runExecForContainer(container string, podName string, namespace string, command []string) (response string, err error) {
+func runExecForContainer(ctx context.Context, container string, podName string, namespace string, command []string) (response string, err error) {
 	req := rawK8sClient.CoreV1().RESTClient().Post().
 		Resource("pods").
 		Name(podName).
@@ -414,7 +454,7 @@ func runExecForContainer(container string, podName string, namespace string, com
 	}
 
 	var stdout, stderr bytes.Buffer
-	err = exec.Stream(remotecommand.StreamOptions{
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 		Tty:    false,
@@ -445,7 +485,7 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 			ZookeeperRef: &solrv1beta1.ZookeeperRef{
 				ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
 					InternalConnectionString: sharedZookeeperConnectionString,
-					ChRoot:                   "/" + rand.String(5),
+					ChRoot:                   "/" + testNamespace() + "/" + rand.String(5),
 				},
 			},
 			// This seems to be the lowest memory & CPU that allow the tests to pass
