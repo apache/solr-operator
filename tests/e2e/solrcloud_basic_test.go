@@ -48,7 +48,7 @@ var _ = FDescribe("E2E - SolrCloud - Basic", func() {
 		})
 
 		By("creating a first Solr Collection")
-		createAndQueryCollection(solrCloud, "basic", 1, 1)
+		createAndQueryCollection(ctx, solrCloud, "basic", 1, 1)
 	})
 
 	FContext("Provided Zookeeper", func() {

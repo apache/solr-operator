@@ -53,10 +53,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 		})
 
 		By("creating a first Solr Collection")
-		createAndQueryCollection(solrCloud, solrCollection1, 1, 2)
+		createAndQueryCollection(ctx, solrCloud, solrCollection1, 1, 2)
 
 		By("creating a second Solr Collection")
-		createAndQueryCollection(solrCloud, solrCollection2, 2, 1)
+		createAndQueryCollection(ctx, solrCloud, solrCollection2, 2, 1)
 	})
 
 	FContext("Managed Update - Ephemeral Data - Slow", func() {
@@ -143,8 +143,8 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			}
 
 			By("checking that the collections can be queried after the restart")
-			queryCollection(solrCloud, solrCollection1, 0)
-			queryCollection(solrCloud, solrCollection2, 0)
+			queryCollection(ctx, solrCloud, solrCollection1, 0)
+			queryCollection(ctx, solrCloud, solrCollection2, 0)
 		})
 	})
 })

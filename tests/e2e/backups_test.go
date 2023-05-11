@@ -72,7 +72,7 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 		})
 
 		By("creating a Solr Collection to backup")
-		createAndQueryCollection(solrCloud, solrCollection, 1, 2)
+		createAndQueryCollection(ctx, solrCloud, solrCollection, 1, 2)
 	})
 
 	BeforeEach(func() {
@@ -122,10 +122,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 			Expect(foundSolrBackup.Status.History[len(foundSolrBackup.Status.History)-1].Successful).To(PointTo(BeTrue()), "The latest backup was not successful")
 
 			lastBackupId := 0
-			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
-				Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
+			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				g.Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
 				lastBackupId = backupListResponse.Backups[len(backupListResponse.Backups)-1].BackupId
-				Expect(lastBackupId).To(BeNumerically(">", 3), "The last backup ID is too low")
+				g.Expect(lastBackupId).To(BeNumerically(">", 3), "The last backup ID is too low")
 			})
 
 			By("disabling further backup recurrence")
@@ -138,10 +138,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 			// Use start time because we might have disabled the recurrence mid-backup, and the finish time might not have been set
 			Expect(nextFoundSolrBackup.Status.StartTime).To(Equal(foundSolrBackup.Status.StartTime), "The last backup start time should be unchanged after recurrence is disabled")
 
-			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
-				Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
+			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				g.Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
 				newLastBackupId := backupListResponse.Backups[len(backupListResponse.Backups)-1].BackupId
-				Expect(newLastBackupId).To(Equal(lastBackupId), "The last backup ID should not have been changed since the backup recurrence was disabled")
+				g.Expect(newLastBackupId).To(Equal(lastBackupId), "The last backup ID should not have been changed since the backup recurrence was disabled")
 			})
 		})
 	})
@@ -158,8 +158,8 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 				g.Expect(backup.Status.Successful).To(PointTo(BeTrue()), "Backup did not successfully complete")
 			})
 
-			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
-				Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
+			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				g.Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
 			})
 
 			// Make sure nothing else happens after the backup is complete
@@ -169,9 +169,9 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 				g.Expect(backup.Status.NextScheduledTime).To(BeNil(), "There should be no nextScheduledTime for a non-recurring backup")
 			})
 
-			checkBackup(solrCloud, solrBackup, func(collection string, backupListResponse *solr_api.SolrBackupListResponse) {
-				Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
-				Expect(backupListResponse.Backups[0].BackupId).To(Equal(0), "A non-recurring backup should have an ID of 1")
+			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
+				g.Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")
+				g.Expect(backupListResponse.Backups[0].BackupId).To(Equal(0), "A non-recurring backup should have an ID of 1")
 			})
 		})
 	})
