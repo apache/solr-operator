@@ -58,7 +58,7 @@ func deleteAndWait(ctx context.Context, object client.Object, additionalOffset .
 	Expect(err).ToNot(HaveOccurred(), "Error fetching objectKind")
 	Expect(kinds).ToNot(BeEmpty(), "No objectKinds found for object")
 	objKind := kinds[0]
-	Expect(k8sClient.Delete(ctx, object)).To(Or(Succeed(), MatchError(HaveSuffix("%q not found", testNamespace()))), "Failed to delete %s %s after test", objKind.Kind, key.Name)
+	Expect(k8sClient.Delete(ctx, object)).To(Or(Succeed(), MatchError(HaveSuffix("%q not found", object.GetName()))), "Failed to delete %s %s after test", objKind.Kind, key.Name)
 	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, key, object)
 	}).Within(time.Minute).

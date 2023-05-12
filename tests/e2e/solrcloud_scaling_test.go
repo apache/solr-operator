@@ -42,18 +42,18 @@ var _ = FDescribe("E2E - SolrCloud - Scaling", func() {
 	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+		DeferCleanup(func(ctx context.Context) {
+			cleanupTest(ctx, solrCloud)
+		})
 
 		By("Waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+			g.Expect(found.Status.Replicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		})
 
 		By("creating a first Solr Collection")
 		createAndQueryCollection(ctx, solrCloud, solrCollection1, 1, 1, 1)
-	})
-
-	AfterEach(func(ctx context.Context) {
-		cleanupTest(ctx, solrCloud)
 	})
 
 	FContext("Scale Down with replica migration", func() {

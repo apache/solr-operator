@@ -159,9 +159,32 @@ func (rc RetryCommand) String() string {
 	)
 }
 
+type FailureInformation struct {
+	namespace string
+}
+
+// ColorableString for ReportEntry to use
+func (fi FailureInformation) ColorableString() string {
+	return fmt.Sprintf("{{yellow}}%s{{/}}", fi)
+}
+
+// non-colorable String() is used by go's string formatting support but ignored by ReportEntry
+func (fi FailureInformation) String() string {
+	return fmt.Sprintf(
+		"Namespace: %s\n",
+		fi.namespace,
+	)
+}
+
 var _ = ReportAfterEach(func(report SpecReport) {
 	if report.Failed() {
 		ginkgoConfig, _ := GinkgoConfiguration()
+		AddReportEntry(
+			"Failure Information",
+			FailureInformation{
+				namespace: testNamespace(),
+			},
+		)
 		AddReportEntry(
 			"Re-Run Failed Test Using Command",
 			types.CodeLocation{},
