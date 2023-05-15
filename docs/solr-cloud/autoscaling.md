@@ -76,3 +76,10 @@ If `autoscaling.vacatePodsOnScaleDown` option is enabled, which it is by default
 
 Because of the available Solr APIs, the statefulSet can only be scaled down 1 pod at-a-time,
 this is why the Scale down step is repeated until the statefulSet size reaches the desired size.
+
+#### Scale to Zero
+
+If the `SolrCloud.spec.replicas` is set to 0, then the SolrCloud will set the statefulSet replicas to 0 without moving or deleting replicas.
+
+The data will be saved in PVCs if the SolrCloud is set to use persistent storage, and `dataStorage.persistent.reclaimPolicy` is set to `Retain`.
+If the `reclaimPolicy` is set to `Delete`, these PVCs will be deleted when the pods are scaled down.
