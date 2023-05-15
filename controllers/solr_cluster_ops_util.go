@@ -53,7 +53,7 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 			}
 		} else if desiredPods > configuredPods {
 			// Scale up!
-			// TODO: replicasScaleUp is not supported, so do not make a cluserOp out of it, just do the patch
+			// TODO: replicasScaleUp is not supported, so do not make a clusterOp out of it, just do the patch
 			err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)
 		}
 		if scaleTo > -1 {
