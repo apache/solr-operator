@@ -48,9 +48,7 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 		})
 
 		By("Waiting for the SolrCloud to come up healthy")
-		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
-		})
+		solrCloud = expectSolrCloudToBeReady(ctx, solrCloud)
 
 		By("creating a first Solr Collection")
 		createAndQueryCollection(ctx, solrCloud, solrCollection1, 1, 2)
