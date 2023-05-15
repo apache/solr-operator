@@ -67,6 +67,9 @@ serviceAccount:
 
 # Various Pod Options to customize the runtime of the operator
 resources: {}
+securityContext:
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
 envVars: []
 labels: {}
 annotations: {}
