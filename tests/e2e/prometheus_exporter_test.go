@@ -53,10 +53,7 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		})
 
 		By("waiting for the SolrCloud to come up healthy")
-		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-			g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
-			g.Expect(found.Status.Replicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
-		})
+		solrCloud = expectSolrCloudToBeReady(ctx, solrCloud)
 
 		By("creating a Solr Collection to query metrics for")
 		createAndQueryCollection(ctx, solrCloud, solrCollection, 1, 2)

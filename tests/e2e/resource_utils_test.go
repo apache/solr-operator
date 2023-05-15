@@ -65,6 +65,19 @@ func deleteAndWait(ctx context.Context, object client.Object, additionalOffset .
 		Should(MatchError(HaveSuffix("%q not found", key.Name)), objKind.Kind+" exists when it should not")
 }
 
+func expectSolrCloudToBeReady(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
+	return expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+		g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		// We have to check the status.replicas, because when a cloud is deleted/recreated, the statefulset can be recreated
+		// before the pods of the previous statefulset are deleted. So those pods will still be matched to the label selector,
+		// but the new statefulset doesn't know about them.
+		// The "Status.ReadyReplicas" value is populated from querying with the label selector
+		// The "Status.Replicas" value is populated from the statefulSet status
+		// So we need both to be equal to the requested number of replicas in order to know the statefulset is ready to go.
+		g.Expect(found.Status.Replicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+	}, resolveOffset(additionalOffset))
+}
+
 func expectSolrCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
 	return expectSolrCloudWithChecks(ctx, solrCloud, nil, resolveOffset(additionalOffset))
 }
