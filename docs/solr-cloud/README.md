@@ -17,9 +17,12 @@
 
 # Solr Clouds
 
-The Solr Operator supports creating and managing Solr Clouds.
+Child Pages:
+- [All SolrCloud CRD Options](solr-cloud-crd.md) - Please refer here when trying to find new SolrCloud options/features.
+- [Managed Updates](managed-updates.md)
+- [Autoscaling](autoscaling.md)
 
-To find how to configure the SolrCloud best for your use case, please refer to the [documentation on available SolrCloud CRD options](solr-cloud-crd.md).
+The Solr Operator supports creating and managing Solr Clouds.
 
 This page outlines how to create, update and delete a SolrCloud in Kubernetes.
 
@@ -75,6 +78,8 @@ The SolrCloud CRD support the Kubernetes `scale` operation, to increase and decr
 # Issue the scale command
 kubectl scale --replicas=5 solrcloud/example
 ```
+
+For more information on SolrCloud scaling, refer to the [autoscaling page](autoscaling.md).
 
 After issuing the scale command, start hitting the "Refresh" button in the Admin UI.
 You will see how the new Solr nodes are added.
