@@ -45,7 +45,9 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 					// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
 					scaleTo = configuredPods - 1
 				} else {
-					scaleTo = 0
+					// We do not do a "managed" scale-to-zero operation.
+					// Just scale down unmanaged.
+					err = scaleCloudUnmanaged(ctx, r, statefulSet, 0, logger)
 				}
 			} else {
 				// The cloud is not setup to use managed scale-down
@@ -132,9 +134,10 @@ func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, in
 	}
 
 	if scaleDownTo == 0 {
-		// Delete all collections & data, the user wants no data left if scaling the solrcloud down to 0
-		// This is a much different operation to deleting the SolrCloud/StatefulSet all-together
-		replicaManagementComplete, err = evictAllPods(ctx, r, instance, podList, podStoppedReadinessConditions, logger)
+		// Eventually we might want to delete all collections & data,
+		// the user wants no data left if scaling the solrcloud down to 0.
+		// However, for now we do not offer managed scale down to zero, so this line of code shouldn't even happen.
+		replicaManagementComplete = true
 	} else {
 		// Only evict the last pod, even if we are trying to scale down multiple pods.
 		// Scale down will happen one pod at a time.
@@ -157,6 +160,7 @@ func scaleCloudUnmanaged(ctx context.Context, r *SolrCloudReconciler, statefulSe
 	return err
 }
 
+// This is currently not used, use in the future if we want to delete all data when scaling down to zero
 func evictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, readinessConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (podsAreEmpty bool, err error) {
 	// If there are no pods, we can't empty them. Just return true
 	if len(podList) == 0 {
