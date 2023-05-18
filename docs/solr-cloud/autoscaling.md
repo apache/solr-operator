@@ -51,12 +51,12 @@ off of the pods that are about to be deleted.
 
 When a StatefulSet, which the Solr Operator uses to run Solr pods, has its size decreased by `x` pods, it's the last
 `x` pods that are deleted. So if a StatefulSet `tmp` has size 4, it will have pods `tmp-0`, `tmp-1`, `tmp-2` and `tmp-3`.
-If that `tmp` then is scaled down to size 2, then pods `tmp-2` and `tmp-3` will be deleted because they are `tmp`'s last pods numerically.
+If that `tmp` then is scaled down to size 2, then pod `tmp-3` will be deleted first, followed by `tmp-2` because they are `tmp`'s last pods numerically.
 
 If Solr has replicas placed on the pods that will be deleted as a part of the scale-down, then it has a problem.
 Solr will expect that these replicas will eventually come back online, because they are a part of the clusterState.
-However, the Solr Operator has no expectations for these replicas to come back, because the cloud has been scaled down.
-Therefore, the safest option is to move the replicas off of these pods before the scale-down operation occurs.
+The Solr Operator can update the cluster state to handle the scale-down operation by using Solr APIs
+to move replicas off of the soon-to-be-deleted pods.
 
 If `autoscaling.vacatePodsOnScaleDown` option is not enabled, then whenever the `SolrCloud.Spec.Replicas` is decreased,
 that change will be reflected in the StatefulSet immediately.
@@ -65,7 +65,7 @@ Pods will be deleted even if replicas live on those pods.
 If `autoscaling.vacatePodsOnScaleDown` option is enabled, which it is by default, then the following steps occur:
 1. Acquire a cluster-ops lock on the SolrCloud. (This means other cluster operations, such as a rolling restart, cannot occur during the scale down operation)
 1. Scale down the last pod.
-   1. Mark the pod as "notReady" so that traffic is diverted away from this pod.
+   1. Mark the pod as "notReady" so that traffic is diverted away from this pod (for requests to the common endpoint, requests that target that node directly will not be affected).
    1. Check to see if the last pod has any replicas.
    1. If so, start an asynchronous command to remove replicas from this pod.
    1. Check if the async command completed, if not then loop back until the command is finished.

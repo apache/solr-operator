@@ -91,9 +91,8 @@ func handleLockedClusterOpScale(ctx context.Context, r *SolrCloudReconciler, ins
 				}
 			}
 
-			// Scale down the statefulSet to represent the new number of utilizedPods, if it is lower than the current number of pods
-			// Also remove the "scalingToNodes" annotation, as that acts as a lock on the cluster, so that other operations,
-			// such as scale-up, pod updates and further scale-down cannot happen at the same time.
+			// Scale the statefulSet to represent the new number of pods, if it is lower than the current number of pods
+			// Also remove the lock annotations, as the cluster operation is done. Other operations can now take place.
 			if replicaManagementComplete {
 				patchedStatefulSet := statefulSet.DeepCopy()
 				patchedStatefulSet.Spec.Replicas = pointer.Int32(int32(scalingToNodesInt))
