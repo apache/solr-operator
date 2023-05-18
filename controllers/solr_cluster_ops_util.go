@@ -22,10 +22,12 @@ import (
 	"errors"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
+	"net/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
 	"time"
@@ -197,12 +199,16 @@ func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv
 		}
 	}
 
-	// TODO: Get whether the pod has replicas or not
 	podHasReplicas := true
+	if replicas, e := getReplicasForPod(ctx, instance, podName, logger); e != nil {
+		return false, e
+	} else {
+		podHasReplicas = len(replicas) > 0
+	}
 
 	// The pod doesn't exist, we cannot empty it
 	if pod == nil {
-		return !podHasReplicas, nil
+		return !podHasReplicas, errors.New("Could not find pod " + podName + " when trying to migrate replicas to scale down pod.")
 	}
 
 	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, readinessConditions, logger); e != nil {
@@ -217,5 +223,33 @@ func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv
 		logger.Error(err, "Error while evicting replicas on Pod, when scaling down SolrCloud", "pod", pod.Name)
 	}
 
+	return
+}
+
+func getReplicasForPod(ctx context.Context, cloud *solrv1beta1.SolrCloud, podName string, logger logr.Logger) (replicas []string, err error) {
+	clusterResp := &solr_api.SolrClusterStatusResponse{}
+	queryParams := url.Values{}
+	queryParams.Add("action", "CLUSTERSTATUS")
+	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
+	if err == nil {
+		if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
+			err = apiErr
+		}
+	}
+	podNodeName := util.SolrNodeName(cloud, podName)
+	if err == nil {
+		for _, colState := range clusterResp.ClusterStatus.Collections {
+			for _, shardState := range colState.Shards {
+				for replica, replicaState := range shardState.Replicas {
+					if replicaState.NodeName == podNodeName {
+						replicas = append(replicas, replica)
+					}
+				}
+			}
+		}
+	}
+	if err != nil {
+		logger.Error(err, "Error retrieving cluster status, cannot determine if pod has replicas")
+	}
 	return
 }

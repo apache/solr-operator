@@ -253,3 +253,14 @@ func PodConditionEquals(pod *corev1.Pod, conditionType corev1.PodConditionType, 
 
 	return false
 }
+
+// PodConditionEquals check if a podCondition equals what is expected
+func PodConditionHasStatus(pod *corev1.Pod, conditionType corev1.PodConditionType, status corev1.ConditionStatus) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == conditionType {
+			return status == condition.Status
+		}
+	}
+
+	return false
+}
