@@ -219,8 +219,14 @@ func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv
 	}
 
 	// Only evict from the pod if it contains replicas in the clusterState
-	if err, podIsEmpty = util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "scaleDown", logger); err != nil {
+	if e, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "scaleDown", logger); e != nil {
+		err = e
 		logger.Error(err, "Error while evicting replicas on Pod, when scaling down SolrCloud", "pod", pod.Name)
+	} else if canDeletePod {
+		// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't
+		// have replicas anymore even if the previous evict command was successful.
+		// If there are still replicas, it will start the eviction process again
+		podIsEmpty = !podHasReplicas
 	}
 
 	return

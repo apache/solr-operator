@@ -79,7 +79,14 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
-			deletePod = true
+			if podHasReplicas {
+				// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't
+				// have replicas anymore even if the previous evict command was successful.
+				// If there are still replicas, it will start the eviction process again
+				requeueAfterDuration = time.Millisecond * 10
+			} else {
+				deletePod = true
+			}
 		} else {
 			// Try again in 5 seconds if we cannot delete a pod.
 			requeueAfterDuration = time.Second * 5
