@@ -253,8 +253,7 @@ func getReplicasForPod(ctx context.Context, cloud *solrv1beta1.SolrCloud, podNam
 				}
 			}
 		}
-	}
-	if err != nil {
+	} else {
 		logger.Error(err, "Error retrieving cluster status, cannot determine if pod has replicas")
 	}
 	return
