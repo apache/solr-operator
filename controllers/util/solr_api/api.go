@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
-	"io/ioutil"
+	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
@@ -55,6 +55,9 @@ type SolrAsyncResponse struct {
 
 	// +optional
 	Status SolrAsyncStatus `json:"status,omitempty"`
+
+	// +optional
+	Error SolrAsyncError `json:"error,omitempty"`
 }
 
 type SolrResponseHeader struct {
@@ -70,6 +73,17 @@ type SolrAsyncStatus struct {
 
 	// +optional
 	Message string `json:"msg,omitempty"`
+}
+
+type SolrAsyncError struct {
+	// +optional
+	Metadata []string `json:"metadata,omitempty"`
+
+	// +optional
+	Message string `json:"msg,omitempty"`
+
+	// +optional
+	Code int `json:"code,omitempty"`
 }
 
 type SolrAsyncStatusResponse struct {
@@ -154,7 +168,7 @@ func CallCollectionsApi(ctx context.Context, cloud *solr.SolrCloud, urlParams ur
 	defer resp.Body.Close()
 
 	if err == nil && resp.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(resp.Body)
+		b, _ := io.ReadAll(resp.Body)
 		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
 	}
 

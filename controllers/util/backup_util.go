@@ -26,6 +26,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/robfig/cron/v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -91,22 +93,28 @@ func GenerateQueryParamsForBackup(backupRepository *solr.SolrBackupRepository, b
 	return queryParams
 }
 
-func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, collection string, logger logr.Logger) (success bool, err error) {
+func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backupRepository *solr.SolrBackupRepository, backup *solr.SolrBackup, collection string, logger logr.Logger) (err error) {
 	queryParams := GenerateQueryParamsForBackup(backupRepository, backup, collection)
 	resp := &solr_api.SolrAsyncResponse{}
 
 	logger.Info("Calling to start collection backup", "solrCloud", cloud.Name, "collection", collection)
 	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
 
-	if err == nil {
-		if resp.ResponseHeader.Status == 0 {
-			success = true
-		}
-	} else {
+	if err == nil && resp.ResponseHeader.Status != 0 {
+		err = &errors.StatusError{ErrStatus: metav1.Status{
+			Status: metav1.StatusFailure,
+			Code:   int32(resp.Error.Code),
+			Details: &metav1.StatusDetails{
+				Causes: []metav1.StatusCause{{Message: resp.Error.Message}},
+			},
+			Message: "Error occurred while trying to start backup",
+		}}
+	}
+	if err != nil {
 		logger.Error(err, "Error starting collection backup", "solrCloud", cloud.Name, "collection", collection)
 	}
 
-	return success, err
+	return err
 }
 
 func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (finished bool, success bool, asyncStatus string, err error) {
