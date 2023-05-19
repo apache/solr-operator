@@ -55,6 +55,11 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
+      description: Ability to customize the SecurityContext for the solr-operator pod
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/566
+    - kind: added
       description: Replica migration is now managed on scale down of Solr Nodes, by default.
       links:
         - name: Github Issue

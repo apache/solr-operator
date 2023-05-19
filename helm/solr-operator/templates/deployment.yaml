@@ -90,8 +90,7 @@ spec:
           {{- end }}
 
         securityContext:
-          allowPrivilegeEscalation: false
-          runAsNonRoot: true
+          {{- toYaml .Values.securityContext | nindent 10 }}
         livenessProbe:
           httpGet:
             path: /healthz
