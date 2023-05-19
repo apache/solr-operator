@@ -313,29 +313,59 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	pvcLabelSelector := make(map[string]string, 0)
-	var statefulSetStatus appsv1.StatefulSetStatus
+	extAddressabilityOpts := instance.Spec.SolrAddressability.External
+	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
+		// Generate Ingress
+		ingress := util.GenerateIngress(instance, solrNodeNames)
+
+		// Check if the Ingress already exists
+		ingressLogger := logger.WithValues("ingress", ingress.Name)
+		foundIngress := &netv1.Ingress{}
+		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
+		if err != nil && errors.IsNotFound(err) {
+			ingressLogger.Info("Creating Ingress")
+			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
+				err = r.Create(ctx, ingress)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
+			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
+
+			// Update the found Ingress and write the result back if there are any changes
+			if needsUpdate && err == nil {
+				ingressLogger.Info("Updating Ingress")
+				err = r.Update(ctx, foundIngress)
+			}
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
+	}
+
+	var statefulSet *appsv1.StatefulSet
 
 	if !blockReconciliationOfStatefulSet {
-		// Generate StatefulSet
-		statefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
+		// Generate StatefulSet that should exist
+		expectedStatefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
 
 		// Check if the StatefulSet already exists
-		statefulSetLogger := logger.WithValues("statefulSet", statefulSet.Name)
+		statefulSetLogger := logger.WithValues("statefulSet", expectedStatefulSet.Name)
 		foundStatefulSet := &appsv1.StatefulSet{}
-		err = r.Get(ctx, types.NamespacedName{Name: statefulSet.Name, Namespace: statefulSet.Namespace}, foundStatefulSet)
+		err = r.Get(ctx, types.NamespacedName{Name: expectedStatefulSet.Name, Namespace: expectedStatefulSet.Namespace}, foundStatefulSet)
 
+		// TODO: Move this logic down to the cluster ops and save the existing annotation in util.MaintainPreservedStatefulSetFields()
 		// Set the annotation for a scheduled restart, if necessary.
 		if nextRestartAnnotation, reconcileWaitDuration, schedulingErr := util.ScheduleNextRestart(instance.Spec.UpdateStrategy.RestartSchedule, foundStatefulSet.Spec.Template.Annotations); schedulingErr != nil {
 			logger.Error(schedulingErr, "Cannot parse restartSchedule cron", "cron", instance.Spec.UpdateStrategy.RestartSchedule)
 		} else {
 			if nextRestartAnnotation != "" {
 				// Set the new restart time annotation
-				statefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
+				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
 				// TODO: Create event for the CRD.
 			} else if existingRestartAnnotation, exists := foundStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
 				// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
-				statefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
+				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
 			}
 			if reconcileWaitDuration != nil {
 				// Set the requeueAfter if it has not been set, or is greater than the time we need to wait to restart again
@@ -346,48 +376,52 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Update or Create the StatefulSet
 		if err != nil && errors.IsNotFound(err) {
 			statefulSetLogger.Info("Creating StatefulSet")
-			if err = controllerutil.SetControllerReference(instance, statefulSet, r.Scheme); err == nil {
-				err = r.Create(ctx, statefulSet)
+			if err = controllerutil.SetControllerReference(instance, expectedStatefulSet, r.Scheme); err == nil {
+				err = r.Create(ctx, expectedStatefulSet)
 			}
-			// Find which labels the PVCs will be using, to use for the finalizer
-			pvcLabelSelector = statefulSet.Spec.Selector.MatchLabels
+			statefulSet = expectedStatefulSet
 		} else if err == nil {
-			statefulSetStatus = foundStatefulSet.Status
-			// Find which labels the PVCs will be using, to use for the finalizer
-			pvcLabelSelector = foundStatefulSet.Spec.Selector.MatchLabels
+			util.MaintainPreservedStatefulSetFields(expectedStatefulSet, foundStatefulSet)
 
 			// Check to see if the StatefulSet needs an update
 			var needsUpdate bool
 			needsUpdate, err = util.OvertakeControllerRef(instance, foundStatefulSet, r.Scheme)
-			needsUpdate = util.CopyStatefulSetFields(statefulSet, foundStatefulSet, statefulSetLogger) || needsUpdate
+			needsUpdate = util.CopyStatefulSetFields(expectedStatefulSet, foundStatefulSet, statefulSetLogger) || needsUpdate
 
 			// Update the found StatefulSet and write the result back if there are any changes
 			if needsUpdate && err == nil {
 				statefulSetLogger.Info("Updating StatefulSet")
 				err = r.Update(ctx, foundStatefulSet)
 			}
+			statefulSet = foundStatefulSet
 		}
 		if err != nil {
 			return requeueOrNot, err
 		}
 	} else {
 		// If we are blocking the reconciliation of the statefulSet, we still want to find information about it.
-		foundStatefulSet := &appsv1.StatefulSet{}
-		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, foundStatefulSet)
-		if err == nil {
-			// Find the status
-			statefulSetStatus = foundStatefulSet.Status
-			// Find which labels the PVCs will be using, to use for the finalizer
-			pvcLabelSelector = foundStatefulSet.Spec.Selector.MatchLabels
-		} else if !errors.IsNotFound(err) {
-			return requeueOrNot, err
+		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				return requeueOrNot, err
+			} else {
+				statefulSet = nil
+			}
 		}
+	}
+
+	// *********************************************************
+	// The operations after this require a statefulSet to exist,
+	// including updating the solrCloud status
+	// *********************************************************
+	if statefulSet == nil {
+		return requeueOrNot, err
 	}
 
 	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
 	// Otherwise it will delete all PVCs possibly
-	if len(pvcLabelSelector) > 0 {
-		if err := r.reconcileStorageFinalizer(ctx, instance, pvcLabelSelector, logger); err != nil {
+	if len(statefulSet.Spec.Selector.MatchLabels) > 0 {
+		if err := r.reconcileStorageFinalizer(ctx, instance, statefulSet.Spec.Selector.MatchLabels, logger); err != nil {
 			logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
 			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
@@ -403,13 +437,54 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Make sure the SolrCloud status is up-to-date with the state of the cluster
 	var outOfDatePods util.OutOfDatePodSegmentation
 	var availableUpdatedPodCount int
-	outOfDatePods, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSetStatus, podSelector, podList)
+	outOfDatePods, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSet.Status, podSelector, podList)
 	if err != nil {
 		return requeueOrNot, err
 	}
 
-	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
+	// We only want to do one cluster operation at a time, so we use a lock to ensure that.
+	// Update or a Scale at a time. We do not want to do both.
+
+	var retryLaterDuration time.Duration
+	if clusterOpLock, hasAnn := statefulSet.Annotations[util.ClusterOpsLockAnnotation]; hasAnn {
+		switch clusterOpLock {
+		case util.ScaleLock:
+			retryLaterDuration, err = handleLockedClusterOpScale(ctx, r, instance, statefulSet, podList, logger)
+		}
+	} else {
+		// Start cluster operations if needed.
+		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
+		// And that lock will tell future reconcile loops that the operation needs to be done.
+		clusterOpLock = ""
+		clusterOpMetadata := ""
+		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
+		// a "locked" cluster operation
+		clusterOpLock, clusterOpMetadata, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
+
+		if retryLaterDuration <= 0 && err == nil && clusterOpLock != "" {
+			patchedStatefulSet := statefulSet.DeepCopy()
+			patchedStatefulSet.Annotations[util.ClusterOpsLockAnnotation] = clusterOpLock
+			patchedStatefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = clusterOpMetadata
+			if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
+				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", clusterOpLock, "clusterOpMetadata", clusterOpMetadata)
+			} else {
+				statefulSet = patchedStatefulSet
+			}
+		}
+	}
+	if err != nil && retryLaterDuration == 0 {
+		retryLaterDuration = time.Second * 5
+	}
+	if retryLaterDuration > 0 {
+		updateRequeueAfter(&requeueOrNot, retryLaterDuration)
+	}
+	if err != nil {
+		return requeueOrNot, err
+	}
+
+	// TODO: Move this logic into the ClusterOpLock, with the "rollingUpdate" lock
 	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion)+len(outOfDatePods.Running) > 0 {
+		// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
 		updateLogger := logger.WithName("ManagedUpdateSelector")
 
 		// The out of date pods that have not been started, should all be updated immediately.
@@ -439,7 +514,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
 		}
 
-		var retryLaterDuration time.Duration
 		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
 		for _, pod := range podsToUpdate {
 			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
@@ -465,7 +539,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Upsert or delete solrcloud-wide PodDisruptionBudget(s) based on 'Enabled' flag.
-	pdb := util.GeneratePodDisruptionBudget(instance, pvcLabelSelector)
+	pdb := util.GeneratePodDisruptionBudget(instance, statefulSet.Spec.Selector.MatchLabels)
 	if instance.Spec.Availability.PodDisruptionBudget.Enabled != nil && *instance.Spec.Availability.PodDisruptionBudget.Enabled {
 		// Check if the PodDistruptionBudget already exists
 		pdbLogger := logger.WithValues("podDisruptionBudget", pdb.Name)
@@ -493,36 +567,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	} else { // PDB is disabled, make sure that we delete any previously created pdb that might exist.
 		err = r.Client.Delete(ctx, pdb)
 		if err != nil && !errors.IsNotFound(err) {
-			return requeueOrNot, err
-		}
-	}
-
-	extAddressabilityOpts := instance.Spec.SolrAddressability.External
-	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
-		// Generate Ingress
-		ingress := util.GenerateIngress(instance, solrNodeNames)
-
-		// Check if the Ingress already exists
-		ingressLogger := logger.WithValues("ingress", ingress.Name)
-		foundIngress := &netv1.Ingress{}
-		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
-		if err != nil && errors.IsNotFound(err) {
-			ingressLogger.Info("Creating Ingress")
-			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
-				err = r.Create(ctx, ingress)
-			}
-		} else if err == nil {
-			var needsUpdate bool
-			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
-			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
-
-			// Update the found Ingress and write the result back if there are any changes
-			if needsUpdate && err == nil {
-				ingressLogger.Info("Updating Ingress")
-				err = r.Update(ctx, foundIngress)
-			}
-		}
-		if err != nil {
 			return requeueOrNot, err
 		}
 	}

@@ -89,6 +89,16 @@ spec:
                 items:
                   type: string
                 type: array
+              autoscaling:
+                description: Define how Solr nodes should be autoscaled.
+                properties:
+                  vacatePodsOnScaleDown:
+                    default: true
+                    description: VacatePodsOnScaleDown determines whether Solr replicas
+                      are moved off of a Pod before the Pod is deleted due to the
+                      SolrCloud scaling down.
+                    type: boolean
+                type: object
               availability:
                 description: Define how Solr nodes should be available.
                 properties:

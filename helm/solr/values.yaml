@@ -143,6 +143,10 @@ availability:
     enabled: true
     method: ClusterWide
 
+# Various settings to control autoscaling of Solr pods and replicas
+autoscaling:
+  vacatePodsOnScaleDown: true
+
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
 # - https://apache.github.io/solr-operator/docs/solr-backup

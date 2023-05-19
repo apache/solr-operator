@@ -40,10 +40,10 @@ type podReadinessConditionChange struct {
 type PodConditionChangeReason string
 
 const (
-	PodStarted           PodConditionChangeReason = "PodStarted"
-	PodUpdate            PodConditionChangeReason = "PodUpdate"
-	EvictingReplicas     PodConditionChangeReason = "EvictingReplicas"
-	StatefulSetScaleDown PodConditionChangeReason = "StatefulSetScaleDown"
+	PodStarted       PodConditionChangeReason = "PodStarted"
+	PodUpdate        PodConditionChangeReason = "PodUpdate"
+	EvictingReplicas PodConditionChangeReason = "EvictingReplicas"
+	ScaleDown        PodConditionChangeReason = "ScaleDown"
 )
 
 func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
@@ -73,14 +73,20 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 
 	// If the pod needs to be drained of replicas (i.e. upgrading a pod with ephemeral storage), do that before deleting the pod
 	deletePod := false
-	// TODO: After v0.7.0 release, can remove "podHasReplicas ||", as this is no longer needed
-	if podHasReplicas || PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
+	if PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, logger); evictError != nil {
+		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
-			deletePod = true
+			if podHasReplicas {
+				// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't
+				// have replicas anymore even if the previous evict command was successful.
+				// If there are still replicas, it will start the eviction process again
+				requeueAfterDuration = time.Millisecond * 10
+			} else {
+				deletePod = true
+			}
 		} else {
 			// Try again in 5 seconds if we cannot delete a pod.
 			requeueAfterDuration = time.Second * 5
@@ -249,6 +255,17 @@ func PodConditionEquals(pod *corev1.Pod, conditionType corev1.PodConditionType, 
 	for _, condition := range pod.Status.Conditions {
 		if condition.Type == conditionType {
 			return string(reason) == condition.Reason
+		}
+	}
+
+	return false
+}
+
+// PodConditionEquals check if a podCondition equals what is expected
+func PodConditionHasStatus(pod *corev1.Pod, conditionType corev1.PodConditionType, status corev1.ConditionStatus) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == conditionType {
+			return status == condition.Status
 		}
 	}
 

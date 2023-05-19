@@ -51,6 +51,13 @@ const (
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
 
+	// Protected StatefulSet annotations
+	// These are to be saved on a statefulSet update
+	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
+	ScaleLock                    = "scaling"
+	UpdateLock                   = "rollingUpdate"
+	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
+
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
 
@@ -606,6 +613,22 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	return stateful
+}
+
+// MaintainPreservedStatefulSetFields makes sure that certain fields in the SolrCloud statefulSet are preserved
+// across updates to the statefulSet. The code that generates an "idempotent" statefulSet might not have the information
+// that was used when these values were populated, so they must be saved when the new "expected" statefulSet overwrites
+// all the information on the new "found" statefulSet.
+func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
+	// Cluster Operations are saved in the annotations of the SolrCloud StatefulSet.
+	// ClusterOps information is saved to the statefulSet independently of the general StatefulSet update.
+	// These annotations can also not be overridden set by the user.
+	expected.Annotations[ClusterOpsLockAnnotation] = found.Annotations[ClusterOpsLockAnnotation]
+	expected.Annotations[ClusterOpsMetadataAnnotation] = found.Annotations[ClusterOpsMetadataAnnotation]
+
+	// Scaling (i.e. changing) the number of replicas in the SolrCloud statefulSet is handled during the clusterOps
+	// section of the SolrCloud reconcile loop
+	expected.Spec.Replicas = found.Spec.Replicas
 }
 
 func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, security *SecurityConfig) (containers []corev1.Container) {
