@@ -2290,6 +2290,28 @@ spec:
                           type: string
                         description: Labels to be added for the Service.
                         type: object
+                      sessionAffinity:
+                        description: Supports "ClientIP" and "None". Used to maintain
+                          session affinity. Enable client IP based session affinity.
+                          Must be ClientIP or None. Defaults to None
+                        type: string
+                      sessionAffinityConfig:
+                        description: sessionAffinityConfig contains the configurations
+                          of session affinity.
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: timeoutSeconds specifies the seconds
+                                  of ClientIP type session sticky time. The value
+                                  must be >0 && <=86400(for 1 day) if ServiceAffinity
+                                  == "ClientIP". Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
+                        type: object
                     type: object
                   configMapOptions:
                     description: ServiceOptions defines the custom options for the
@@ -2323,6 +2345,28 @@ spec:
                         additionalProperties:
                           type: string
                         description: Labels to be added for the Service.
+                        type: object
+                      sessionAffinity:
+                        description: Supports "ClientIP" and "None". Used to maintain
+                          session affinity. Enable client IP based session affinity.
+                          Must be ClientIP or None. Defaults to None
+                        type: string
+                      sessionAffinityConfig:
+                        description: sessionAffinityConfig contains the configurations
+                          of session affinity.
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: timeoutSeconds specifies the seconds
+                                  of ClientIP type session sticky time. The value
+                                  must be >0 && <=86400(for 1 day) if ServiceAffinity
+                                  == "ClientIP". Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                     type: object
                   ingressOptions:
@@ -2363,6 +2407,28 @@ spec:
                         additionalProperties:
                           type: string
                         description: Labels to be added for the Service.
+                        type: object
+                      sessionAffinity:
+                        description: Supports "ClientIP" and "None". Used to maintain
+                          session affinity. Enable client IP based session affinity.
+                          Must be ClientIP or None. Defaults to None
+                        type: string
+                      sessionAffinityConfig:
+                        description: sessionAffinityConfig contains the configurations
+                          of session affinity.
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: timeoutSeconds specifies the seconds
+                                  of ClientIP type session sticky time. The value
+                                  must be >0 && <=86400(for 1 day) if ServiceAffinity
+                                  == "ClientIP". Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                     type: object
                   podOptions:
@@ -23625,6 +23691,28 @@ spec:
                         additionalProperties:
                           type: string
                         description: Labels to be added for the Service.
+                        type: object
+                      sessionAffinity:
+                        description: Supports "ClientIP" and "None". Used to maintain
+                          session affinity. Enable client IP based session affinity.
+                          Must be ClientIP or None. Defaults to None
+                        type: string
+                      sessionAffinityConfig:
+                        description: sessionAffinityConfig contains the configurations
+                          of session affinity.
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: timeoutSeconds specifies the seconds
+                                  of ClientIP type session sticky time. The value
+                                  must be >0 && <=86400(for 1 day) if ServiceAffinity
+                                  == "ClientIP". Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
                         type: object
                     type: object
                 type: object
