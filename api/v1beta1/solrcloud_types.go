@@ -730,7 +730,17 @@ type SolrAutoscalingOptions struct {
 	// VacatePodsOnScaleDown determines whether Solr replicas are moved off of a Pod before the Pod is
 	// deleted due to the SolrCloud scaling down.
 	// +kubebuilder:default=true
+	// +optional
 	VacatePodsOnScaleDown *bool `json:"vacatePodsOnScaleDown,omitempty"`
+
+	// PopulatePodsOnScaleUp determines whether Solr replicas should be moved to newly-created Pods that have been
+	// created due to the SolrCloud scaling up.
+	//
+	// This feature is only available to users using Solr 9.3 or newer.
+	//
+	// +kubebuilder:default=false
+	// +optional
+	PopulatePodsOnScaleUp bool `json:"populatePodsOnScaleUp,omitempty"`
 }
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to

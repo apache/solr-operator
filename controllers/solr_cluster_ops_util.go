@@ -37,95 +37,56 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 	desiredPods := int(*instance.Spec.Replicas)
 	configuredPods := int(*statefulSet.Spec.Replicas)
 	if desiredPods != configuredPods {
-		scaleTo := -1
-		// Start a scaling operation
-		if desiredPods < configuredPods {
-			// Scale down!
-			// The option is enabled by default, so treat "nil" like "true"
-			if instance.Spec.Autoscaling.VacatePodsOnScaleDown == nil || *instance.Spec.Autoscaling.VacatePodsOnScaleDown {
-				if desiredPods > 0 {
-					// We only support one scaling down one pod at-a-time if not scaling down to 0 pods
-					scaleTo = configuredPods - 1
-				} else {
-					// We do not do a "managed" scale-to-zero operation.
-					// Just scale down unmanaged.
-					err = scaleCloudUnmanaged(ctx, r, statefulSet, 0, logger)
-				}
-			} else {
-				// The cloud is not setup to use managed scale-down
-				err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)
+		// We do not do a "managed" scale-to-zero operation.
+		// Only do a managed scale down if the desiredPods is positive.
+		// The VacatePodsOnScaleDown option is enabled by default, so treat "nil" like "true"
+		if desiredPods < configuredPods && desiredPods > 0 &&
+			(instance.Spec.Autoscaling.VacatePodsOnScaleDown == nil || *instance.Spec.Autoscaling.VacatePodsOnScaleDown) {
+			// Managed Scale down!
+			originalStatefulSet := statefulSet.DeepCopy()
+			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleDownLock
+			// The scaleDown metadata is the number of nodes to scale down to.
+			// We only support scaling down one pod at-a-time when using a managed scale-down.
+			// If the user wishes to scale down by multiple nodes, this ClusterOp will be done once-per-node.
+			statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = strconv.Itoa(configuredPods - 1)
+			if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", util.ScaleDownLock, "clusterOpMetadata", configuredPods-1)
 			}
-		} else if desiredPods > configuredPods {
-			// Scale up!
-			// TODO: replicasScaleUp is not supported, so do not make a clusterOp out of it, just do the patch
+		} else if desiredPods > configuredPods && instance.Spec.Autoscaling.PopulatePodsOnScaleUp {
+			// Managed Scale up!
+			originalStatefulSet := statefulSet.DeepCopy()
+			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleUpLock
+			// The scaleUp metadata is the number of nodes that existed before the scaleUp.
+			// This allows the scaleUp operation to know which pods will be empty after the statefulSet is scaledUp.
+			statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = strconv.Itoa(configuredPods - 1)
+			// We want to set the number of replicas at the beginning of the scaleUp operation
+			statefulSet.Spec.Replicas = pointer.Int32(int32(desiredPods))
+			if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", util.ScaleUpLock, "clusterOpMetadata", configuredPods, "newStatefulSetSize", desiredPods)
+			}
+		} else {
 			err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)
-		}
-		if scaleTo > -1 {
-			clusterOpLock = util.ScaleLock
-			clusterOpMetadata = strconv.Itoa(scaleTo)
 		}
 	}
 	return
 }
 
-func handleLockedClusterOpScale(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, podList []corev1.Pod, logger logr.Logger) (retryLaterDuration time.Duration, err error) {
-	if scalingToNodes, hasAnn := statefulSet.Annotations[util.ClusterOpsMetadataAnnotation]; hasAnn {
-		if scalingToNodesInt, convErr := strconv.Atoi(scalingToNodes); convErr != nil {
-			logger.Error(convErr, "Could not convert statefulSet annotation to int for scale-down-to information", "annotation", util.ClusterOpsMetadataAnnotation, "value", scalingToNodes)
-			err = convErr
-		} else {
-			replicaManagementComplete := false
-			if scalingToNodesInt < int(*statefulSet.Spec.Replicas) {
-				// Manage scaling down the SolrCloud
-				replicaManagementComplete, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, scalingToNodesInt, podList, logger)
-				// } else if scalingToNodesInt > int(*statefulSet.Spec.Replicas) {
-				// TODO: Utilize the scaled-up nodes in the future, however Solr does not currently have APIs for this.
-				// TODO: Think about the order of scale-up and restart when individual nodeService IPs are injected into the pods.
-				// TODO: Will likely want to do a scale-up of the service first, then do the rolling restart of the cluster, then utilize the node.
-			} else {
-				// This shouldn't happen. The ScalingToNodesAnnotation is removed when the statefulSet size changes, through a Patch.
-				// But if it does happen, we should just remove the annotation and move forward.
-				patchedStatefulSet := statefulSet.DeepCopy()
-				delete(patchedStatefulSet.Annotations, util.ClusterOpsLockAnnotation)
-				delete(patchedStatefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
-				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
-					logger.Error(err, "Error while patching StatefulSet to remove unneeded clusterLockOp annotation for scaling to the current amount of nodes")
-				} else {
-					statefulSet = patchedStatefulSet
-				}
-			}
-
-			// Scale the statefulSet to represent the new number of pods, if it is lower than the current number of pods
-			// Also remove the lock annotations, as the cluster operation is done. Other operations can now take place.
-			if replicaManagementComplete {
-				patchedStatefulSet := statefulSet.DeepCopy()
-				patchedStatefulSet.Spec.Replicas = pointer.Int32(int32(scalingToNodesInt))
-				delete(patchedStatefulSet.Annotations, util.ClusterOpsLockAnnotation)
-				delete(patchedStatefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
-				if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
-					logger.Error(err, "Error while patching StatefulSet to scale down SolrCloud", "newUtilizedNodes", scalingToNodesInt)
-				}
-
-				// TODO: Create event for the CRD.
-			} else {
-				// Retry after five minutes to check if the replica management commands have been completed
-				retryLaterDuration = time.Second * 5
-			}
-		}
-		// If everything succeeded, the statefulSet will have an annotation updated
-		// and the reconcile loop will be called again.
-
-		return
-	} else {
-		err = errors.New("no clusterOpMetadata annotation is present in the statefulSet")
-		logger.Error(err, "Cannot perform scaling operation when no scale-to-nodes is provided via the clusterOpMetadata")
-		return time.Second * 10, err
-	}
-}
-
 // handleManagedCloudScaleDown does the logic of a managed and "locked" cloud scale down operation.
-// This will likely take many reconcile loops to complete, as it is moving replicas away from the nodes that will be scaled down.
-func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownTo int, podList []corev1.Pod, logger logr.Logger) (replicaManagementComplete bool, err error) {
+// This will likely take many reconcile loops to complete, as it is moving replicas away from the pods that will be scaled down.
+func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownToRaw string, podList []corev1.Pod, logger logr.Logger) (retryLaterDuration time.Duration, err error) {
+	var scaleDownTo int
+	if scaleDownTo, err = strconv.Atoi(scaleDownToRaw); err != nil {
+		logger.Error(err, "Could not convert statefulSet annotation to int for scale-down-to information", "annotation", util.ClusterOpsMetadataAnnotation, "value", scaleDownToRaw)
+		return
+		// TODO: Create event for the CRD.
+	}
+
+	if scaleDownTo >= int(*statefulSet.Spec.Replicas) {
+		// This shouldn't happen, but we don't want to be stuck if it does.
+		// Just remove the cluster Op, because the cluster has already been scaled down.
+		err = clearClusterOp(ctx, r, statefulSet, "statefulSet already scaled-down", logger)
+	}
+
 	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
 	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
 		util.SolrIsNotStoppedReadinessCondition: {
@@ -135,18 +96,63 @@ func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, in
 		},
 	}
 
-	if scaleDownTo == 0 {
-		// Eventually we might want to delete all collections & data,
-		// the user wants no data left if scaling the solrcloud down to 0.
-		// However, for now we do not offer managed scale down to zero, so this line of code shouldn't even happen.
-		replicaManagementComplete = true
-	} else {
-		// Only evict the last pod, even if we are trying to scale down multiple pods.
-		// Scale down will happen one pod at a time.
-		replicaManagementComplete, err = evictSinglePod(ctx, r, instance, scaleDownTo, podList, podStoppedReadinessConditions, logger)
-	}
 	// TODO: It would be great to support a multi-node scale down when Solr supports evicting many SolrNodes at once.
+	// Only evict the last pod, even if we are trying to scale down multiple pods.
+	// Scale down will happen one pod at a time.
+	if replicaManagementComplete, evictErr := evictSinglePod(ctx, r, instance, scaleDownTo, podList, podStoppedReadinessConditions, logger); err != nil {
+		err = evictErr
+	} else if replicaManagementComplete {
+		originalStatefulSet := statefulSet.DeepCopy()
+		statefulSet.Spec.Replicas = pointer.Int32(int32(scaleDownTo))
+		delete(statefulSet.Annotations, util.ClusterOpsLockAnnotation)
+		delete(statefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to finish the managed SolrCloud scale down clusterOp", "newStatefulSetReplicas", scaleDownTo)
+		}
 
+		// TODO: Create event for the CRD.
+	} else {
+		// Retry after five seconds to check if the replica management commands have been completed
+		retryLaterDuration = time.Second * 5
+	}
+	return
+}
+
+// handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
+// This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
+func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleUpFromRaw string, logger logr.Logger) (retryLaterDuration time.Duration, err error) {
+	// TODO: Think about bad pod specs, that will never come up healthy. We want to try a rolling restart in between if necessary
+	if balanceComplete, balanceErr := util.BalanceReplicasForCluster(ctx, instance, statefulSet, "scaleUp", scaleUpFromRaw, logger); err != nil {
+		err = balanceErr
+	} else if balanceComplete {
+		// Once the replica balancing is complete, finish the cluster operation by deleting the statefulSet annotations
+		originalStatefulSet := statefulSet.DeepCopy()
+		delete(statefulSet.Annotations, util.ClusterOpsLockAnnotation)
+		delete(statefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to finish the managed SolrCloud scale up clusterOp")
+		}
+
+		// TODO: Create event for the CRD.
+	} else {
+		// Retry after five seconds to check if the replica management commands have been completed
+		retryLaterDuration = time.Second * 5
+	}
+	return
+}
+
+// clearClusterOp simply removes any clusterOp for the given statefulSet.
+// This should only be used as a "break-glass" scenario. Do not use this to finish off successful clusterOps.
+func clearClusterOp(ctx context.Context, r *SolrCloudReconciler, statefulSet *appsv1.StatefulSet, reason string, logger logr.Logger) (err error) {
+	logger = logger.WithValues("reason", reason, "clusterOp", statefulSet.Annotations[util.ClusterOpsLockAnnotation], "clusterOpMetadata", statefulSet.Annotations[util.ClusterOpsMetadataAnnotation])
+	originalStatefulSet := statefulSet.DeepCopy()
+	delete(statefulSet.Annotations, util.ClusterOpsLockAnnotation)
+	delete(statefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
+	if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+		logger.Error(err, "Error while patching StatefulSet to remove unneeded clusterLockOp annotation")
+	} else {
+		logger.Error(err, "Removed unneeded clusterLockOp annotation from statefulSet")
+	}
 	return
 }
 

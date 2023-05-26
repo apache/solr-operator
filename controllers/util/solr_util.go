@@ -54,7 +54,8 @@ const (
 	// Protected StatefulSet annotations
 	// These are to be saved on a statefulSet update
 	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
-	ScaleLock                    = "scaling"
+	ScaleDownLock                = "scalingDown"
+	ScaleUpLock                  = "scalingUp"
 	UpdateLock                   = "rollingUpdate"
 	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
 
