@@ -218,7 +218,7 @@ func ListAllSolrCollections(ctx context.Context, cloud *solr.SolrCloud, logger l
 	queryParams.Add("action", "LIST")
 	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
 	if err == nil {
-		if hasError, apiErr := solr_api.CheckForCollectionsApiError("LIST", resp.ResponseHeader); hasError {
+		if hasError, apiErr := solr_api.CheckForCollectionsApiError("LIST", resp.ResponseHeader, resp.Error); hasError {
 			err = apiErr
 		}
 	}

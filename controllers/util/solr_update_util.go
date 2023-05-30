@@ -116,12 +116,12 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 			queryParams.Add("action", "CLUSTERSTATUS")
 			err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
 			if err == nil {
-				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
+				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader, clusterResp.Error); hasError {
 					err = apiErr
 				} else {
 					queryParams.Set("action", "OVERSEERSTATUS")
 					err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, overseerResp)
-					if hasError, apiErr = solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
+					if hasError, apiErr = solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", overseerResp.ResponseHeader, overseerResp.Error); hasError {
 						err = apiErr
 					}
 				}
@@ -532,7 +532,7 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
 				queryParams.Add("async", requestId)
 				if err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse); err == nil {
-					if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
+					if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader, replaceResponse.Error); hasError {
 						err = apiErr
 					}
 				}

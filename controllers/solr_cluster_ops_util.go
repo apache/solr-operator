@@ -244,9 +244,7 @@ func getReplicasForPod(ctx context.Context, cloud *solrv1beta1.SolrCloud, podNam
 	queryParams.Add("action", "CLUSTERSTATUS")
 	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
 	if err == nil {
-		if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
-			err = apiErr
-		}
+		_, err = solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader, clusterResp.Error)
 	}
 	podNodeName := util.SolrNodeName(cloud, podName)
 	if err == nil {

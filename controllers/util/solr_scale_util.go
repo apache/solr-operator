@@ -23,8 +23,6 @@ import (
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	"net/url"
-	"strings"
 )
 
 // BalanceReplicasForCluster takes a SolrCloud and balances all replicas across the Pods that are currently alive.
@@ -51,25 +49,25 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				logger.Error(err, "Cannot start balancing replicas until all pods are ready.", "pods", *statefulSet.Spec.Replicas, "readyPods", statefulSet.Status.ReadyReplicas)
 			} else {
 				// Submit new BalanceReplicas request
-				replaceResponse := &solr_api.SolrAsyncResponse{}
-				queryParams := url.Values{}
-				queryParams.Add("action", "BALANCEREPLICAS")
-				queryParams.Add("parallel", "true")
-				queryParams.Add("async", requestId)
-				if err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse); err == nil {
-					if hasError, apiErr := solr_api.CheckForCollectionsApiError("BALANCEREPLICAS", replaceResponse.ResponseHeader); hasError {
-						err = apiErr
+				rebalanceRequest := &solr_api.SolrRebalanceRequest{
+					WaitForFinalState: true,
+					Async:             requestId,
+				}
+				rebalanceResponse := &solr_api.SolrAsyncResponse{}
+				if err = solr_api.CallCollectionsApiV2(ctx, solrCloud, "POST", "/api/cluster/rebalanceReplicas", nil, rebalanceRequest, rebalanceResponse); err == nil {
+					if isUnsupportedApi, apiError := solr_api.CheckForCollectionsApiError("BALANCEREPLICAS", rebalanceResponse.ResponseHeader, rebalanceResponse.Error); isUnsupportedApi {
+						// TODO: Remove this if-statement when Solr 9.3 is the lowest supported version
+						logger.Error(err, "Could not balance replicas across the cluster, because the SolrCloud's version does not support this feature.")
+						// Swallow the error after logging it, because it's not a real error.
+						// Balancing is not supported, so we just need to finish the clusterOp.
+						err = nil
+						balanceComplete = true
+					} else {
+						err = apiError
 					}
 				}
 				if err == nil {
 					logger.Info("Started balancing replicas across cluster.", "requestId", requestId)
-				} else if strings.Contains(message, "Not supported") {
-					// TODO: Find the right way to do this
-					logger.Error(err, "Could not balance replicas across the cluster, because the SolrCloud's version does not support this feature.")
-					// Swallow the error after logging it, because it's not a real error.
-					// Balancing is not supported, so we just need to finish the clusterOp.
-					err = nil
-					balanceComplete = true
 				} else {
 					logger.Error(err, "Could not balance replicas across the cluster. Will try again.", "requestId", requestId, "message", message)
 				}

@@ -33,6 +33,9 @@ type SolrOverseerStatusResponse struct {
 
 	// +optional
 	CollectionQueueSize int `json:"overseer_collection_queue_size,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 type SolrClusterStatusResponse struct {
@@ -40,6 +43,9 @@ type SolrClusterStatusResponse struct {
 
 	// +optional
 	ClusterStatus SolrClusterStatus `json:"cluster,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 type SolrClusterStatus struct {
