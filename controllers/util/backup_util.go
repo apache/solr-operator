@@ -133,11 +133,10 @@ func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collec
 
 func DeleteAsyncInfoForBackup(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (err error) {
 	logger.Info("Calling to delete async info for backup command.", "solrCloud", cloud.Name, "collection", collection)
-	var message string
-	message, err = solr_api.DeleteAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
+	_, err = solr_api.DeleteAsyncRequest(ctx, cloud, AsyncIdForCollectionBackup(collection, backupName))
 
 	if err != nil {
-		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
+		logger.Error(err, "Error deleting async data for collection backup", "solrCloud", cloud.Name, "collection", collection)
 	}
 
 	return err
@@ -217,10 +216,8 @@ func ListAllSolrCollections(ctx context.Context, cloud *solr.SolrCloud, logger l
 	queryParams := url.Values{}
 	queryParams.Add("action", "LIST")
 	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, resp)
-	if err == nil {
-		if hasError, apiErr := solr_api.CheckForCollectionsApiError("LIST", resp.ResponseHeader, resp.Error); hasError {
-			err = apiErr
-		}
+	if _, apiErr := solr_api.CheckForCollectionsApiError("LIST", resp.ResponseHeader, resp.Error); apiErr != nil {
+		err = apiErr
 	}
 	return resp.Collections, err
 }

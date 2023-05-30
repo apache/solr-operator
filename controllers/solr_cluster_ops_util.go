@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, podList []corev1.Pod, logger logr.Logger) (clusterOpLock string, clusterOpMetadata string, retryLaterDuration time.Duration, err error) {
+func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, podList []corev1.Pod, logger logr.Logger) (clusterLockAcquired bool, retryLaterDuration time.Duration, err error) {
 	desiredPods := int(*instance.Spec.Replicas)
 	configuredPods := int(*statefulSet.Spec.Replicas)
 	if desiredPods != configuredPods {
@@ -51,6 +51,8 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 			statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = strconv.Itoa(configuredPods - 1)
 			if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
 				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", util.ScaleDownLock, "clusterOpMetadata", configuredPods-1)
+			} else {
+				clusterLockAcquired = true
 			}
 		} else if desiredPods > configuredPods && instance.Spec.Autoscaling.PopulatePodsOnScaleUp {
 			// Managed Scale up!
@@ -58,11 +60,13 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleUpLock
 			// The scaleUp metadata is the number of nodes that existed before the scaleUp.
 			// This allows the scaleUp operation to know which pods will be empty after the statefulSet is scaledUp.
-			statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = strconv.Itoa(configuredPods - 1)
+			statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = strconv.Itoa(configuredPods)
 			// We want to set the number of replicas at the beginning of the scaleUp operation
 			statefulSet.Spec.Replicas = pointer.Int32(int32(desiredPods))
 			if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
 				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", util.ScaleUpLock, "clusterOpMetadata", configuredPods, "newStatefulSetSize", desiredPods)
+			} else {
+				clusterLockAcquired = true
 			}
 		} else {
 			err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)
@@ -243,8 +247,8 @@ func getReplicasForPod(ctx context.Context, cloud *solrv1beta1.SolrCloud, podNam
 	queryParams := url.Values{}
 	queryParams.Add("action", "CLUSTERSTATUS")
 	err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
-	if err == nil {
-		_, err = solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader, clusterResp.Error)
+	if _, apiError := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader, clusterResp.Error); apiError != nil {
+		err = apiError
 	}
 	podNodeName := util.SolrNodeName(cloud, podName)
 	if err == nil {

@@ -34,7 +34,7 @@ import (
 func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, err error) {
 	logger = logger.WithValues("balanceReason", balanceReason)
 	// If the Cloud has 1 or zero pods, there is no reason to balance replicas.
-	if solrCloud.Spec.Replicas == nil || *solrCloud.Spec.Replicas < 1 {
+	if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas < 1 {
 		balanceComplete = true
 	} else {
 		requestId := "balance-replicas-" + balanceCmdUniqueId
@@ -45,8 +45,8 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 			logger.Error(err, "Error occurred while checking the status of the balance replicas task. Will try again.", "requestId", requestId)
 		} else if asyncState == "notfound" {
 			// Only start the balance command if all pods are ready
-			if *statefulSet.Spec.Replicas == statefulSet.Status.ReadyReplicas {
-				logger.Error(err, "Cannot start balancing replicas until all pods are ready.", "pods", *statefulSet.Spec.Replicas, "readyPods", statefulSet.Status.ReadyReplicas)
+			if *statefulSet.Spec.Replicas != statefulSet.Status.ReadyReplicas {
+				logger.Info("Cannot start balancing replicas until all pods are ready.", "pods", *statefulSet.Spec.Replicas, "readyPods", statefulSet.Status.ReadyReplicas)
 			} else {
 				// Submit new BalanceReplicas request
 				rebalanceRequest := &solr_api.SolrRebalanceRequest{
@@ -54,22 +54,21 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 					Async:             requestId,
 				}
 				rebalanceResponse := &solr_api.SolrAsyncResponse{}
-				if err = solr_api.CallCollectionsApiV2(ctx, solrCloud, "POST", "/api/cluster/rebalanceReplicas", nil, rebalanceRequest, rebalanceResponse); err == nil {
-					if isUnsupportedApi, apiError := solr_api.CheckForCollectionsApiError("BALANCEREPLICAS", rebalanceResponse.ResponseHeader, rebalanceResponse.Error); isUnsupportedApi {
-						// TODO: Remove this if-statement when Solr 9.3 is the lowest supported version
-						logger.Error(err, "Could not balance replicas across the cluster, because the SolrCloud's version does not support this feature.")
-						// Swallow the error after logging it, because it's not a real error.
-						// Balancing is not supported, so we just need to finish the clusterOp.
-						err = nil
-						balanceComplete = true
-					} else {
-						err = apiError
-					}
+				err = solr_api.CallCollectionsApiV2(ctx, solrCloud, "POST", "/api/cluster/rebalanceReplicas", nil, rebalanceRequest, rebalanceResponse)
+				if isUnsupportedApi, apiError := solr_api.CheckForCollectionsApiError("BALANCE_REPLICAS", rebalanceResponse.ResponseHeader, rebalanceResponse.Error); isUnsupportedApi {
+					// TODO: Remove this if-statement when Solr 9.3 is the lowest supported version
+					logger.Error(err, "Could not balance replicas across the cluster, because the SolrCloud's version does not support this feature.")
+					// Swallow the error after logging it, because it's not a real error.
+					// Balancing is not supported, so we just need to finish the clusterOp.
+					err = nil
+					balanceComplete = true
+				} else if apiError != nil {
+					err = apiError
 				}
 				if err == nil {
 					logger.Info("Started balancing replicas across cluster.", "requestId", requestId)
 				} else {
-					logger.Error(err, "Could not balance replicas across the cluster. Will try again.", "requestId", requestId, "message", message)
+					logger.Error(err, "Could not balance replicas across the cluster. Will try again.")
 				}
 			}
 		} else {
@@ -85,8 +84,8 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 			// Delete the async request Id if the async request is successful or failed.
 			// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
 			if asyncState == "completed" || asyncState == "failed" {
-				if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
-					logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
+				if _, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
+					logger.Error(err, "Could not delete Async request status.", "requestId", requestId)
 					balanceComplete = false
 				}
 			}

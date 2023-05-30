@@ -462,22 +462,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		// Start cluster operations if needed.
 		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
 		// And that lock will tell future reconcile loops that the operation needs to be done.
-		clusterOpLock = ""
-		clusterOpMetadata := ""
 		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
 		// a "locked" cluster operation
-		clusterOpLock, clusterOpMetadata, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
-
-		if retryLaterDuration <= 0 && err == nil && clusterOpLock != "" {
-			patchedStatefulSet := statefulSet.DeepCopy()
-			patchedStatefulSet.Annotations[util.ClusterOpsLockAnnotation] = clusterOpLock
-			patchedStatefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = clusterOpMetadata
-			if err = r.Patch(ctx, patchedStatefulSet, client.StrategicMergeFrom(statefulSet)); err != nil {
-				logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", clusterOpLock, "clusterOpMetadata", clusterOpMetadata)
-			} else {
-				statefulSet = patchedStatefulSet
-			}
-		}
+		_, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
 	}
 	if err != nil && retryLaterDuration == 0 {
 		retryLaterDuration = time.Second * 5

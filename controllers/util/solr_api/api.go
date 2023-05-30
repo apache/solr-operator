@@ -112,25 +112,30 @@ func CheckAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId strin
 	queryParams := url.Values{}
 	queryParams.Set("action", "REQUESTSTATUS")
 	queryParams.Set("requestid", asyncId)
-	if err = CallCollectionsApi(ctx, cloud, queryParams, asyncStatus); err == nil {
-		if _, err = CheckForCollectionsApiError("REQUESTSTATUS", asyncStatus.ResponseHeader, asyncStatus.Error); err == nil {
-			asyncState = asyncStatus.Status.AsyncState
-			message = asyncStatus.Status.Message
-		}
+	err = CallCollectionsApi(ctx, cloud, queryParams, asyncStatus)
+	if _, apiErr := CheckForCollectionsApiError("REQUESTSTATUS", asyncStatus.ResponseHeader, asyncStatus.Error); apiErr != nil {
+		err = apiErr
+	}
+	if err == nil {
+		asyncState = asyncStatus.Status.AsyncState
+		message = asyncStatus.Status.Message
 	}
 
 	return
 }
 
-func DeleteAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (message string, err error) {
+func DeleteAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (status string, err error) {
 	deleteStatus := &SolrDeleteRequestStatus{}
 
 	queryParams := url.Values{}
 	queryParams.Set("action", "DELETESTATUS")
 	queryParams.Set("requestid", asyncId)
-	if err = CallCollectionsApi(ctx, cloud, queryParams, deleteStatus); err == nil {
-		_, err = CheckForCollectionsApiError("DELETESTATUS", deleteStatus.ResponseHeader, deleteStatus.Error)
-		message = deleteStatus.Status
+	err = CallCollectionsApi(ctx, cloud, queryParams, deleteStatus)
+	if _, apiErr := CheckForCollectionsApiError("DELETESTATUS", deleteStatus.ResponseHeader, deleteStatus.Error); apiErr != nil {
+		err = apiErr
+	}
+	if err == nil {
+		status = deleteStatus.Status
 	}
 
 	return
