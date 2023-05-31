@@ -300,6 +300,8 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | statefulSetOptions.podManagementPolicy | string | `"Parallel"` | Policy for how Solr pods should be managed in the statefulSet, ["OrderedReady" or "Parallel"](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies) |
 | commonServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr common service |
 | commonServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr common service |
+| commonServiceOptions.sessionAffinity | string |  | Used to maintain session affinity. Enable client IP based session affinity |
+| commonServiceOptions.sessionAffinityConfig | object |  | Sets configuration of session affinity |
 | headlessServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr headless service |
 | headlessServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr headless service |
 | nodeServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr node service(s) |

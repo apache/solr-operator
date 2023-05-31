@@ -167,6 +167,14 @@ labels:
 annotations:
   {{- toYaml .Values.commonServiceOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinity -}}
+sessionAffinity:
+  {{- toYaml .Values.commonServiceOptions.sessionAffinity | nindent 2 }}
+{{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.commonServiceOptions.sessionAffinityConfig | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*

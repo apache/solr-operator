@@ -169,9 +169,10 @@ type ServiceOptions struct {
 	// +optional
 	SessionAffinity string `json:"sessionAffinity,omitempty"`
 
-	// sessionAffinityConfig contains the configurations of session affinity.
 	// +optional
-	SessionAffinityConfig corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
+	// +kubebuilder:default=None
+	// +kubebuilder:validation:Enum=None,ClientIP
+	SessionAffinityConfig *corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
 }
 
 // IngressOptions defines custom options for ingresses

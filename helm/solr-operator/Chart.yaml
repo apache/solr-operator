@@ -68,6 +68,13 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/561
         - name: Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html
+    - kind: added
+      description: Ability to set SessionAffinity and SessionAffinityConfig for Services
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/535
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/571
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease

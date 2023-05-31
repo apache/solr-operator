@@ -344,6 +344,8 @@ statefulSetOptions:
 commonServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 headlessServiceOptions:
   annotations: {}
