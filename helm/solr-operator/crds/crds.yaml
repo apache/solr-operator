@@ -342,11 +342,13 @@ spec:
                 description: Define how Solr nodes should be autoscaled.
                 properties:
                   populatePodsOnScaleUp:
-                    default: false
+                    default: true
                     description: "PopulatePodsOnScaleUp determines whether Solr replicas
                       should be moved to newly-created Pods that have been created
                       due to the SolrCloud scaling up. \n This feature is only available
-                      to users using Solr 9.3 or newer."
+                      to users using Solr 9.3 or newer. If this is set to \"true\"
+                      for a cloud that is running an unsupported version of Solr,
+                      the replicas will not be moved."
                     type: boolean
                   vacatePodsOnScaleDown:
                     default: true

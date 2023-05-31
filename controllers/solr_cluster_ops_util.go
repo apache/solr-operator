@@ -54,7 +54,7 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 			} else {
 				clusterLockAcquired = true
 			}
-		} else if desiredPods > configuredPods && instance.Spec.Autoscaling.PopulatePodsOnScaleUp {
+		} else if desiredPods > configuredPods && (instance.Spec.Autoscaling.PopulatePodsOnScaleUp == nil || *instance.Spec.Autoscaling.PopulatePodsOnScaleUp) {
 			// Managed Scale up!
 			originalStatefulSet := statefulSet.DeepCopy()
 			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleUpLock

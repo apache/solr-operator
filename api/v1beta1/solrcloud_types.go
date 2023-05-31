@@ -737,10 +737,11 @@ type SolrAutoscalingOptions struct {
 	// created due to the SolrCloud scaling up.
 	//
 	// This feature is only available to users using Solr 9.3 or newer.
+	// If this is set to "true" for a cloud that is running an unsupported version of Solr, the replicas will not be moved.
 	//
-	// +kubebuilder:default=false
+	// +kubebuilder:default=true
 	// +optional
-	PopulatePodsOnScaleUp bool `json:"populatePodsOnScaleUp,omitempty"`
+	PopulatePodsOnScaleUp *bool `json:"populatePodsOnScaleUp,omitempty"`
 }
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to

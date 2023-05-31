@@ -160,10 +160,6 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 	FContext("with replica migration", func() {
 
-		BeforeEach(func() {
-			solrCloud.Spec.Autoscaling.PopulatePodsOnScaleUp = true
-		})
-
 		FIt("Scales Up", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()
 			solrCloud.Spec.Replicas = pointer.Int32(int32(3))
@@ -192,7 +188,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 	FContext("without replica migration", func() {
 
 		BeforeEach(func() {
-			solrCloud.Spec.Autoscaling.PopulatePodsOnScaleUp = false
+			solrCloud.Spec.Autoscaling.PopulatePodsOnScaleUp = pointer.Bool(false)
 		})
 
 		FIt("Scales Up", func(ctx context.Context) {
