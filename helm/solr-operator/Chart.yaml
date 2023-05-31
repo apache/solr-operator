@@ -68,6 +68,15 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/561
         - name: Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html
+    - kind: added
+      description: Replica migration is now managed on scale up of Solr Nodes, by default.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/567
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/575
+        - name: Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease
