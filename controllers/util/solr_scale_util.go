@@ -54,7 +54,7 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 					Async:             requestId,
 				}
 				rebalanceResponse := &solr_api.SolrAsyncResponse{}
-				err = solr_api.CallCollectionsApiV2(ctx, solrCloud, "POST", "/api/cluster/rebalanceReplicas", nil, rebalanceRequest, rebalanceResponse)
+				err = solr_api.CallCollectionsApiV2(ctx, solrCloud, "POST", "/api/cluster/balanceReplicas", nil, rebalanceRequest, rebalanceResponse)
 				if isUnsupportedApi, apiError := solr_api.CheckForCollectionsApiError("BALANCE_REPLICAS", rebalanceResponse.ResponseHeader, rebalanceResponse.Error); isUnsupportedApi {
 					// TODO: Remove this if-statement when Solr 9.3 is the lowest supported version
 					logger.Error(err, "Could not balance replicas across the cluster, because the SolrCloud's version does not support this feature.")

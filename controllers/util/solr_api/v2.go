@@ -64,7 +64,7 @@ func CallCollectionsApiV2(ctx context.Context, cloud *solr.SolrCloud, urlMethod 
 		}
 	}
 	var req *http.Request
-	if req, err = http.NewRequest(urlMethod, cloudUrl, b); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, urlMethod, cloudUrl, b); err != nil {
 		return err
 	}
 
@@ -74,6 +74,7 @@ func CallCollectionsApiV2(ctx context.Context, cloud *solr.SolrCloud, urlMethod 
 			req.Header.Add(key, header)
 		}
 	}
+	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
 	if resp, err = client.Do(req); err != nil {
