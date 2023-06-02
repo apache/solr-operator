@@ -60,23 +60,23 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/566
     - kind: added
-      description: Replica migration is now managed on scale down of Solr Nodes, by default.
+      description: Scale down of Solr Pods includes Replica migration by default.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/559
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/561
         - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html#solr-pod-scale-down
     - kind: added
-      description: Replica migration is now managed on scale up of Solr Nodes, by default.
+      description: Scale up of Solr Pods includes Replica migration by default, for Solr 9.3+.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/567
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/575
         - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html#solr-pod-scale-up
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease

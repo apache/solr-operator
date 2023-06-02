@@ -34,6 +34,7 @@ The `autoscaling` section in the SolrCloud CRD can be configured in the followin
 spec:
   autoscaling:
     vacatePodsOnScaleDown: true # Default: true
+    populatePodsOnScaleUp: true # Default: true
 ```
 
 ## Replica Movement
@@ -63,7 +64,7 @@ that change will be reflected in the StatefulSet immediately.
 Pods will be deleted even if replicas live on those pods.
 
 If `autoscaling.vacatePodsOnScaleDown` option is enabled, which it is by default, then the following steps occur:
-1. Acquire a cluster-ops lock on the SolrCloud. (This means other cluster operations, such as a rolling restart, cannot occur during the scale down operation)
+1. Acquire a cluster-ops lock on the SolrCloud. (This means other cluster operations, such as a rolling restart and scale up, cannot occur during the scale down operation)
 1. Scale down the last pod.
    1. Mark the pod as "notReady" so that traffic is diverted away from this pod (for requests to the common endpoint, requests that target that node directly will not be affected).
    1. Check to see if the last pod has any replicas.
@@ -83,3 +84,33 @@ If the `SolrCloud.spec.replicas` is set to 0, then the SolrCloud will set the st
 
 The data will be saved in PVCs if the SolrCloud is set to use persistent storage, and `dataStorage.persistent.reclaimPolicy` is set to `Retain`.
 If the `reclaimPolicy` is set to `Delete`, these PVCs will be deleted when the pods are scaled down.
+
+### Solr Pod Scale-Up
+
+When the desired number of Solr Pods that should be run `SolrCloud.Spec.Replicas` is increased,
+the `SolrCloud.spec.autoscaling.populatePodsOnScaleUp` option determines whether the Solr Operator should move replicas
+onto the pods that have been created because of the scale-up.
+
+If `autoscaling.populatePodsOnScaleUp` option is not enabled, then whenever the `SolrCloud.Spec.Replicas` is increased,
+the StatefulSet's replicas will be increased, and no other actions will be taken by the Solr Operator.
+This means that the new pods that are created will likely remain empty until the user takes an action themselves.
+This could be creating collections, migrating replicas or scaling up existing shards/collections.
+
+If `autoscaling.populatePodsOnScaleUp` option is enabled, which it is by default, then the following steps occur:
+1. Acquire a cluster-ops lock on the SolrCloud. (This means other cluster operations, such as a rolling restart and scale down, cannot occur during the scale up operation)
+1. Scale up to the StatefulSet to the desired `spec.replicas` (number of pods).
+1. Wait for all pods in the cluster to become healthy.
+   * Rolling restarts cannot occur at the same time, so most likely every existing pod will be ready, and we will just be waiting for the newly created pods.
+1. Start an asynchronous command to balance replicas across all pods. (This does not just target the newly created pods)
+1. Check if the async command completed, if not then loop back until the command is finished.
+1. If the command succeeded, continue, if not go back to step #4.
+1. Give up the cluster-ops lock on the SolrCloud. The scale-up operation is complete.
+
+
+#### Solr Version Compatibility
+
+The managed scale-up option relies on the BalanceReplicas API in Solr, which was added in Solr 9.3.
+Therefore, this option cannot be used with Solr versions < 9.3.
+If `autoscaling.populatePodsOnScaleUp` option is enabled and an unsupported version of Solr is used, the cluster lock will
+be given up after the BalanceReplicas API call fails.
+This behavior is very similar to `autoscaling.populatePodsOnScaleUp` being disabled.
