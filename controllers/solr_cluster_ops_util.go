@@ -42,6 +42,12 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 		// The VacatePodsOnScaleDown option is enabled by default, so treat "nil" like "true"
 		if desiredPods < configuredPods && desiredPods > 0 &&
 			(instance.Spec.Autoscaling.VacatePodsOnScaleDown == nil || *instance.Spec.Autoscaling.VacatePodsOnScaleDown) {
+			if len(podList) > configuredPods {
+				// There are too many pods, the statefulSet controller has yet to delete unwanted pods.
+				// Do not start the scale down until these extra pods are deleted.
+				return false, time.Second * 5, nil
+			}
+
 			// Managed Scale down!
 			originalStatefulSet := statefulSet.DeepCopy()
 			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleDownLock
@@ -55,6 +61,11 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 				clusterLockAcquired = true
 			}
 		} else if desiredPods > configuredPods && (instance.Spec.Autoscaling.PopulatePodsOnScaleUp == nil || *instance.Spec.Autoscaling.PopulatePodsOnScaleUp) {
+			if len(podList) < configuredPods {
+				// There are not enough pods, the statefulSet controller has yet to create the previously desired pods.
+				// Do not start the scale up until these missing pods are created.
+				return false, time.Second * 5, nil
+			}
 			// Managed Scale up!
 			originalStatefulSet := statefulSet.DeepCopy()
 			statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.ScaleUpLock
