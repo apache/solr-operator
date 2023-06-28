@@ -115,9 +115,6 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 			queryParams := url.Values{}
 			queryParams.Add("action", "CLUSTERSTATUS")
 			err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
-			if _, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader, clusterResp.Error); apiErr != nil {
-				err = apiErr
-			}
 			if err == nil {
 				queryParams.Set("action", "OVERSEERSTATUS")
 				err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, overseerResp)
@@ -529,6 +526,7 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				queryParams.Add("action", "REPLACENODE")
 				queryParams.Add("parallel", "true")
 				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
+				queryParams.Add("waitForFinalState", "true")
 				queryParams.Add("async", requestId)
 				err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
 				if _, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader, replaceResponse.Error); apiErr != nil {
