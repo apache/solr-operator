@@ -151,6 +151,19 @@ If both of those criteria are met, then an individual ClusterIP Service will be 
 If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
 Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
 
+**Note:** If you have no need for an `Ingress` or a specific hostname to address your SolrCloud cluster you can create a simple loadbalancer that can be addressed from outside the kubernetes cluster. To achieve this you can add annotations to `SolrCloud.spec.customSolrKubeOptions.commonServiceOptions.annotations`. Exposing the headlessService is an option as well through `SolrCloud.spec.customSolrKubeOptions.headlessServiceOptions.annotations`, mind that using the headless service requires a load balancing implementation in the client calling the SolrCloud api.
+Snippet below shows you can create an NLB on AWS:
+
+```yaml
+spec:
+  customSolrKubeOptions:
+    commonServiceOptions:
+      annotations: 
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing  
+```
+
 ## Backups
 
 Solr Backups are enabled via the Solr Operator.
