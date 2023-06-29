@@ -117,6 +117,7 @@ spec:
   {{- if .Values.autoscaling }}
   autoscaling:
     vacatePodsOnScaleDown: {{ .Values.autoscaling.vacatePodsOnScaleDown }}
+    populatePodsOnScaleUp: {{ .Values.autoscaling.populatePodsOnScaleUp }}
   {{- end }}
 
   {{- if .Values.dataStorage }}

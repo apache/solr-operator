@@ -146,6 +146,7 @@ availability:
 # Various settings to control autoscaling of Solr pods and replicas
 autoscaling:
   vacatePodsOnScaleDown: true
+  populatePodsOnScaleUp: true
 
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:

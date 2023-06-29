@@ -23,7 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
-	"io/ioutil"
+	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
 	"net/url"
@@ -55,6 +55,9 @@ type SolrAsyncResponse struct {
 
 	// +optional
 	Status SolrAsyncStatus `json:"status,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 type SolrResponseHeader struct {
@@ -77,6 +80,9 @@ type SolrAsyncStatusResponse struct {
 
 	// +optional
 	Status SolrAsyncStatus `json:"status,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 type SolrDeleteRequestStatus struct {
@@ -85,6 +91,9 @@ type SolrDeleteRequestStatus struct {
 	// Status of the delete request
 	// +optional
 	Status string `json:"status,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 type SolrCollectionsListing struct {
@@ -92,6 +101,9 @@ type SolrCollectionsListing struct {
 
 	// +optional
 	Collections []string `json:"collections,omitempty"`
+
+	// +optional
+	Error *SolrErrorResponse `json:"error,omitempty"`
 }
 
 func CheckAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (asyncState string, message string, err error) {
@@ -100,25 +112,30 @@ func CheckAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId strin
 	queryParams := url.Values{}
 	queryParams.Set("action", "REQUESTSTATUS")
 	queryParams.Set("requestid", asyncId)
-	if err = CallCollectionsApi(ctx, cloud, queryParams, asyncStatus); err == nil {
-		if _, err = CheckForCollectionsApiError("REQUESTSTATUS", asyncStatus.ResponseHeader); err == nil {
-			asyncState = asyncStatus.Status.AsyncState
-			message = asyncStatus.Status.Message
-		}
+	err = CallCollectionsApi(ctx, cloud, queryParams, asyncStatus)
+	if _, apiErr := CheckForCollectionsApiError("REQUESTSTATUS", asyncStatus.ResponseHeader, asyncStatus.Error); apiErr != nil {
+		err = apiErr
+	}
+	if err == nil {
+		asyncState = asyncStatus.Status.AsyncState
+		message = asyncStatus.Status.Message
 	}
 
 	return
 }
 
-func DeleteAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (message string, err error) {
+func DeleteAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId string) (status string, err error) {
 	deleteStatus := &SolrDeleteRequestStatus{}
 
 	queryParams := url.Values{}
 	queryParams.Set("action", "DELETESTATUS")
 	queryParams.Set("requestid", asyncId)
-	if err = CallCollectionsApi(ctx, cloud, queryParams, deleteStatus); err == nil {
-		_, err = CheckForCollectionsApiError("DELETESTATUS", deleteStatus.ResponseHeader)
-		message = deleteStatus.Status
+	err = CallCollectionsApi(ctx, cloud, queryParams, deleteStatus)
+	if _, apiErr := CheckForCollectionsApiError("DELETESTATUS", deleteStatus.ResponseHeader, deleteStatus.Error); apiErr != nil {
+		err = apiErr
+	}
+	if err == nil {
+		status = deleteStatus.Status
 	}
 
 	return
@@ -153,8 +170,8 @@ func CallCollectionsApi(ctx context.Context, cloud *solr.SolrCloud, urlParams ur
 
 	defer resp.Body.Close()
 
-	if err == nil && resp.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(resp.Body)
+	if err == nil && resp.StatusCode >= 400 {
+		b, _ := io.ReadAll(resp.Body)
 		err = errors.NewServiceUnavailable(fmt.Sprintf("Recieved bad response code of %d from solr with response: %s", resp.StatusCode, string(b)))
 	}
 

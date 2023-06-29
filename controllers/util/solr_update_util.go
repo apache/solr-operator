@@ -116,14 +116,10 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 			queryParams.Add("action", "CLUSTERSTATUS")
 			err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
 			if err == nil {
-				if hasError, apiErr := solr_api.CheckForCollectionsApiError("CLUSTERSTATUS", clusterResp.ResponseHeader); hasError {
+				queryParams.Set("action", "OVERSEERSTATUS")
+				err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, overseerResp)
+				if _, apiErr := solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", overseerResp.ResponseHeader, overseerResp.Error); apiErr != nil {
 					err = apiErr
-				} else {
-					queryParams.Set("action", "OVERSEERSTATUS")
-					err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, overseerResp)
-					if hasError, apiErr = solr_api.CheckForCollectionsApiError("OVERSEERSTATUS", clusterResp.ResponseHeader); hasError {
-						err = apiErr
-					}
 				}
 			}
 			if err != nil {
@@ -502,7 +498,7 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 	return allNodeNames
 }
 
-// EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod, if the Pod is using ephemeral storage.
+// EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod.
 // For updates this will only be called for pods using ephemeral data.
 // For scale-down operations, this can be called for pods using ephemeral or persistent data.
 func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, logger logr.Logger) (err error, canDeletePod bool) {
@@ -521,6 +517,7 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 		// First check to see if the Async Replace request has started
 		if asyncState, message, asyncErr := solr_api.CheckAsyncRequest(ctx, solrCloud, requestId); asyncErr != nil {
 			err = asyncErr
+			logger.Error(err, "Error occurred while checking the status of the ReplaceNode task. Will try again.", "requestId", requestId)
 		} else if asyncState == "notfound" {
 			if podHasReplicas {
 				// Submit new Replace Node request
@@ -529,15 +526,16 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				queryParams.Add("action", "REPLACENODE")
 				queryParams.Add("parallel", "true")
 				queryParams.Add("sourceNode", SolrNodeName(solrCloud, pod.Name))
+				queryParams.Add("waitForFinalState", "true")
 				queryParams.Add("async", requestId)
 				err = solr_api.CallCollectionsApi(ctx, solrCloud, queryParams, replaceResponse)
-				if hasError, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader); hasError {
+				if _, apiErr := solr_api.CheckForCollectionsApiError("REPLACENODE", replaceResponse.ResponseHeader, replaceResponse.Error); apiErr != nil {
 					err = apiErr
 				}
 				if err == nil {
 					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
 				} else {
-					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again later.", "requestId", requestId, "message", message)
+					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again.")
 				}
 			} else {
 				canDeletePod = true
@@ -556,8 +554,8 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 			// Delete the async request Id if the async request is successful or failed.
 			// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
 			if asyncState == "completed" || asyncState == "failed" {
-				if message, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
-					logger.Error(err, "Could not delete Async request status.", "requestId", requestId, "message", message)
+				if _, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
+					logger.Error(err, "Could not delete Async request status.", "requestId", requestId)
 					canDeletePod = false
 				}
 			}

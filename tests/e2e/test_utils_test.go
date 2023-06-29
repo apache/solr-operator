@@ -229,7 +229,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 			[]string{
 				"curl",
 				fmt.Sprintf(
-					"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s",
+					"http://localhost:%d/solr/admin/collections?action=CREATE&name=%s&replicationFactor=%d&numShards=%d%s&async=%s&maxShardsPerNode=10",
 					solrCloud.Spec.SolrAddressability.PodPort,
 					collection,
 					replicasPerShard,
@@ -328,7 +328,7 @@ func queryCollectionWithNoReplicaAvailable(ctx context.Context, solrCloud *solrv
 		)
 		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
 		g.Expect(response).To(ContainSubstring("Error trying to proxy request for url"), "Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection")
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Collection query did not fail in the correct way")
 }
 
 func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {

@@ -113,7 +113,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
 | backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 | autoscaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
-
+| autoscaling.populatePodsOnScaleUp | boolean | `true` | While scaling up the SolrCloud, migrate replicas onto the new Solr Pods after they are created. This uses the Balance Replicas API in Solr that is only available in Solr 9.3+. This option will be ignored if using an unsupported version of Solr.  |
 
 ### Data Storage Options
 
