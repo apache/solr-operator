@@ -96,9 +96,9 @@ type SolrCloudSpec struct {
 	// +optional
 	Availability SolrAvailabilityOptions `json:"availability,omitempty"`
 
-	// Define how Solr nodes should be autoscaled.
+	// Configure how Solr nodes should be scaled.
 	// +optional
-	Autoscaling SolrAutoscalingOptions `json:"autoscaling,omitempty"`
+	Scaling SolrScalingOptions `json:"scaling,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -726,9 +726,10 @@ const (
 	ClusterWidePDB SolrPodDisruptionBudgetMethod = "ClusterWide"
 )
 
-type SolrAutoscalingOptions struct {
+type SolrScalingOptions struct {
 	// VacatePodsOnScaleDown determines whether Solr replicas are moved off of a Pod before the Pod is
 	// deleted due to the SolrCloud scaling down.
+	//
 	// +kubebuilder:default=true
 	// +optional
 	VacatePodsOnScaleDown *bool `json:"vacatePodsOnScaleDown,omitempty"`

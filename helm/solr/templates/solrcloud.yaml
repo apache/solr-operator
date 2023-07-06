@@ -114,10 +114,10 @@ spec:
       {{- toYaml .Values.availability.podDisruptionBudget | nindent 6 }}
   {{- end }}
 
-  {{- if .Values.autoscaling }}
-  autoscaling:
-    vacatePodsOnScaleDown: {{ .Values.autoscaling.vacatePodsOnScaleDown }}
-    populatePodsOnScaleUp: {{ .Values.autoscaling.populatePodsOnScaleUp }}
+  {{- if .Values.scaling }}
+  scaling:
+    vacatePodsOnScaleDown: {{ .Values.scaling.vacatePodsOnScaleDown }}
+    populatePodsOnScaleUp: {{ .Values.scaling.populatePodsOnScaleUp }}
   {{- end }}
 
   {{- if .Values.dataStorage }}

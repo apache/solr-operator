@@ -67,7 +67,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/561
         - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html#solr-pod-scale-down
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/scaling.html#solr-pod-scale-down
     - kind: added
       description: Scale up of Solr Pods includes Replica migration by default, for Solr 9.3+.
       links:
@@ -76,7 +76,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/575
         - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/autoscaling.html#solr-pod-scale-up
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/scaling.html#solr-pod-scale-up
     - kind: changed
       description: The Solr Operator is now built with Go 1.20
       links:

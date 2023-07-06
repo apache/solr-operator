@@ -271,16 +271,17 @@ All ACL fields are **required** if an ACL is used.
 This means that even if Solr sets the ACLs on znodes, they will not be enforced by Zookeeper. If your organization requires Solr to use ZK ACLs, then you'll need to 
 deploy Zookeeper to Kubernetes using another approach, such as using a Helm chart. 
 
-## Autoscaling
+## Scaling
 _Since v0.8.0_
 
 ```yaml
 spec:
-  autoscaling:
+  scaling:
     vacatePodsOnScaleDown: true
+    populatePodsOnScaleUp: true
 ```
 
-Please refer to the [Autoscaling page](autoscaling.md) for more information.
+Please refer to the [Scaling page](scaling.md) for more information.
 
 ## Override Built-in Solr Configuration Files
 _Since v0.2.7_

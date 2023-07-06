@@ -110,10 +110,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.8.0
-- The new `SolrCloud.spec.autoscaling.vacatePodsOnScaleDown` option is enabled by default.
+- The new `SolrCloud.spec.scaling.vacatePodsOnScaleDown` option is enabled by default.
   This means that any SolrCloud that has its `spec.replicas` decreased will have the replicas migrated off of the soon-to-be-deleted pods by default.
   Set this value to `false` to retain the previous functionality.
-  More information can be found in the [Solr Pod Scale-Down](solr-cloud/autoscaling.md#solr-pod-scale-down) documentation.
+  More information can be found in the [Solr Pod Scale-Down](solr-cloud/scaling.md#solr-pod-scale-down) documentation.
 
 ### v0.7.0
 - **Kubernetes support is now limited to 1.21+.**  

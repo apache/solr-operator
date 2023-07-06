@@ -89,25 +89,6 @@ spec:
                 items:
                   type: string
                 type: array
-              autoscaling:
-                description: Define how Solr nodes should be autoscaled.
-                properties:
-                  populatePodsOnScaleUp:
-                    default: true
-                    description: "PopulatePodsOnScaleUp determines whether Solr replicas
-                      should be moved to newly-created Pods that have been created
-                      due to the SolrCloud scaling up. \n This feature is only available
-                      to users using Solr 9.3 or newer. If this is set to \"true\"
-                      for a cloud that is running an unsupported version of Solr,
-                      the replicas will not be moved."
-                    type: boolean
-                  vacatePodsOnScaleDown:
-                    default: true
-                    description: VacatePodsOnScaleDown determines whether Solr replicas
-                      are moved off of a Pod before the Pod is deleted due to the
-                      SolrCloud scaling down.
-                    type: boolean
-                type: object
               availability:
                 description: Define how Solr nodes should be available.
                 properties:
@@ -9195,6 +9176,25 @@ spec:
                 description: The number of solr nodes to run
                 format: int32
                 type: integer
+              scaling:
+                description: Configure how Solr nodes should be scaled.
+                properties:
+                  populatePodsOnScaleUp:
+                    default: true
+                    description: "PopulatePodsOnScaleUp determines whether Solr replicas
+                      should be moved to newly-created Pods that have been created
+                      due to the SolrCloud scaling up. \n This feature is only available
+                      to users using Solr 9.3 or newer. If this is set to \"true\"
+                      for a cloud that is running an unsupported version of Solr,
+                      the replicas will not be moved."
+                    type: boolean
+                  vacatePodsOnScaleDown:
+                    default: true
+                    description: VacatePodsOnScaleDown determines whether Solr replicas
+                      are moved off of a Pod before the Pod is deleted due to the
+                      SolrCloud scaling down.
+                    type: boolean
+                type: object
               solrAddressability:
                 description: Customize how Solr is addressed both internally and externally
                   in Kubernetes.
