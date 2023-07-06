@@ -156,6 +156,79 @@ func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, inst
 	return
 }
 
+func determineRollingUpdateClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, outOfDatePods util.OutOfDatePodSegmentation, logger logr.Logger) (clusterLockAcquired bool, retryLaterDuration time.Duration, err error) {
+	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && !outOfDatePods.IsEmpty() {
+		// Managed Rolling Upgrade!
+		originalStatefulSet := statefulSet.DeepCopy()
+		statefulSet.Annotations[util.ClusterOpsLockAnnotation] = util.UpdateLock
+		// No rolling update metadata is currently required
+		statefulSet.Annotations[util.ClusterOpsMetadataAnnotation] = ""
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to start clusterOp", "clusterOp", util.UpdateLock, "clusterOpMetadata", "")
+		} else {
+			clusterLockAcquired = true
+		}
+	}
+	return
+}
+
+// handleManagedCloudRollingUpdate does the logic of a managed and "locked" cloud rolling update operation.
+// This will take many reconcile loops to complete, as it is deleting pods/moving replicas.
+func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, outOfDatePods util.OutOfDatePodSegmentation, hasReadyPod bool, availableUpdatedPodCount int, logger logr.Logger) (retryLaterDuration time.Duration, err error) {
+	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
+	updateLogger := logger.WithName("ManagedUpdateSelector")
+
+	// First check if all pods are up to date. If so the rolling update is complete
+	if outOfDatePods.IsEmpty() {
+		// Once the rolling update is complete, finish the cluster operation by deleting the statefulSet annotations
+		originalStatefulSet := statefulSet.DeepCopy()
+		delete(statefulSet.Annotations, util.ClusterOpsLockAnnotation)
+		delete(statefulSet.Annotations, util.ClusterOpsMetadataAnnotation)
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to finish the managed SolrCloud rollingUpdate clusterOp")
+		}
+
+		// TODO: Create event for the CRD.
+	} else {
+		// The out of date pods that have not been started, should all be updated immediately.
+		// There is no use "safely" updating pods which have not been started yet.
+		podsToUpdate := append([]corev1.Pod{}, outOfDatePods.NotStarted...)
+		for _, pod := range outOfDatePods.NotStarted {
+			updateLogger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
+		}
+
+		// Pick which pods should be deleted for an update.
+		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
+		additionalPodsToUpdate, podsHaveReplicas, retryLater, clusterStateError :=
+			util.DeterminePodsSafeToUpdate(ctx, instance, int(*statefulSet.Spec.Replicas), outOfDatePods, hasReadyPod, availableUpdatedPodCount, updateLogger)
+		// If we do not have the clusterState, it's not safe to update pods that are running
+		if clusterStateError != nil {
+			retryLater = true
+		} else {
+			podsToUpdate = append(podsToUpdate, outOfDatePods.ScheduledForDeletion...)
+			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+		}
+
+		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
+		for _, pod := range podsToUpdate {
+			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
+
+			// Use the retryLaterDuration of the pod that requires a retry the soonest (smallest duration > 0)
+			if retryLaterDurationTemp > 0 && (retryLaterDurationTemp < retryLaterDuration || retryLaterDuration == 0) {
+				retryLaterDuration = retryLaterDurationTemp
+			}
+			if errTemp != nil {
+				err = errTemp
+			}
+		}
+
+		if retryLater && retryLaterDuration == 0 {
+			retryLaterDuration = time.Second * 10
+		}
+	}
+	return
+}
+
 // clearClusterOp simply removes any clusterOp for the given statefulSet.
 // This should only be used as a "break-glass" scenario. Do not use this to finish off successful clusterOps.
 func clearClusterOp(ctx context.Context, r *SolrCloudReconciler, statefulSet *appsv1.StatefulSet, reason string, logger logr.Logger) (err error) {

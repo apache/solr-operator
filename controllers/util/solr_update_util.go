@@ -92,6 +92,10 @@ type OutOfDatePodSegmentation struct {
 	Running              []corev1.Pod
 }
 
+func (seg OutOfDatePodSegmentation) IsEmpty() bool {
+	return len(seg.NotStarted)+len(seg.ScheduledForDeletion)+len(seg.Running) == 0
+}
+
 // DeterminePodsSafeToUpdate takes a list of solr Pods and returns a list of pods that are safe to upgrade now.
 // This function MUST be idempotent and return the same list of pods given the same kubernetes/solr state.
 //
@@ -101,9 +105,9 @@ type OutOfDatePodSegmentation struct {
 // TODO:
 //   - Think about caching this for ~250 ms? Not a huge need to send these requests milliseconds apart.
 //   - Might be too much complexity for very little gain.
-func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOfDatePods OutOfDatePodSegmentation, readyPods int, availableUpdatedPodCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool, err error) {
+func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, totalPods int, outOfDatePods OutOfDatePodSegmentation, hasReadyPod bool, availableUpdatedPodCount int, logger logr.Logger) (podsToUpdate []corev1.Pod, podsHaveReplicas map[string]bool, retryLater bool, err error) {
 	// Before fetching the cluster state, be sure that there is room to update at least 1 pod
-	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, len(outOfDatePods.Running), len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion), availableUpdatedPodCount)
+	maxPodsUnavailable, unavailableUpdatedPodCount, maxPodsToUpdate := calculateMaxPodsToUpdate(cloud, totalPods, len(outOfDatePods.Running), len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion), availableUpdatedPodCount)
 	if maxPodsToUpdate <= 0 {
 		logger.Info("Pod update selection canceled. The number of updated pods unavailable equals or exceeds the calculated maxPodsUnavailable.",
 			"unavailableUpdatedPods", unavailableUpdatedPodCount, "outOfDatePodsNotStarted", len(outOfDatePods.NotStarted), "alreadyScheduledForDeletion", len(outOfDatePods.ScheduledForDeletion), "maxPodsUnavailable", maxPodsUnavailable)
@@ -111,7 +115,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 		clusterResp := &solr_api.SolrClusterStatusResponse{}
 		overseerResp := &solr_api.SolrOverseerStatusResponse{}
 
-		if readyPods > 0 {
+		if hasReadyPod {
 			queryParams := url.Values{}
 			queryParams.Add("action", "CLUSTERSTATUS")
 			err = solr_api.CallCollectionsApi(ctx, cloud, queryParams, clusterResp)
@@ -148,8 +152,7 @@ func DeterminePodsSafeToUpdate(ctx context.Context, cloud *solr.SolrCloud, outOf
 }
 
 // calculateMaxPodsToUpdate determines the maximum number of additional pods that can be updated.
-func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, outOfDatePodCount int, outOfDatePodsNotStartedCount int, availableUpdatedPodCount int) (maxPodsUnavailable int, unavailableUpdatedPodCount int, maxPodsToUpdate int) {
-	totalPods := int(*cloud.Spec.Replicas)
+func calculateMaxPodsToUpdate(cloud *solr.SolrCloud, totalPods int, outOfDatePodCount int, outOfDatePodsNotStartedCount int, availableUpdatedPodCount int) (maxPodsUnavailable int, unavailableUpdatedPodCount int, maxPodsToUpdate int) {
 	// In order to calculate the number of updated pods that are unavailable take all pods, take the total pods and subtract those that are available and updated, and those that are not updated.
 	unavailableUpdatedPodCount = totalPods - availableUpdatedPodCount - outOfDatePodCount - outOfDatePodsNotStartedCount
 	// If the maxBatchNodeUpgradeSpec is passed as a decimal between 0 and 1, then calculate as a percentage of the number of nodes.

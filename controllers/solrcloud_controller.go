@@ -285,6 +285,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var security *util.SecurityConfig = nil
 	if instance.Spec.SolrSecurity != nil {
 		security, err = util.ReconcileSecurityConfig(ctx, &r.Client, instance)
+		if err == nil && security != nil {
+			// If authn enabled on Solr, we need to pass the auth header when making requests
+			ctx, err = security.AddAuthToContext(ctx)
+			if err != nil {
+				logger.Error(err, "failed to create Authorization header when reconciling")
+			}
+		}
 		if err != nil {
 			return requeueOrNot, err
 		}
@@ -443,12 +450,14 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// We only want to do one cluster operation at a time, so we use a lock to ensure that.
-	// Update or a Scale at a time. We do not want to do both.
-
+	// Update or Scale, one-at-a-time. We do not want to do both.
+	hasReadyPod := newStatus.ReadyReplicas > 0
 	var retryLaterDuration time.Duration
 	if clusterOpLock, hasAnn := statefulSet.Annotations[util.ClusterOpsLockAnnotation]; hasAnn {
 		clusterOpMetadata := statefulSet.Annotations[util.ClusterOpsMetadataAnnotation]
 		switch clusterOpLock {
+		case util.UpdateLock:
+			retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
 		case util.ScaleDownLock:
 			retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOpMetadata, podList, logger)
 		case util.ScaleUpLock:
@@ -459,12 +468,21 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			err = clearClusterOp(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 	} else {
+		lockAcquired := false
 		// Start cluster operations if needed.
 		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
 		// And that lock will tell future reconcile loops that the operation needs to be done.
 		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
 		// a "locked" cluster operation
-		_, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
+		lockAcquired, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(ctx, r, instance, statefulSet, outOfDatePods, logger)
+		// Start cluster operations if needed.
+		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
+		// And that lock will tell future reconcile loops that the operation needs to be done.
+		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
+		// a "locked" cluster operation
+		if !lockAcquired {
+			lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
+		}
 	}
 	if err != nil && retryLaterDuration == 0 {
 		retryLaterDuration = time.Second * 5
@@ -474,62 +492,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if err != nil {
 		return requeueOrNot, err
-	}
-
-	// TODO: Move this logic into the ClusterOpLock, with the "rollingUpdate" lock
-	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && len(outOfDatePods.NotStarted)+len(outOfDatePods.ScheduledForDeletion)+len(outOfDatePods.Running) > 0 {
-		// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
-		updateLogger := logger.WithName("ManagedUpdateSelector")
-
-		// The out of date pods that have not been started, should all be updated immediately.
-		// There is no use "safely" updating pods which have not been started yet.
-		podsToUpdate := append([]corev1.Pod{}, outOfDatePods.NotStarted...)
-		for _, pod := range outOfDatePods.NotStarted {
-			updateLogger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
-		}
-
-		// If authn enabled on Solr, we need to pass the auth header
-		if security != nil {
-			ctx, err = security.AddAuthToContext(ctx)
-			if err != nil {
-				updateLogger.Error(err, "failed to create Authorization header when reconciling", "SolrCloud", instance.Name)
-				return requeueOrNot, err
-			}
-		}
-
-		// Pick which pods should be deleted for an update.
-		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, podsHaveReplicas, retryLater, clusterStateError := util.DeterminePodsSafeToUpdate(ctx, instance, outOfDatePods, int(newStatus.ReadyReplicas), availableUpdatedPodCount, updateLogger)
-		// If we do not have the clusterState, it's not safe to update pods that are running
-		if clusterStateError != nil {
-			retryLater = true
-		} else {
-			podsToUpdate = append(podsToUpdate, outOfDatePods.ScheduledForDeletion...)
-			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
-		}
-
-		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
-		for _, pod := range podsToUpdate {
-			retryLaterDurationTemp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
-
-			// Use the retryLaterDuration of the pod that requires a retry the soonest (smallest duration > 0)
-			if retryLaterDurationTemp > 0 && (retryLaterDurationTemp < retryLaterDuration || retryLaterDuration == 0) {
-				retryLaterDuration = retryLaterDurationTemp
-			}
-			if errTemp != nil {
-				err = errTemp
-			}
-		}
-
-		if err != nil || retryLaterDuration > 0 || retryLater {
-			if retryLaterDuration == 0 {
-				retryLaterDuration = time.Second * 10
-			}
-			updateRequeueAfter(&requeueOrNot, retryLaterDuration)
-		}
-		if err != nil {
-			return requeueOrNot, err
-		}
 	}
 
 	// Upsert or delete solrcloud-wide PodDisruptionBudget(s) based on 'Enabled' flag.
