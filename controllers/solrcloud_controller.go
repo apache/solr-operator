@@ -483,6 +483,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if !lockAcquired {
 			lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
 		}
+		// After a lock is acquired, the reconcile will be started again because the StatefulSet is being watched
 	}
 	if err != nil && retryLaterDuration == 0 {
 		retryLaterDuration = time.Second * 5
