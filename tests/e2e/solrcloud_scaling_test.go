@@ -107,7 +107,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 	FContext("without replica migration", func() {
 
 		BeforeEach(func() {
-			solrCloud.Spec.Autoscaling.VacatePodsOnScaleDown = pointer.Bool(false)
+			solrCloud.Spec.Scaling.VacatePodsOnScaleDown = pointer.Bool(false)
 		})
 
 		FIt("Scales Down", func(ctx context.Context) {
@@ -188,7 +188,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 	FContext("without replica migration", func() {
 
 		BeforeEach(func() {
-			solrCloud.Spec.Autoscaling.PopulatePodsOnScaleUp = pointer.Bool(false)
+			solrCloud.Spec.Scaling.PopulatePodsOnScaleUp = pointer.Bool(false)
 		})
 
 		FIt("Scales Up", func(ctx context.Context) {

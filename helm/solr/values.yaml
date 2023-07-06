@@ -143,8 +143,8 @@ availability:
     enabled: true
     method: ClusterWide
 
-# Various settings to control autoscaling of Solr pods and replicas
-autoscaling:
+# Various settings to control scaling of Solr pods and replicas
+scaling:
   vacatePodsOnScaleDown: true
   populatePodsOnScaleUp: true
 
