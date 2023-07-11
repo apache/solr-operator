@@ -84,6 +84,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/570
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/578
+    - kind: changed
+      description: Managed Rolling Updates are now computed via a Cluster Lock, like scaling operations.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/560
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/586
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease
