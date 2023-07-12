@@ -104,7 +104,7 @@ function add_image_to_kind_repo_if_local() {
     kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
   else
     if [ "${PULL_IF_NOT_LOCAL}" = true ]; then
-      printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}" "${IMAGE}"
+      printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}"
       docker pull "${IMAGE}"
       kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
     else
