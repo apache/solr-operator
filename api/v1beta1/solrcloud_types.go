@@ -137,6 +137,10 @@ type SolrCloudSpec struct {
 	//
 	//+optional
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
+
+	// Optional Tainted solr pods.
+	// +optional
+	TaintedSolrPodsSelector *metav1.LabelSelector `json:"taintedSolrPodsSelector,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults() (changed bool) {

@@ -550,7 +550,7 @@ func (r *SolrCloudReconciler) reconcileCloudStatus(ctx context.Context, solrClou
 		}
 
 		// A pod is out of date if it's revision label is not equal to the statefulSetStatus' updateRevision.
-		nodeStatus.SpecUpToDate = p.Labels["controller-revision-hash"] == updateRevision
+		nodeStatus.SpecUpToDate = p.Labels["controller-revision-hash"] == updateRevision && !r.isPodTainted(ctx, solrCloud, logger, &p)
 		if nodeStatus.SpecUpToDate {
 			newStatus.UpToDateNodes += 1
 			if nodeStatus.Ready {
@@ -979,4 +979,26 @@ func (r *SolrCloudReconciler) findSolrCloudByFieldValueFunc(field string) handle
 			}
 			return requests
 		})
+}
+
+func (r *SolrCloudReconciler) isPodTainted(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger, pod *corev1.Pod) bool {
+	logger.Info("check tainted label for solr pod")
+	logger.Info("solr cluster tainted label configuration", "label expression", solrCloud.Spec.TaintedSolrPodsSelector.String())
+	for key, element := range pod.Labels {
+		logger.Info("solr pod label list", "key", key, "value", element)
+	}
+
+	selector, err := metav1.LabelSelectorAsSelector(solrCloud.Spec.TaintedSolrPodsSelector)
+	if err != nil {
+		logger.Error(err, "Invalid tainted brokers label selector")
+		return false
+	}
+
+	if selector.Empty() {
+		logger.Info("taint selector is empty")
+		return false
+	}
+	labelCheckResult := selector.Matches(labels.Set(pod.Labels))
+	logger.Info("solr pod tainted label check result", "pod name", pod.Name, "result", labelCheckResult)
+	return labelCheckResult
 }

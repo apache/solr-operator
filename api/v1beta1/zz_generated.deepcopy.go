@@ -24,6 +24,7 @@ package v1beta1
 
 import (
 	"k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -1026,6 +1027,11 @@ func (in *SolrCloudSpec) DeepCopyInto(out *SolrCloudSpec) {
 		in, out := &in.AdditionalLibs, &out.AdditionalLibs
 		*out = make([]string, len(*in))
 		copy(*out, *in)
+	}
+	if in.TaintedSolrPodsSelector != nil {
+		in, out := &in.TaintedSolrPodsSelector, &out.TaintedSolrPodsSelector
+		*out = new(metav1.LabelSelector)
+		(*in).DeepCopyInto(*out)
 	}
 }
 
