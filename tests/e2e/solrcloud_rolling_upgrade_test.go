@@ -20,6 +20,7 @@ package e2e
 import (
 	"context"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -81,12 +82,14 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			Expect(k8sClient.Patch(ctx, patchedSolrCloud, client.MergeFrom(solrCloud))).To(Succeed(), "Could not add annotation to SolrCloud pod to initiate rolling restart")
 
 			By("waiting for the rolling restart to begin")
-			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
+			solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
 				g.Expect(cloud.Status.UpToDateNodes).To(BeZero(), "Cloud did not get to a state with zero up-to-date replicas when rolling restart began.")
 				for _, nodeStatus := range cloud.Status.SolrNodes {
 					g.Expect(nodeStatus.SpecUpToDate).To(BeFalse(), "Node not starting as out-of-date when rolling restart begins: %s", nodeStatus.Name)
 				}
 			})
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			Expect(statefulSet.Annotations).To(HaveKeyWithValue(util.ClusterOpsLockAnnotation, util.UpdateLock), "StatefulSet does not have a RollingUpdate lock after starting managed update.")
 
 			By("waiting for the rolling restart to complete")
 			// Expect the SolrCloud to be up-to-date, or in a valid restarting state
@@ -139,6 +142,9 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				Expect(nodeStatus.SpecUpToDate).To(BeTrue(), "Node not finishing as up-to-date when rolling restart ends: %s", nodeStatus.Name)
 				Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
 			}
+
+			statefulSet = expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a RollingUpdate lock after finishing a managed update.")
 
 			By("checking that the collections can be queried after the restart")
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
