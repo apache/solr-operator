@@ -60,7 +60,7 @@ spec:
   volumeMode: Filesystem
 ```
 
-Note that this PVC specifies `ReadWriteMany` access, which is required for Solr clusters with more than node.
+Note that this PVC specifies `ReadWriteMany` access, which is required for Solr clusters with more than one node.
 Note also that it uses a `storageClassName` of `hostpath`.
 Not all Kubernetes clusters support this `storageClassName` value - you may need to choose a different `ReadWriteMany`-compatible storage class based on your Kubernetes version and cluster setup.
 
