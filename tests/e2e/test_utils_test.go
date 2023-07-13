@@ -308,14 +308,30 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 				fmt.Sprintf("http://localhost:%d/solr/%s/select?rows=0", solrCloud.Spec.SolrAddressability.PodPort, collection),
 			},
 		)
-		g.ExpectWithOffset(resolveOffset(additionalOffset), err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
-		g.ExpectWithOffset(resolveOffset(additionalOffset), response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection")
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
+	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
 	// Only wait 5 seconds for the collection to be query-able
 }
 
+func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) string {
+	response, err := runExecForContainer(
+		ctx,
+		util.SolrNodeContainer,
+		solrCloud.GetRandomSolrPodName(),
+		solrCloud.Namespace,
+		[]string{
+			"curl",
+			fmt.Sprintf("http://localhost:%d/solr/admin/collections?action=CLUSTERSTATUS", solrCloud.Spec.SolrAddressability.PodPort),
+		},
+	)
+	Expect(err).ToNot(HaveOccurred(), "Could not fetch clusterStatus for cloud")
+
+	return response
+}
+
 func queryCollectionWithNoReplicaAvailable(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) {
-	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
 		response, err := runExecForContainer(
 			ctx,
 			util.SolrNodeContainer,
@@ -326,8 +342,8 @@ func queryCollectionWithNoReplicaAvailable(ctx context.Context, solrCloud *solrv
 				fmt.Sprintf("http://localhost:%d/solr/%s/select", solrCloud.Spec.SolrAddressability.PodPort, collection),
 			},
 		)
-		g.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
-		g.Expect(response).To(ContainSubstring("Error trying to proxy request for url"), "Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("Error trying to proxy request for url"), "Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
 	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Collection query did not fail in the correct way")
 }
 
