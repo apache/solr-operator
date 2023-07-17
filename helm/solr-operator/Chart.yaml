@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.7.1-prerelease
-appVersion: v0.7.1-prerelease
+version: 0.7.1
+appVersion: v0.7.1
 kubeVersion: ">= 1.21.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -42,14 +42,14 @@ annotations:
   artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "true"
+  artifacthub.io/prerelease: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: <fingerprint>
+    fingerprint: 50E3EE1C91C7E0CB4DFB007B369424FC98F3F6EC
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
@@ -63,7 +63,7 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/592
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.7.1-prerelease
+      image: apache/solr-operator:v0.7.1
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
