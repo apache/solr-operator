@@ -20,7 +20,7 @@ package e2e
 import (
 	"context"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -67,8 +67,11 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			By("waiting for the scaleDown of first pod to begin")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
-				g.Expect(found.Annotations).To(HaveKeyWithValue(util.ClusterOpsLockAnnotation, util.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
-				g.Expect(found.Annotations).To(HaveKeyWithValue(util.ClusterOpsMetadataAnnotation, "2"), "StatefulSet scaling lock operation has the wrong metadata.")
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Operation).To(Equal(controllers.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Metadata).To(Equal("2"), "StatefulSet scaling lock operation has the wrong metadata.")
 			})
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
 
@@ -81,8 +84,11 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			By("waiting for the scaleDown of second pod to begin")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(2)), "StatefulSet should still have 2 pods, because the scale down should first move Solr replicas")
-				g.Expect(found.Annotations).To(HaveKeyWithValue(util.ClusterOpsLockAnnotation, util.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
-				g.Expect(found.Annotations).To(HaveKeyWithValue(util.ClusterOpsMetadataAnnotation, "1"), "StatefulSet scaling lock operation has the wrong metadata.")
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Operation).To(Equal(controllers.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Metadata).To(Equal("1"), "StatefulSet scaling lock operation has the wrong metadata.")
 			})
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			// This pod check must happen after the above clusterLock and replicas check.
@@ -95,8 +101,9 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(1)), "StatefulSet should now have 1 pods, after the replicas have been moved.")
 			})
 			// Once the scale down actually occurs, the statefulSet annotations should already be removed
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock after scaling is complete.")
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have scaling lock metadata after scaling is complete.")
+			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+			Expect(clusterOp).To(BeNil(), "StatefulSet should not have a ScaleDown lock after scaling is complete.")
 
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
@@ -117,9 +124,10 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to initiate scale down")
 
 			By("make sure scaleDown happens without a clusterLock and eventually the replicas are removed")
-			statefulSet := expectStatefulSetWithConsistentChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, statefulSet *appsv1.StatefulSet) {
-				g.Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock while scaling unmanaged.")
-				g.Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have scaling lock metadata while scaling unmanaged.")
+			statefulSet := expectStatefulSetWithConsistentChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a scaling lock, since scaleDown is unmanaged.")
 			})
 			Expect(statefulSet.Spec.Replicas).To(HaveValue(BeEquivalentTo(1)), "StatefulSet should immediately have 1 pod, since the scaleDown is unmanaged.")
 
@@ -170,15 +178,18 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 			statefulSet := expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
 			})
-			Expect(statefulSet.Annotations).To(HaveKeyWithValue(util.ClusterOpsLockAnnotation, util.ScaleUpLock), "StatefulSet does not have a scaleUp lock after starting managed scaleUp.")
-			Expect(statefulSet.Annotations).To(HaveKeyWithValue(util.ClusterOpsMetadataAnnotation, "1"), "StatefulSet scaleUp lock operation has the wrong metadata.")
+			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleUp lock.")
+			Expect(clusterOp.Operation).To(Equal(controllers.ScaleUpLock), "StatefulSet does not have a scaleUp lock.")
+			Expect(clusterOp.Metadata).To(Equal("1"), "StatefulSet scaling lock operation has the wrong metadata.")
 
 			By("waiting for the scaleUp to finish")
 			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock after scaling is complete.")
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a scaling lock after scaling is complete.")
 			})
-			// Once the scale down actually occurs, the statefulSet annotations should already be removed
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have scaling lock metadata after scaling is complete.")
 
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
@@ -201,8 +212,9 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 			statefulSet := expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should immediately have 3 pods.")
 			})
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a scaling lock, since scaleUp is unmanaged.")
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsMetadataAnnotation)), "StatefulSet should not have a scaling lock metadata, since scaleUp is unmanaged.")
+			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+			Expect(clusterOp).To(BeNil(), "StatefulSet should not have a scaling lock, since scaleUp is unmanaged.")
 
 			By("Waiting for the new solrCloud pods to become ready")
 			solrCloud = expectSolrCloudToBeReady(ctx, solrCloud)

@@ -453,37 +453,53 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Update or Scale, one-at-a-time. We do not want to do both.
 	hasReadyPod := newStatus.ReadyReplicas > 0
 	var retryLaterDuration time.Duration
-	if clusterOpLock, hasAnn := statefulSet.Annotations[util.ClusterOpsLockAnnotation]; hasAnn {
-		clusterOpMetadata := statefulSet.Annotations[util.ClusterOpsMetadataAnnotation]
-		switch clusterOpLock {
-		case util.UpdateLock:
-			retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
-		case util.ScaleDownLock:
-			retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOpMetadata, podList, logger)
-		case util.ScaleUpLock:
-			retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOpMetadata, logger)
+	if clusterOp, opErr := GetCurrentClusterOp(statefulSet); clusterOp != nil && opErr == nil {
+		switch clusterOp.Operation {
+		case UpdateLock:
+			retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, clusterOp, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
+		case ScaleDownLock:
+			retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOp, podList, logger)
+		case ScaleUpLock:
+			retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, logger)
 		default:
 			// This shouldn't happen, but we don't want to be stuck if it does.
 			// Just remove the cluster Op, because the solr operator version running does not support it.
-			err = clearClusterOp(ctx, r, statefulSet, "clusterOp not supported", logger)
+			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
+		}
+	} else if opErr == nil {
+		if clusterOpQueue, opErr := GetClusterOpRetryQueue(statefulSet); opErr == nil {
+			queuedRetryOps := map[SolrClusterOperationType]bool{}
+
+			for _, op := range clusterOpQueue {
+				queuedRetryOps[op.Operation] = true
+			}
+			lockAcquired := false
+			// Start cluster operations if needed.
+			// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
+			// And that lock will tell future reconcile loops that the operation needs to be done.
+			// Do not attempt a rolling restart if a rolling restart is already queued for retry.
+			if !queuedRetryOps[UpdateLock] {
+				lockAcquired, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(ctx, r, instance, statefulSet, outOfDatePods, logger)
+			}
+
+			// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
+			// a "locked" cluster operation
+			// Do not attempt a scale, if a scale operation is already queued for retry
+			if !lockAcquired && !queuedRetryOps[ScaleDownLock] && !queuedRetryOps[ScaleUpLock] {
+				lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
+			}
+
+			// If no lock has been acquired, retry the next queued clusterOp, if there are any operations in the retry queue.
+			if !lockAcquired {
+				err = retryNextQueuedClusterOpWithPatch(ctx, r, statefulSet, logger)
+			}
+
+			// After a lock is acquired, the reconcile will be started again because the StatefulSet is being watched for changes
+		} else {
+			err = opErr
 		}
 	} else {
-		lockAcquired := false
-		// Start cluster operations if needed.
-		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
-		// And that lock will tell future reconcile loops that the operation needs to be done.
-		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
-		// a "locked" cluster operation
-		lockAcquired, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(ctx, r, instance, statefulSet, outOfDatePods, logger)
-		// Start cluster operations if needed.
-		// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
-		// And that lock will tell future reconcile loops that the operation needs to be done.
-		// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
-		// a "locked" cluster operation
-		if !lockAcquired {
-			lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
-		}
-		// After a lock is acquired, the reconcile will be started again because the StatefulSet is being watched
+		err = opErr
 	}
 	if err != nil && retryLaterDuration == 0 {
 		retryLaterDuration = time.Second * 5

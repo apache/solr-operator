@@ -53,11 +53,10 @@ const (
 
 	// Protected StatefulSet annotations
 	// These are to be saved on a statefulSet update
-	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
-	ScaleDownLock                = "scalingDown"
-	ScaleUpLock                  = "scalingUp"
-	UpdateLock                   = "rollingUpdate"
-	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
+	ClusterOpsLockAnnotation       = "solr.apache.org/clusterOpsLock"
+	ClusterOpsRetryQueueAnnotation = "solr.apache.org/clusterOpsRetryQueue"
+	ClusterOpsMetadataAnnotation   = "solr.apache.org/clusterOpsMetadata"
+	ClusterOpsStartTimeAnnotation  = "solr.apache.org/clusterOpsStartTime"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
@@ -624,8 +623,16 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 	// Cluster Operations are saved in the annotations of the SolrCloud StatefulSet.
 	// ClusterOps information is saved to the statefulSet independently of the general StatefulSet update.
 	// These annotations can also not be overridden set by the user.
-	expected.Annotations[ClusterOpsLockAnnotation] = found.Annotations[ClusterOpsLockAnnotation]
-	expected.Annotations[ClusterOpsMetadataAnnotation] = found.Annotations[ClusterOpsMetadataAnnotation]
+	if found.Annotations != nil {
+		if lock, hasLock := found.Annotations[ClusterOpsLockAnnotation]; hasLock {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 3)
+			}
+			expected.Annotations[ClusterOpsLockAnnotation] = lock
+			expected.Annotations[ClusterOpsMetadataAnnotation] = found.Annotations[ClusterOpsMetadataAnnotation]
+			expected.Annotations[ClusterOpsStartTimeAnnotation] = found.Annotations[ClusterOpsStartTimeAnnotation]
+		}
+	}
 
 	// Scaling (i.e. changing) the number of replicas in the SolrCloud statefulSet is handled during the clusterOps
 	// section of the SolrCloud reconcile loop

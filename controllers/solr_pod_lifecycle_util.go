@@ -46,7 +46,7 @@ const (
 	ScaleDown        PodConditionChangeReason = "ScaleDown"
 )
 
-func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
+func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, requestInProgress bool, err error) {
 	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
 	ps := PodStarted
 	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
@@ -75,10 +75,12 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	deletePod := false
 	if PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
+		if evictError, canDeletePod, inProgTmp := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
+			requestInProgress = true
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
+			requestInProgress = inProgTmp
 			if podHasReplicas {
 				// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't
 				// have replicas anymore even if the previous evict command was successful.
@@ -88,6 +90,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 				deletePod = true
 			}
 		} else {
+			requestInProgress = inProgTmp
 			// Try again in 5 seconds if we cannot delete a pod.
 			requeueAfterDuration = time.Second * 5
 		}
