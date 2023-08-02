@@ -468,25 +468,31 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	} else if opErr == nil {
 		if clusterOpQueue, opErr := GetClusterOpRetryQueue(statefulSet); opErr == nil {
-			queuedRetryOps := map[SolrClusterOperationType]bool{}
+			queuedRetryOps := map[SolrClusterOperationType]*SolrClusterOp{}
 
 			for _, op := range clusterOpQueue {
-				queuedRetryOps[op.Operation] = true
+				queuedRetryOps[op.Operation] = &op
 			}
 			lockAcquired := false
 			// Start cluster operations if needed.
 			// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
 			// And that lock will tell future reconcile loops that the operation needs to be done.
 			// Do not attempt a rolling restart if a rolling restart is already queued for retry.
-			if !queuedRetryOps[UpdateLock] {
+			if queuedRetryOps[UpdateLock] == nil {
 				lockAcquired, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(ctx, r, instance, statefulSet, outOfDatePods, logger)
 			}
 
 			// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
 			// a "locked" cluster operation
-			// Do not attempt a scale, if a scale operation is already queued for retry
-			if !lockAcquired && !queuedRetryOps[ScaleDownLock] && !queuedRetryOps[ScaleUpLock] {
-				lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, podList, logger)
+			// Do not attempt a scale, if a scale operation is already queued for retry. Instead, a pointer to the queued operation
+			// is passed, so that it will be updated to the new scale value if it has changed.
+			if !lockAcquired {
+				// Only one of ScaleUp or ScaleDown can be queued at one time
+				queuedOperation := queuedRetryOps[ScaleDownLock]
+				if queuedOperation == nil {
+					queuedOperation = queuedRetryOps[ScaleUpLock]
+				}
+				lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, queuedOperation, podList, logger)
 			}
 
 			// If no lock has been acquired, retry the next queued clusterOp, if there are any operations in the retry queue.
