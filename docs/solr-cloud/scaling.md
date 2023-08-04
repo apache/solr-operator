@@ -44,6 +44,8 @@ changes, the Solr Operator must implement this change the same way.
 
 For now Replicas are not scaled up and down themselves, they are just moved to utilize new Solr pods or vacate soon-to-be-deleted Solr pods.
 
+Note: Scaling actions with replica movements are a executed via [Cluster Operation Locks](cluster-operations.md), please refer to the documentation for more information about how these operations are executed.
+
 ### Solr Pod Scale-Down
 
 When the desired number of Solr Pods that should be run `SolrCloud.Spec.Replicas` is decreased,

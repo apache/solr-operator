@@ -55,8 +55,6 @@ const (
 	// These are to be saved on a statefulSet update
 	ClusterOpsLockAnnotation       = "solr.apache.org/clusterOpsLock"
 	ClusterOpsRetryQueueAnnotation = "solr.apache.org/clusterOpsRetryQueue"
-	ClusterOpsMetadataAnnotation   = "solr.apache.org/clusterOpsMetadata"
-	ClusterOpsStartTimeAnnotation  = "solr.apache.org/clusterOpsStartTime"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
@@ -626,11 +624,15 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 	if found.Annotations != nil {
 		if lock, hasLock := found.Annotations[ClusterOpsLockAnnotation]; hasLock {
 			if expected.Annotations == nil {
-				expected.Annotations = make(map[string]string, 3)
+				expected.Annotations = make(map[string]string, 1)
 			}
 			expected.Annotations[ClusterOpsLockAnnotation] = lock
-			expected.Annotations[ClusterOpsMetadataAnnotation] = found.Annotations[ClusterOpsMetadataAnnotation]
-			expected.Annotations[ClusterOpsStartTimeAnnotation] = found.Annotations[ClusterOpsStartTimeAnnotation]
+		}
+		if queue, hasQueue := found.Annotations[ClusterOpsRetryQueueAnnotation]; hasQueue {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 1)
+			}
+			expected.Annotations[ClusterOpsRetryQueueAnnotation] = queue
 		}
 	}
 
