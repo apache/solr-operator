@@ -282,6 +282,13 @@ func expectNoPod(ctx context.Context, parentResource client.Object, podName stri
 	}).Should(MatchError("pods \""+podName+"\" not found"), "Pod exists when it should not")
 }
 
+func expectNoPodNow(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) {
+	ExpectWithOffset(
+		resolveOffset(additionalOffset),
+		k8sClient.Get(ctx, resourceKey(parentResource, podName), &corev1.Pod{}),
+	).To(MatchError("pods \""+podName+"\" not found"), "Pod exists when it should not")
+}
+
 func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalOffset ...int) *corev1.Service {
 	return expectServiceWithChecks(ctx, parentResource, serviceName, selectorLables, isHeadless, nil, resolveOffset(additionalOffset))
 }

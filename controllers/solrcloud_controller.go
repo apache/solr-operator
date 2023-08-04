@@ -454,50 +454,85 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	hasReadyPod := newStatus.ReadyReplicas > 0
 	var retryLaterDuration time.Duration
 	if clusterOp, opErr := GetCurrentClusterOp(statefulSet); clusterOp != nil && opErr == nil {
+		var operationComplete, requestInProgress bool
 		switch clusterOp.Operation {
 		case UpdateLock:
-			retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, clusterOp, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
+			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
 		case ScaleDownLock:
-			retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOp, podList, logger)
+			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		case ScaleUpLock:
-			retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, logger)
+			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		default:
 			// This shouldn't happen, but we don't want to be stuck if it does.
 			// Just remove the cluster Op, because the solr operator version running does not support it.
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
+		if operationComplete {
+			// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
+			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" complete", logger)
+
+			// TODO: Create event for the CRD.
+		}
+		if !requestInProgress && time.Since(clusterOp.LastStartTime.Time) > time.Minute {
+			// If the cluster operation is in a stoppable place (not currently doing an async operation)
+			// and the operation has been taking more than a minute, continue the operation later. (will likely immediately continue)
+			err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" timed out during operation", logger)
+
+			// TODO: Create event for the CRD.
+		}
 	} else if opErr == nil {
 		if clusterOpQueue, opErr := GetClusterOpRetryQueue(statefulSet); opErr == nil {
-			queuedRetryOps := map[SolrClusterOperationType]*SolrClusterOp{}
+			queuedRetryOps := map[SolrClusterOperationType]int{}
 
-			for _, op := range clusterOpQueue {
-				queuedRetryOps[op.Operation] = &op
+			for i, op := range clusterOpQueue {
+				queuedRetryOps[op.Operation] = i
 			}
-			lockAcquired := false
 			// Start cluster operations if needed.
 			// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
 			// And that lock will tell future reconcile loops that the operation needs to be done.
-			// Do not attempt a rolling restart if a rolling restart is already queued for retry.
-			if queuedRetryOps[UpdateLock] == nil {
-				lockAcquired, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(ctx, r, instance, statefulSet, outOfDatePods, logger)
+			clusterOp, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(instance, outOfDatePods)
+			// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
+			if queueIdx, opIsQueued := queuedRetryOps[UpdateLock]; clusterOp != nil && opIsQueued {
+				clusterOpQueue[queueIdx] = *clusterOp
+				clusterOp = nil
 			}
 
 			// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
 			// a "locked" cluster operation
-			// Do not attempt a scale, if a scale operation is already queued for retry. Instead, a pointer to the queued operation
-			// is passed, so that it will be updated to the new scale value if it has changed.
-			if !lockAcquired {
-				// Only one of ScaleUp or ScaleDown can be queued at one time
-				queuedOperation := queuedRetryOps[ScaleDownLock]
-				if queuedOperation == nil {
-					queuedOperation = queuedRetryOps[ScaleUpLock]
+			if clusterOp == nil {
+				_, scaleDownOpIsQueued := queuedRetryOps[ScaleDownLock]
+				clusterOp, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, scaleDownOpIsQueued, podList, logger)
+
+				// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
+				if clusterOp != nil {
+					// Only one of ScaleUp or ScaleDown can be queued at one time
+					if queueIdx, opIsQueued := queuedRetryOps[ScaleDownLock]; opIsQueued {
+						clusterOpQueue[queueIdx] = *clusterOp
+						clusterOp = nil
+					}
+					if queueIdx, opIsQueued := queuedRetryOps[ScaleUpLock]; opIsQueued {
+						clusterOpQueue[queueIdx] = *clusterOp
+						clusterOp = nil
+					}
 				}
-				lockAcquired, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, queuedOperation, podList, logger)
 			}
 
-			// If no lock has been acquired, retry the next queued clusterOp, if there are any operations in the retry queue.
-			if !lockAcquired {
-				err = retryNextQueuedClusterOpWithPatch(ctx, r, statefulSet, logger)
+			if clusterOp != nil {
+				// Starting a locked cluster operation!
+				originalStatefulSet := statefulSet.DeepCopy()
+				clusterOp.LastStartTime = metav1.Now()
+				err = setClusterOpLock(statefulSet, *clusterOp)
+				if err == nil {
+					err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet))
+				}
+				if err != nil {
+					logger.Error(err, "Error while patching StatefulSet to start locked clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
+				} else {
+					logger.Info("Started locked clusterOp", "clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
+				}
+			} else {
+				// No new clusterOperation has been started, retry the next queued clusterOp, if there are any operations in the retry queue.
+				err = retryNextQueuedClusterOpWithPatch(ctx, r, statefulSet, clusterOpQueue, logger)
 			}
 
 			// After a lock is acquired, the reconcile will be started again because the StatefulSet is being watched for changes
