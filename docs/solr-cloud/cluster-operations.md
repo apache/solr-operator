@@ -53,7 +53,10 @@ Unfortunately, these cluster operations can and will fail for a number of reason
 
 If this is the case, then we need to be able to stop the locked cluster operation if it hasn't succeeded in a certain time period.
 The cluster operation can only be stopped if there is no background task (async request) being executed in the Solr Cluster.
-Once cluster operation reaches a point at which it can stop, and the locking-time (**1 minute**) has been exceeded, the cluster operation is _paused_, and added to a queue to retry later.
+Once cluster operation reaches a point at which it can stop, and the locking-timeout has been exceeded or an error was found, the cluster operation is _paused_, and added to a queue to retry later.
+The _timeout_ is different per-operation:
+- Scaling (Up or Down): **1 minute**
+- Rolling restarts: **10 minutes**
 
 Immediately afterwards, the Solr Operator sees if there are any other operations that need to take place while before the queued cluster operation is re-started.
 This allows for users to make changes to fix the reason why the cluster operation was failing.
