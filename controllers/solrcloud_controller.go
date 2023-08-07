@@ -455,30 +455,51 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var retryLaterDuration time.Duration
 	if clusterOp, opErr := GetCurrentClusterOp(statefulSet); clusterOp != nil && opErr == nil {
 		var operationComplete, requestInProgress bool
+		operationFound := true
+		shortTimeoutForRequeue := true
 		switch clusterOp.Operation {
 		case UpdateLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
+			// Rolling Updates should not be requeued quickly. The operation is expected to take a long time and thus should have a longTimeout if errors are not seen.
+			shortTimeoutForRequeue = false
 		case ScaleDownLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		case ScaleUpLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		default:
+			operationFound = false
 			// This shouldn't happen, but we don't want to be stuck if it does.
 			// Just remove the cluster Op, because the solr operator version running does not support it.
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
-		if operationComplete {
-			// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
-			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" complete", logger)
+		if operationFound {
+			if operationComplete {
+				// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
+				err = clearClusterOpLockWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" complete", logger)
 
-			// TODO: Create event for the CRD.
-		}
-		if !requestInProgress && time.Since(clusterOp.LastStartTime.Time) > time.Minute {
-			// If the cluster operation is in a stoppable place (not currently doing an async operation)
-			// and the operation has been taking more than a minute, continue the operation later. (will likely immediately continue)
-			err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" timed out during operation", logger)
+				// TODO: Create event for the CRD.
+			} else if !requestInProgress {
+				// If the cluster operation is in a stoppable place (not currently doing an async operation), and either:
+				//   - the operation hit an error and has taken more than 1 minute
+				//   - the operation has a short timeout and has taken more than 1 minute
+				//   - the operation has a long timeout and has taken more than 10 minutes
+				// then continue the operation later.
+				// (it will likely immediately continue, since it is unlikely there is another operation to run)
+				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
+				queueForLaterReason := ""
+				if err != nil && clusterOpRuntime > time.Minute {
+					queueForLaterReason = "hit an error during operation"
+				} else if shortTimeoutForRequeue && clusterOpRuntime > time.Minute {
+					queueForLaterReason = "timed out during operation (1 minutes)"
+				} else if clusterOpRuntime > time.Minute*10 {
+					queueForLaterReason = "timed out during operation (10 minutes)"
+				}
+				if queueForLaterReason != "" {
+					err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
 
-			// TODO: Create event for the CRD.
+					// TODO: Create event for the CRD.
+				}
+			}
 		}
 	} else if opErr == nil {
 		if clusterOpQueue, opErr := GetClusterOpRetryQueue(statefulSet); opErr == nil {
