@@ -115,7 +115,7 @@ fi
 
 if ! (which kind); then
   echo "Install Kind (Kubernetes in Docker)"
-  GO111MODULE="on" go install sigs.k8s.io/kind@v0.11.1
+  GO111MODULE="on" go install sigs.k8s.io/kind@v0.20.0
 fi
 
 CLUSTER_NAME="solr-operator-${VERSION}-rc"

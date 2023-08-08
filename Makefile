@@ -43,7 +43,7 @@ KUSTOMIZE_VERSION=v4.5.2
 CONTROLLER_GEN_VERSION=v0.10.0
 GO_LICENSES_VERSION=v1.6.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
-KIND_VERSION=v0.17.0
+KIND_VERSION=v0.20.0
 YQ_VERSION=v4.33.3
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION ?= 1.25.0
