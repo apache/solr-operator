@@ -91,6 +91,17 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/560
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/586
+        - name: Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html
+    - kind: added
+      description: Cluster Operation Locks now give other operations a chance to run, every minute, to eliminate the risk of deadlocks
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/560
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/596
+        - name: Documentation
+          url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html#avoiding-deadlocks
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease

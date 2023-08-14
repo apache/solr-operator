@@ -519,3 +519,15 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 		},
 	}
 }
+
+func generateBaseSolrCloudWithPlacementPolicy(replicas int, placementPlugin string) *solrv1beta1.SolrCloud {
+	solrCloud := generateBaseSolrCloud(replicas)
+	solrCloud.Spec.CustomSolrKubeOptions.PodOptions.EnvVariables = []corev1.EnvVar{
+		{
+			Name:  "SOLR_PLACEMENTPLUGIN_DEFAULT",
+			Value: placementPlugin,
+		},
+	}
+
+	return solrCloud
+}

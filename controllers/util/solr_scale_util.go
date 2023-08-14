@@ -31,7 +31,7 @@ import (
 // a successful status returned from the command. So if we delete the asyncStatus, and then something happens in the operator,
 // and we lose our state, then we will need to retry the balanceReplicas command. This should be ok since calling
 // balanceReplicas multiple times should not be bad when the replicas for the cluster are already balanced.
-func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, err error) {
+func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, requestInProgress bool, err error) {
 	logger = logger.WithValues("balanceReason", balanceReason)
 	// If the Cloud has 1 or zero pods, there is no reason to balance replicas.
 	if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas < 1 {
@@ -65,9 +65,11 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				} else if apiError != nil {
 					err = apiError
 				}
-				if err == nil {
+
+				if !balanceComplete && err == nil {
 					logger.Info("Started balancing replicas across cluster.", "requestId", requestId)
-				} else {
+					requestInProgress = true
+				} else if err == nil {
 					logger.Error(err, "Could not balance replicas across the cluster. Will try again.")
 				}
 			}
@@ -79,6 +81,8 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				logger.Info("Replica Balancing command completed successfully")
 			} else if asyncState == "failed" {
 				logger.Info("Replica Balancing command failed. Will try again", "message", message)
+			} else {
+				requestInProgress = true
 			}
 
 			// Delete the async request Id if the async request is successful or failed.
@@ -87,6 +91,7 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				if _, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
 					logger.Error(err, "Could not delete Async request status.", "requestId", requestId)
 					balanceComplete = false
+					requestInProgress = true
 				}
 			}
 		}

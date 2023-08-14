@@ -20,7 +20,7 @@ package e2e
 import (
 	"context"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
-	"github.com/apache/solr-operator/controllers/util"
+	"github.com/apache/solr-operator/controllers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -89,7 +89,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				}
 			})
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
-			Expect(statefulSet.Annotations).To(HaveKeyWithValue(util.ClusterOpsLockAnnotation, util.UpdateLock), "StatefulSet does not have a RollingUpdate lock after starting managed update.")
+			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a RollingUpdate lock.")
+			Expect(clusterOp.Operation).To(Equal(controllers.UpdateLock), "StatefulSet does not have a RollingUpdate lock after starting managed update.")
 
 			By("waiting for the rolling restart to complete")
 			// Expect the SolrCloud to be up-to-date, or in a valid restarting state
@@ -144,7 +147,9 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			}
 
 			statefulSet = expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
-			Expect(statefulSet.Annotations).To(Not(HaveKey(util.ClusterOpsLockAnnotation)), "StatefulSet should not have a RollingUpdate lock after finishing a managed update.")
+			clusterOp, err = controllers.GetCurrentClusterOp(statefulSet)
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+			Expect(clusterOp).To(BeNil(), "StatefulSet should not have a RollingUpdate lock after finishing a managed update.")
 
 			By("checking that the collections can be queried after the restart")
 			queryCollection(ctx, solrCloud, solrCollection1, 0)

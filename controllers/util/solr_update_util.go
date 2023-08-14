@@ -504,7 +504,7 @@ func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 // EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod.
 // For updates this will only be called for pods using ephemeral data.
 // For scale-down operations, this can be called for pods using ephemeral or persistent data.
-func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, logger logr.Logger) (err error, canDeletePod bool) {
+func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, logger logr.Logger) (err error, canDeletePod bool, requestInProgress bool) {
 	logger = logger.WithValues("evictionReason", evictionReason)
 	// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
 	// Otherwise, move the replicas to other pods
@@ -537,6 +537,7 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				}
 				if err == nil {
 					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
+					requestInProgress = true
 				} else {
 					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again.")
 				}
@@ -552,6 +553,8 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				logger.Info("Migration of all replicas off of pod before deletion complete. Pod can now be deleted.", "pod", pod.Name)
 			} else if asyncState == "failed" {
 				logger.Info("Migration of all replicas off of pod before deletion failed. Will try again.", "pod", pod.Name, "message", message)
+			} else {
+				requestInProgress = true
 			}
 
 			// Delete the async request Id if the async request is successful or failed.
@@ -560,9 +563,10 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				if _, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
 					logger.Error(err, "Could not delete Async request status.", "requestId", requestId)
 					canDeletePod = false
+					requestInProgress = true
 				}
 			}
 		}
 	}
-	return err, canDeletePod
+	return err, canDeletePod, requestInProgress
 }
