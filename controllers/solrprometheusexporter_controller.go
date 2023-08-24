@@ -26,18 +26,16 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 )
@@ -401,14 +399,14 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.M
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
-		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		&solrv1beta1.SolrCloud{},
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
 			listOps := &client.ListOptions{
 				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.Background(), foundExporters, listOps)
+			err := r.List(ctx, foundExporters, listOps)
 			if err != nil {
 				// if no exporters found, just no-op this
 				return []reconcile.Request{}
@@ -447,14 +445,14 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForProvidedConfigMaps(mg
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.ConfigMap{}},
-		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		&corev1.ConfigMap{},
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
 			listOps := &client.ListOptions{
 				FieldSelector: fields.OneTermEqualSelector(providedConfigMapField, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.Background(), foundExporters, listOps)
+			err := r.List(ctx, foundExporters, listOps)
 			if err != nil {
 				// if no exporters found, just no-op this
 				return []reconcile.Request{}
@@ -530,14 +528,14 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForBasicAuthSecret(mgr c
 
 func (r *SolrPrometheusExporterReconciler) buildSecretWatch(secretField string, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.Secret{}},
-		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		&corev1.Secret{},
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
 			listOps := &client.ListOptions{
 				FieldSelector: fields.OneTermEqualSelector(secretField, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.Background(), foundExporters, listOps)
+			err := r.List(ctx, foundExporters, listOps)
 			if err != nil {
 				// if no exporters found, just no-op this
 				return []reconcile.Request{}
