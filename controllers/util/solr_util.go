@@ -608,6 +608,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// If probes require auth is set OR tls is configured to want / need client auth, then reconfigure the probes to use an exec
 	if (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) || (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) {
 		enableSecureProbesOnSolrCloudStatefulSet(solrCloud, stateful)
+	} else {
+		// If we are not using secure probes, but still using TLS, then make sure that the HOST header is correct when sending liveness and readiness checks.
+		// Otherwise it is likely that the SNI checks will fail for newer versions of Solr (9.2+)
+		setHostHeaderForProbesOnSolrCloudStatefulSet(solrCloud, stateful)
 	}
 
 	return stateful

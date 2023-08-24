@@ -128,6 +128,7 @@ func TLSCertsForExporter(prometheusExporter *solr.SolrPrometheusExporter) *TLSCe
 // pod-specific TLS files using mutating web hooks
 func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSet) {
 	serverCert := tls.ServerConfig
+	// TODO: Add "solr.jetty.ssl.sniRequired=false" always and "solr.jetty.ssl.sniHostCheck" to false if !opts.VerifyClientHostname
 
 	// Add the SOLR_SSL_* vars to the main container's environment
 	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
@@ -594,6 +595,7 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 	}
 
 	if tls.Options.VerifyClientHostname {
+		// TODO: This is broken in Solr 9.2+
 		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
 	}
 
