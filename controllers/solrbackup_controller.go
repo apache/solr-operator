@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 	"time"
 
 	"github.com/apache/solr-operator/controllers/util"
@@ -335,15 +334,15 @@ func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrl
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &solrv1beta1.SolrCloud{}},
-		handler.EnqueueRequestsFromMapFunc(func(obj client.Object) []reconcile.Request {
+		&solrv1beta1.SolrCloud{},
+		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			solrCloud := obj.(*solrv1beta1.SolrCloud)
 			foundBackups := &solrv1beta1.SolrBackupList{}
 			listOps := &client.ListOptions{
 				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.Background(), foundBackups, listOps)
+			err := r.List(ctx, foundBackups, listOps)
 			if err != nil {
 				// if no exporters found, just no-op this
 				return []reconcile.Request{}

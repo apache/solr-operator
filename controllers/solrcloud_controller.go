@@ -48,7 +48,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -1098,7 +1097,7 @@ func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manage
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.ConfigMap{}},
+		&corev1.ConfigMap{},
 		r.findSolrCloudByFieldValueFunc(".spec.customSolrKubeOptions.configMapOptions.providedConfigMap"),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
@@ -1118,7 +1117,7 @@ func (r *SolrCloudReconciler) indexAndWatchForTLSSecret(mgr ctrl.Manager, ctrlBu
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.Secret{}},
+		&corev1.Secret{},
 		r.findSolrCloudByFieldValueFunc(field),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
@@ -1138,20 +1137,20 @@ func (r *SolrCloudReconciler) indexAndWatchForClientTLSSecret(mgr ctrl.Manager, 
 	}
 
 	return ctrlBuilder.Watches(
-		&source.Kind{Type: &corev1.Secret{}},
+		&corev1.Secret{},
 		r.findSolrCloudByFieldValueFunc(field),
 		builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})), nil
 }
 
 func (r *SolrCloudReconciler) findSolrCloudByFieldValueFunc(field string) handler.EventHandler {
 	return handler.EnqueueRequestsFromMapFunc(
-		func(obj client.Object) []reconcile.Request {
+		func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundClouds := &solrv1beta1.SolrCloudList{}
 			listOps := &client.ListOptions{
 				FieldSelector: fields.OneTermEqualSelector(field, obj.GetName()),
 				Namespace:     obj.GetNamespace(),
 			}
-			err := r.List(context.Background(), foundClouds, listOps)
+			err := r.List(ctx, foundClouds, listOps)
 			if err != nil {
 				return []reconcile.Request{}
 			}
