@@ -22,6 +22,7 @@ import (
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/version"
+	certManagerApi "github.com/cert-manager/cert-manager/pkg/api"
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
@@ -85,6 +86,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
@@ -93,6 +95,10 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	// The zookeeper will not be healthy until after the zookeeper operator is released with the solr operator
 	By("creating a shared zookeeper cluster")
 	zookeeper := runSharedZookeeperCluster(ctx)
+
+	// Set up a shared Bootstrap issuer for creating CAs for Solr
+	By("creating a boostrap cert issuer")
+	installBootstrapIssuer(ctx)
 
 	// Run this once before all tests, not per-test-process
 	By("starting the test solr operator")
@@ -125,6 +131,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	By("setting up the k8s clients")
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
