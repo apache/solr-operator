@@ -1540,18 +1540,26 @@ type MountedTLSDirectory struct {
 	// +optional
 	KeystoreFile string `json:"keystoreFile,omitempty"`
 
-	// Override the name of the keystore password file; defaults to keystore-password
+	// Override the name of the keystore password file; defaults to keystore-password, if "keystorePassword" is not provided.
 	// +optional
 	KeystorePasswordFile string `json:"keystorePasswordFile,omitempty"`
+
+	// Set the password of the keystore explicitly. Cannot be used with "keystorePasswordFile"
+	// +optional
+	KeystorePassword string `json:"keystorePassword,omitempty"`
 
 	// Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding
 	// env vars and Java system properties will not be configured for the pod template
 	// +optional
 	TruststoreFile string `json:"truststoreFile,omitempty"`
 
-	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile, if "truststorePassword" is not provided.
 	// +optional
 	TruststorePasswordFile string `json:"truststorePasswordFile,omitempty"`
+
+	// Set the password of the truststore explicitly. If "keystorePassword" is provided, and "truststorePasswordFile" is not, this will be defaulted to "keystorePassword".
+	// +optional
+	TruststorePassword string `json:"truststorePassword,omitempty"`
 }
 
 type SolrTLSOptions struct {

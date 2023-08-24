@@ -9454,9 +9454,14 @@ spec:
                           env vars and Java system properties will not be configured
                           for the pod template
                         type: string
+                      keystorePassword:
+                        description: Set the password of the keystore explicitly.
+                          Cannot be used with "keystorePasswordFile"
+                        type: string
                       keystorePasswordFile:
                         description: Override the name of the keystore password file;
-                          defaults to keystore-password
+                          defaults to keystore-password, if "keystorePassword" is
+                          not provided.
                         type: string
                       path:
                         description: The path on the main Solr container where the
@@ -9468,9 +9473,15 @@ spec:
                           env vars and Java system properties will not be configured
                           for the pod template
                         type: string
+                      truststorePassword:
+                        description: Set the password of the truststore explicitly.
+                          If "keystorePassword" is provided, and "truststorePasswordFile"
+                          is not, this will be defaulted to "keystorePassword".
+                        type: string
                       truststorePasswordFile:
                         description: Override the name of the truststore password
-                          file; defaults to the same value as the KeystorePasswordFile
+                          file; defaults to the same value as the KeystorePasswordFile,
+                          if "truststorePassword" is not provided.
                         type: string
                     required:
                     - path
@@ -9704,9 +9715,14 @@ spec:
                           env vars and Java system properties will not be configured
                           for the pod template
                         type: string
+                      keystorePassword:
+                        description: Set the password of the keystore explicitly.
+                          Cannot be used with "keystorePasswordFile"
+                        type: string
                       keystorePasswordFile:
                         description: Override the name of the keystore password file;
-                          defaults to keystore-password
+                          defaults to keystore-password, if "keystorePassword" is
+                          not provided.
                         type: string
                       path:
                         description: The path on the main Solr container where the
@@ -9718,9 +9734,15 @@ spec:
                           env vars and Java system properties will not be configured
                           for the pod template
                         type: string
+                      truststorePassword:
+                        description: Set the password of the truststore explicitly.
+                          If "keystorePassword" is provided, and "truststorePasswordFile"
+                          is not, this will be defaulted to "keystorePassword".
+                        type: string
                       truststorePasswordFile:
                         description: Override the name of the truststore password
-                          file; defaults to the same value as the KeystorePasswordFile
+                          file; defaults to the same value as the KeystorePasswordFile,
+                          if "truststorePassword" is not provided.
                         type: string
                     required:
                     - path
