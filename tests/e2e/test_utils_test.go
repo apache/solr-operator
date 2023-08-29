@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -87,7 +88,7 @@ func runSolrOperator(ctx context.Context) *release.Release {
 	histClient := action.NewHistory(actionConfig)
 	histClient.Max = 1
 	var solrOperatorHelmRelease *release.Release
-	if _, err = histClient.Run(solrOperatorReleaseName); err == driver.ErrReleaseNotFound {
+	if _, err = histClient.Run(solrOperatorReleaseName); errors.Is(err, driver.ErrReleaseNotFound) {
 		installClient := action.NewInstall(actionConfig)
 
 		installClient.ReleaseName = solrOperatorReleaseName
