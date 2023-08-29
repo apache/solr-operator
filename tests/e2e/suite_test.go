@@ -38,6 +38,7 @@ import (
 	"k8s.io/client-go/rest"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -179,7 +180,8 @@ func (rc RetryCommand) String() string {
 }
 
 type FailureInformation struct {
-	namespace string
+	namespace       string
+	outputDirectory string
 }
 
 // ColorableString for ReportEntry to use
@@ -190,14 +192,15 @@ func (fi FailureInformation) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (fi FailureInformation) String() string {
 	return fmt.Sprintf(
-		"Namespace: %s\n",
+		"Namespace: %s\nLogs Directory: %s\n",
 		fi.namespace,
+		fi.outputDirectory,
 	)
 }
 
 var _ = ReportAfterEach(func(report SpecReport) {
 	testName := cases.Title(language.AmericanEnglish, cases.NoLower).String(report.FullText())
-	testOutputDir := outputDir + "/" + strings.ReplaceAll(testName, " ", "")
+	testOutputDir := outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
 	// We count "ran" as "passed" or "failed"
 	if report.State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
 		Expect(os.Mkdir(testOutputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", testOutputDir)
@@ -214,10 +217,13 @@ var _ = ReportAfterEach(func(report SpecReport) {
 
 	if report.Failed() {
 		ginkgoConfig, _ := GinkgoConfiguration()
+		testOutputDir, _ := filepath.Abs(testOutputDir)
 		AddReportEntry(
 			"Failure Information",
+			types.CodeLocation{},
 			FailureInformation{
-				namespace: testNamespace(),
+				namespace:       testNamespace(),
+				outputDirectory: testOutputDir,
 			},
 		)
 		AddReportEntry(
