@@ -18,6 +18,8 @@
 package e2e
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -206,6 +208,7 @@ var _ = ReportAfterEach(func(report SpecReport) {
 			getSolrOperatorPodName(solrOperatorReleaseNamespace),
 			solrOperatorReleaseNamespace,
 			report.StartTime,
+			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
 		)
 	}
 
@@ -247,7 +250,7 @@ func getSolrOperatorPodName(namespace string) string {
 	return foundPods.Items[0].Name
 }
 
-func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw time.Time) {
+func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw time.Time, filterLinesWithString string) {
 	logFile, err := os.Create(filename)
 	defer logFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
@@ -261,6 +264,22 @@ func writePodLogsToFile(filename string, podName string, podNamespace string, st
 	defer podLogs.Close()
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
 
-	_, err = io.Copy(logFile, podLogs)
+	var logReader io.Reader
+	logReader = podLogs
+
+	if filterLinesWithString != "" {
+		filteredWriter := bytes.NewBufferString("")
+		scanner := bufio.NewScanner(podLogs)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, filterLinesWithString) {
+				io.WriteString(filteredWriter, line)
+				io.WriteString(filteredWriter, "\n")
+			}
+		}
+		logReader = filteredWriter
+	}
+
+	_, err = io.Copy(logFile, logReader)
 	Expect(err).ToNot(HaveOccurred(), "Could not write podLogs to file: %s", filename)
 }
