@@ -18,6 +18,8 @@
 package e2e
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -25,14 +27,23 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	"io"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"math/rand"
+	"os"
+	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +55,7 @@ const (
 	// Available environment variables to customize tests
 	operatorImageEnv = "OPERATOR_IMAGE"
 	solrImageEnv     = "SOLR_IMAGE"
+	kubeVersionEnv   = "KUBERNETES_VERSION"
 
 	backupDirHostPath = "/tmp/backup"
 
@@ -64,6 +76,9 @@ var (
 
 	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)
+	kubeVersion   = getEnvWithDefault(kubeVersionEnv, defaultSolrImage)
+
+	outputDir = "output"
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -80,6 +95,9 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 
 	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
 	logf.SetLogger(logger)
+
+	Expect(os.RemoveAll(outputDir+"/")).To(Succeed(), "Could not delete existing output directory before tests start: %s", outputDir)
+	Expect(os.Mkdir(outputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", outputDir)
 
 	var err error
 	k8sConfig, err = config.GetConfig()
@@ -139,6 +157,7 @@ type RetryCommand struct {
 	randomSeed    int64
 	operatorImage string
 	solrImage     string
+	kubeVersion   string
 }
 
 // ColorableString for ReportEntry to use
@@ -149,18 +168,20 @@ func (rc RetryCommand) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (rc RetryCommand) String() string {
 	return fmt.Sprintf(
-		"make e2e-tests TEST_FILES=%q TEST_FILTER=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q",
+		"make e2e-tests TEST_FILES=%q TEST_FILTER=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q %s=%q",
 		rc.report.FileName(),
 		rc.report.FullText(),
 		rc.randomSeed,
 		rc.parallelism,
 		solrImageEnv, rc.solrImage,
 		operatorImageEnv, rc.operatorImage,
+		kubeVersionEnv, rc.kubeVersion,
 	)
 }
 
 type FailureInformation struct {
-	namespace string
+	namespace       string
+	outputDirectory string
 }
 
 // ColorableString for ReportEntry to use
@@ -171,18 +192,38 @@ func (fi FailureInformation) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (fi FailureInformation) String() string {
 	return fmt.Sprintf(
-		"Namespace: %s\n",
+		"Namespace: %s\nLogs Directory: %s\n",
 		fi.namespace,
+		fi.outputDirectory,
 	)
 }
 
 var _ = ReportAfterEach(func(report SpecReport) {
+	testName := cases.Title(language.AmericanEnglish, cases.NoLower).String(report.FullText())
+	testOutputDir := outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
+	// We count "ran" as "passed" or "failed"
+	if report.State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
+		Expect(os.Mkdir(testOutputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", testOutputDir)
+		testOutputDir += "/"
+		// Always save the logs of the Solr Operator for the test
+		writePodLogsToFile(
+			testOutputDir+"solr-operator.log",
+			getSolrOperatorPodName(solrOperatorReleaseNamespace),
+			solrOperatorReleaseNamespace,
+			report.StartTime,
+			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
+		)
+	}
+
 	if report.Failed() {
 		ginkgoConfig, _ := GinkgoConfiguration()
+		testOutputDir, _ := filepath.Abs(testOutputDir)
 		AddReportEntry(
 			"Failure Information",
+			types.CodeLocation{},
 			FailureInformation{
-				namespace: testNamespace(),
+				namespace:       testNamespace(),
+				outputDirectory: testOutputDir,
 			},
 		)
 		AddReportEntry(
@@ -194,7 +235,57 @@ var _ = ReportAfterEach(func(report SpecReport) {
 				randomSeed:    GinkgoRandomSeed(),
 				operatorImage: operatorImage,
 				solrImage:     solrImage,
+				kubeVersion:   kubeVersion,
 			},
 		)
 	}
 })
+
+func getSolrOperatorPodName(namespace string) string {
+	labelSelector := labels.SelectorFromSet(map[string]string{"control-plane": "solr-operator"})
+	listOps := &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+		Limit:         int64(1),
+	}
+
+	foundPods := &corev1.PodList{}
+	Expect(k8sClient.List(context.TODO(), foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(foundPods).ToNot(BeNil(), "No Solr Operator pods could be found")
+	Expect(foundPods.Items).ToNot(BeEmpty(), "No Solr Operator pods could be found")
+	return foundPods.Items[0].Name
+}
+
+func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw time.Time, filterLinesWithString string) {
+	logFile, err := os.Create(filename)
+	defer logFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
+
+	startTime := metav1.NewTime(startTimeRaw)
+	podLogOpts := corev1.PodLogOptions{
+		SinceTime: &startTime,
+	}
+	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
+	podLogs, logsErr := req.Stream(context.Background())
+	defer podLogs.Close()
+	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
+
+	var logReader io.Reader
+	logReader = podLogs
+
+	if filterLinesWithString != "" {
+		filteredWriter := bytes.NewBufferString("")
+		scanner := bufio.NewScanner(podLogs)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, filterLinesWithString) {
+				io.WriteString(filteredWriter, line)
+				io.WriteString(filteredWriter, "\n")
+			}
+		}
+		logReader = filteredWriter
+	}
+
+	_, err = io.Copy(logFile, logReader)
+	Expect(err).ToNot(HaveOccurred(), "Could not write podLogs to file: %s", filename)
+}
