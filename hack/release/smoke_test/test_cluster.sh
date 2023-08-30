@@ -170,14 +170,14 @@ helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${
 
 printf "\nInstall a test Solr Cluster\n"
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" \
-    --set replicas=3 \
+    --set replicas=2 \
     --set image.repository="${SOLR_IMAGE%%:*}" \
     --set-string image.tag="${SOLR_IMAGE##*:}" \
-    --set solrOptions.javaMemory="-Xms512m -Xmx512m" \
-    --set podOptions.resources.limits.cpu="700m" \
-    --set podOptions.resources.limits.memory="750Mi" \
-    --set podOptions.resources.requests.cpu="700m" \
-    --set podOptions.resources.requests.memory="750Mi" \
+    --set solrOptions.javaMemory="-Xms700m -Xmx700m" \
+    --set podOptions.resources.limits.cpu="1" \
+    --set podOptions.resources.limits.memory="1Gi" \
+    --set podOptions.resources.requests.cpu="1" \
+    --set podOptions.resources.requests.memory="1Gi" \
     --set zk.provided.persistence.spec.resources.requests.storage="5Gi" \
     --set zk.provided.replicas=1 \
     --set "backupRepositories[0].name=local" \
@@ -187,8 +187,8 @@ helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_H
 remove_solr_helm_repo
 
 # Wait for solrcloud to be ready
-printf '\nWait for all 3 Solr nodes to become ready.\n\n'
-grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w); kill $!
+printf '\nWait for all 2 Solr nodes to become ready.\n\n'
+grep -q "2              2       2            2" <(exec kubectl get solrcloud example -w); kill $!
 
 # Expose the common Solr service to localhost
 kubectl port-forward service/example-solrcloud-common 18983:80 || true &
@@ -198,7 +198,7 @@ printf "\nCheck the admin URL to make sure it works\n"
 curl --silent "http://localhost:18983/solr/admin/info/system" | grep '"status":0' > /dev/null
 
 printf "\nCreating a test collection\n"
-curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=2&numShards=1" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=1&numShards=2" | grep '"status":0' > /dev/null
 
 printf "\nQuery the test collection, test for 0 docs\n"
 curl --silent "http://localhost:18983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
@@ -294,11 +294,11 @@ add_solr_helm_repo
 helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" --reuse-values  \
     --set-string podOptions.annotations.restart="true"
 printf '\nWait for the rolling restart to begin.\n\n'
-grep -q "3              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
+grep -q "2              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
 remove_solr_helm_repo
 
-printf '\nWait 5 minutes for all 3 Solr nodes to become ready.\n\n'
-grep -q "3              3       3            3" <(exec kubectl get solrcloud example -w --request-timeout 300); kill $!
+printf '\nWait 5 minutes for all 2 Solr nodes to become ready.\n\n'
+grep -q "2              2       2            2" <(exec kubectl get solrcloud example -w --request-timeout 300); kill $!
 
 # Need a new port-forward, since the last one will have broken due to all pods restarting
 kubectl port-forward service/example-solrcloud-common 28983:80 || true &
