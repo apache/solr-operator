@@ -77,7 +77,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.3}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
@@ -173,10 +173,10 @@ helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_H
     --set replicas=3 \
     --set image.repository="${SOLR_IMAGE%%:*}" \
     --set-string image.tag="${SOLR_IMAGE##*:}" \
-    --set solrOptions.javaMemory="-Xms1g -Xmx3g" \
-    --set podOptions.resources.limits.memory="1G" \
-    --set podOptions.resources.requests.cpu="300m" \
-    --set podOptions.resources.requests.memory="512Mi" \
+    --set solrOptions.javaMemory="-Xms1g -Xmx1g" \
+    --set podOptions.resources.limits.memory="1500Mi" \
+    --set podOptions.resources.requests.cpu="1" \
+    --set podOptions.resources.requests.memory="1500Mi" \
     --set zk.provided.persistence.spec.resources.requests.storage="5Gi" \
     --set zk.provided.replicas=1 \
     --set "backupRepositories[0].name=local" \
