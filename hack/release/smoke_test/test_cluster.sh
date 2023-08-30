@@ -32,7 +32,7 @@ Test the release candidate in a Kind cluster
     -l  Base location of the staged artifacts. Can be a URL or relative or absolute file path.
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -g  GPG Key (fingerprint) used to sign the artifacts (Optional, if not provided then the helm chart will not be verified)
-    -k  Kubernetes Version to test with (full tag, e.g. v1.24.15) (Optional, defaults to a compatible version)
+    -k  Kubernetes Version to test with (full tag, e.g. v1.26.6) (Optional, defaults to a compatible version)
     -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 8.11). (Optional, defaults to a compatible version)
 EOF
 }
@@ -74,7 +74,7 @@ if [[ -z "${LOCATION:-}" ]]; then
   echo "Specify an base artifact location -l, or through the LOCATION env var" >&2 && exit 1
 fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
-  KUBERNETES_VERSION="v1.24.15"
+  KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
   SOLR_IMAGE="${SOLR_VERSION:-9}"

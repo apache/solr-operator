@@ -73,7 +73,7 @@ if [[ -z "${OPERATOR_IMAGE:-}" ]]; then
   echo "Specify a Docker image for the Solr Operator through -i, or through the OPERATOR_IMAGE env var" >&2 && exit 1
 fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
-  KUBERNETES_VERSION="v1.24.15"
+  KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
   SOLR_IMAGE="${SOLR_VERSION:-8.11}"
