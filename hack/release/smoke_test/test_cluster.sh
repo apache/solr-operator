@@ -173,10 +173,11 @@ helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_H
     --set replicas=3 \
     --set image.repository="${SOLR_IMAGE%%:*}" \
     --set-string image.tag="${SOLR_IMAGE##*:}" \
-    --set solrOptions.javaMemory="-Xms1g -Xmx1g" \
-    --set podOptions.resources.limits.memory="1500Mi" \
-    --set podOptions.resources.requests.cpu="1" \
-    --set podOptions.resources.requests.memory="1500Mi" \
+    --set solrOptions.javaMemory="-Xms512m -Xmx512m" \
+    --set podOptions.resources.limits.cpu="700m" \
+    --set podOptions.resources.limits.memory="750Mi" \
+    --set podOptions.resources.requests.cpu="700m" \
+    --set podOptions.resources.requests.memory="750Mi" \
     --set zk.provided.persistence.spec.resources.requests.storage="5Gi" \
     --set zk.provided.replicas=1 \
     --set "backupRepositories[0].name=local" \
