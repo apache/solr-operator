@@ -511,7 +511,7 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 				PodOptions: &solrv1beta1.PodOptions{
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("600Mi"),
+							corev1.ResourceMemory: resource.MustParse("750Mi"),
 							corev1.ResourceCPU:    resource.MustParse("1"),
 						},
 					},
