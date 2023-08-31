@@ -48,7 +48,7 @@ jobs:
     strategy:
       matrix:
         go-version: [ '1.20' ]
-        kube-version: [ 'v1.21.14' ]
+        kube-version: [ 'v1.26.6' ]
         solr-version: [ '9' ] # [ '8', '9' ]
 
     steps:

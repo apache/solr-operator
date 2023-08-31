@@ -27,7 +27,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 
 ### Kubernetes Versions
 
-| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.20`   |       `1.21`        |      `1.22`+       |
+| Solr Operator Version | `1.15` | `1.16` - `1.18` |  `1.19` - `1.20`   |       `1.21`       |      `1.22`+       |
 |:---------------------:| :---: | :---: |:------------------:|:------------------:|:------------------:|
 |       `v0.2.6`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
 |       `v0.2.7`        | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |        :x:         |
@@ -37,6 +37,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.5.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.8.x`        | :x: | :x: |        :x:         |        :x:         | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -50,6 +51,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.6.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.7.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+|       `v0.8.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
@@ -110,6 +112,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.8.0
+- **Kubernetes support is now limited to 1.22+.**  
+  If you are unable to use a newer version of Kubernetes, please install the `v0.7.1` version of the Solr Operator for use with Kubernetes `1.21`.
+  See the [version compatibility matrix](#kubernetes-versions) for more information.
+
 - The new `SolrCloud.spec.scaling.vacatePodsOnScaleDown` option is enabled by default.
   This means that any SolrCloud that has its `spec.replicas` decreased will have the replicas migrated off of the soon-to-be-deleted pods by default.
   Set this value to `false` to retain the previous functionality.
