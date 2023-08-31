@@ -596,13 +596,13 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 
 	exportServerKeystorePassword, exportServerTruststorePassword := "", ""
 	if tls.ServerConfig.Options.MountedTLSDir != nil {
-		mountedDir := tls.ClientConfig.Options.MountedTLSDir
+		mountedDir := tls.ServerConfig.Options.MountedTLSDir
 		if mountedDir.KeystorePasswordFile != "" || mountedDir.KeystorePassword == "" {
 			exportServerKeystorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
 			exportServerTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_TRUST_STORE_PASSWORD", "${SOLR_SSL_KEY_STORE_PASSWORD}")
 		}
 		if mountedDir.TruststorePasswordFile != "" {
-			exportServerTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_KEY_STORE_PASSWORD", mountedTLSTruststorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
+			exportServerTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
 		} else if mountedDir.TruststorePassword != "" {
 			exportServerTruststorePassword = ""
 		}
