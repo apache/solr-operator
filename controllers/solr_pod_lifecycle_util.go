@@ -101,6 +101,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 
 	// Delete the pod
 	if deletePod {
+		logger.Error(err, "Deleting solr pod for update", "pod", pod.Name)
 		err = r.Delete(ctx, pod, client.Preconditions{
 			UID: &pod.UID,
 		})

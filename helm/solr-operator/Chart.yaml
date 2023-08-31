@@ -109,6 +109,11 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/596
         - name: Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html#avoiding-deadlocks
+    - kind: added
+      description: Fix a bug with Rolling Restarts with ephemeral data
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/614
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease
