@@ -104,23 +104,23 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// Normal inputs
+	testDownClusterState := findSolrNodeContents(testDownClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgradeDetailed, podsHaveReplicas := pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log)
-	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-2": true, "foo-solrcloud-6": false})
+	podsToUpgradeDetailed := pickPodsToUpdate(solrCloud, allPods, testDownClusterState, 6, log)
 	podsToUpgrade := getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-2", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Do to the down/non-live replicas, only the node without replicas and one more can be upgraded.")
 
 	// Test the maxBatchNodeUpgradeSpec
+	testDownClusterState = findSolrNodeContents(testDownClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgradeDetailed, podsHaveReplicas = pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 1, log)
-	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-6": false})
+	podsToUpgradeDetailed = pickPodsToUpdate(solrCloud, allPods, testDownClusterState, 1, log)
 	podsToUpgrade = getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Only 1 node should be upgraded when maxBatchNodeUpgradeSpec=1")
 
 	// Test the maxShardReplicasDownSpec
+	testDownClusterState = findSolrNodeContents(testDownClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgradeDetailed, podsHaveReplicas = pickPodsToUpdate(solrCloud, allPods, testDownClusterStatus, overseerLeader, 6, log)
-	assert.Equal(t, podsHaveReplicas, map[string]bool{"foo-solrcloud-2": true, "foo-solrcloud-3": true, "foo-solrcloud-4": true, "foo-solrcloud-6": false})
+	podsToUpgradeDetailed = pickPodsToUpdate(solrCloud, allPods, testDownClusterState, 6, log)
 	podsToUpgrade = getPodNames(podsToUpgradeDetailed)
 	assert.ElementsMatch(t, []string{"foo-solrcloud-2", "foo-solrcloud-3", "foo-solrcloud-4", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade.")
 
@@ -129,23 +129,27 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// Normal inputs
+	testRecoveringClusterState := findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-4", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Do to the recovering/down/non-live replicas, only the non-live node and node without replicas can be upgraded.")
 
 	// Test the maxBatchNodeUpgradeSpec
+	testRecoveringClusterState = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterStatus, overseerLeader, 1, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterState, 1, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-4"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Only 1 node should be upgraded when maxBatchNodeUpgradeSpec=1, and it should be the non-live node.")
 
 	// Test the maxShardReplicasDownSpec
+	testRecoveringClusterState = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, allPods, testRecoveringClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-2", "foo-solrcloud-3", "foo-solrcloud-4", "foo-solrcloud-6"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
 
 	// The overseer should be upgraded when given enough leeway
+	testDownClusterState = findSolrNodeContents(testDownClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromString("50%")
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testDownClusterStatus, overseerLeader, 2, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testDownClusterState, 2, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The last pod, the overseer, should be chosen because it has been given enough leeway.")
 
 	/*
@@ -153,18 +157,21 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// Normal inputs
+	testHealthyClusterState := findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, halfPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, halfPods, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-1"}, podsToUpgrade, "Incorrect set of next pods to upgrade. Do to replica placement, only the node with the least leaders can be upgraded and replicas.")
 
 	// Test the maxShardReplicasDownSpec
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, halfPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, halfPods, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-1", "foo-solrcloud-5"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
 
 	// The overseer should be upgraded when given enough leeway
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromString("50%")
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testDownClusterStatus, overseerLeader, 2, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterState, 2, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The last pod, the overseer, should be chosen because it has been given enough leeway.")
 
 	/*
@@ -172,22 +179,26 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// The overseer should be not be upgraded if the clusterstate is not healthy enough
+	testRecoveringClusterState = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testRecoveringClusterStatus, overseerLeader, 3, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testRecoveringClusterState, 3, log))
 	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be not be upgraded if the clusterstate is not healthy enough.")
 
 	// The overseer should be not be upgraded if the clusterstate is not healthy enough
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testRecoveringClusterStatus, overseerLeader, 6, log))
+	testRecoveringClusterState = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testRecoveringClusterState, 6, log))
 	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be not be upgraded if there are other non-live nodes.")
 
 	// The overseer should be upgraded when given enough leeway
+	testDownClusterState = findSolrNodeContents(testDownClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testDownClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testDownClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be upgraded when given enough leeway.")
 
 	// The overseer should be upgraded when everything is healthy and it is the last node
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be upgraded when everything is healthy and it is the last node")
 
 	/*
@@ -195,15 +206,17 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// The overseer should not be upgraded when everything is healthy and it is the last node but one pod is not in the live nodes
-	maxshardReplicasUnavailable = intstr.FromInt(1)
 	solrCloud.Spec.Replicas = Replicas(7)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterStatus, overseerLeader, 6, log))
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
+	maxshardReplicasUnavailable = intstr.FromInt(1)
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterState, 6, log))
 	assert.Empty(t, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be not be upgraded when one of the managed pods is not live")
 
 	// The overseer should be upgraded when everything is healthy and it is the last node even though this SolrCloud resource doesn't manage all Nodes
-	maxshardReplicasUnavailable = intstr.FromInt(1)
 	solrCloud.Spec.Replicas = Replicas(4)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterStatus, overseerLeader, 6, log))
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
+	maxshardReplicasUnavailable = intstr.FromInt(1)
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, lastPod, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-0"}, podsToUpgrade, "Incorrect set of next pods to upgrade. The overseer should be upgraded when everything is healthy and it is the last node, even though this SolrCloud resource doesn't manage all Nodes")
 
 	/*
@@ -211,18 +224,21 @@ func TestPickPodsToUpgrade(t *testing.T) {
 	*/
 
 	// Normal inputs
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(1)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{}, podsToUpgrade, "Incorrect set of next pods to upgrade. Due to replica placement, only the node with the least leaders can be upgraded and replicas.")
 
 	// Test the maxShardReplicasDownSpec
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 6, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterState, 6, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-1", "foo-solrcloud-3"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
 
 	// Test the maxNodes
+	testHealthyClusterState = findSolrNodeContents(testHealthyClusterStatus, overseerLeader, GetAllManagedSolrNodeNames(solrCloud))
 	maxshardReplicasUnavailable = intstr.FromInt(2)
-	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterStatus, overseerLeader, 2, log))
+	podsToUpgrade = getPodNames(pickPodsToUpdate(solrCloud, someScheduledForDeletionPods, testHealthyClusterState, 2, log))
 	assert.ElementsMatch(t, []string{"foo-solrcloud-1", "foo-solrcloud-3"}, podsToUpgrade, "Incorrect set of next pods to upgrade. More nodes should be upgraded when maxShardReplicasDown=2")
 
 }
@@ -350,21 +366,21 @@ func TestFindSolrNodeContents(t *testing.T) {
 	overseerLeader := "foo-solrcloud-0.foo-solrcloud-headless.default:2000_solr"
 
 	// Test allManagedPodsLive when true
-	_, _, _, allManagedPodsLive := findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{
+	state := findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{
 		"foo-solrcloud-2.foo-solrcloud-headless.default:2000_solr": true,
 		"foo-solrcloud-6.foo-solrcloud-headless.default:2000_solr": true,
 	})
-	assert.True(t, allManagedPodsLive, "allManagedPodsLive should be true, because both managed pods are live in cluster status")
+	assert.True(t, state.AllManagedPodsLive, "allManagedPodsLive should be true, because both managed pods are live in cluster status")
 
 	// Test allManagedPodsLive when false
-	_, _, _, allManagedPodsLive = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{
+	state = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{
 		"foo-solrcloud-2.foo-solrcloud-headless.default:2000_solr": true,
 		"foo-solrcloud-6.foo-solrcloud-headless.default:2000_solr": true,
 		"foo-solrcloud-4.foo-solrcloud-headless.default:2000_solr": true,
 	})
-	assert.False(t, allManagedPodsLive, "allManagedPodsLive should be false, because there is a managed pod that is not live")
+	assert.False(t, state.AllManagedPodsLive, "allManagedPodsLive should be false, because there is a managed pod that is not live")
 
-	nodeContents, totalShardReplicas, shardReplicasNotActive, _ := findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{})
+	state = findSolrNodeContents(testRecoveringClusterStatus, overseerLeader, map[string]bool{})
 
 	expectedNodeContents := map[string]*SolrNodeContents{
 		"foo-solrcloud-0.foo-solrcloud-headless.default:2000_solr": {
@@ -481,8 +497,8 @@ func TestFindSolrNodeContents(t *testing.T) {
 			live:                   true,
 		},
 	}
-	assert.Equal(t, len(nodeContents), len(nodeContents), "Number of Solr nodes with content information is incorrect.")
-	for node, foundNodeContents := range nodeContents {
+	assert.Equal(t, len(state.NodeContents), len(state.NodeContents), "Number of Solr nodes with content information is incorrect.")
+	for node, foundNodeContents := range state.NodeContents {
 		expectedContents, found := expectedNodeContents[node]
 		assert.Truef(t, found, "No nodeContents found for node %s", node)
 		assert.EqualValuesf(t, expectedContents, foundNodeContents, "NodeContents information from clusterstate is incorrect for node %s", node)
@@ -494,7 +510,7 @@ func TestFindSolrNodeContents(t *testing.T) {
 		"col2|shard1": 3,
 		"col2|shard2": 4,
 	}
-	assert.EqualValues(t, expectedTotalShardReplicas, totalShardReplicas, "Shards replica count is incorrect.")
+	assert.EqualValues(t, expectedTotalShardReplicas, state.TotalShardReplicas, "Shards replica count is incorrect.")
 
 	expectedShardReplicasNotActive := map[string]int{
 		"col1|shard1": 1,
@@ -502,7 +518,7 @@ func TestFindSolrNodeContents(t *testing.T) {
 		"col2|shard1": 2,
 		"col2|shard2": 2,
 	}
-	assert.EqualValues(t, expectedShardReplicasNotActive, shardReplicasNotActive, "Shards with replicas not active information is incorrect.")
+	assert.EqualValues(t, expectedShardReplicasNotActive, state.ShardReplicasNotActive, "Shards with replicas not active information is incorrect.")
 }
 
 func TestCalculateMaxPodsToUpgrade(t *testing.T) {
