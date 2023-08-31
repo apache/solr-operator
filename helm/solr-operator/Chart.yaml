@@ -114,6 +114,13 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/614
+    - kind: added
+      description: MountedDir TLS now accepts plaintext passwords, for use with the Cert Manager CSI Driver
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/603
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/608
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease
