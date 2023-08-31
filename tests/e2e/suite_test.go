@@ -33,6 +33,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
@@ -198,26 +199,39 @@ func (fi FailureInformation) String() string {
 	)
 }
 
-var _ = ReportAfterEach(func(report SpecReport) {
-	testName := cases.Title(language.AmericanEnglish, cases.NoLower).String(report.FullText())
-	testOutputDir := outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
+func outputDirForTest(testText string) string {
+	testName := cases.Title(language.AmericanEnglish, cases.NoLower).String(testText)
+	return outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
+}
+
+var _ = JustAfterEach(func() {
+	testOutputDir := outputDirForTest(CurrentSpecReport().FullText())
+
 	// We count "ran" as "passed" or "failed"
-	if report.State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
+	if CurrentSpecReport().State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
 		Expect(os.Mkdir(testOutputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", testOutputDir)
 		testOutputDir += "/"
 		// Always save the logs of the Solr Operator for the test
+		startTime := CurrentSpecReport().StartTime
 		writePodLogsToFile(
 			testOutputDir+"solr-operator.log",
 			getSolrOperatorPodName(solrOperatorReleaseNamespace),
 			solrOperatorReleaseNamespace,
-			report.StartTime,
+			&startTime,
 			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
 		)
+		// Always save the logs of the Solr Operator for the test
+		writeAllSolrLogsToFiles(
+			testOutputDir,
+			testNamespace(),
+		)
 	}
+})
 
+var _ = ReportAfterEach(func(report SpecReport) {
 	if report.Failed() {
 		ginkgoConfig, _ := GinkgoConfiguration()
-		testOutputDir, _ := filepath.Abs(testOutputDir)
+		testOutputDir, _ := filepath.Abs(outputDirForTest(report.FullText()))
 		AddReportEntry(
 			"Failure Information",
 			types.CodeLocation{},
@@ -256,15 +270,41 @@ func getSolrOperatorPodName(namespace string) string {
 	return foundPods.Items[0].Name
 }
 
-func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw time.Time, filterLinesWithString string) {
+func writeAllSolrLogsToFiles(directory string, namespace string) {
+	req, err := labels.NewRequirement("technology", selection.In, []string{solrv1beta1.SolrTechnologyLabel, solrv1beta1.SolrPrometheusExporterTechnologyLabel})
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector := labels.Everything().Add(*req)
+	listOps := &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPods := &corev1.PodList{}
+	Expect(k8sClient.List(context.TODO(), foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(foundPods).ToNot(BeNil(), "No Solr pods could be found")
+	for _, pod := range foundPods.Items {
+		writePodLogsToFile(
+			directory+pod.Name+".log",
+			pod.Name,
+			namespace,
+			nil,
+			"",
+		)
+	}
+}
+
+func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
 	logFile, err := os.Create(filename)
 	defer logFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
 
-	startTime := metav1.NewTime(startTimeRaw)
-	podLogOpts := corev1.PodLogOptions{
-		SinceTime: &startTime,
+	podLogOpts := corev1.PodLogOptions{}
+	if startTimeRaw != nil {
+		startTime := metav1.NewTime(*startTimeRaw)
+		podLogOpts.SinceTime = &startTime
 	}
+
 	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
 	podLogs, logsErr := req.Stream(context.Background())
 	defer podLogs.Close()
