@@ -169,11 +169,11 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 
 	FContext("Mounted TLS - Non-default file names", func() {
 		mountedDir := &solrv1beta1.MountedTLSDirectory{
-			Path:                   "/mounted-non-default",
-			KeystoreFile:           "ks.p12",
-			TruststoreFile:         "ts.p12",
-			KeystorePasswordFile:   "ks-password",
-			TruststorePasswordFile: "ts-password",
+			Path:                 "/mounted-non-default",
+			KeystoreFile:         "ks.p12",
+			TruststoreFile:       "ts.p12",
+			KeystorePasswordFile: "ks-password",
+			TruststorePassword:   "ts-password",
 		}
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
@@ -560,11 +560,29 @@ func expectMountedTLSDirEnvVars(envVars []corev1.EnvVar, solrCloud *solrv1beta1.
 		return strings.HasPrefix(n, "SOLR_SSL_")
 	})
 
+	expectedTLSVarsCount := 6
+
 	if solrCloud.Spec.SolrClientTLS != nil {
+		expectedTLSVarsCount += 2
 		Expect(len(envVars)).To(Equal(8), "expected SOLR_SSL and SOLR_SSL_CLIENT related env vars not found")
-	} else {
-		Expect(len(envVars)).To(Equal(6), "expected SOLR_SSL related env vars not found")
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
+			if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword != "" {
+				expectedTLSVarsCount += 1
+			}
+			if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword != "" {
+				expectedTLSVarsCount += 1
+			}
+		}
 	}
+	if solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword != "" {
+			expectedTLSVarsCount += 1
+		}
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword != "" {
+			expectedTLSVarsCount += 1
+		}
+	}
+	Expect(len(envVars)).To(Equal(expectedTLSVarsCount), "expected SOLR_SSL related env vars not found")
 
 	expectedKeystorePath := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystoreFile
 	expectedTruststorePath := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.TruststoreFile
@@ -607,6 +625,13 @@ func expectMountedTLSDirEnvVars(envVars []corev1.EnvVar, solrCloud *solrv1beta1.
 				Expect(envVar.Value).To(Equal(expectedTruststorePath), "Wrong envVar value for %s", envVar.Name)
 			}
 
+			if envVar.Name == "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD" {
+				Expect(envVar.Value).To(Equal(solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword), "Wrong envVar value for %s", envVar.Name)
+			}
+
+			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD" {
+				Expect(envVar.Value).To(Equal(solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword), "Wrong envVar value for %s", envVar.Name)
+			}
 		}
 	}
 }
@@ -750,12 +775,28 @@ func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1
 	name := "export-tls-password"
 	expInitContainer := expectInitContainer(podTemplate, name, "initdb", util.InitdbPath)
 	Expect(len(expInitContainer.Command)).To(Equal(3), "Wrong command length for %s init container command", name)
-	Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-	Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+	if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile != "" && solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword == "" {
+		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+	} else {
+		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_KEY_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
+	}
+	if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile != "" || (solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword == "" && solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile != "") {
+		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+	} else {
+		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_TRUST_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
+	}
 
 	if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
-		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile != "" && solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword == "" {
+			Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+		} else {
+			Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
+		}
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile != "" || (solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword == "" && solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile != "") {
+			Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
+		} else {
+			Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
+		}
 	} else {
 		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
 		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
@@ -786,16 +827,19 @@ func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec,
 			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
 		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
 	} else {
-		expectedKeystorePasswordFile := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
-		expectedTruststorePasswordFile := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/"
+		expectedKeystorePassword := solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile != "" {
+			expectedKeystorePassword = "$(cat " + solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile + ")"
+		}
+		expectedTruststorePassword := expectedKeystorePassword
 		if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile != "" {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile
-		} else {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
+			expectedTruststorePassword = "$(cat " + solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile + ")"
+		} else if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword != "" {
+			expectedTruststorePassword = solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword
 		}
 
-		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat " + expectedKeystorePasswordFile + ") " +
-			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
+		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=" + expectedKeystorePassword + " " +
+			"-Djavax.net.ssl.trustStorePassword=" + expectedTruststorePassword + ""
 		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE"
 	}
 
