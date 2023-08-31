@@ -256,8 +256,10 @@ solrTLS: {}
   #   path: /path/to/mounted/tls
   #   keystoreFile: "keystore.p12"
   #   keystorePasswordFile: ""
+  #   keystorePassword: ""
   #   truststoreFile: "truststore.p12"
   #   truststorePasswordFile: ""
+  #   truststorePassword: ""
 
 solrClientTLS: {}
   # pkcs12Secret:
@@ -276,8 +278,10 @@ solrClientTLS: {}
   #   path: /path/to/mounted/tls
   #   keystoreFile: "keystore.p12"
   #   keystorePasswordFile: ""
+  #   keystorePassword: ""
   #   truststoreFile: "truststore.p12"
   #   truststorePasswordFile: ""
+  #   truststorePassword: ""
 
 # Customize the Solr Pod for your needs
 podOptions:
