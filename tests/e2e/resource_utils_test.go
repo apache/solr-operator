@@ -89,7 +89,7 @@ func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		if additionalChecks != nil {
 			additionalChecks(g, foundSolrCloud)
 		}
-	}).WithContext(ctx).Should(Succeed())
+	}).WithTimeout(time.Minute * 4).WithContext(ctx).Should(Succeed())
 
 	return foundSolrCloud
 }
