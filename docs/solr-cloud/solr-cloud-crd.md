@@ -643,6 +643,12 @@ When using the mounted TLS directory option, you need to ensure each Solr pod ge
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
 Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
+When using the Cert Manager CSI Driver, a file is not generated for the keystore password.
+Instead, users can provide an annotation to manually set the password.
+For this use case, the `solrTLS.mountedTLSDir.keystorePassword` and `solrTLS.mountedTLSDir.truststorePassword` options are available.
+These take strings that are plain-text passwords for the keystore or truststore.
+They will be ignored when `keystorePasswordFile` and `truststorePasswordFile` are provided.
+
 ### Client TLS
 _Since v0.4.0_
 

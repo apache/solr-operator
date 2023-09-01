@@ -17,7 +17,7 @@ name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
 version: 0.8.0-prerelease
 appVersion: v0.8.0-prerelease
-kubeVersion: ">= 1.21.0-0"
+kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
   - https://github.com/apache/solr-operator
@@ -54,6 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: changed
+      description: The minimum supported version of Kubernetes is now v1.22
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/604
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/612
     - kind: added
       description: Ability to customize the SecurityContext for the solr-operator pod
       links:
@@ -102,6 +109,18 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/596
         - name: Documentation
           url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html#avoiding-deadlocks
+    - kind: added
+      description: Fix a bug with Rolling Restarts with ephemeral data
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/614
+    - kind: added
+      description: MountedDir TLS now accepts plaintext passwords, for use with the Cert Manager CSI Driver
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/603
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/608
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease

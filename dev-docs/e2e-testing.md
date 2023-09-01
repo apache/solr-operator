@@ -50,7 +50,7 @@ $ make e2e-tests TEST_SEED=89724023 SOLR_IMAGE=apache/solr-nightly:10.0.0-SNAPSH
   Default is `solr:8.11`.
 - **KUBERETES_VERSION** - A full Kubernetes version, starting with `v`, to use when creating the KinD Cluster.
   To find a list of all possible versions, check the [KinD Node Docker tags](https://hub.docker.com/r/kindest/node/tags).
-  Default is `v1.21.14`.
+  Default is `v1.26.6`.
 
 ### Filtering tests
 

@@ -233,8 +233,10 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | solrTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
 | solrTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
 | solrTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrTLS.mountedTLSDir.keystorePassword | string | | Manually set the keystore password, in plaintext; will be ignored if `keystorePasswordFile` is provided. Useful when using the Cert Manager CSI Driver. |
 | solrTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
 | solrTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+| solrTLS.mountedTLSDir.truststorePassword | string | | Manually set the truststore password, in plaintext; will be ignored if `truststorePasswordFile` is provided. Defaults to `keystorePassword`, if it is provided. |
 
 #### Client TLS Options
 
@@ -255,8 +257,10 @@ Configure Solr to use a separate TLS certificate for client auth.
 | solrClientTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
 | solrClientTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
 | solrClientTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrClientTLS.mountedTLSDir.keystorePassword | string | | Manually set the keystore password, in plaintext; will be ignored if `keystorePasswordFile` is provided. Useful when using the Cert Manager CSI Driver. |
 | solrClientTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
 | solrClientTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+| solrClientTLS.mountedTLSDir.truststorePassword | string | | Manually set the truststore password, in plaintext; will be ignored if `truststorePasswordFile` is provided. Defaults to `keystorePassword`, if it is provided. |
 
 ### Global Options
 

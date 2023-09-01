@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -87,7 +88,7 @@ func runSolrOperator(ctx context.Context) *release.Release {
 	histClient := action.NewHistory(actionConfig)
 	histClient.Max = 1
 	var solrOperatorHelmRelease *release.Release
-	if _, err = histClient.Run(solrOperatorReleaseName); err == driver.ErrReleaseNotFound {
+	if _, err = histClient.Run(solrOperatorReleaseName); errors.Is(err, driver.ErrReleaseNotFound) {
 		installClient := action.NewInstall(actionConfig)
 
 		installClient.ReleaseName = solrOperatorReleaseName
@@ -505,12 +506,12 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 				},
 			},
 			// This seems to be the lowest memory & CPU that allow the tests to pass
-			SolrJavaMem: "-Xms512m -Xmx512m",
+			SolrJavaMem: "-Xms700m -Xmx700m",
 			CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 				PodOptions: &solrv1beta1.PodOptions{
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{
-							corev1.ResourceMemory: resource.MustParse("600Mi"),
+							corev1.ResourceMemory: resource.MustParse("1Gi"),
 							corev1.ResourceCPU:    resource.MustParse("1"),
 						},
 					},
