@@ -717,25 +717,25 @@ func secureProbeTLSJavaToolOpts(solrCloud *solr.SolrCloud) (tlsJavaToolOpts stri
 	if solrCloud.Spec.SolrTLS != nil {
 		// prefer the mounted client cert for probes if provided
 		tlsDir := solrCloud.Spec.SolrTLS.MountedTLSDir
+		clientPrefix := ""
 		if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
 			tlsDir = solrCloud.Spec.SolrClientTLS.MountedTLSDir
+			clientPrefix = "CLIENT_"
 		}
 		if tlsDir != nil {
 			// The keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
-			keyStorePassword := ""
-			if tlsDir.KeystorePasswordFile != "" || tlsDir.KeystorePassword == "" {
-				keyStorePassword = "$(cat " + mountedTLSKeystorePasswordPath(tlsDir) + ")"
-				tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=" + keyStorePassword
+			keyStorePassword := "$(cat " + mountedTLSKeystorePasswordPath(tlsDir) + ")"
+			if tlsDir.KeystorePasswordFile == "" && tlsDir.KeystorePassword != "" {
+				keyStorePassword = "${SOLR_SSL_" + clientPrefix + "KEY_STORE_PASSWORD}"
 			}
-			trustStorePassword := ""
+			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=" + keyStorePassword
+			trustStorePassword := keyStorePassword
 			if tlsDir.TruststorePasswordFile != "" {
 				trustStorePassword = "$(cat " + mountedTLSTruststorePasswordPath(tlsDir) + ")"
-			} else if tlsDir.TruststorePassword == "" {
-				trustStorePassword = keyStorePassword
+			} else if tlsDir.TruststorePassword != "" {
+				trustStorePassword = "${SOLR_SSL_" + clientPrefix + "TRUST_STORE_PASSWORD}"
 			}
-			if trustStorePassword != "" {
-				tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=" + trustStorePassword
-			}
+			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=" + trustStorePassword
 		}
 		tlsJavaSysProps = secureProbeTLSJavaSysProps(solrCloud)
 	}
@@ -770,6 +770,10 @@ func secureProbeTLSJavaSysProps(solrCloud *solr.SolrCloud) string {
 		if solrCloud.Spec.SolrTLS.MountedTLSDir == nil {
 			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD"
 			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
+		} else {
+			if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword != "" {
+
+			}
 		} // else passwords come through JAVA_TOOL_OPTIONS via cat'ing the mounted files
 	}
 

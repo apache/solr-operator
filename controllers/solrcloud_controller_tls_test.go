@@ -827,7 +827,7 @@ func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec,
 			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
 		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
 	} else {
-		expectedKeystorePassword := solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword
+		expectedKeystorePassword := "${SOLR_SSL_KEY_STORE_PASSWORD}"
 		if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile != "" {
 			expectedKeystorePassword = "$(cat " + solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile + ")"
 		}
@@ -835,7 +835,7 @@ func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec,
 		if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile != "" {
 			expectedTruststorePassword = "$(cat " + solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile + ")"
 		} else if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword != "" {
-			expectedTruststorePassword = solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword
+			expectedTruststorePassword = "${SOLR_SSL_TRUST_STORE_PASSWORD}"
 		}
 
 		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=" + expectedKeystorePassword + " " +
