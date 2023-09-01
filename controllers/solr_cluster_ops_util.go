@@ -321,21 +321,32 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 			updateLogger.Info("Pod killed for update.", "pod", pod.Name, "reason", "The solr container in the pod has not yet started, thus it is safe to update.")
 		}
 
-		// Pick which pods should be deleted for an update.
 		// Don't exit on an error, which would only occur because of an HTTP Exception. Requeue later instead.
-		additionalPodsToUpdate, podsHaveReplicas, retryLater, clusterStateError :=
-			util.DeterminePodsSafeToUpdate(ctx, instance, int(*statefulSet.Spec.Replicas), outOfDatePods, hasReadyPod, availableUpdatedPodCount, updateLogger)
-		// If we do not have the clusterState, it's not safe to update pods that are running
-		if clusterStateError != nil {
-			retryLater = true
-		} else {
+		// We won't kill pods that we need the cluster state for, but we can kill the pods that are already not running.
+		// This is important for scenarios where there is a bad pod config and nothing is running, but we need to do
+		// a restart to get a working pod config.
+		state, retryLater, apiError := util.GetNodeReplicaState(ctx, instance, hasReadyPod, logger)
+		if apiError != nil {
+			return false, true, 0, apiError
+		} else if !retryLater {
+			// If the cluster status has been successfully fetched, then add the pods scheduled for deletion
+			// This requires the clusterState to be fetched successfully to ensure that we know if there
+			// are replicas living on the pod
 			podsToUpdate = append(podsToUpdate, outOfDatePods.ScheduledForDeletion...)
-			podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+
+			// Pick which pods should be deleted for an update.
+			var additionalPodsToUpdate []corev1.Pod
+			additionalPodsToUpdate, retryLater =
+				util.DeterminePodsSafeToUpdate(instance, int(*statefulSet.Spec.Replicas), outOfDatePods, state, availableUpdatedPodCount, updateLogger)
+			// If we do not have the clusterState, it's not safe to update pods that are running
+			if !retryLater {
+				podsToUpdate = append(podsToUpdate, additionalPodsToUpdate...)
+			}
 		}
 
 		// Only actually delete a running pod if it has been evicted, or doesn't need eviction (persistent storage)
 		for _, pod := range podsToUpdate {
-			retryLaterDurationTemp, inProgTmp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, podsHaveReplicas[pod.Name], updateLogger)
+			retryLaterDurationTemp, inProgTmp, errTemp := DeletePodForUpdate(ctx, r, instance, &pod, state.PodHasReplicas(instance, pod.Name), updateLogger)
 			requestInProgress = requestInProgress || inProgTmp
 
 			// Use the retryLaterDuration of the pod that requires a retry the soonest (smallest duration > 0)
