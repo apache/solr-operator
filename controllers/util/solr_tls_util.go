@@ -722,18 +722,20 @@ func secureProbeTLSJavaToolOpts(solrCloud *solr.SolrCloud) (tlsJavaToolOpts stri
 		}
 		if tlsDir != nil {
 			// The keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
-			keyStorePassword := "$(cat " + mountedTLSKeystorePasswordPath(tlsDir) + ")"
-			if tlsDir.KeystorePasswordFile == "" && tlsDir.KeystorePassword != "" {
-				keyStorePassword = "${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+			keyStorePassword := ""
+			if tlsDir.KeystorePasswordFile != "" || tlsDir.KeystorePassword == "" {
+				keyStorePassword = "$(cat " + mountedTLSKeystorePasswordPath(tlsDir) + ")"
+				tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=" + keyStorePassword
 			}
-			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=" + keyStorePassword
-			trustStorePassword := keyStorePassword
+			trustStorePassword := ""
 			if tlsDir.TruststorePasswordFile != "" {
 				trustStorePassword = "$(cat " + mountedTLSTruststorePasswordPath(tlsDir) + ")"
-			} else if tlsDir.TruststorePassword != "" {
-				trustStorePassword = tlsDir.TruststorePassword
+			} else if tlsDir.TruststorePassword == "" {
+				trustStorePassword = keyStorePassword
 			}
-			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=" + trustStorePassword
+			if trustStorePassword != "" {
+				tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=" + trustStorePassword
+			}
 		}
 		tlsJavaSysProps = secureProbeTLSJavaSysProps(solrCloud)
 	}
