@@ -241,7 +241,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while starting async command to create Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while starting async command to create Solr Collection")
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
+	}).Within(time.Second*10).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
 	// Only wait 5 seconds when trying to create the asyncCommand
 
 	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
@@ -257,7 +257,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 			},
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while checking if Solr Collection creation command was successful")
-		if strings.Contains(response, "\"state\":\"failed\"") || strings.Contains(response, "\"state\":\"notfound\"") {
+		if strings.Contains(response, "failed") || strings.Contains(response, "notfound") {
 			StopTrying("A failure occurred while creating the Solr Collection").
 				Attach("Collection", collection).
 				Attach("Shards", shards).
@@ -267,7 +267,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		}
 		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "A failure occurred while creating the Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
-	}).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
+	}).Within(time.Second*40).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
 
 	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
 		response, err := callSolrApiInPod(
@@ -283,7 +283,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while deleting Solr CollectionsAPI AsyncID")
 		innerG.Expect(response).To(ContainSubstring("\"status\":0"), "Error occurred while deleting Solr CollectionsAPI AsyncID")
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not delete aysncId after collection creation")
+	}).Within(time.Second*10).WithContext(ctx).Should(Succeed(), "Could not delete aysncId after collection creation")
 	// Only wait 5 seconds when trying to delete the async requestId
 
 	queryCollectionWithGomega(ctx, solrCloud, collection, 0, g, additionalOffset)
@@ -307,7 +307,7 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
+	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
 	// Only wait 5 seconds for the collection to be query-able
 }
 
@@ -343,7 +343,7 @@ func queryCollectionWithNoReplicaAvailable(ctx context.Context, solrCloud *solrv
 			// "Exception in thread "main" is for 8.11, which does not handle the exception correctly
 			Or(ContainSubstring("Error trying to proxy request for url"), ContainSubstring("Exception in thread \"main\" java.lang.NullPointerException")),
 			"Wrong occurred while querying Solr Collection '%s', expected a proxy forwarding error", collection)
-	}, time.Second*5).WithContext(ctx).Should(Succeed(), "Collection query did not fail in the correct way")
+	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Collection query did not fail in the correct way")
 }
 
 func getPrometheusExporterPod(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter) (podName string) {
@@ -455,7 +455,7 @@ func (r *ExecError) Error() string {
 }
 
 func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string, hostnameOptional ...string) (response string, err error) {
-	hostname := solrCloud.InternalNodeUrl("${POD_HOSTNAME}", false)
+	hostname := "${POD_HOSTNAME}"
 	if len(hostnameOptional) > 0 {
 		hostname = hostnameOptional[0]
 	}

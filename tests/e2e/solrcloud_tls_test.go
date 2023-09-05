@@ -474,9 +474,9 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 	expectSecret(ctx, solrCloud, tlsPasswordSecret.Name)
 	tlsPasswordSecretName = tlsPasswordSecret.Name
 
-	allDNSNames := make([]string, *solrCloud.Spec.Replicas)
+	allDNSNames := make([]string, *solrCloud.Spec.Replicas*2+1)
 	for _, pod := range solrCloud.GetAllSolrPodNames() {
-		allDNSNames = append(allDNSNames, solrCloud.InternalNodeUrl(pod, false))
+		allDNSNames = append(allDNSNames, pod, solrCloud.InternalNodeUrl(pod, false))
 	}
 
 	certSecretName = solrCloud.Name + "-secret-auth"
