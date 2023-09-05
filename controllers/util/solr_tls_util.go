@@ -770,10 +770,6 @@ func secureProbeTLSJavaSysProps(solrCloud *solr.SolrCloud) string {
 		if solrCloud.Spec.SolrTLS.MountedTLSDir == nil {
 			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD"
 			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
-		} else {
-			if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword != "" {
-
-			}
 		} // else passwords come through JAVA_TOOL_OPTIONS via cat'ing the mounted files
 	}
 
