@@ -35,7 +35,7 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
     -h  Display this help and exit
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -k  Kubernetes Version to test with (full tag, e.g. v1.24.16) (Optional, defaults to a compatible version)
-    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 8.11). (Optional, defaults to a compatible version)
+    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 8.11). (Optional, defaults to a compatible version)
     -a  Load additional local images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
 EOF
 }
@@ -95,6 +95,9 @@ export RAW_GINKGO
 # Cluster Operation Options
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
+
+export CERT_MANAGER_VERSION=1.12.3
+export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
 
 function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
@@ -178,6 +181,12 @@ function setup_cluster() {
   printf "Installing Solr & Zookeeper CRDs\n"
   kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
   kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
+  echo ""
+
+  printf "Installing Cert Manager\n"
+  helm repo add cert-manager https://charts.jetstack.io --force-update
+  helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set installCRDs=true
+  helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
   echo ""
 }
 

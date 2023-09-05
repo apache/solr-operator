@@ -18,6 +18,7 @@
 package e2e
 
 import (
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
@@ -89,7 +90,7 @@ func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		if additionalChecks != nil {
 			additionalChecks(g, foundSolrCloud)
 		}
-	}).WithContext(ctx).Should(Succeed())
+	}).WithTimeout(time.Minute * 4).WithContext(ctx).Should(Succeed())
 
 	return foundSolrCloud
 }
@@ -764,6 +765,8 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
 		&zkApi.ZookeeperCluster{},
+
+		&certmanagerv1.Certificate{}, &certmanagerv1.Issuer{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &netv1.Ingress{},
