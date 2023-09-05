@@ -454,7 +454,11 @@ func (r *ExecError) Error() string {
 	return fmt.Sprintf("Error from Pod Exec: %v\n\nError output from Pod Exec: %sResponse output from Pod Exec: %s", r.Err, r.ErrorOutput, r.ResponseOutput)
 }
 
-func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string) (response string, err error) {
+func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string, hostnameOptional ...string) (response string, err error) {
+	hostname := solrCloud.InternalNodeUrl("${POD_HOSTNAME}", false)
+	if len(hostnameOptional) > 0 {
+		hostname = hostnameOptional[0]
+	}
 	var queryParamsSlice []string
 	for param, val := range queryParams {
 		queryParamsSlice = append(queryParamsSlice, param+"="+val)
@@ -469,8 +473,9 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		"api",
 		"-" + strings.ToLower(httpMethod),
 		fmt.Sprintf(
-			"\"%s://${POD_HOSTNAME}:%d%s%s\"",
+			"\"%s://%s:%d%s%s\"",
 			solrCloud.UrlScheme(false),
+			hostname,
 			solrCloud.Spec.SolrAddressability.PodPort,
 			apiPath,
 			queryParamsString),
