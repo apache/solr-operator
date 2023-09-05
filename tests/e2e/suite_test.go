@@ -21,9 +21,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/version"
+	certManagerApi "github.com/cert-manager/cert-manager/pkg/api"
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
@@ -104,6 +106,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
@@ -112,6 +115,10 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	// The zookeeper will not be healthy until after the zookeeper operator is released with the solr operator
 	By("creating a shared zookeeper cluster")
 	zookeeper := runSharedZookeeperCluster(ctx)
+
+	// Set up a shared Bootstrap issuer for creating CAs for Solr
+	By("creating a boostrap cert issuer")
+	installBootstrapIssuer(ctx)
 
 	// Run this once before all tests, not per-test-process
 	By("starting the test solr operator")
@@ -144,6 +151,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	By("setting up the k8s clients")
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
@@ -204,7 +212,7 @@ func outputDirForTest(testText string) string {
 	return outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
 }
 
-var _ = JustAfterEach(func() {
+var _ = JustAfterEach(func(ctx context.Context) {
 	testOutputDir := outputDirForTest(CurrentSpecReport().FullText())
 
 	// We count "ran" as "passed" or "failed"
@@ -214,14 +222,16 @@ var _ = JustAfterEach(func() {
 		// Always save the logs of the Solr Operator for the test
 		startTime := CurrentSpecReport().StartTime
 		writePodLogsToFile(
+			ctx,
 			testOutputDir+"solr-operator.log",
-			getSolrOperatorPodName(solrOperatorReleaseNamespace),
+			getSolrOperatorPodName(ctx, solrOperatorReleaseNamespace),
 			solrOperatorReleaseNamespace,
 			&startTime,
 			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
 		)
 		// Always save the logs of the Solr Operator for the test
-		writeAllSolrLogsToFiles(
+		writeAllSolrInfoToFiles(
+			ctx,
 			testOutputDir,
 			testNamespace(),
 		)
@@ -255,7 +265,7 @@ var _ = ReportAfterEach(func(report SpecReport) {
 	}
 })
 
-func getSolrOperatorPodName(namespace string) string {
+func getSolrOperatorPodName(ctx context.Context, namespace string) string {
 	labelSelector := labels.SelectorFromSet(map[string]string{"control-plane": "solr-operator"})
 	listOps := &client.ListOptions{
 		Namespace:     namespace,
@@ -264,13 +274,13 @@ func getSolrOperatorPodName(namespace string) string {
 	}
 
 	foundPods := &corev1.PodList{}
-	Expect(k8sClient.List(context.TODO(), foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
 	Expect(foundPods).ToNot(BeNil(), "No Solr Operator pods could be found")
 	Expect(foundPods.Items).ToNot(BeEmpty(), "No Solr Operator pods could be found")
 	return foundPods.Items[0].Name
 }
 
-func writeAllSolrLogsToFiles(directory string, namespace string) {
+func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace string) {
 	req, err := labels.NewRequirement("technology", selection.In, []string{solrv1beta1.SolrTechnologyLabel, solrv1beta1.SolrPrometheusExporterTechnologyLabel})
 	Expect(err).ToNot(HaveOccurred())
 
@@ -281,20 +291,55 @@ func writeAllSolrLogsToFiles(directory string, namespace string) {
 	}
 
 	foundPods := &corev1.PodList{}
-	Expect(k8sClient.List(context.TODO(), foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
 	Expect(foundPods).ToNot(BeNil(), "No Solr pods could be found")
 	for _, pod := range foundPods.Items {
-		writePodLogsToFile(
-			directory+pod.Name+".log",
-			pod.Name,
-			namespace,
-			nil,
-			"",
+		writeAllPodInfoToFiles(
+			ctx,
+			directory+pod.Name,
+			&pod,
 		)
 	}
 }
 
-func writePodLogsToFile(filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
+// writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.
+//   - Pod Spec/Status
+//   - Pod Events
+//   - Pod logs
+func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev1.Pod) {
+	// Write pod to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	defer statusFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod status: %s", baseFilename+".status.json")
+	jsonBytes, marshErr := json.MarshalIndent(pod, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write pod json to file")
+
+	// Write events for pod to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	defer eventsFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save status: %s", baseFilename+".events.yaml")
+
+	eventList, err := rawK8sClient.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for pod: %s", pod.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write events json to file")
+
+	// Write pod logs to a file
+	writePodLogsToFile(
+		ctx,
+		baseFilename+".log",
+		pod.Name,
+		pod.Namespace,
+		nil,
+		"",
+	)
+}
+
+func writePodLogsToFile(ctx context.Context, filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
 	logFile, err := os.Create(filename)
 	defer logFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
@@ -306,7 +351,7 @@ func writePodLogsToFile(filename string, podName string, podNamespace string, st
 	}
 
 	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
-	podLogs, logsErr := req.Stream(context.Background())
+	podLogs, logsErr := req.Stream(ctx)
 	defer podLogs.Close()
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
 
