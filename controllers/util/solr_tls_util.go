@@ -666,9 +666,8 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 		"-Djavax.net.ssl.trustStoreType=PKCS12",
 	}
 
-	if tls.Options.VerifyClientHostname {
-		// TODO: This is broken in Solr 9.2+
-		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
+	if !tls.Options.VerifyClientHostname {
+		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=false")
 	}
 
 	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystoreFile != "") {
