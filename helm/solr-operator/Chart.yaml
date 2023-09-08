@@ -55,6 +55,13 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: changed
+      description: The minimum supported version of Solr is now 8.11
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/616
+        - name: Version Compatibility Documentation
+          url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
+    - kind: changed
       description: The minimum supported version of Kubernetes is now v1.22
       links:
         - name: Github Issue
