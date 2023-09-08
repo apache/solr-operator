@@ -397,11 +397,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
 	}
 
-	if solrCloud.Spec.SolrTLS != nil && !solrCloud.Spec.SolrTLS.CheckPeerName {
-		// The CheckPeerName setting will be added later, but for Solr 9.2+ we also need the sni check turned off if the peerName is not checked
-		allSolrOpts = append(allSolrOpts, "-Dsolr.jetty.ssl.sniHostCheck=false")
-	}
-
 	if solrCloud.Spec.SolrOpts != "" {
 		allSolrOpts = append(allSolrOpts, solrCloud.Spec.SolrOpts)
 	}
