@@ -96,19 +96,25 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 		FIt("Can run", func() {})
 	})
 
-	FContext("No Client TLS - VerifyClientHostname", func() {
+	FContext("No Client TLS - CheckPeerName", func() {
 
 		BeforeEach(func(ctx context.Context) {
 			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false)
 
-			solrCloud.Spec.SolrTLS.VerifyClientHostname = true
+			solrCloud.Spec.SolrTLS.CheckPeerName = true
 
-			solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
+			//solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
+
+			//solrCloud.Spec.CustomSolrKubeOptions.PodOptions.EnvVariables =
+			//	append(solrCloud.Spec.CustomSolrKubeOptions.PodOptions.EnvVariables, corev1.EnvVar{
+			//		Name:  "SOLR_TOOL_OPTS",
+			//		Value: "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake",
+			//	})
 		})
 
 		FIt("Can run", func(ctx context.Context) {
 			By("Checking that using the wrong peer name does not fail")
-			_, err := callSolrApiInPod(
+			response, err := callSolrApiInPod(
 				ctx,
 				solrCloud,
 				"get",
@@ -116,7 +122,8 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				nil,
 				"localhost",
 			)
-			Expect(err).ToNot(HaveOccurred(), "Error occurred while calling Solr API - Hostname checking should not be on")
+			Expect(err).To(HaveOccurred(), "Error should have occurred while calling Solr API - Bad server hostname for TLS")
+			Expect(response).To(Or(ContainSubstring("Invalid SNI"), ContainSubstring("doesn't match any of the subject alternative names"), ContainSubstring("No subject alternative DNS name matching")), "Wrong error when calling Solr - Bad hostname for TLS expected")
 		})
 	})
 
@@ -140,7 +147,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				nil,
 				"localhost",
 			)
-			Expect(err).ToNot(HaveOccurred(), "Error occurred while calling Solr API - Hostname checking should not be on")
+			Expect(err).ToNot(HaveOccurred(), "Error occurred while calling Solr API - Server Hostname checking should not be on")
 		})
 	})
 
@@ -151,7 +158,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 
 			solrCloud.Spec.SolrTLS.CheckPeerName = true
 
-			//solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
+			solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
 		})
 
 		FIt("Can run", func(ctx context.Context) {
@@ -164,8 +171,8 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				nil,
 				"localhost",
 			)
-			Expect(err).To(HaveOccurred(), "Error should have occurred while calling Solr API - Bad hostname for TLS")
-			Expect(response).To(Or(ContainSubstring("Invalid SNI"), ContainSubstring("doesn't match any of the subject alternative names")), "Wrong error when calling Solr - Bad hostname for TLS expected")
+			Expect(err).To(HaveOccurred(), "Error should have occurred while calling Solr API - Bad server hostname for TLS")
+			Expect(response).To(Or(ContainSubstring("Invalid SNI"), ContainSubstring("doesn't match any of the subject alternative names"), ContainSubstring("No subject alternative DNS name matching")), "Wrong error when calling Solr - Bad hostname for TLS expected")
 		})
 	})
 

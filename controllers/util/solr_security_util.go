@@ -487,19 +487,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptions += " -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory"
 	}
 
-	// Is TLS enabled? If so we need some additional SSL related props
-	//tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud)
-	//javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
-
 	// construct the probe command to invoke the SolrCLI "api" action
-	//
-	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
-	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	//probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s %s "+
-	//	"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-	//	"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-	//	"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-	//	javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 
 	// no-commit - SOLR_TOOL_OPTIONS is only in 9.4.0 - investigate JAVA_TOOL_OPTIONS?
 
