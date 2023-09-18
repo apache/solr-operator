@@ -286,11 +286,8 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount).To(Not(BeNil()), "No Basic Auth volume mount used in Solr container")
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
-		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password)\" java "+
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
-			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-			"org.apache.solr.util.SolrCLI api -get http://localhost:8983%s",
+		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
+			"solr api -get \"http://${POD_HOSTNAME}:8983%s\"",
 			solrCloud.Name, solrCloud.Name, expProbePath)
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")

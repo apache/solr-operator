@@ -39,6 +39,7 @@ const (
 	TLSCertKey                     = "tls.crt"
 	DefaultTrustStorePath          = "/var/solr/tls-truststore"
 	DefaultClientTrustStorePath    = "/var/solr/client-tls-truststore"
+	InitdbInitContainer            = "generate-init-db"
 	InitdbPath                     = "/docker-entrypoint-initdb.d"
 	DefaultPkcs12KeystoreFile      = "keystore.p12"
 	DefaultPkcs12TruststoreFile    = "truststore.p12"
@@ -616,7 +617,7 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 			exportClientKeystorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(mountedDir))
 			exportClientTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", "${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}")
 		}
-		if mountedDir.TruststorePasswordFile == "" {
+		if mountedDir.TruststorePasswordFile != "" {
 			exportClientTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(mountedDir))
 		} else if mountedDir.TruststorePassword != "" {
 			exportClientTruststorePassword = ""
@@ -642,7 +643,7 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 	*/
 
 	return corev1.Container{
-		Name:            "export-tls-password",
+		Name:            InitdbInitContainer,
 		Image:           tls.InitContainerImage.ToImageName(),
 		ImagePullPolicy: tls.InitContainerImage.PullPolicy,
 		Command:         []string{"sh", "-c", shCmd},
@@ -652,7 +653,13 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 
 // Helper function for writing a line to the initdb wrapper script that exports an env var sourced from a file
 func exportVarFromFileInInitdbWrapperScript(varName string, varValue string) string {
-	return fmt.Sprintf("\\nexport %s=\\`cat %s\\`\\n", varName, varValue)
+	if strings.HasPrefix(varValue, "${") {
+		// This is a pass-through variable
+		return fmt.Sprintf("\\nexport %s=%q\\n", varName, varValue)
+	} else {
+		// This is a file to "cat"
+		return fmt.Sprintf("\\nexport %s=\"$(cat %q)\"\\n", varName, varValue)
+	}
 }
 
 // Returns an array of Java system properties to configure the TLS certificate used by client applications to call mTLS enabled Solr pods

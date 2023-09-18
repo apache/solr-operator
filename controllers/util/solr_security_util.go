@@ -479,19 +479,27 @@ func BasicAuthEnvVars(secretName string) []corev1.EnvVar {
 func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath string) {
 	// mount the secret in a file so it gets updated; env vars do not see:
 	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-	javaToolOptions := ""
+	javaToolOptions := make([]string, 0)
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		javaToolOptions = fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile)
-		javaToolOptions += " -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory"
+		javaToolOptions = append(javaToolOptions,
+			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+		)
 	}
 
 	// construct the probe command to invoke the SolrCLI "api" action
 
-	// no-commit - SOLR_TOOL_OPTIONS is only in 9.4.0 - investigate JAVA_TOOL_OPTIONS?
+	// Future work - SOLR_TOOL_OPTIONS is only in 9.4.0, use JAVA_TOOL_OPTIONS until that is the minimum supported version
+	var javaToolOptionsStr string
+	if len(javaToolOptions) > 0 {
+		javaToolOptionsStr = fmt.Sprintf("JAVA_TOOL_OPTIONS=%q ", strings.Join(javaToolOptions, " "))
+	} else {
+		javaToolOptionsStr = ""
+	}
 
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" solr api -get %s://%s:%d%s", javaToolOptions, solrCloud.UrlScheme(false), solrCloud.NodeHeadlessUrl("${POD_HOSTNAME}", false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
+	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://%s:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), "${POD_HOSTNAME}", probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET
