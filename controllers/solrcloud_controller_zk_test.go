@@ -35,14 +35,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
-	BeforeEach(func() {
-		ctx = context.Background()
-
+	BeforeEach(func(ctx context.Context) {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -54,7 +50,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -64,7 +60,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -89,7 +85,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the ZK information in the SolrCloud status")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal("host:7271"), "Wrong internal zkConnectionString in status")
@@ -152,7 +148,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the ZK information in the SolrCloud status")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connectionString), "Wrong internal zkConnectionString in status")
@@ -242,7 +238,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -350,7 +346,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -429,7 +425,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -503,7 +499,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -564,7 +560,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")

@@ -57,7 +57,7 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Controller Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx context.Context) {
 	// Define testing timeouts/durations and intervals.
 	const (
 		timeout  = time.Second * 5
@@ -131,6 +131,5 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	cancel()
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(testEnv.Stop()).To(Succeed())
 })

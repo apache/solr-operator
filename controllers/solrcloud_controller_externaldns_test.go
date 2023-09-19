@@ -29,14 +29,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - External DNS", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		replicas := int32(2)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +60,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -74,7 +70,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -90,7 +86,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -164,7 +160,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 5000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -235,7 +231,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 2000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -305,7 +301,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -379,7 +375,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -453,7 +449,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -524,7 +520,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 

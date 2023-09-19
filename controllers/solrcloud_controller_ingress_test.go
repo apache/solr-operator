@@ -31,15 +31,11 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Ingress", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	replicas := 3
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		int32Replicas := int32(replicas)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -76,7 +72,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -86,7 +82,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -103,7 +99,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -178,7 +174,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				Controller: "acme.io/foo",
 			},
 		}
-		BeforeEach(func() {
+		BeforeEach(func(ctx context.Context) {
 			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
 				External: &solrv1beta1.ExternalAddressability{
 					Method:             solrv1beta1.Ingress,
@@ -195,11 +191,11 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			By("Create a default ingress class, so that the ingress is defaulted with this ingress class name")
 			Expect(k8sClient.Create(ctx, ingressClass)).To(Succeed(), "Create a default ingress class for the ingress")
 		})
-		AfterEach(func() {
+		AfterEach(func(ctx context.Context) {
 			By("Deleting the ingress class, so other tests do not use the default")
 			Expect(k8sClient.Delete(ctx, ingressClass)).To(Succeed(), "Delete the default ingress class")
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -282,7 +278,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			}
 			solrCloud.Spec.CustomSolrKubeOptions.IngressOptions.IngressClassName = nil
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -362,7 +358,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -436,7 +432,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -512,7 +508,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				KubeDomain: testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -585,7 +581,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 				KubeDomain: testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 

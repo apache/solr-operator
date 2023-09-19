@@ -32,14 +32,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		replicas := int32(1)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -57,7 +53,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -67,7 +63,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -78,7 +74,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				ProbesRequireAuth:  true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -106,7 +102,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				ProbesRequireAuth:  true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -128,7 +124,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				PasswordKey: "read-only-pass",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -139,7 +135,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				AuthenticationType: solrv1beta1.Basic,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Testing that the statefulSet exists and has the correct information")
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 
@@ -161,7 +157,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				BasicAuthSecret:    basicAuthSecretName,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -186,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 

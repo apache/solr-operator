@@ -31,14 +31,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Storage", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -65,7 +61,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -75,7 +71,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -93,7 +89,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when the reclaim policy is Retain")
@@ -129,7 +125,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(1), "The solrcloud should have no finalizers when the reclaim policy is Retain")
@@ -165,7 +161,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				EphemeralStorage: &solrv1beta1.SolrEphemeralDataStorageOptions{},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -194,7 +190,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -226,7 +222,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -260,7 +256,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
@@ -298,7 +294,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrCloud finalizers")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.GetFinalizers()).To(HaveLen(0), "The solrcloud should have no finalizers when ephemeral storage is used")
