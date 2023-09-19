@@ -122,7 +122,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_JAVA_MEM":  "-Xmx4G",
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
@@ -252,7 +252,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/test",
-				"SOLR_HOST":      "$(POD_HOSTNAME).foo-solrcloud-headless.default",
+				"SOLR_HOST":      "$(POD_NAME).foo-solrcloud-headless.default",
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"GC_TUNE":        "gc Options",
@@ -348,7 +348,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"ZK_HOST":   expectedZKHost,
 				"ZK_SERVER": "host:7271,host2:7271",
 				"ZK_CHROOT": "/a-ch/root",
-				"SOLR_HOST": "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST": "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT": "8983",
 				"GC_TUNE":   "",
 			}
@@ -443,7 +443,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
 				"SOLR_PORT":      "2000",
 				"SOLR_NODE_PORT": "2000",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",

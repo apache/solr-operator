@@ -169,7 +169,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 	if clientCert.Options.PKCS12Secret != nil || clientCert.Options.TrustStoreSecret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
 		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template)
-	} else if clientCert.Options.MountedTLSDir != nil {
+	} else if clientCert.Options.MountedTLSDir != nil && clientCert.hasPasswordsInFiles() {
 		// volumes and mounts for TLS when using the mounted dir option
 		clientCert.mountTLSWrapperScriptAndInitContainer(deployment, tls.InitContainerImage)
 	}
@@ -558,19 +558,27 @@ func (tls *TLSConfig) mountTLSWrapperScriptAndInitContainer(deployment *appsv1.D
 	kspJavaSysProp := ""
 	catKsp := ""
 	if opts.MountedTLSDir.KeystoreFile != "" {
-		catKsp = fmt.Sprintf("ksp=\\$(cat %s)", mountedTLSKeystorePasswordPath(opts.MountedTLSDir))
-		kspJavaSysProp = " -Djavax.net.ssl.keyStorePassword=\\${ksp}"
+		if opts.MountedTLSDir.KeystorePasswordFile != "" || opts.MountedTLSDir.KeystorePassword == "" {
+			catKsp = fmt.Sprintf("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD=\\$(cat %s)", mountedTLSKeystorePasswordPath(opts.MountedTLSDir))
+			kspJavaSysProp = " -Djavax.net.ssl.keyStorePassword=\\${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+		}
 	}
 
-	catTsp := fmt.Sprintf("tsp=\\$(cat %s)", mountedTLSTruststorePasswordPath(opts.MountedTLSDir))
-	tspJavaSysProp := " -Djavax.net.ssl.trustStorePassword=\\${tsp}"
+	tspJavaSysProp := ""
+	catTsp := ""
+	if opts.MountedTLSDir.TruststorePasswordFile != "" || opts.MountedTLSDir.TruststorePassword == "" {
+		catTsp = fmt.Sprintf("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD=\\$(cat %s)", mountedTLSTruststorePasswordPath(opts.MountedTLSDir))
+		tspJavaSysProp = " -Djavax.net.ssl.trustStorePassword=\\${SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD}"
+	} else if catKsp != "" {
+		tspJavaSysProp = " -Djavax.net.ssl.trustStorePassword=\\${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+	}
 
 	/*
 		  Create a wrapper script like:
 
 			#!/bin/bash
 			ksp=$(cat $MOUNTED_TLS_DIR/keystore-password)
-			tsp=$(cat $MOUNTED_TLS_DIR/truststore-password)s
+			tsp=$(cat $MOUNTED_TLS_DIR/truststore-password)
 			JAVA_OPTS="${JAVA_OPTS} -Djavax.net.ssl.keyStorePassword=${ksp} -Djavax.net.ssl.trustStorePassword=${tsp}"
 			/opt/solr/contrib/prometheus-exporter/bin/solr-exporter $@
 
@@ -672,20 +680,18 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 		"-Djavax.net.ssl.trustStoreType=PKCS12",
 	}
 
-	if !tls.Options.VerifyClientHostname {
-		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=false")
-	}
-
 	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystoreFile != "") {
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStore=$(SOLR_SSL_CLIENT_KEY_STORE)")
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStoreType=PKCS12")
 	}
 
-	if tls.Options.PKCS12Secret != nil {
+	hasKeyStorePassword := false
+	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystorePasswordFile == "" && tls.Options.MountedTLSDir.KeystorePassword != "") {
+		hasKeyStorePassword = true
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStorePassword=$(SOLR_SSL_CLIENT_KEY_STORE_PASSWORD)")
 	} // else for mounted dir option, the password comes from the wrapper script
 
-	if tls.Options.PKCS12Secret != nil || tls.Options.TrustStoreSecret != nil {
+	if tls.Options.PKCS12Secret != nil || tls.Options.TrustStoreSecret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.TruststorePasswordFile == "" && (tls.Options.MountedTLSDir.TruststorePassword != "" || hasKeyStorePassword)) {
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.trustStorePassword=$(SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD)")
 	} // else for mounted dir option, the password comes from the wrapper script
 
@@ -733,7 +739,7 @@ func mountedTLSTruststorePasswordPath(tlsDir *solr.MountedTLSDirectory) string {
 	path := ""
 	if tlsDir.TruststorePasswordFile != "" {
 		path = mountedTLSPath(tlsDir, tlsDir.TruststorePasswordFile, "")
-	} else {
+	} else if tlsDir.TruststorePassword == "" {
 		path = mountedTLSKeystorePasswordPath(tlsDir)
 	}
 	return path

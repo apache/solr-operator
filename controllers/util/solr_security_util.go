@@ -499,7 +499,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsStr = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://%s:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), "${POD_HOSTNAME}", probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
+	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://%s:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), "${POD_NAME}", probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

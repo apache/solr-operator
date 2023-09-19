@@ -128,6 +128,8 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   Set this value to `false` to retain the previous functionality.
   More information can be found in the [Solr Pod Scale-Down](solr-cloud/scaling.md#solr-pod-scale-down) documentation.
 
+- The `POD_HOSTNAME` envVar in SolrCloud Pods has been deprecated. Use `POD_NAME` instead.
+
 ### v0.7.0
 - **Kubernetes support is now limited to 1.21+.**  
   If you are unable to use a newer version of Kubernetes, please install the `v0.6.0` version of the Solr Operator for use with Kubernetes `1.20` and below.

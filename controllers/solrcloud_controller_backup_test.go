@@ -107,7 +107,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -155,7 +155,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
 					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_HOST":      "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
 					"SOLR_PORT":      "8983",
 					"SOLR_NODE_PORT": "8983",
 					"SOLR_LOG_LEVEL": "INFO",
@@ -209,7 +209,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
 					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_HOST":      "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
 					"SOLR_PORT":      "8983",
 					"SOLR_NODE_PORT": "8983",
 					"SOLR_LOG_LEVEL": "INFO",

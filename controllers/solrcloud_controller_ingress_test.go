@@ -118,7 +118,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_HOSTNAME)." + testDomain,
+				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -218,7 +218,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "3000",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -297,7 +297,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_HOSTNAME)." + testDomain,
+				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -374,7 +374,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.Namespace,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -451,7 +451,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_HOSTNAME)." + testDomain,
+				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -524,7 +524,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.Namespace + ".svc." + testKubeDomain,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
@@ -600,7 +600,7 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_HOSTNAME)." + testDomain,
+				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
 				"SOLR_PORT":      "3000",
 				"SOLR_NODE_PORT": "100",
 				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
