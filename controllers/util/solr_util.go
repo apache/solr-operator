@@ -279,7 +279,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
+	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_NAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
 	// Solr can take longer than SOLR_STOP_WAIT to run solr stop, give it a few extra seconds before forcefully killing the pod.
@@ -308,11 +308,30 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:  "SOLR_NODE_PORT",
 			Value: strconv.Itoa(solrAdressingPort),
 		},
+		// POD_HOSTNAME is deprecated and will be removed in a future version. Use POD_NAME instead
 		{
 			Name: "POD_HOSTNAME",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "metadata.namespace",
 					APIVersion: "v1",
 				},
 			},
@@ -608,6 +627,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// If probes require auth is set OR tls is configured to want / need client auth, then reconfigure the probes to use an exec
 	if (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) || (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) {
 		enableSecureProbesOnSolrCloudStatefulSet(solrCloud, stateful)
+	} else {
+		// If we are not using secure probes, but still using TLS, then make sure that the HOST header is correct when sending liveness and readiness checks.
+		// Otherwise it is likely that the SNI checks will fail for newer versions of Solr (9.2+)
+		setHostHeaderForProbesOnSolrCloudStatefulSet(solrCloud, stateful)
 	}
 
 	return stateful

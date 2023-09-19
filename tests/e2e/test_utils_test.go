@@ -455,7 +455,7 @@ func (r *ExecError) Error() string {
 }
 
 func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string, hostnameOptional ...string) (response string, err error) {
-	hostname := "${POD_HOSTNAME}"
+	hostname := "${POD_NAME}"
 	if len(hostnameOptional) > 0 {
 		hostname = hostnameOptional[0]
 	}
@@ -471,6 +471,7 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 	command := []string{
 		"solr",
 		"api",
+		"-verbose",
 		"-" + strings.ToLower(httpMethod),
 		fmt.Sprintf(
 			"\"%s://%s:%d%s%s\"",

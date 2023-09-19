@@ -48,12 +48,10 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 	SetDefaultEventuallyPollingInterval(interval)
 
 	var (
-		ctx context.Context
-
 		solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter
 	)
 
-	BeforeEach(func() {
+	BeforeEach(func(ctx context.Context) {
 		ctx = context.Background()
 
 		solrPrometheusExporter = &solrv1beta1.SolrPrometheusExporter{
@@ -65,7 +63,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
 
@@ -75,7 +73,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrPrometheusExporter)
 	})
 
@@ -94,7 +92,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTLS(ctx, solrPrometheusExporter, tlsSecretName, false)
 		})
@@ -115,7 +113,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTLS(ctx, solrPrometheusExporter, tlsSecretName, true)
 		})
@@ -136,7 +134,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTLS(ctx, solrPrometheusExporter, tlsSecretName, false)
 		})
@@ -145,7 +143,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 	FContext("TLS Secret - With BasicAuth", func() {
 		tlsSecretName := "tls-cert-secret-update"
 		basicAuthSecretName := tlsSecretName + "-basic-auth"
-		BeforeEach(func() {
+		BeforeEach(func(ctx context.Context) {
 			solrPrometheusExporter.Spec = solrv1beta1.SolrPrometheusExporterSpec{
 				SolrReference: solrv1beta1.SolrReference{
 					Cloud: &solrv1beta1.SolrCloudReference{
@@ -162,7 +160,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 			By("Creating secret to use with BasicAuth")
 			Expect(k8sClient.Create(ctx, createBasicAuthSecret(basicAuthSecretName, solrv1beta1.DefaultBasicAuthUsername, solrPrometheusExporter.Namespace))).To(Succeed(), "Could not create basic auth secret")
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTLS(ctx, solrPrometheusExporter, tlsSecretName, false)
 		})
@@ -171,7 +169,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 	FContext("TLS Secret - With BasicAuth - Restart on Secret Update", func() {
 		tlsSecretName := "tls-cert-secret-update"
 		basicAuthSecretName := tlsSecretName + "-basic-auth"
-		BeforeEach(func() {
+		BeforeEach(func(ctx context.Context) {
 			solrPrometheusExporter.Spec = solrv1beta1.SolrPrometheusExporterSpec{
 				SolrReference: solrv1beta1.SolrReference{
 					Cloud: &solrv1beta1.SolrCloudReference{
@@ -188,7 +186,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 			By("Creating secret to use with BasicAuth")
 			Expect(k8sClient.Create(ctx, createBasicAuthSecret(basicAuthSecretName, solrv1beta1.DefaultBasicAuthUsername, solrPrometheusExporter.Namespace))).To(Succeed(), "Could not create basic auth secret")
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTLS(ctx, solrPrometheusExporter, tlsSecretName, false)
 
@@ -222,7 +220,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTruststoreOnly(ctx, solrPrometheusExporter, tlsSecretName)
 		})
@@ -253,7 +251,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			testReconcileWithTruststoreOnly(ctx, solrPrometheusExporter, tlsSecretName)
 		})
@@ -288,7 +286,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - TLS", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			deployment := expectDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
 
@@ -348,7 +346,7 @@ func testReconcileWithTLS(ctx context.Context, solrPrometheusExporter *solrv1bet
 	mockSecret := createMockTLSSecret(ctx, solrPrometheusExporter, tlsSecretName, tlsKey, keystorePassKey, "")
 
 	deployment := expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
-		expectTLSConfigOnPodTemplateWithGomega(g, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, needsPkcs12InitContainer, true, nil)
+		expectTLSConfigOnPodTemplateWithGomega(g, nil, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, needsPkcs12InitContainer, true, nil)
 	})
 	mainContainer := &deployment.Spec.Template.Spec.Containers[0]
 
@@ -421,7 +419,7 @@ func testReconcileWithTruststoreOnly(ctx context.Context, solrPrometheusExporter
 	mockSecret := createMockTLSSecret(ctx, solrPrometheusExporter, tlsSecretName, tlsKey, keystorePassKey, "")
 
 	deployment := expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
-		expectTLSConfigOnPodTemplateWithGomega(g, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, false, true, nil)
+		expectTLSConfigOnPodTemplateWithGomega(g, nil, solrPrometheusExporter.Spec.SolrReference.SolrTLS, &found.Spec.Template, false, true, nil)
 	})
 	mainContainer := &deployment.Spec.Template.Spec.Containers[0]
 
