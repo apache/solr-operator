@@ -471,6 +471,7 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 	command := []string{
 		"solr",
 		"api",
+		"-verbose",
 		"-" + strings.ToLower(httpMethod),
 		fmt.Sprintf(
 			"\"%s://%s:%d%s%s\"",

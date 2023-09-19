@@ -341,8 +341,8 @@ func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev
 
 func writePodLogsToFile(ctx context.Context, filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
 	logFile, err := os.Create(filename)
-	defer logFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
+	defer logFile.Close()
 
 	podLogOpts := corev1.PodLogOptions{}
 	if startTimeRaw != nil {
@@ -352,8 +352,8 @@ func writePodLogsToFile(ctx context.Context, filename string, podName string, po
 
 	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
 	podLogs, logsErr := req.Stream(ctx)
-	defer podLogs.Close()
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
+	defer podLogs.Close()
 
 	var logReader io.Reader
 	logReader = podLogs
