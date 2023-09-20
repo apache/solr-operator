@@ -307,8 +307,25 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 	// First check if all pods are up to date and ready. If so the rolling update is complete
 	configuredPods := int(*statefulSet.Spec.Replicas)
 	if configuredPods == availableUpdatedPodCount {
-		// The configured number of pods are all healthy and up to date. The operation is complete
-		operationComplete = true
+		// The configured number of pods are all healthy and up to date. Need to make sure that shards are balanced
+		balanceComplete, balanceInProgress, balanceError := util.BalanceReplicasForCluster(ctx, instance, statefulSet,
+			"rollingUpdateComplete",
+			"afterRollingUpdate", // TODO should there be a more meaningful ID here?
+			logger)
+		if err != nil {
+			if balanceInProgress {
+				requestInProgress = true
+				// TODO should this be configurable somewhere? Have a default retry interval for things like this?
+				retryLaterDuration = time.Second * 10
+				return
+			}
+			if balanceComplete {
+				// Now we're done
+				operationComplete = true
+				return
+			}
+		}
+		err = balanceError
 		return
 	} else if outOfDatePods.IsEmpty() {
 		// Just return and wait for the updated pods to come up healthy, these will call new reconciles, so there is nothing for us to do
