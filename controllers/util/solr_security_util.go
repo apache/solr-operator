@@ -41,7 +41,7 @@ import (
 const (
 	SecurityJsonFile       = "security.json"
 	BasicAuthMd5Annotation = "solr.apache.org/basicAuthMd5"
-	DefaultProbePath       = "/admin/info/system"
+	DefaultProbePath       = "/admin/info/health"
 )
 
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,

@@ -124,7 +124,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Scheme: corev1.URISchemeHTTPS,
-							Path:   "/solr/admin/info/health",
+							Path:   "/solr/admin/info/customhealth",
 							Port:   intstr.FromInt(8983),
 						},
 					},
@@ -134,7 +134,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 		})
 		FIt("has the correct resources", func(ctx context.Context) {
-			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/info/health"), "Utility Probe paths command gives wrong result")
+			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/info/customhealth"), "Utility Probe paths command gives wrong result")
 
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")

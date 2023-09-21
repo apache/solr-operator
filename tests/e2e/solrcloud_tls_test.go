@@ -103,7 +103,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				ctx,
 				solrCloud,
 				"get",
-				"/solr/admin/info/system",
+				"/solr/admin/info/health",
 				nil,
 				"localhost",
 			)
@@ -128,7 +128,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				ctx,
 				solrCloud,
 				"get",
-				"/solr/admin/info/system",
+				"/solr/admin/info/health",
 				nil,
 				"localhost",
 			)
@@ -152,7 +152,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 				ctx,
 				solrCloud,
 				"get",
-				"/solr/admin/info/system",
+				"/solr/admin/info/health",
 				nil,
 				"localhost",
 			)

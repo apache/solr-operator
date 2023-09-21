@@ -195,7 +195,7 @@ kubectl port-forward service/example-solrcloud-common 18983:80 || true &
 sleep 2
 
 printf "\nCheck the admin URL to make sure it works\n"
-curl --silent "http://localhost:18983/solr/admin/info/system" | grep '"status":0' > /dev/null
+curl --silent "http://localhost:18983/solr/admin/info/health" | grep '"status":0' > /dev/null
 
 printf "\nCreating a test collection\n"
 curl --silent "http://localhost:18983/solr/admin/collections?action=CREATE&name=smoke-test&replicationFactor=1&numShards=2" | grep '"status":0' > /dev/null

@@ -208,7 +208,7 @@ var boostrapedSecretKeys = []string{
 func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrCloud, expectBootstrapSecret bool) *appsv1.StatefulSet {
 	Expect(sc.Spec.SolrSecurity).To(Not(BeNil()), "solrSecurity is not configured for this SolrCloud instance!")
 
-	expProbePath := "/solr/admin/info/system"
+	expProbePath := "/solr/admin/info/health"
 	if sc.Spec.CustomSolrKubeOptions.PodOptions != nil && sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
 		expProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
 	}
