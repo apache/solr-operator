@@ -48,6 +48,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/616
         - name: Version Compatibility Documentation
           url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
+    - kind: changed
+      description: Default liveness and readiness probes now use Solr's /admin/info/health API.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/628
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/629
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
