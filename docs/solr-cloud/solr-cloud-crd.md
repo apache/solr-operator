@@ -930,7 +930,7 @@ The operator configures a command instead of setting the `Authorization` header 
 With a command, we can load the username and password from a secret; Kubernetes will 
 [update the mounted secret files](https://kubernetes.io/docs/concepts/configuration/secret/#mounted-secrets-are-updated-automatically) when the secret changes automatically.
 
-By default, the operator will use Solr's `/admin/info/health` endpoint for readiness and liveness probes.
+By default, the operator will use Solr's `/admin/info/system` endpoint for startup and liveness probes, and the `/admin/info/health` endpoint for readiness probes.
 This default can be customized by changing the HTTP path for any probes (under `spec.customSolrKubeOptions.podOptions`), however this also requires users to set `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
 
 Custom readiness and liveness probes can be specified using configuration like the following:
@@ -942,21 +942,28 @@ spec:
       livenessProbe:
         httpGet:
           scheme: HTTP
-          path: /solr/admin/info/customhealth
+          path: /solr/admin/customliveness
           port: 8983
       readinessProbe:
         httpGet:
           scheme: HTTP
-          path: /solr/admin/info/customhealth
+          path: /solr/admin/customreadiness
           port: 8983
 ```
-Consequently, the bootstrapped `security.json` will include an additional rule to allow access to the `/admin/info/customhealth` endpoint:
+
+Consequently, the bootstrapped `security.json` will include additional rules to allow access to the endpoints used by the startup, liveness, and readiness probes:
 ```json
       {
         "name": "k8s-probe-1",
         "role": null,
         "collection": null,
-        "path": "/admin/info/customhealth"
+        "path": "/admin/customliveness"
+      },
+      {
+        "name": "k8s-probe-2",
+        "role": null,
+        "collection": null,
+        "path": "/admin/customreadiness"
       }
 ```
 

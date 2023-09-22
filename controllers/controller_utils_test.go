@@ -824,7 +824,7 @@ var (
 		ProbeHandler: corev1.ProbeHandler{
 			HTTPGet: &corev1.HTTPGetAction{
 				Scheme: corev1.URISchemeHTTP,
-				Path:   "/solr/admin/info/health",
+				Path:   "/solr/admin/info/system",
 				Port:   intstr.FromInt(8983),
 			},
 		},

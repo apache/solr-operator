@@ -88,13 +88,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	defaultProbeTimeout := int32(1)
-	defaultHandler := corev1.ProbeHandler{
-		HTTPGet: &corev1.HTTPGetAction{
-			Scheme: probeScheme,
-			Path:   "/solr" + DefaultProbePath,
-			Port:   intstr.FromInt(solrPodPort),
-		},
-	}
+	defaultStartupProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultStartupProbePath)
+	defaultLivenessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultLivenessProbePath)
+	defaultReadinessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultReadinessProbePath)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	selectorLabels := solrCloud.SharedLabels()
@@ -452,7 +448,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold:    1,
 				FailureThreshold:    10,
 				PeriodSeconds:       5,
-				ProbeHandler:        defaultHandler,
+				ProbeHandler:        defaultStartupProbe,
 			},
 			// Kill Solr if it is unavailable for any 60-second period
 			LivenessProbe: &corev1.Probe{
@@ -460,7 +456,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 				PeriodSeconds:    20,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultLivenessProbe,
 			},
 			// Do not route requests to solr if it is not available for any 20-second period
 			ReadinessProbe: &corev1.Probe{
@@ -468,7 +464,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 2,
 				PeriodSeconds:    10,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultReadinessProbe,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
@@ -764,6 +760,16 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	}
 
 	return containers
+}
+
+func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort int, path string) corev1.ProbeHandler {
+	return corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Scheme: probeScheme,
+			Path:   "/solr" + path,
+			Port:   intstr.FromInt(solrPodPort),
+		},
+	}
 }
 
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>

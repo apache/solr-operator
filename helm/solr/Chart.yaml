@@ -49,7 +49,7 @@ annotations:
         - name: Version Compatibility Documentation
           url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
     - kind: changed
-      description: Default liveness and readiness probes now use Solr's /admin/info/health API.
+      description: Solr's `/admin/info/health` API is now used for readiness probes by default.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/628
