@@ -402,9 +402,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 			statefulSet = foundStatefulSet
 		}
-		if err != nil {
-			return requeueOrNot, err
-		}
 	} else {
 		// If we are blocking the reconciliation of the statefulSet, we still want to find information about it.
 		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet)
@@ -415,6 +412,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				statefulSet = nil
 			}
 		}
+	}
+	if err != nil {
+		return requeueOrNot, err
 	}
 
 	// *********************************************************
@@ -428,7 +428,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
 	// Otherwise it will delete all PVCs possibly
 	if len(statefulSet.Spec.Selector.MatchLabels) > 0 {
-		if err := r.reconcileStorageFinalizer(ctx, instance, statefulSet.Spec.Selector.MatchLabels, logger); err != nil {
+		if err = r.reconcileStorageFinalizer(ctx, instance, statefulSet.Spec.Selector.MatchLabels, logger); err != nil {
 			logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
 			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
