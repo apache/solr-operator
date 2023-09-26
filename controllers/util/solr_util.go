@@ -785,6 +785,7 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
   %s
 </solr>
 `

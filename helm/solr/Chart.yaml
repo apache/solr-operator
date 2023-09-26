@@ -48,6 +48,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/616
         - name: Version Compatibility Documentation
           url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
+    - kind: changed
+      description: The default solr.xml now includes a `maxBooleanClauses` value of `${solr.max.booleanClauses:1024}`.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/630
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/631
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
