@@ -183,6 +183,11 @@ function setup_cluster() {
   kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
   echo ""
 
+
+  printf "Edit the TTL of CoreDNS kubernetes so that statefulSet endpoints are refreshed more often\n"
+  kubectl get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl replace -n kube-system -f -
+  echo ""
+
   printf "Installing Cert Manager\n"
   helm repo add cert-manager https://charts.jetstack.io --force-update
   helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set installCRDs=true
