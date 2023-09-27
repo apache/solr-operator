@@ -283,7 +283,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
 		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${POD_NAME}:8983%s\"",
+			"solr api -get \"http://${SOLR_HOST}:8983%s\"",
 			solrCloud.Name, solrCloud.Name, expProbePath)
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
