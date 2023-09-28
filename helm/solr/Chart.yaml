@@ -49,6 +49,13 @@ annotations:
         - name: Version Compatibility Documentation
           url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
     - kind: changed
+      description: The default solr.xml now includes a `maxBooleanClauses` value of `${solr.max.booleanClauses:1024}`.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/630
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/631
+    - kind: changed
       description: Solr's `/admin/info/health` API is now used for readiness probes by default.
       links:
         - name: Github Issue

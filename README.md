@@ -54,6 +54,7 @@ Please visit the following pages for documentation on using and developing the S
   - The released helm charts and their instructions should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
 - [Running the Solr Operator](https://apache.github.io/solr-operator/docs/running-the-operator)
+- [Known Issues](https://apache.github.io/solr-operator/docs/known-issues)
 - Available Solr Resources
     - [Solr Clouds](https://apache.github.io/solr-operator/docs/solr-cloud)
     - [Solr Backups](https://apache.github.io/solr-operator/docs/solr-backup)

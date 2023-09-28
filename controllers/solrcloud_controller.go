@@ -385,7 +385,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if err = controllerutil.SetControllerReference(instance, expectedStatefulSet, r.Scheme); err == nil {
 				err = r.Create(ctx, expectedStatefulSet)
 			}
-			statefulSet = expectedStatefulSet
+			// Wait for the next reconcile loop
+			statefulSet = nil
 		} else if err == nil {
 			util.MaintainPreservedStatefulSetFields(expectedStatefulSet, foundStatefulSet)
 
