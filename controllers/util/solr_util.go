@@ -61,8 +61,9 @@ const (
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
-	DistLibs    = "/opt/solr/dist"
-	ContribLibs = "/opt/solr/contrib/%s/lib"
+	DistLibs              = "/opt/solr/dist"
+	ContribLibs           = "/opt/solr/contrib/%s/lib"
+	SysPropLibPlaceholder = "${solr.sharedLib:}"
 )
 
 var (
@@ -786,6 +787,8 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
   <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+  <str name="allowPaths">${solr.allowPaths:}</str>
+  <metrics enabled="${metricsEnabled:true}"/>
   %s
 </solr>
 `
@@ -831,6 +834,9 @@ func GenerateSolrXMLString(backupSection string, solrModules []string, additiona
 func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
 	libs := make(map[string]bool, 0)
 
+	// Placeholder for users to specify libs via sysprop
+	libs[SysPropLibPlaceholder] = true
+
 	// Add all module library locations
 	if len(solrModules) > 0 {
 		libs[DistLibs] = true
@@ -844,16 +850,12 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string)
 		libs[libPath] = true
 	}
 
-	libXml := ""
-	if len(libs) > 0 {
-		libList := make([]string, 0)
-		for lib := range libs {
-			libList = append(libList, lib)
-		}
-		sort.Strings(libList)
-		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	libList := make([]string, 0)
+	for lib := range libs {
+		libList = append(libList, lib)
 	}
-	return libXml
+	sort.Strings(libList)
+	return fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
 }
 
 func getAppProtocol(solrCloud *solr.SolrCloud) *string {
