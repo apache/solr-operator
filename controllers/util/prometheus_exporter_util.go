@@ -97,23 +97,27 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				},
 			},
 		},
+		{
+			Name:  "PORT",
+			Value: strconv.Itoa(SolrMetricsPort),
+		},
+		{
+			Name:  "NUM_THREADS",
+			Value: strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
+		},
 	}
 	var allJavaOpts []string
 
 	var solrVolumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-	exporterArgs := []string{
-		"-p", strconv.Itoa(SolrMetricsPort),
-		"-n", strconv.Itoa(int(solrPrometheusExporter.Spec.NumThreads)),
-	}
 
 	if solrPrometheusExporter.Spec.ScrapeInterval > 0 {
-		exporterArgs = append(exporterArgs, "-s", strconv.Itoa(int(solrPrometheusExporter.Spec.ScrapeInterval)))
+		envVars = append(envVars, corev1.EnvVar{Name: "SCRAPE_INTERVAL", Value: strconv.Itoa(int(solrPrometheusExporter.Spec.ScrapeInterval))})
 	}
 
 	// Setup the solrConnectionInfo
 	if solrConnectionInfo.CloudZkConnnectionInfo != nil {
-		exporterArgs = append(exporterArgs, "-z", solrConnectionInfo.CloudZkConnnectionInfo.ZkConnectionString())
+		envVars = append(envVars, corev1.EnvVar{Name: "ZK_HOST", Value: solrConnectionInfo.CloudZkConnnectionInfo.ZkConnectionString()})
 
 		// Add ACL information, if given, through Env Vars
 		if hasACLs, aclEnvs := AddACLsToEnv(solrConnectionInfo.CloudZkConnnectionInfo.AllACL, solrConnectionInfo.CloudZkConnnectionInfo.ReadOnlyACL); hasACLs {
@@ -123,7 +127,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			allJavaOpts = append(allJavaOpts, "$(SOLR_ZK_CREDS_AND_ACLS)")
 		}
 	} else if solrConnectionInfo.StandaloneAddress != "" {
-		exporterArgs = append(exporterArgs, "-b", solrConnectionInfo.StandaloneAddress)
+		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_URL", Value: solrConnectionInfo.StandaloneAddress})
 	}
 
 	// Only add the config if it is passed in from the user. Otherwise, use the default.
@@ -152,9 +156,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		volumeMounts = []corev1.VolumeMount{{Name: "solr-prometheus-exporter-xml", MountPath: "/opt/solr-exporter", ReadOnly: true}}
 
-		exporterArgs = append(exporterArgs, "-f", "/opt/solr-exporter/"+PrometheusExporterConfigMapKey)
+		envVars = append(envVars, corev1.EnvVar{Name: "CONFIG_FILE", Value: "/opt/solr-exporter/" + PrometheusExporterConfigMapKey})
 	} else {
-		exporterArgs = append(exporterArgs, "-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml")
+		envVars = append(envVars, corev1.EnvVar{Name: "CONFIG_FILE", Value: "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml"})
 	}
 
 	entrypoint := DefaultPrometheusExporterEntrypoint
@@ -216,7 +220,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			Ports:           []corev1.ContainerPort{{ContainerPort: SolrMetricsPort, Name: SolrMetricsPortName, Protocol: corev1.ProtocolTCP}},
 			VolumeMounts:    volumeMounts,
 			Command:         []string{entrypoint},
-			Args:            exporterArgs,
 			Env:             envVars,
 
 			StartupProbe: &corev1.Probe{
