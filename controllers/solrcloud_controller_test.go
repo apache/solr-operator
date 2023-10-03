@@ -123,7 +123,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_LOG_LEVEL": "DEBUG",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -252,7 +252,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"GC_TUNE":        "gc Options",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
 				"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
@@ -442,7 +442,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
 				"SOLR_PORT":      "2000",
 				"SOLR_NODE_PORT": "2000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")
@@ -696,7 +696,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				},
 				Data: map[string]string{
 					util.LogXmlFile:  "<Configuration/>",
-					util.SolrXmlFile: "<solr> ${hostPort:} </solr>", // the controller checks for ${hostPort: in the solr.xml
+					util.SolrXmlFile: "<solr> ${solr.port.advertise:} </solr>", // the controller checks for ${hostPort: in the solr.xml
 				},
 			}
 			Expect(k8sClient.Create(ctx, configMap)).To(Succeed(), "Create the valid configMap")

@@ -108,7 +108,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -173,7 +173,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -454,7 +454,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"ZK_CHROOT":      "/a-ch/root",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -529,7 +529,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -570,7 +570,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT":      "8983",
 				"SOLR_NODE_PORT": "8983",
 				"SOLR_ZK_OPTS":   testSolrZKOpts,
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
 				"SOLR_STOP_WAIT": strconv.FormatInt(60-5, 10),
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)

@@ -135,7 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+	allSolrOpts := []string{"-Dsolr.port.advertise=$(SOLR_NODE_PORT)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{

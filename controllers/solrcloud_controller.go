@@ -225,9 +225,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			if hasSolrXml {
 				// make sure the user-provided solr.xml is valid
-				if !strings.Contains(solrXml, "${hostPort:") {
+				if !strings.Contains(solrXml, "${solr.port.advertise:") {
 					return requeueOrNot,
-						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for the 'hostPort' variable, such as <int name=\"hostPort\">${hostPort:80}</int>",
+						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for the 'solr.port.advertise' variable, such as <int name=\"hostPort\">${solr.port.advertise:80}</int>",
 							providedConfigMapName)
 				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
