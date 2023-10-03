@@ -56,7 +56,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/631
     - kind: changed
-      description: The default solr.xml now includes the necessary boilerplate to specify additional `sharedLib` and `allowPath` values (via the `solr.sharedLib` and `solr.allowPaths` system properties respectively).  The `metricsEnabled` system property can also be used to toggle Solr's metrics processing (defaults to `true`).
+      description: The default solr.xml now includes the necessary boilerplate to specify additional `sharedLib` and `allowPath` values (via the `solr.sharedLib` and `solr.allowPaths` system properties respectively).  The `metricsEnabled` system property can also be used to toggle Solr's metrics processing (defaults to `true`).  And the `solr.port.advertise` property can be used to control the port Solr is advertised under in `/live_nodes` and other cluster state (defaults to `80`)
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/635

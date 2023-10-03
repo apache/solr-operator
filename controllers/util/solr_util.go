@@ -772,7 +772,7 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
   %s
   <solrcloud>
     <str name="host">${host:}</str>
-    <int name="hostPort">${hostPort:80}</int>
+    <int name="hostPort">${solr.port.advertise:80}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
