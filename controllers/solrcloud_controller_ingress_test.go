@@ -113,11 +113,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -213,11 +214,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "3000",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "3000",
+				"SOLR_PORT_ADVERTISE": "3000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -292,11 +294,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -369,11 +372,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.Namespace,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -446,11 +450,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -519,11 +524,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.Namespace + ".svc." + testKubeDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -595,11 +601,12 @@ var _ = FDescribe("SolrCloud controller - Ingress", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "100",
-				"SOLR_OPTS":      "-Dsolr.port.advertise=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           solrCloud.Namespace + "-$(POD_NAME)." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "100",
+				"SOLR_PORT_ADVERTISE": "100",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")

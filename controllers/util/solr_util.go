@@ -135,7 +135,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{"-Dsolr.port.advertise=$(SOLR_NODE_PORT)"}
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -306,7 +306,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 		{
 			// This is the port that the Solr Node will advertise itself as listening on in live_nodes
+			// TODO Remove in 0.9.0 once users have had a chance to switch any custom solr.xml files over to using the `solr.port.advertise` placeholder
 			Name:  "SOLR_NODE_PORT",
+			Value: strconv.Itoa(solrAdressingPort),
+		},
+		{
+			// Supercedes SOLR_NODE_PORT above.  'bin/solr' converts to 'solr.port.advertise' sysprop automatically.
+			Name:  "SOLR_PORT_ADVERTISE",
 			Value: strconv.Itoa(solrAdressingPort),
 		},
 		// POD_HOSTNAME is deprecated and will be removed in a future version. Use POD_NAME instead
