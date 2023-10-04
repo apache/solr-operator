@@ -437,16 +437,21 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Get the SolrCloud's Pods and initialize them if necessary
 	var podList []corev1.Pod
 	var podSelector labels.Selector
-	if podSelector, podList, err = r.initializePods(ctx, instance, logger); err != nil {
+	if podSelector, podList, err = r.initializePods(ctx, instance, statefulSet, logger); err != nil {
 		return requeueOrNot, err
 	}
 
 	// Make sure the SolrCloud status is up-to-date with the state of the cluster
 	var outOfDatePods util.OutOfDatePodSegmentation
 	var availableUpdatedPodCount int
-	outOfDatePods, availableUpdatedPodCount, err = createCloudStatus(instance, &newStatus, statefulSet.Status, podSelector, podList)
+	var shouldRequeue bool
+	outOfDatePods, availableUpdatedPodCount, shouldRequeue, err = createCloudStatus(instance, &newStatus, statefulSet.Status, podSelector, podList)
 	if err != nil {
 		return requeueOrNot, err
+	} else if shouldRequeue {
+		// There is an issue with the status, so requeue to get a more up-to-date view of the cluster
+		updateRequeueAfter(&requeueOrNot, time.Second*1)
+		return requeueOrNot, nil
 	}
 
 	// We only want to do one cluster operation at a time, so we use a lock to ensure that.
@@ -620,7 +625,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 // InitializePods Ensure that all SolrCloud Pods are initialized
-func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
+func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solrv1beta1.SolrTechnologyLabel
@@ -635,14 +640,24 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 		logger.Error(err, "Error listing pods for SolrCloud")
 		return
 	}
-	podList = foundPods.Items
 
 	// Initialize the pod's notStopped readinessCondition so that they can receive traffic until they are stopped
-	for i, pod := range podList {
+	for _, pod := range foundPods.Items {
+		isOwnedByCurrentStatefulSet := false
+		for _, ownerRef := range pod.ObjectMeta.OwnerReferences {
+			if ownerRef.UID == statefulSet.UID {
+				isOwnedByCurrentStatefulSet = true
+				break
+			}
+		}
+		// Do not include pods that match, but are not owned by the current statefulSet
+		if !isOwnedByCurrentStatefulSet {
+			continue
+		}
 		if updatedPod, podError := r.initializePod(ctx, &pod, logger); podError != nil {
 			err = podError
 		} else if updatedPod != nil {
-			podList[i] = *updatedPod
+			podList = append(podList, *updatedPod)
 		}
 	}
 	return
@@ -676,7 +691,7 @@ func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod
 // Initialize the SolrCloud.Status object
 func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 	newStatus *solrv1beta1.SolrCloudStatus, statefulSetStatus appsv1.StatefulSetStatus, podSelector labels.Selector,
-	podList []corev1.Pod) (outOfDatePods util.OutOfDatePodSegmentation, availableUpdatedPodCount int, err error) {
+	podList []corev1.Pod) (outOfDatePods util.OutOfDatePodSegmentation, availableUpdatedPodCount int, shouldRequeue bool, err error) {
 	var otherVersions []string
 	nodeNames := make([]string, len(podList))
 	nodeStatusMap := map[string]solrv1beta1.SolrNodeStatus{}
@@ -798,8 +813,9 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 		extAddress := solrCloud.UrlScheme(true) + "://" + solrCloud.ExternalCommonUrl(solrCloud.Spec.SolrAddressability.External.DomainName, true)
 		newStatus.ExternalCommonAddress = &extAddress
 	}
+	shouldRequeue = newStatus.ReadyReplicas != statefulSetStatus.ReadyReplicas || newStatus.Replicas != statefulSetStatus.Replicas || newStatus.UpToDateNodes != statefulSetStatus.UpdatedReplicas
 
-	return outOfDatePods, availableUpdatedPodCount, nil
+	return outOfDatePods, availableUpdatedPodCount, shouldRequeue, nil
 }
 
 func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, nodeName string) (err error, ip string) {
