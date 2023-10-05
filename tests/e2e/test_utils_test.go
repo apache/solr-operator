@@ -34,6 +34,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	"io"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -432,7 +433,7 @@ func checkBackupWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud
 			innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while fetching backup '%s' for collection '%s': %s", solrBackup.Name, collection, backupParams)
 			backupListResponse := &solr_api.SolrBackupListResponse{}
 
-			innerG.Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API")
+			innerG.Expect(json.Unmarshal([]byte(response), &backupListResponse)).To(Succeed(), "Could not parse json from Solr BackupList API: %s", response)
 
 			innerG.Expect(backupListResponse.ResponseHeader.Status).To(BeZero(), "SolrBackupList API returned exception code: %d", backupListResponse.ResponseHeader.Status)
 			checks(innerG, collection, backupListResponse)
@@ -455,7 +456,7 @@ func (r *ExecError) Error() string {
 }
 
 func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string, hostnameOptional ...string) (response string, err error) {
-	hostname := "${POD_HOSTNAME}"
+	hostname := "${SOLR_HOST}"
 	if len(hostnameOptional) > 0 {
 		hostname = hostnameOptional[0]
 	}
@@ -471,6 +472,7 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 	command := []string{
 		"solr",
 		"api",
+		"-verbose",
 		"-" + strings.ToLower(httpMethod),
 		fmt.Sprintf(
 			"\"%s://%s:%d%s%s\"",
@@ -510,28 +512,26 @@ func runExecForContainer(ctx context.Context, container string, podName string, 
 		return "", fmt.Errorf("error while creating Executor: %v", err)
 	}
 
-	var stdout, stderr bytes.Buffer
+	var combined, stdout, stderr bytes.Buffer
 	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &stdout,
-		Stderr: &stderr,
+		Stdout: io.MultiWriter(&stdout, &combined),
+		Stderr: io.MultiWriter(&stderr, &combined),
 		Tty:    false,
 	})
 
-	responseOutput := stdout.String()
-	errOutput := stderr.String()
+	response = combined.String()
 
 	if err != nil {
 		err = &ExecError{
 			Command:        strings.Join(command, " "),
 			Err:            err,
-			ResponseOutput: responseOutput,
-			ErrorOutput:    errOutput,
+			ResponseOutput: stdout.String(),
+			ErrorOutput:    stderr.String(),
 		}
-	}
-	if len(responseOutput) == 0 {
-		response = errOutput
+
+		response = combined.String()
 	} else {
-		response = responseOutput
+		response = stdout.String()
 	}
 
 	return response, err

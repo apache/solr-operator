@@ -32,6 +32,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"io"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -291,7 +292,7 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	}
 
 	foundPods := &corev1.PodList{}
-	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr pods")
 	Expect(foundPods).ToNot(BeNil(), "No Solr pods could be found")
 	for _, pod := range foundPods.Items {
 		writeAllPodInfoToFiles(
@@ -300,6 +301,42 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 			&pod,
 		)
 	}
+
+	foundStatefulSets := &appsv1.StatefulSetList{}
+	Expect(k8sClient.List(ctx, foundStatefulSets, listOps)).To(Succeed(), "Could not fetch Solr statefulSets")
+	Expect(foundStatefulSets).ToNot(BeNil(), "No Solr statefulSet could be found")
+	for _, statefulSet := range foundStatefulSets.Items {
+		writeAllStatefulSetInfoToFiles(
+			directory+statefulSet.Name+".statefulSet",
+			&statefulSet,
+		)
+	}
+}
+
+// writeAllStatefulSetInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - StatefulSet Spec/Status
+//   - StatefulSet Events
+func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.StatefulSet) {
+	// Write statefulSet to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	defer statusFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet status: %s", baseFilename+".status.json")
+	jsonBytes, marshErr := json.MarshalIndent(statefulSet, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet json to file")
+
+	// Write events for statefulSet to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	defer eventsFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet events: %s", baseFilename+".events.yaml")
+
+	eventList, err := rawK8sClient.CoreV1().Events(statefulSet.Namespace).Search(scheme.Scheme, statefulSet)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for statefulSet: %s", statefulSet.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet events json to file")
 }
 
 // writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.
@@ -319,30 +356,32 @@ func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev
 	// Write events for pod to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
 	defer eventsFile.Close()
-	Expect(err).ToNot(HaveOccurred(), "Could not open file to save status: %s", baseFilename+".events.yaml")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod events: %s", baseFilename+".events.yaml")
 
 	eventList, err := rawK8sClient.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for pod: %s", pod.Name)
 	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
-	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize events json")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod events json")
 	_, writeErr = eventsFile.Write(jsonBytes)
-	Expect(writeErr).ToNot(HaveOccurred(), "Could not write events json to file")
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write pod events json to file")
 
 	// Write pod logs to a file
-	writePodLogsToFile(
-		ctx,
-		baseFilename+".log",
-		pod.Name,
-		pod.Namespace,
-		nil,
-		"",
-	)
+	if len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Started != nil && *pod.Status.ContainerStatuses[0].Started {
+		writePodLogsToFile(
+			ctx,
+			baseFilename+".log",
+			pod.Name,
+			pod.Namespace,
+			nil,
+			"",
+		)
+	}
 }
 
 func writePodLogsToFile(ctx context.Context, filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
 	logFile, err := os.Create(filename)
-	defer logFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
+	defer logFile.Close()
 
 	podLogOpts := corev1.PodLogOptions{}
 	if startTimeRaw != nil {
@@ -352,8 +391,8 @@ func writePodLogsToFile(ctx context.Context, filename string, podName string, po
 
 	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
 	podLogs, logsErr := req.Stream(ctx)
-	defer podLogs.Close()
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
+	defer podLogs.Close()
 
 	var logReader io.Reader
 	logReader = podLogs

@@ -32,14 +32,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -49,7 +45,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -59,7 +55,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -89,7 +85,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr ConfigMap")
 			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
 
@@ -106,11 +102,12 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 
@@ -154,12 +151,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -208,12 +206,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -310,7 +309,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr ConfigMap")
 			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
 

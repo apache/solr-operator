@@ -32,14 +32,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		replicas := int32(1)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -57,7 +53,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -67,7 +63,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -78,7 +74,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				ProbesRequireAuth:  true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -106,7 +102,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				ProbesRequireAuth:  true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -128,7 +124,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				PasswordKey: "read-only-pass",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 		})
 	})
@@ -139,7 +135,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				AuthenticationType: solrv1beta1.Basic,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Testing that the statefulSet exists and has the correct information")
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 
@@ -161,7 +157,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				BasicAuthSecret:    basicAuthSecretName,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -186,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Making sure that no statefulSet exists until the BasicAuth Secret is created")
 			expectNoStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -212,13 +208,17 @@ var boostrapedSecretKeys = []string{
 func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrCloud, expectBootstrapSecret bool) *appsv1.StatefulSet {
 	Expect(sc.Spec.SolrSecurity).To(Not(BeNil()), "solrSecurity is not configured for this SolrCloud instance!")
 
-	expProbePath := "/solr/admin/info/system"
+	expLivenessProbePath := "/solr/admin/info/system"
+	expReadinessProbePath := "/solr/admin/info/health"
 	if sc.Spec.CustomSolrKubeOptions.PodOptions != nil && sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
-		expProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
+		expLivenessProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
+	}
+	if sc.Spec.CustomSolrKubeOptions.PodOptions != nil && sc.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe != nil {
+		expReadinessProbePath = sc.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe.HTTPGet.Path
 	}
 
 	stateful := expectStatefulSetWithChecks(ctx, sc, sc.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret, expProbePath)
+		expectBasicAuthConfigOnPodTemplateWithGomega(g, sc, &found.Spec.Template, expectBootstrapSecret, expLivenessProbePath, expReadinessProbePath)
 	})
 
 	expectSecretWithChecks(ctx, sc, sc.BasicAuthSecretName(), func(innerG Gomega, found *corev1.Secret) {
@@ -241,7 +241,9 @@ func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrC
 			probePaths := util.GetCustomProbePaths(sc)
 			if len(probePaths) > 0 {
 				securityJson := string(bootstrapSecret.Data["security.json"])
-				Expect(securityJson).To(ContainSubstring(util.DefaultProbePath), "bootstrapped security.json should have an authz rule for probe path: %s", util.DefaultProbePath)
+				Expect(securityJson).To(ContainSubstring(util.DefaultLivenessProbePath), "bootstrapped security.json should have an authz rule for liveness probe path: %s", util.DefaultLivenessProbePath)
+				Expect(securityJson).To(ContainSubstring(util.DefaultReadinessProbePath), "bootstrapped security.json should have an authz rule for readiness probe path: %s", util.DefaultReadinessProbePath)
+
 				for _, p := range probePaths {
 					p = p[len("/solr"):] // drop the /solr part on the path
 					Expect(securityJson).To(ContainSubstring(p), "bootstrapped security.json should have an authz rule for probe path: %s", p)
@@ -254,7 +256,7 @@ func expectStatefulSetBasicAuthConfig(ctx context.Context, sc *solrv1beta1.SolrC
 }
 
 // Ensures config is setup for basic-auth enabled Solr pods
-func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool, expProbePath string) *corev1.Container {
+func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, podTemplate *corev1.PodTemplateSpec, expectBootstrapSecret bool, expLivenessProbePath string, expReadinessProbePath string) *corev1.Container {
 	// check the env vars needed for the probes to work with auth
 	g.Expect(podTemplate.Spec.Containers).To(Not(BeEmpty()), "Solr Pod requires containers")
 	mainContainer := podTemplate.Spec.Containers[0]
@@ -286,21 +288,22 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount).To(Not(BeNil()), "No Basic Auth volume mount used in Solr container")
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
-		expProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password)\" java "+
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "+
-			"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-			"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-			"org.apache.solr.util.SolrCLI api -get http://localhost:8983%s",
-			solrCloud.Name, solrCloud.Name, expProbePath)
+		expLivenessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
+			"solr api -get \"http://${SOLR_HOST}:8983%s\"",
+			solrCloud.Name, solrCloud.Name, expLivenessProbePath)
+		expReadinessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
+			"solr api -get \"http://${SOLR_HOST}:8983%s\"",
+			solrCloud.Name, solrCloud.Name, expReadinessProbePath)
+
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeEmpty()), "liveness probe command cannot be empty")
-		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(Equal(expProbeCmd), "liveness probe should invoke java with auth opts")
+		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(Equal(expLivenessProbeCmd), "liveness probe should invoke java with auth opts")
 		g.Expect(mainContainer.LivenessProbe.TimeoutSeconds).To(BeEquivalentTo(5), "liveness probe default timeout should be increased when using basicAuth")
 		g.Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
 		g.Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when auth is enabled")
 		g.Expect(mainContainer.ReadinessProbe.Exec.Command).To(Not(BeEmpty()), "readiness probe command cannot be empty")
-		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(Equal(expProbeCmd), "readiness probe should invoke java with auth opts")
+		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(Equal(expReadinessProbeCmd), "readiness probe should invoke java with auth opts")
 		g.Expect(mainContainer.ReadinessProbe.TimeoutSeconds).To(BeEquivalentTo(5), "readiness probe default timeout should be increased when using basicAuth")
 	}
 

@@ -41,17 +41,19 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 
 ### Solr Versions
 
-| Solr Operator Version | `6.6` | `7.7` | `8.0` - `8.5` | `8.6`+ |
-|:---------------------:| :---: | :---: | :---: | :---: |
-|       `v0.2.6`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :x: |
-|       `v0.2.7`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.2.8`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.3.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.4.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.5.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.6.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.7.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
-|       `v0.8.x`        | :grey_question: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
+| Solr Operator Version |       `7.7`        |   `8.0` - `8.10`   |       `8.11`       |      `9.0` - `9.3`       |          `9.4`+          |
+|:---------------------:|:------------------:|:------------------:|:------------------:|:------------------------:|:------------------------:|
+|       `v0.2.7`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |           :x:            |           :x:            |
+|       `v0.2.8`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |           :x:            |           :x:            |
+|       `v0.3.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |           :x:            |           :x:            |
+|       `v0.4.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |           :x:            |           :x:            |
+|       `v0.5.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |           :x:            |           :x:            |
+|       `v0.6.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
+|       `v0.7.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
+|       `v0.8.x`        |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: :one: |    :heavy_check_mark:    |
+
+**Exceptions**
+* :one: `SolrTLS` and `SolrClientTLS` are not supported
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
@@ -112,6 +114,11 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.8.0
+- **The minimum supported Solr version is now 8.11**
+  If you are unable to use a newer version of Solr, please install the `v0.7.1` version of the Solr Operator.
+  However, it is strongly suggested to upgrade to newer versions of Solr that are actively supported.q
+  See the [version compatibility matrix](#solr-versions) for more information.
+
 - **Kubernetes support is now limited to 1.22+.**  
   If you are unable to use a newer version of Kubernetes, please install the `v0.7.1` version of the Solr Operator for use with Kubernetes `1.21`.
   See the [version compatibility matrix](#kubernetes-versions) for more information.
@@ -120,6 +127,14 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
   This means that any SolrCloud that has its `spec.replicas` decreased will have the replicas migrated off of the soon-to-be-deleted pods by default.
   Set this value to `false` to retain the previous functionality.
   More information can be found in the [Solr Pod Scale-Down](solr-cloud/scaling.md#solr-pod-scale-down) documentation.
+
+- The `POD_HOSTNAME` envVar in SolrCloud Pods has been deprecated. Use `POD_NAME` instead.
+
+- Use of the `hostPort` system property placeholder in custom solr.xml files has been deprecated.
+  Use `<int name="hostPort">${solr.port.advertise:80}</int>`, the default value used by Solr, instead.
+
+- By default `solrcloud` resources will now use `/admin/info/system` and `/admin/info/health` for liveness and readiness checks, respectively.
+  Administrators that provide custom `security.json` files for their clusters should either exempt both of these endpoints from authentication entirely, or configure permissions ensuring the relevant Solr user account can access them without issue.
 
 ### v0.7.0
 - **Kubernetes support is now limited to 1.21+.**  

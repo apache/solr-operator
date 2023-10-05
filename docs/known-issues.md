@@ -15,16 +15,21 @@
     limitations under the License.
  -->
 
-# Documentation
+# Known Issues
 
-Please visit the following pages for documentation on using and developing the Solr Operator:
+## Solr Cloud
 
-- [Local Tutorial](local_tutorial.md)
-- [Upgrade Notes](upgrade-notes.md)
-- [Known Issues](known-issues.md)
-- [Running the Solr Operator](running-the-operator.md)
-- Available Solr Resources
-    - [Solr Clouds](solr-cloud)
-    - [Solr Backups](solr-backup)
-    - [Solr Metrics](solr-prometheus-exporter)
-- [Development](development.md)
+- You may be seeing timeouts in your Solr logs after a rolling update.
+  This can be caused by DNS caching in CoreDNS (the default DNS for Kubernetes).
+  This can be fixed by reducing the kubernetes cache TTL to 5-10 seconds.
+  Please refer to this ticket for more information: https://github.com/kubernetes/kubernetes/issues/92559
+  \
+  Fix: In the `kube-system` namespace, there will be a `ConfigMap` with name `coredns`. It will contain a section:
+  ```
+  kubernetes cluster.local in-addr.arpa ip6.arpa {
+   ...
+   ttl 30
+  ...
+  }
+  ```
+  Edit the `ttl` value to be `5`, CoreDNS will automatically see a change in the configMap and reload it.
