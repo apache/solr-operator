@@ -130,7 +130,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 - The `POD_HOSTNAME` envVar in SolrCloud Pods has been deprecated. Use `POD_NAME` instead.
 
-- Use of the `hostPort` system property placeholder in custom solr.xml files has been deprecated.  Use `solr.port.advertise` instead.
+- Use of the `hostPort` system property placeholder in custom solr.xml files has been deprecated.  Use `<int name="hostPort">${solr.port.advertise:80}</int>`, the default value used by Solr, instead.
 
 ### v0.7.0
 - **Kubernetes support is now limited to 1.21+.**  
