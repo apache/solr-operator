@@ -62,6 +62,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/635
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/636
+    - kind: changed
+      description: Solr's `/admin/info/health` API is now used for readiness probes by default.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/628
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/629
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
