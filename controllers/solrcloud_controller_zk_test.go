@@ -104,11 +104,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -169,11 +170,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/a-ch/root",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             "host:7271/a-ch/root",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -449,12 +451,13 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			// Env Variable Tests
 			expectedZKHost := expectedZkConnStr + "/a-ch/root"
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        expectedZKHost,
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"ZK_CHROOT":      "/a-ch/root",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             expectedZKHost,
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"ZK_CHROOT":           "/a-ch/root",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -525,11 +528,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			// Env Variable Tests
 			expectedZKHost := expectedZkConnStr + "/"
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        expectedZKHost,
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             expectedZKHost,
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -565,13 +569,14 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/test",
-				"SOLR_HOST":      "$(POD_NAME).foo-solrcloud-headless.default",
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_ZK_OPTS":   testSolrZKOpts,
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
-				"SOLR_STOP_WAIT": strconv.FormatInt(60-5, 10),
+				"ZK_HOST":             "host:7271/test",
+				"SOLR_HOST":           "$(POD_NAME).foo-solrcloud-headless.default",
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_ZK_OPTS":        testSolrZKOpts,
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_STOP_WAIT":      strconv.FormatInt(60-5, 10),
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 

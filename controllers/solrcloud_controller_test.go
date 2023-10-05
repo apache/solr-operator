@@ -117,13 +117,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_JAVA_MEM":  "-Xmx4G",
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_LOG_LEVEL": "DEBUG",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_JAVA_MEM":       "-Xmx4G",
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_LOG_LEVEL":      "DEBUG",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -247,13 +248,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/test",
-				"SOLR_HOST":      "$(POD_NAME).foo-solrcloud-headless.default",
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"GC_TUNE":        "gc Options",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
-				"SOLR_STOP_WAIT": strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
+				"ZK_HOST":             "host:7271/test",
+				"SOLR_HOST":           "$(POD_NAME).foo-solrcloud-headless.default",
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"GC_TUNE":             "gc Options",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/test"}
@@ -438,11 +440,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
-				"SOLR_PORT":      "2000",
-				"SOLR_NODE_PORT": "2000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_PORT":           "2000",
+				"SOLR_NODE_PORT":      "2000",
+				"SOLR_PORT_ADVERTISE": "2000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")

@@ -338,7 +338,7 @@ data:
       ... CUSTOM CONFIG HERE ...
     </solr>
 ```
-**Important: Your custom `solr.xml` must include `<int name="hostPort">${hostPort:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
+**Important: Your custom `solr.xml` must include `<int name="hostPort">${solr.port.advertise:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
 
 You can get the default `solr.xml` from a Solr pod as a starting point for creating a custom config using `kubectl cp` as shown in the example below:
 ```bash
