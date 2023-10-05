@@ -946,11 +946,9 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 }
 
 func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, selectorLables map[string]string, podsHaveTLSEnabled bool) {
-	appProtocol := "http"
 	podPort := 8983
 	servicePort := 80
 	if podsHaveTLSEnabled {
-		appProtocol = "https"
 		servicePort = 443
 	}
 	By("testing the Solr Common Service")
@@ -959,8 +957,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 	Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on common Service")
 	Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 	Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
-	Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
-	Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on common Service")
+	if podsHaveTLSEnabled {
+		Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
+		Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on common Service")
+	} else {
+		Expect(commonService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on common Service should be nil when not running with TLS")
+	}
 
 	if solrCloud.Spec.SolrAddressability.External.UsesIndividualNodeServices() {
 		nodeNames := solrCloud.GetAllSolrPodNames()
@@ -971,8 +973,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 			Expect(service.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on node Service")
 			Expect(service.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on node Service")
 			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on node Service")
-			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on node Service should not be nil")
-			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on node Service")
+			if podsHaveTLSEnabled {
+				Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on node Service should not be nil")
+				Expect(*service.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on node Service")
+			} else {
+				Expect(service.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on node Service should be nil when not running with TLS")
+			}
 		}
 	} else {
 		By("testing the Solr Headless Service")
@@ -981,8 +987,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 		Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(podPort)), "Wrong port on headless Service")
 		Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 		Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
-		Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
-		Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on headless Service")
+		if podsHaveTLSEnabled {
+			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
+			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on headless Service")
+		} else {
+			Expect(headlessService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on headless Service should be nil when not running with TLS")
+		}
 	}
 }
 
