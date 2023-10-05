@@ -55,6 +55,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/630
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/631
+    - kind: changed
+      description: The default solr.xml now includes the necessary boilerplate to specify additional `sharedLib` and `allowPath` values (via the `solr.sharedLib` and `solr.allowPaths` system properties respectively).  The `metricsEnabled` system property can also be used to toggle Solr's metrics processing (defaults to `true`).  Lastly, the `solr.port.advertise` property can be used to control the port Solr is advertised under in `/live_nodes` and other cluster state.  Users providing their own `solr.xml` should replace any references to the `hostPort` system property with `solr.port.advertise`, as support for the `hostPort` placeholder will be removed in a future release.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/635
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/636
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

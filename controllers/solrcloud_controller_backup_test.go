@@ -102,11 +102,12 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 
@@ -150,12 +151,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -204,12 +206,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
