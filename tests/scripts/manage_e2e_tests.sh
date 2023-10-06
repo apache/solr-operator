@@ -76,7 +76,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.3}"
+  SOLR_IMAGE="${SOLR_VERSION:-8.11.2}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
@@ -181,6 +181,11 @@ function setup_cluster() {
   printf "Installing Solr & Zookeeper CRDs\n"
   kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
   kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
+  echo ""
+
+
+  printf "Edit the TTL of CoreDNS kubernetes so that statefulSet endpoints are refreshed more often\n"
+  kubectl get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl replace -n kube-system -f -
   echo ""
 
   printf "Installing Cert Manager\n"

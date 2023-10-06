@@ -103,14 +103,29 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.Containers).To(HaveLen(1), "Wrong number of containers for the Deployment")
 			Expect(deployment.Spec.Template.Spec.InitContainers).To(BeEmpty(), "Wrong number of initContainers for the Deployment")
 
-			expectedArgs := []string{
-				"-p", strconv.Itoa(util.SolrMetricsPort),
-				"-n", strconv.Itoa(int(testNumThreads)),
-				"-s", strconv.Itoa(int(testScrapeInterval)),
-				"-z", testZkCnxString + testZKChroot,
-				"-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
+			exporterArgEnvVars := []corev1.EnvVar{
+				{
+					Name:  "PORT",
+					Value: strconv.Itoa(util.SolrMetricsPort),
+				},
+				{
+					Name:  "NUM_THREADS",
+					Value: strconv.Itoa(int(testNumThreads)),
+				},
+				{
+					Name:  "SCRAPE_INTERVAL",
+					Value: strconv.Itoa(int(testScrapeInterval)),
+				},
+				{
+					Name:  "ZK_HOST",
+					Value: testZkCnxString + testZKChroot,
+				},
+				{
+					Name:  "CONFIG_FILE",
+					Value: "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
+				},
 			}
-			Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container")
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(exporterArgEnvVars), "Incorrect arguments for the SolrPrometheusExporter container")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
 		})
 	})
@@ -198,15 +213,30 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.InitContainers).To(HaveLen(len(extraContainers2)), "Wrong number of initContainers for the Deployment")
 			Expect(deployment.Spec.Template.Spec.InitContainers).To(Equal(extraContainers2), "Incorrect init containers")
 
-			expectedArgs := []string{
-				"-p", strconv.Itoa(util.SolrMetricsPort),
-				"-n", strconv.Itoa(int(testNumThreads)),
-				"-s", strconv.Itoa(int(testScrapeInterval)),
-				"-z", testZkCnxString + testZKChroot,
-				"-f", "/opt/solr-exporter/solr-prometheus-exporter.xml",
+			exporterArgEnvVars := []corev1.EnvVar{
+				{
+					Name:  "PORT",
+					Value: strconv.Itoa(util.SolrMetricsPort),
+				},
+				{
+					Name:  "NUM_THREADS",
+					Value: strconv.Itoa(int(testNumThreads)),
+				},
+				{
+					Name:  "SCRAPE_INTERVAL",
+					Value: strconv.Itoa(int(testScrapeInterval)),
+				},
+				{
+					Name:  "ZK_HOST",
+					Value: testZkCnxString + testZKChroot,
+				},
+				{
+					Name:  "CONFIG_FILE",
+					Value: "/opt/solr-exporter/solr-prometheus-exporter.xml",
+				},
 			}
-			Expect(deployment.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(exporterArgEnvVars), "Incorrect or missing environment variables used by the exporter script")
 
 			By("testing the SolrPrometheusExporter Deployment Custom Options")
 			Expect(deployment.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
@@ -215,7 +245,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.NodeSelector).To(Equal(testNodeSelectors), "Incorrect pod node selectors")
 
 			// Other Pod Options
-			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(Equal(addBuiltInEnvVars(extraVars)), "Extra Env Vars are not the same as the ones provided in podOptions")
+			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(addBuiltInEnvVars(extraVars)), "Extra Env Vars are not the same as the ones provided in podOptions")
 			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(deployment.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits).To(Equal(testResources.Limits), "Resources.Limits is not the same as the one provided in podOptions")
@@ -328,13 +358,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the SolrPrometheusExporter Deployment")
 			expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
-				expectedArgs := []string{
-					"-p", strconv.Itoa(util.SolrMetricsPort),
-					"-n", strconv.Itoa(1),
-					"-z", testZkCnxString + testZKChroot,
-					"-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
-				}
-				g.Expect(found.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container")
+
 				g.Expect(found.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
 				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(Equal(solrv1beta1.DefaultSolrRepo+":should-be-the-same"), "Incorrect image, should be pulled from the SolrCloud")
 				g.Expect(found.Spec.Template.Spec.Containers[0].ImagePullPolicy).To(Equal(corev1.PullAlways), "Incorrect imagePullPolicy, should be pulled from the SolrCloud")
@@ -346,6 +370,24 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 				f := false
+				exporterArgEnvVars := []corev1.EnvVar{
+					{
+						Name:  "PORT",
+						Value: strconv.Itoa(util.SolrMetricsPort),
+					},
+					{
+						Name:  "NUM_THREADS",
+						Value: strconv.Itoa(1),
+					},
+					{
+						Name:  "ZK_HOST",
+						Value: testZkCnxString + testZKChroot,
+					},
+					{
+						Name:  "CONFIG_FILE",
+						Value: "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
+					},
+				}
 				zkAclEnvVars := []corev1.EnvVar{
 					{
 						Name: "ZK_ALL_ACL_USERNAME",
@@ -399,8 +441,9 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 				for _, extraVar := range extraVars {
 					expectedEnvVars[extraVar.Name] = extraVar.Value
 				}
-				g.Expect(foundEnv[0:7]).To(Equal(addBuiltInEnvVars(zkAclEnvVars)), "ZK ACL Env Vars are not correct")
-				g.Expect(foundEnv[7:len(foundEnv)-1]).To(Equal(extraVars), "Extra Env Vars are not the same as the ones provided in podOptions")
+				for _, exporterArgEnvVar := range exporterArgEnvVars {
+					expectedEnvVars[exporterArgEnvVar.Name] = exporterArgEnvVar.Value
+				}
 				testPodEnvVariablesWithGomega(g, expectedEnvVars, foundEnv)
 			})
 			By("Changing the ZKConnection String of the SolrCloud")
@@ -415,13 +458,13 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 
 			By("making sure the PrometheusExporter Deployment updates to use the new ZK Connection String")
 			expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
-				expectedArgs := []string{
-					"-p", strconv.Itoa(util.SolrMetricsPort),
-					"-n", strconv.Itoa(1),
-					"-z", newZkCnxString + testZKChroot,
-					"-f", "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
+				expectedEnvVars := map[string]string{
+					"PORT":        strconv.Itoa(util.SolrMetricsPort),
+					"NUM_THREADS": strconv.Itoa(1),
+					"ZK_HOST":     newZkCnxString + testZKChroot,
+					"CONFIG_FILE": "/opt/solr/contrib/prometheus-exporter/conf/solr-exporter-config.xml",
 				}
-				g.Expect(found.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs), "Incorrect arguments for the SolrPrometheusExporter container, Zookeeper info not updated after SolrCloud changed")
+				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 		})
 	})

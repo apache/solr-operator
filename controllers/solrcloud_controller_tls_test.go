@@ -124,7 +124,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Scheme: corev1.URISchemeHTTPS,
-							Path:   "/solr/admin/info/health",
+							Path:   "/solr/admin/customreadiness",
 							Port:   intstr.FromInt(8983),
 						},
 					},
@@ -134,7 +134,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 		})
 		FIt("has the correct resources", func(ctx context.Context) {
-			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/info/health"), "Utility Probe paths command gives wrong result")
+			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/customreadiness"), "Utility Probe paths command gives wrong result")
 
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
@@ -536,28 +536,28 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(HaveLen(3), "liveness probe command has wrong number of args")
-		path := "/solr" + util.DefaultProbePath
+		path := "/solr" + util.DefaultLivenessProbePath
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
 			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
 		}
-		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://%s:%d%s\"", solrCloud.UrlScheme(false), "${POD_NAME}", solrCloud.Spec.SolrAddressability.PodPort, path)), "liveness probe should invoke solr api -get to contact Solr securely")
+		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "liveness probe should invoke solr api -get to contact Solr securely")
 		g.Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
 		g.Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.ReadinessProbe.Exec.Command).To(HaveLen(3), "readiness probe command has wrong number of args")
-		path = "/solr" + util.DefaultProbePath
+		path = "/solr" + util.DefaultReadinessProbePath
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe != nil {
 			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe.HTTPGet.Path
 		}
-		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://%s:%d%s\"", solrCloud.UrlScheme(false), "${POD_NAME}", solrCloud.Spec.SolrAddressability.PodPort, path)), "readiness probe should invoke solr api -get to contact Solr securely")
+		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "readiness probe should invoke solr api -get to contact Solr securely")
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
 			g.Expect(mainContainer.StartupProbe).To(Not(BeNil()), "main container should have a startup probe defined")
 			g.Expect(mainContainer.StartupProbe.Exec).To(Not(BeNil()), "startup probe should have an exec when auth is enabled")
 			g.Expect(mainContainer.StartupProbe.Exec.Command).To(HaveLen(3), "startup probe command has wrong number of args")
-			path = "/solr" + util.DefaultProbePath
+			path = "/solr" + util.DefaultStartupProbePath
 			if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
 				path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe.HTTPGet.Path
 			}
-			g.Expect(mainContainer.StartupProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://%s:%d%s\"", solrCloud.UrlScheme(false), "${POD_NAME}", solrCloud.Spec.SolrAddressability.PodPort, path)), "startup probe should invoke solr api -get to contact Solr securely")
+			g.Expect(mainContainer.StartupProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "startup probe should invoke solr api -get to contact Solr securely")
 		}
 	} else if solrCloud != nil {
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")

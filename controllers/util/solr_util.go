@@ -61,8 +61,9 @@ const (
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
-	DistLibs    = "/opt/solr/dist"
-	ContribLibs = "/opt/solr/contrib/%s/lib"
+	DistLibs              = "/opt/solr/dist"
+	ContribLibs           = "/opt/solr/contrib/%s/lib"
+	SysPropLibPlaceholder = "${solr.sharedLib:}"
 )
 
 var (
@@ -88,13 +89,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	defaultProbeTimeout := int32(1)
-	defaultHandler := corev1.ProbeHandler{
-		HTTPGet: &corev1.HTTPGetAction{
-			Scheme: probeScheme,
-			Path:   "/solr" + DefaultProbePath,
-			Port:   intstr.FromInt(solrPodPort),
-		},
-	}
+	defaultStartupProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultStartupProbePath)
+	defaultLivenessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultLivenessProbePath)
+	defaultReadinessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultReadinessProbePath)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	selectorLabels := solrCloud.SharedLabels()
@@ -305,7 +302,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 		{
 			// This is the port that the Solr Node will advertise itself as listening on in live_nodes
+			// TODO Remove in 0.9.0 once users have had a chance to switch any custom solr.xml files over to using the `solr.port.advertise` placeholder
 			Name:  "SOLR_NODE_PORT",
+			Value: strconv.Itoa(solrAdressingPort),
+		},
+		{
+			// Supercedes SOLR_NODE_PORT above.  'bin/solr' converts to 'solr.port.advertise' sysprop automatically.
+			Name:  "SOLR_PORT_ADVERTISE",
 			Value: strconv.Itoa(solrAdressingPort),
 		},
 		// POD_HOSTNAME is deprecated and will be removed in a future version. Use POD_NAME instead
@@ -323,6 +326,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_IP",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "status.podIP",
 					APIVersion: "v1",
 				},
 			},
@@ -452,7 +464,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold:    1,
 				FailureThreshold:    10,
 				PeriodSeconds:       5,
-				ProbeHandler:        defaultHandler,
+				ProbeHandler:        defaultStartupProbe,
 			},
 			// Kill Solr if it is unavailable for any 60-second period
 			LivenessProbe: &corev1.Probe{
@@ -460,7 +472,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 				PeriodSeconds:    20,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultLivenessProbe,
 			},
 			// Do not route requests to solr if it is not available for any 20-second period
 			ReadinessProbe: &corev1.Probe{
@@ -468,7 +480,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 2,
 				PeriodSeconds:    10,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultReadinessProbe,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
@@ -766,12 +778,22 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
+func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort int, path string) corev1.ProbeHandler {
+	return corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Scheme: probeScheme,
+			Path:   "/solr" + path,
+			Port:   intstr.FromInt(solrPodPort),
+		},
+	}
+}
+
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   %s
   <solrcloud>
     <str name="host">${host:}</str>
-    <int name="hostPort">${hostPort:80}</int>
+    <int name="hostPort">${solr.port.advertise:80}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
@@ -785,6 +807,9 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+  <str name="allowPaths">${solr.allowPaths:}</str>
+  <metrics enabled="${metricsEnabled:true}"/>
   %s
 </solr>
 `
@@ -830,6 +855,9 @@ func GenerateSolrXMLString(backupSection string, solrModules []string, additiona
 func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
 	libs := make(map[string]bool, 0)
 
+	// Placeholder for users to specify libs via sysprop
+	libs[SysPropLibPlaceholder] = true
+
 	// Add all module library locations
 	if len(solrModules) > 0 {
 		libs[DistLibs] = true
@@ -843,16 +871,12 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string)
 		libs[libPath] = true
 	}
 
-	libXml := ""
-	if len(libs) > 0 {
-		libList := make([]string, 0)
-		for lib := range libs {
-			libList = append(libList, lib)
-		}
-		sort.Strings(libList)
-		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	libList := make([]string, 0)
+	for lib := range libs {
+		libList = append(libList, lib)
 	}
-	return libXml
+	sort.Strings(libList)
+	return fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
 }
 
 func getAppProtocol(solrCloud *solr.SolrCloud) *string {

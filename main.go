@@ -32,7 +32,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sort"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -138,8 +138,7 @@ func main() {
 
 	operatorOptions := ctrl.Options{
 		Scheme:                  scheme,
-		MetricsBindAddress:      metricsAddr,
-		Port:                    9443,
+		Metrics:                 metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress:  probeAddr,
 		LeaderElection:          enableLeaderElection,
 		LeaderElectionNamespace: namespace,
@@ -147,7 +146,7 @@ func main() {
 	}
 
 	/*
-		When the operator is started to watch resources in a specific set of namespaces, we use the MultiNamespacedCacheBuilder cache.
+		When the operator is started to watch resources in a specific set of namespaces, we use DefaultNamespaces, which will build us a MultiNamespacedCache.
 		In this scenario, it is also suggested to restrict the provided authorization to this namespace by replacing the default
 		ClusterRole and ClusterRoleBinding to Role and RoleBinding respectively
 		For further information see the kubernetes documentation about
@@ -158,14 +157,20 @@ func main() {
 	*/
 	if watchNamespaces != "" {
 		setupLog.Info(fmt.Sprintf("Managing for Namespaces: %s", watchNamespaces))
-		ns := strings.Split(watchNamespaces, ",")
-		for i := range ns {
-			ns[i] = strings.TrimSpace(ns[i])
+		nsList := strings.Split(watchNamespaces, ",")
+		nsMap := make(map[string]cache.Config, len(nsList))
+		leaderElectionNamespace := ""
+		for i, ns := range nsList {
+			ns = strings.TrimSpace(ns)
+			if i == 0 {
+				leaderElectionNamespace = ns
+			}
+			// nil will have the namespace use the default settings
+			nsMap[ns] = cache.Config{}
 		}
-		sort.Strings(ns)
-		operatorOptions.NewCache = cache.MultiNamespacedCacheBuilder(ns)
+		operatorOptions.Cache.DefaultNamespaces = nsMap
 
-		operatorOptions.LeaderElectionNamespace = ns[0]
+		operatorOptions.LeaderElectionNamespace = leaderElectionNamespace
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), operatorOptions)

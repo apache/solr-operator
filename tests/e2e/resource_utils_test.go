@@ -68,14 +68,14 @@ func deleteAndWait(ctx context.Context, object client.Object, additionalOffset .
 
 func expectSolrCloudToBeReady(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
 	return expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-		g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		g.Expect(found.Status.ReadyReplicas).To(Equal(*solrCloud.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		// We have to check the status.replicas, because when a cloud is deleted/recreated, the statefulset can be recreated
 		// before the pods of the previous statefulset are deleted. So those pods will still be matched to the label selector,
 		// but the new statefulset doesn't know about them.
 		// The "Status.ReadyReplicas" value is populated from querying with the label selector
 		// The "Status.Replicas" value is populated from the statefulSet status
 		// So we need both to be equal to the requested number of replicas in order to know the statefulset is ready to go.
-		g.Expect(found.Status.Replicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		g.Expect(found.Status.Replicas).To(Equal(*solrCloud.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 	}, resolveOffset(additionalOffset))
 }
 
@@ -252,6 +252,21 @@ func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Obje
 			additionalChecks(g, statefulSet)
 		}
 	}).Should(Succeed())
+	return statefulSet
+}
+
+func expectStatefulSetWithChecksAndTimeout(ctx context.Context, parentResource client.Object, statefulSetName string, within time.Duration, checkEvery time.Duration, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Within(within).WithPolling(checkEvery).Should(Succeed())
 	return statefulSet
 }
 

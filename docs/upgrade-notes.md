@@ -130,6 +130,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 - The `POD_HOSTNAME` envVar in SolrCloud Pods has been deprecated. Use `POD_NAME` instead.
 
+- Use of the `hostPort` system property placeholder in custom solr.xml files has been deprecated.
+  Use `<int name="hostPort">${solr.port.advertise:80}</int>`, the default value used by Solr, instead.
+
+- By default `solrcloud` resources will now use `/admin/info/system` and `/admin/info/health` for liveness and readiness checks, respectively.
+  Administrators that provide custom `security.json` files for their clusters should either exempt both of these endpoints from authentication entirely, or configure permissions ensuring the relevant Solr user account can access them without issue.
+
 ### v0.7.0
 - **Kubernetes support is now limited to 1.21+.**  
   If you are unable to use a newer version of Kubernetes, please install the `v0.6.0` version of the Solr Operator for use with Kubernetes `1.20` and below.

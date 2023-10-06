@@ -39,9 +39,11 @@ import (
 )
 
 const (
-	SecurityJsonFile       = "security.json"
-	BasicAuthMd5Annotation = "solr.apache.org/basicAuthMd5"
-	DefaultProbePath       = "/admin/info/system"
+	SecurityJsonFile          = "security.json"
+	BasicAuthMd5Annotation    = "solr.apache.org/basicAuthMd5"
+	DefaultStartupProbePath   = "/admin/info/system"
+	DefaultLivenessProbePath  = DefaultStartupProbePath
+	DefaultReadinessProbePath = "/admin/info/health"
 )
 
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,
@@ -433,7 +435,8 @@ func solrPasswordHash(passBytes []byte) string {
 
 // Gets a list of probe paths we need to setup authz for
 func getProbePaths(solrCloud *solr.SolrCloud) []string {
-	probePaths := []string{DefaultProbePath}
+	// Current startup and liveness probes use the same API, so liveness needn't be explicitly specified here
+	probePaths := []string{DefaultStartupProbePath, DefaultReadinessProbePath}
 	probePaths = append(probePaths, GetCustomProbePaths(solrCloud)...)
 	return uniqueProbePaths(probePaths)
 }
@@ -499,7 +502,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsStr = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://%s:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), "${POD_NAME}", probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
+	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET
