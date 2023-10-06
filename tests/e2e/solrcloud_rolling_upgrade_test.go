@@ -23,6 +23,7 @@ import (
 	"github.com/apache/solr-operator/controllers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -146,10 +147,21 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
 			}
 
+			By("waiting for the rollingUpdate to finish")
+			// Wait for new pods to come up, and when they do we should be doing a balanceReplicas clusterOp
 			statefulSet = expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 			clusterOp, err = controllers.GetCurrentClusterOp(statefulSet)
 			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
-			Expect(clusterOp).To(BeNil(), "StatefulSet should not have a RollingUpdate lock after finishing a managed update.")
+			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a balanceReplicas lock after rolling update is complete.")
+			Expect(clusterOp.Operation).To(Equal(controllers.BalanceReplicasLock), "StatefulSet does not have a balanceReplicas lock after rolling update is complete.")
+			Expect(clusterOp.Metadata).To(Equal("RollingUpdateComplete"), "StatefulSet balanceReplicas lock operation has the wrong metadata.")
+
+			By("waiting for the balanceReplicas to finish")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a balanceReplicas lock after balancing is complete.")
+			})
 
 			By("checking that the collections can be queried after the restart")
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
