@@ -251,6 +251,29 @@ func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, in
 	return
 }
 
+// cleanupManagedCloudScaleDown does the logic of cleaning-up an incomplete scale down operation.
+// This will remove any bad readinessConditions that the scaleDown might have set when trying to scaleDown pods.
+func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, podList []corev1.Pod, logger logr.Logger) (err error) {
+	// First though, the scaleDown op might have set some pods to be "unready" before deletion. Undo that.
+	// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
+	readinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
+		util.SolrIsNotStoppedReadinessCondition: {
+			reason:  PodStarted,
+			message: "Pod is not being deleted, traffic to the pod must be restarted",
+			status:  true,
+		},
+	}
+	for _, pod := range podList {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+			err = e
+			return
+		} else {
+			pod = *updatedPod
+		}
+	}
+	return
+}
+
 // handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
 // This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
 func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, podList []corev1.Pod, logger logr.Logger) (operationComplete bool, nextClusterOperation *SolrClusterOp, err error) {
@@ -269,30 +292,12 @@ func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, inst
 		if err != nil {
 			logger.Error(err, "Error while patching StatefulSet to increase the number of pods for the ScaleUp")
 		}
-	} else {
-		// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
-		readinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
-			util.SolrIsNotStoppedReadinessCondition: {
-				reason:  PodStarted,
-				message: "Pod is not being deleted, traffic to the pod must be started",
-				status:  true,
-			},
+	} else if len(podList) >= configuredPods {
+		nextClusterOperation = &SolrClusterOp{
+			Operation: BalanceReplicasLock,
+			Metadata:  "ScaleUp",
 		}
-		for _, pod := range podList {
-			if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
-				err = e
-				return
-			} else {
-				pod = *updatedPod
-			}
-		}
-		if len(podList) >= configuredPods {
-			nextClusterOperation = &SolrClusterOp{
-				Operation: BalanceReplicasLock,
-				Metadata:  "ScaleUp",
-			}
-			operationComplete = true
-		}
+		operationComplete = true
 	}
 	return
 }
@@ -371,6 +376,38 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 		}
 		if retryLater && retryLaterDuration == 0 {
 			retryLaterDuration = time.Second * 10
+		}
+	}
+	return
+}
+
+// cleanupManagedCloudScaleDown does the logic of cleaning-up an incomplete scale down operation.
+// This will remove any bad readinessConditions that the scaleDown might have set when trying to scaleDown pods.
+func cleanupManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, podList []corev1.Pod, logger logr.Logger) (err error) {
+	// First though, the scaleDown op might have set some pods to be "unready" before deletion. Undo that.
+	// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
+	er := EvictingReplicas
+	readinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
+		util.SolrIsNotStoppedReadinessCondition: {
+			reason:  PodStarted,
+			message: "Pod is not being deleted, traffic to the pod must be restarted",
+			status:  true,
+		},
+		util.SolrReplicasNotEvictedReadinessCondition: {
+			// Only set this condition if the condition hasn't been changed since pod start
+			// We do not want to over-write future states later down the eviction pipeline
+			matchPreviousReason: &er,
+			reason:              PodStarted,
+			message:             "Pod is not being deleted, ephemeral data is no longer being evicted",
+			status:              true,
+		},
+	}
+	for _, pod := range podList {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+			err = e
+			return
+		} else {
+			pod = *updatedPod
 		}
 	}
 	return

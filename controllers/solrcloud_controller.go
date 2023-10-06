@@ -498,6 +498,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				//   - the operation has a long timeout and has taken more than 10 minutes
 				// then continue the operation later.
 				// (it will likely immediately continue, since it is unlikely there is another operation to run)
+
 				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
 				queueForLaterReason := ""
 				if err != nil && clusterOpRuntime > time.Minute {
@@ -508,7 +509,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					queueForLaterReason = "timed out during operation (10 minutes)"
 				}
 				if queueForLaterReason != "" {
-					err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
+					// If the operation is being queued, first have the operation cleanup after itself
+					switch clusterOp.Operation {
+					case UpdateLock:
+						err = cleanupManagedCloudRollingUpdate(ctx, r, outOfDatePods.ScheduledForDeletion, logger)
+					case ScaleDownLock:
+						err = cleanupManagedCloudScaleDown(ctx, r, podList, logger)
+					}
+					if err == nil {
+						err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
+					}
 
 					// TODO: Create event for the CRD.
 				}
