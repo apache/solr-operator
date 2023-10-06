@@ -26,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"time"
 )
 
@@ -280,6 +281,10 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down Abandon", func() {
 
 	BeforeEach(func() {
 		solrCloud = generateBaseSolrCloudWithPlacementPolicy(2, "minimizecores")
+
+		if strings.Contains(solrImage, ":8") || strings.Contains(solrImage, "8.") {
+			Skip("Cannot run the Scale Down Abandon test with Solr 8, as a working placementPolicy for the test cannot be defaulted")
+		}
 	})
 
 	JustBeforeEach(func(ctx context.Context) {
@@ -319,8 +324,19 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down Abandon", func() {
 			solrCloud.Spec.Replicas = pointer.Int32(int32(2))
 			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to cancel scale down")
 
+			By("Make sure the scaleDown attempts for a minute until it times out")
+			// The scaleDown will timeout after a minute, so we have to wait a bit over a minute
+			expectStatefulSetWithConsistentChecksAndDuration(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*50, func(g Gomega, found *appsv1.StatefulSet) {
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Operation).To(Equal(controllers.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
+				g.Expect(clusterOp.Metadata).To(Equal("1"), "StatefulSet scaleDown lock operation has the wrong metadata.")
+			})
+
 			By("Make sure that the operation is changed to a balanceReplicas to redistribute replicas")
-			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+			// The scaleDown will timeout after a minute, so we have to wait a bit over a minute
+			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*30, time.Millisecond*10, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a balanceReplicas lock.")
