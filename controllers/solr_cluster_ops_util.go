@@ -302,10 +302,31 @@ func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, inst
 	return
 }
 
+// hasAnyEphemeralData returns true if any of the given pods uses ephemeral Data for Solr storage, and false if all pods use persistent storage.
+func hasAnyEphemeralData(solrPods []corev1.Pod) bool {
+	for _, pod := range solrPods {
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == util.SolrReplicasNotEvictedReadinessCondition {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func determineRollingUpdateClusterOpLockIfNecessary(instance *solrv1beta1.SolrCloud, outOfDatePods util.OutOfDatePodSegmentation) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
 	if instance.Spec.UpdateStrategy.Method == solrv1beta1.ManagedUpdate && !outOfDatePods.IsEmpty() {
+		includesDataMigration := hasAnyEphemeralData(outOfDatePods.Running) || hasAnyEphemeralData(outOfDatePods.ScheduledForDeletion)
+		metadata := RollingUpdateMetadata{
+			RequiresReplicaMigration: includesDataMigration,
+		}
+		metaBytes, err := json.Marshal(metadata)
+		if err != nil {
+			return nil, 0, err
+		}
 		clusterOp = &SolrClusterOp{
 			Operation: UpdateLock,
+			Metadata:  string(metaBytes),
 		}
 	}
 	return
@@ -313,18 +334,26 @@ func determineRollingUpdateClusterOpLockIfNecessary(instance *solrv1beta1.SolrCl
 
 // handleManagedCloudRollingUpdate does the logic of a managed and "locked" cloud rolling update operation.
 // This will take many reconcile loops to complete, as it is deleting pods/moving replicas.
-func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, outOfDatePods util.OutOfDatePodSegmentation, hasReadyPod bool, availableUpdatedPodCount int, logger logr.Logger) (operationComplete bool, requestInProgress bool, retryLaterDuration time.Duration, nextClusterOp *SolrClusterOp, err error) {
+func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, outOfDatePods util.OutOfDatePodSegmentation, hasReadyPod bool, availableUpdatedPodCount int, logger logr.Logger) (operationComplete bool, requestInProgress bool, retryLaterDuration time.Duration, nextClusterOp *SolrClusterOp, err error) {
 	// Manage the updating of out-of-spec pods, if the Managed UpdateStrategy has been specified.
 	updateLogger := logger.WithName("ManagedUpdateSelector")
 
 	// First check if all pods are up to date and ready. If so the rolling update is complete
 	configuredPods := int(*statefulSet.Spec.Replicas)
 	if configuredPods == availableUpdatedPodCount {
-		// TODO: Only do a balancing for rolling restarts that migrated replicas
+		updateMetadata := &RollingUpdateMetadata{}
+		if clusterOp.Metadata != "" {
+			if err = json.Unmarshal([]byte(clusterOp.Metadata), &updateMetadata); err != nil {
+				updateLogger.Error(err, "Could not unmarshal metadata for rolling update operation")
+			}
+		}
 		operationComplete = true
-		nextClusterOp = &SolrClusterOp{
-			Operation: BalanceReplicasLock,
-			Metadata:  "RollingUpdateComplete",
+		// Only do a re-balancing for rolling restarts that migrated replicas
+		if updateMetadata.RequiresReplicaMigration {
+			nextClusterOp = &SolrClusterOp{
+				Operation: BalanceReplicasLock,
+				Metadata:  "RollingUpdateComplete",
+			}
 		}
 		return
 	} else if outOfDatePods.IsEmpty() {

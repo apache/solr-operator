@@ -465,7 +465,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		shortTimeoutForRequeue := true
 		switch clusterOp.Operation {
 		case UpdateLock:
-			operationComplete, requestInProgress, retryLaterDuration, nextClusterOperation, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
+			operationComplete, requestInProgress, retryLaterDuration, nextClusterOperation, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, clusterOp, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
 			// Rolling Updates should not be requeued quickly. The operation is expected to take a long time and thus should have a longTimeout if errors are not seen.
 			shortTimeoutForRequeue = false
 		case ScaleDownLock:
