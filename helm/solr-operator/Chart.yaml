@@ -128,6 +128,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/603
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/608
+    - kind: changed
+      description: Remove Service AppProtocol for non-TLS SolrClouds, in order to support http and http2
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/640
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/641
     - kind: added
       description: SolrClouds using ephemeral data will now have their replicas rebalanced after a rolling update.
       links:
