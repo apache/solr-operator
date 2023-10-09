@@ -30,6 +30,8 @@ That is why these operations must first obtain a lock on the SolrCloud before ex
 - [Managed Rolling Updates](managed-updates.md)
 - [Scaling Down with Replica Migrations](scaling.md#solr-pod-scale-down)
 - [Scaling Up with Replica Migrations](scaling.md#solr-pod-scale-up)
+- Balancing Replicas Across Pods
+  - This is started after a Rolling Update with Ephemeral Data or after a ScaleUp operation.
 
 ### How is the Lock Implemented?
 

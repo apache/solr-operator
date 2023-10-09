@@ -128,6 +128,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/603
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/608
+    - kind: added
+      description: SolrClouds using ephemeral data will now have their replicas rebalanced after a rolling update.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/615
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/625
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.0-prerelease
