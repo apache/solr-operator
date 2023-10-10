@@ -460,17 +460,20 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var retryLaterDuration time.Duration
 	if clusterOp, opErr := GetCurrentClusterOp(statefulSet); clusterOp != nil && opErr == nil {
 		var operationComplete, requestInProgress bool
+		var nextClusterOperation *SolrClusterOp
 		operationFound := true
 		shortTimeoutForRequeue := true
 		switch clusterOp.Operation {
 		case UpdateLock:
-			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
+			operationComplete, requestInProgress, retryLaterDuration, nextClusterOperation, err = handleManagedCloudRollingUpdate(ctx, r, instance, statefulSet, clusterOp, outOfDatePods, hasReadyPod, availableUpdatedPodCount, logger)
 			// Rolling Updates should not be requeued quickly. The operation is expected to take a long time and thus should have a longTimeout if errors are not seen.
 			shortTimeoutForRequeue = false
 		case ScaleDownLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleDown(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		case ScaleUpLock:
-			operationComplete, requestInProgress, retryLaterDuration, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
+			operationComplete, nextClusterOperation, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
+		case BalanceReplicasLock:
+			operationComplete, requestInProgress, retryLaterDuration, err = util.BalanceReplicasForCluster(ctx, instance, statefulSet, clusterOp.Metadata, clusterOp.Metadata, logger)
 		default:
 			operationFound = false
 			// This shouldn't happen, but we don't want to be stuck if it does.
@@ -479,8 +482,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if operationFound {
 			if operationComplete {
-				// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
-				err = clearClusterOpLockWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" complete", logger)
+				if nextClusterOperation == nil {
+					// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
+					err = clearClusterOpLockWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" complete", logger)
+				} else {
+					// Once the operation is complete, finish the cluster operation and start the next one by setting the statefulSet annotations
+					err = setNextClusterOpLockWithPatch(ctx, r, statefulSet, nextClusterOperation, string(clusterOp.Operation)+" complete", logger)
+				}
 
 				// TODO: Create event for the CRD.
 			} else if !requestInProgress {
@@ -490,6 +498,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				//   - the operation has a long timeout and has taken more than 10 minutes
 				// then continue the operation later.
 				// (it will likely immediately continue, since it is unlikely there is another operation to run)
+
 				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
 				queueForLaterReason := ""
 				if err != nil && clusterOpRuntime > time.Minute {
@@ -500,7 +509,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					queueForLaterReason = "timed out during operation (10 minutes)"
 				}
 				if queueForLaterReason != "" {
-					err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
+					// If the operation is being queued, first have the operation cleanup after itself
+					switch clusterOp.Operation {
+					case UpdateLock:
+						err = cleanupManagedCloudRollingUpdate(ctx, r, outOfDatePods.ScheduledForDeletion, logger)
+					case ScaleDownLock:
+						err = cleanupManagedCloudScaleDown(ctx, r, podList, logger)
+					}
+					if err == nil {
+						err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
+					}
 
 					// TODO: Create event for the CRD.
 				}

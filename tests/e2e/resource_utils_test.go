@@ -95,6 +95,18 @@ func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 	return foundSolrCloud
 }
 
+func expectSolrCloudWithChecksAndTimeout(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, within time.Duration, checkEvery time.Duration, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+	}).Within(within).WithPolling(checkEvery).WithContext(ctx).Should(Succeed())
+
+	return foundSolrCloud
+}
+
 func expectSolrCloudWithConsistentChecks(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
 	foundSolrCloud := &solrv1beta1.SolrCloud{}
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
@@ -282,6 +294,22 @@ func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource c
 			additionalChecks(g, statefulSet)
 		}
 	}).Should(Succeed())
+
+	return statefulSet
+}
+
+func expectStatefulSetWithConsistentChecksAndDuration(ctx context.Context, parentResource client.Object, statefulSetName string, duration time.Duration, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Within(duration).Should(Succeed())
 
 	return statefulSet
 }

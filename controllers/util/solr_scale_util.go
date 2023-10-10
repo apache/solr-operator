@@ -23,6 +23,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	"time"
 )
 
 // BalanceReplicasForCluster takes a SolrCloud and balances all replicas across the Pods that are currently alive.
@@ -31,7 +32,7 @@ import (
 // a successful status returned from the command. So if we delete the asyncStatus, and then something happens in the operator,
 // and we lose our state, then we will need to retry the balanceReplicas command. This should be ok since calling
 // balanceReplicas multiple times should not be bad when the replicas for the cluster are already balanced.
-func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, requestInProgress bool, err error) {
+func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, requestInProgress bool, retryLaterDuration time.Duration, err error) {
 	logger = logger.WithValues("balanceReason", balanceReason)
 	// If the Cloud has 1 or zero pods, there is no reason to balance replicas.
 	if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas < 1 {
@@ -95,6 +96,9 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				}
 			}
 		}
+	}
+	if requestInProgress && !balanceComplete {
+		retryLaterDuration = time.Second * 5
 	}
 	return
 }
