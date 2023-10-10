@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.8.0-prerelease
-appVersion: v0.8.0-prerelease
+version: 0.9.0-prerelease
+appVersion: v0.9.0-prerelease
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -54,118 +54,19 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: added
+      description: Addition 1
+      links:
+        - name: Github Issue
+          url: https://github.com/issue-url
     - kind: changed
-      description: The minimum supported version of Solr is now 8.11
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/616
-        - name: Version Compatibility Documentation
-          url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
-    - kind: changed
-      description: The minimum supported version of Kubernetes is now v1.22
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/604
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/612
-    - kind: added
-      description: Ability to customize the SecurityContext for the solr-operator pod
+      description: Change 2
       links:
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/566
-    - kind: added
-      description: Scale down of Solr Pods includes Replica migration by default.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/559
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/561
-        - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/scaling.html#solr-pod-scale-down
-    - kind: added
-      description: Scale up of Solr Pods includes Replica migration by default, for Solr 9.3+.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/567
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/575
-        - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/scaling.html#solr-pod-scale-up
-    - kind: changed
-      description: The Solr Operator is now built with Go 1.20
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/570
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/578
-    - kind: changed
-      description: Managed Rolling Updates are now computed via a Cluster Lock, like scaling operations.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/560
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/586
-        - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html
-    - kind: added
-      description: Cluster Operation Locks now give other operations a chance to run, every minute, to eliminate the risk of deadlocks
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/560
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/596
-        - name: Documentation
-          url: https://apache.github.io/solr-operator/docs/solr-cloud/cluster-operations.html#avoiding-deadlocks
-    - kind: added
-      description: Fix a bug with Rolling Restarts with ephemeral data
-      links:
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/614
-    - kind: added
-      description: MountedDir TLS now accepts plaintext passwords, for use with the Cert Manager CSI Driver
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/603
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/608
-    - kind: changed
-      description: Remove Service AppProtocol for non-TLS SolrClouds, in order to support http and http2
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/640
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/641
-    - kind: added
-      description: SolrClouds using ephemeral data will now have their replicas rebalanced after a rolling update.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/615
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/625
-    - kind: added
-      description: The default solr.xml now includes a `maxBooleanClauses` value of `${solr.max.booleanClauses:1024}`.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/630
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/631
-    - kind: added
-      description: The default solr.xml now includes the necessary boilerplate to specify additional `sharedLib` and `allowPath` values (via the `solr.sharedLib` and `solr.allowPaths` system properties respectively).  The `metricsEnabled` system property can also be used to toggle Solr's metrics processing (defaults to `true`).  Lastly, the `solr.port.advertise` property can be used to control the port Solr is advertised under in `/live_nodes` and other cluster state.  Users providing their own `solr.xml` should replace any references to the `hostPort` system property with `solr.port.advertise`, as support for the `hostPort` placeholder will be removed in a future release.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/635
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/636
-    - kind: changed
-      description: Solr's `/admin/info/health` API is now used for readiness probes by default.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/628
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/629
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.8.0-prerelease
+      image: apache/solr-operator:v0.9.0-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1

@@ -21,7 +21,7 @@ replicaCount: 1
 
 image:
   repository: apache/solr-operator
-  tag: v0.8.0-prerelease
+  tag: v0.9.0-prerelease
   pullPolicy: IfNotPresent
 
 nameOverride: ""
