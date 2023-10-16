@@ -21,7 +21,7 @@ Please carefully read the entries for all versions between the version you are r
 
 Ensure to read the [Upgrade Warnings and Notes](#upgrade-warnings-and-notes) for the version you are upgrading to as well as the versions you are skipping.
 
-If you want to skip versions when upgrading, be sure to check out the [upgrading minor versions](#upgrading-minor-versions-v_x_) and [upgrading patch versions](#upgrading-patch-versions-v__x) sections.
+If you want to skip versions when upgrading, be sure to check out the [upgrading minor versions](#upgrading-minor-versions-vxa---vxb) and [upgrading patch versions](#upgrading-patch-versions-vxya---vzyb) sections.
 
 ## Version Compatibility Matrixes
 
@@ -62,17 +62,25 @@ There may be options and features that require newer versions of Solr.
 Please test to make sure the features you plan to use are compatible with the version of Solr you choose to run.
 
 
-### Upgrading from `v0.2.x` to `v0.3.x`
-If you are upgrading from `v0.2.x` to `v0.3.x`, please follow the [Upgrading to Apache guide](upgrading-to-apache.md).
-This is a special upgrade that requires different instructions.
+## Upgrade Instructions
 
-### Upgrading minor versions (`v_.X._`)
+Please follow the instructions below when upgrading the Solr Operator.
+
+However, no matter the upgrade, always read the [Upgrade Notes](#upgrade-warnings-and-notes) for every version between
+
+### Upgrading minor versions (`vX.A._` -> `vX.B._`)
 
 In order to upgrade minor versions (e.g. `v0.2.5` -> `v0.3.0`), you must upgrade one minor version at a time (e.g. `v0.2.0` -> `v0.3.0` -> `v0.4.0`).
 It is also necessary to upgrade to the latest patch version before upgrading to the next minor version.
 Therefore if you are running `v0.2.5` and you want to upgrade to `v0.3.0`, you must first upgrade to `v0.2.8` before upgrading to `v0.3.0`.
 
-### Upgrading patch versions (`v_._.X`)
+There when upgrading minor versions, there may be CRD options that have been deprecated.
+The Solr Operator will automatically change the existing Solr resources to use the new format.
+Therefore when upgrading to the next version, which may remove the deprecated option, the existing resources will behave correctly.
+However, creating new resources with the deprecated options will fail.
+Be sure to carefully read the [Upgrade Warnings](#upgrade-warnings-and-notes) to be sure you are not using deprecated options.
+
+### Upgrading patch versions (`vX.Y.A` -> `vZ.Y.B`)
 
 You should be able to upgrade from a version to any patch version with the same minor and major versions.
 It is always encouraged to upgrade to the latest patch version of the minor and major version you are running.

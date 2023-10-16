@@ -23,11 +23,15 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/apache/solr-operator)](https://hub.docker.com/r/apache/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
-The __[Solr Operator](https://solr.apache.org/operator/)__ manages Apache Solr Clouds within Kubernetes.
+The __[Solr Operator](https://solr.apache.org/operator/)__ is the official way of managing an Apache Solr ecosystem within Kubernetes.
 It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 Please visit the [official site](https://solr.apache.org/operator/) for more information.
 
-The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
+The project is **Production Ready**, and has been successfully used to manage production SolrClouds for some of the largest users of Solr.
+
+The API Version is still beta (`v1beta1`), and minor versions can have backwards-incompatible API changes.
+However, the Solr Operator will always have upgrade paths that are backwards-compatible.
+Please check the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) for more information.
 
 If you run into issues using the Solr Operator, please:
 - Reference the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) provided below
