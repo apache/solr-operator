@@ -26,9 +26,6 @@ To use the Prometheus exporter, the easiest thing to do is just provide a refere
 You can also provide a custom Prometheus Exporter config, Solr version, and exporter options as described in the
 [Solr ref-guide](https://solr.apache.org/guide/monitoring-solr-with-prometheus-and-grafana.html#command-line-parameters).
 
-Note that a few of the official Solr docker images do not enable the Prometheus Exporter.
-Versions `6.6` - `7.x` and `8.2` - `master` should have the exporter available. 
-
 ## Finding the Solr Cluster to monitor
 
 The Prometheus Exporter supports metrics for both standalone solr as well as Solr Cloud.
@@ -316,5 +313,3 @@ Open Grafana using `localhost:3000` and login with username `admin` and password
 Once logged into Grafana, import the Solr dashboard JSON corresponding to the version of Solr you're running.
 
 Solr does not export any useful metrics until you have at least one collection defined.
-
-_Note: Solr 8.8.0 and newer versions include an updated dashboard that provides better metrics for monitoring query performance._ 

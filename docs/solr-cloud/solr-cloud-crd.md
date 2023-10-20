@@ -151,6 +151,19 @@ If both of those criteria are met, then an individual ClusterIP Service will be 
 If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
 Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
 
+**Note:** If you have no need for an `Ingress` or a specific hostname to address your SolrCloud cluster you can create a simple loadbalancer that can be addressed from outside the kubernetes cluster. To achieve this you can add annotations to `SolrCloud.spec.customSolrKubeOptions.commonServiceOptions.annotations`. Exposing the headlessService is an option as well through `SolrCloud.spec.customSolrKubeOptions.headlessServiceOptions.annotations`, mind that using the headless service requires a load balancing implementation in the client calling the SolrCloud api.
+Snippet below shows you can create an NLB on AWS:
+
+```yaml
+spec:
+  customSolrKubeOptions:
+    commonServiceOptions:
+      annotations: 
+        service.beta.kubernetes.io/aws-load-balancer-type: external
+        service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+        service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing  
+```
+
 ## Backups
 
 Solr Backups are enabled via the Solr Operator.
@@ -258,6 +271,18 @@ All ACL fields are **required** if an ACL is used.
 This means that even if Solr sets the ACLs on znodes, they will not be enforced by Zookeeper. If your organization requires Solr to use ZK ACLs, then you'll need to 
 deploy Zookeeper to Kubernetes using another approach, such as using a Helm chart. 
 
+## Scaling
+_Since v0.8.0_
+
+```yaml
+spec:
+  scaling:
+    vacatePodsOnScaleDown: true
+    populatePodsOnScaleUp: true
+```
+
+Please refer to the [Scaling page](scaling.md) for more information.
+
 ## Override Built-in Solr Configuration Files
 _Since v0.2.7_
 
@@ -313,7 +338,7 @@ data:
       ... CUSTOM CONFIG HERE ...
     </solr>
 ```
-**Important: Your custom `solr.xml` must include `<int name="hostPort">${hostPort:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
+**Important: Your custom `solr.xml` must include `<int name="hostPort">${solr.port.advertise:0}</int>` as the operator relies on this element to set the port Solr pods advertise to ZooKeeper. If this element is missing, then your Solr pods will not be created.**
 
 You can get the default `solr.xml` from a Solr pod as a starting point for creating a custom config using `kubectl cp` as shown in the example below:
 ```bash
@@ -618,6 +643,12 @@ When using the mounted TLS directory option, you need to ensure each Solr pod ge
 Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires. 
 Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
 
+When using the Cert Manager CSI Driver, a file is not generated for the keystore password.
+Instead, users can provide an annotation to manually set the password.
+For this use case, the `solrTLS.mountedTLSDir.keystorePassword` and `solrTLS.mountedTLSDir.truststorePassword` options are available.
+These take strings that are plain-text passwords for the keystore or truststore.
+They will be ignored when `keystorePasswordFile` and `truststorePasswordFile` are provided.
+
 ### Client TLS
 _Since v0.4.0_
 
@@ -899,10 +930,10 @@ The operator configures a command instead of setting the `Authorization` header 
 With a command, we can load the username and password from a secret; Kubernetes will 
 [update the mounted secret files](https://kubernetes.io/docs/concepts/configuration/secret/#mounted-secrets-are-updated-automatically) when the secret changes automatically.
 
-If you customize the HTTP path for any probes (under `spec.customSolrKubeOptions.podOptions`), 
-then you must use `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
+By default, the operator will use Solr's `/admin/info/system` endpoint for startup and liveness probes, and the `/admin/info/health` endpoint for readiness probes.
+This default can be customized by changing the HTTP path for any probes (under `spec.customSolrKubeOptions.podOptions`), however this also requires users to set `probesRequireAuth=false` as the operator does not reconfigure custom HTTP probes to use the command needed to support `probesRequireAuth=true`.
 
-If you're running Solr 8+, then we recommend using the `/admin/info/health` endpoint for your probes using the following config:
+Custom readiness and liveness probes can be specified using configuration like the following:
 ```yaml
 spec:
   ...
@@ -911,21 +942,28 @@ spec:
       livenessProbe:
         httpGet:
           scheme: HTTP
-          path: /solr/admin/info/health
+          path: /solr/admin/customliveness
           port: 8983
       readinessProbe:
         httpGet:
           scheme: HTTP
-          path: /solr/admin/info/health
+          path: /solr/admin/customreadiness
           port: 8983
 ```
-Consequently, the bootstrapped `security.json` will include an additional rule to allow access to the `/admin/info/health` endpoint:
+
+Consequently, the bootstrapped `security.json` will include additional rules to allow access to the endpoints used by the startup, liveness, and readiness probes:
 ```json
       {
         "name": "k8s-probe-1",
         "role": null,
         "collection": null,
-        "path": "/admin/info/health"
+        "path": "/admin/customliveness"
+      },
+      {
+        "name": "k8s-probe-2",
+        "role": null,
+        "collection": null,
+        "path": "/admin/customreadiness"
       }
 ```
 
@@ -962,7 +1000,7 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "name": "k8s-probe-0",
         "role": null,
         "collection": null,
-        "path": "/admin/info/system"
+        "path": "/admin/info/health"
       },
       {
         "name": "k8s-status",
@@ -1019,7 +1057,7 @@ A few aspects of the default `security.json` configuration warrant a closer look
         "name": "k8s-probe-0",
         "role": null,
         "collection": null,
-        "path": "/admin/info/system"
+        "path": "/admin/info/health"
       }
 ``` 
 In this case, the `"role":null` indicates this endpoint allows anonymous access by unknown users. 
@@ -1115,7 +1153,6 @@ _Note: be sure to use a stronger password for real deployments_
 
 Users need to ensure their `security.json` contains the user supplied in the `basicAuthSecret` has read access to the following endpoints:
 ```
-/admin/info/system
 /admin/info/health
 /admin/collections
 /admin/metrics

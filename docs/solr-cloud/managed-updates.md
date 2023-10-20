@@ -24,6 +24,8 @@ If the [`Managed` update strategy](solr-cloud-crd.md#update-strategy) is specifi
 
 The operator will find all pods that have not been updated yet and choose the next set of pods to delete for an update, given the following workflow.
 
+Note: Managed Updates are a executed via [Cluster Operation Locks](cluster-operations.md), please refer to the documentation for more information about how these operations are executed.
+
 ## Pod Update Workflow
 
 The logic goes as follows:
