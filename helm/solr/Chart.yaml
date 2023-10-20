@@ -15,7 +15,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
-version: 0.8.0
+version: 0.8.1-prerelease
 appVersion: 8.11.1
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org
@@ -37,17 +37,20 @@ annotations:
   artifacthub.io/alternativeName: "solrcloud"
   artifacthub.io/category: "database"
   artifacthub.io/operator: "false"
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: changed
-      description: The minimum supported version of Solr is now 8.11
+    - kind: added
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/616
-        - name: Version Compatibility Documentation
-          url: https://apache.github.io/solr-operator/docs/upgrade-notes.html#solr-versions
+          url: https://github.com/issue-url
+    - kind: changed
+      description: Change 2
+      links:
+        - name: Github PR
+          url: https://github.com/pr-url
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
@@ -65,5 +68,5 @@ annotations:
       image: solr:8.11
       whitelisted: true
   artifacthub.io/signKey: |
-    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
