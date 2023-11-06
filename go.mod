@@ -6,7 +6,7 @@ require (
 	github.com/cert-manager/cert-manager v1.13.0
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/go-logr/logr v1.2.4
-	github.com/onsi/ginkgo/v2 v2.12.1
+	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/onsi/gomega v1.27.10
 	github.com/pravega/zookeeper-operator v0.2.15
 	github.com/robfig/cron/v3 v3.0.1
