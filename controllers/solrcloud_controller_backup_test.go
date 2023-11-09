@@ -119,9 +119,9 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+2), "Pod has wrong number of volumes")
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 
 			By("adding credentials to the S3 repository (envVars)")
 			s3Credentials := &solrv1beta1.S3Credentials{
@@ -183,9 +183,9 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+2), "Pod has wrong number of volumes")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			})
 
 			By("adding credentials to the S3 repository (envVars & credentials file)")
@@ -245,15 +245,15 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].MountPath).To(Equal("/var/solr/data/backup-restore/test-repo/s3credential"), "S3Credentials file volumeMount has wrong mount path.")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].ReadOnly).To(BeTrue(), "S3Credentials file volumeMount must be read-only.")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volume has wrong name.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret).To(Not(BeNil()), "S3Credentials file has to be loaded via a secret volume.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.SecretName).To(Equal(s3Credentials.CredentialsFileSecret.Name), "S3Credentials file is loaded into the pod using the wrong secret name.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.Items).To(Equal(
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+4), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volume has wrong name.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret).To(Not(BeNil()), "S3Credentials file has to be loaded via a secret volume.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.SecretName).To(Equal(s3Credentials.CredentialsFileSecret.Name), "S3Credentials file is loaded into the pod using the wrong secret name.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.Items).To(Equal(
 					[]corev1.KeyToPath{{Key: s3Credentials.CredentialsFileSecret.Key, Path: util.S3CredentialFileName}}), "S3Credentials file pod volume has the wrong items.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.DefaultMode).To(BeEquivalentTo(&util.SecretReadOnlyPermissions), "S3Credentials file pod volume has the wrong default mode.")
-				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.DefaultMode).To(BeEquivalentTo(&util.SecretReadOnlyPermissions), "S3Credentials file pod volume has the wrong default mode.")
+				g.Expect(found.Spec.Template.Spec.Volumes[4].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[4].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			})
 
 			By("adding extra options to the S3 repository")
