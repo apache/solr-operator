@@ -61,6 +61,13 @@ annotations:
           url: https://issues.apache.org/jira/browse/SOLR-17216
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/698
+    - kind: changed
+      description: SolrClouds now support auto-readOnlyRootFilesystem setting.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/624
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/648
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.1-prerelease

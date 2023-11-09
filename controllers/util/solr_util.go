@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"sort"
 	"strconv"
 	"strings"
@@ -151,6 +152,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					},
 					DefaultMode: &PublicReadOnlyPermissions,
 				},
+			},
+		},
+		{
+			Name: "tmp",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
 	}
@@ -1247,6 +1254,12 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		corev1.ResourceMemory: *DefaultSolrZKPrepInitContainerMemory,
 	}
 	if cmd != "" {
+		volumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "tmp",
+				MountPath: "/tmp",
+			},
+		}
 		return true, corev1.Container{
 			Name:                     "setup-zk",
 			Image:                    solrCloud.Spec.SolrImage.ToImageName(),
@@ -1259,6 +1272,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 				Requests: zkSetupResources,
 				Limits:   zkSetupResources,
 			},
+			SecurityContext: &corev1.SecurityContext{
+				ReadOnlyRootFilesystem: ptr.To(true),
+			},
+			VolumeMounts: volumeMounts,
 		}
 	}
 
