@@ -54,16 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: changed
+      description: SolrClouds now support auto-readOnlyRootFilesystem setting.
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/624
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/648
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
