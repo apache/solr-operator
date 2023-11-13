@@ -122,9 +122,9 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a 3-node cluster v8.3 with 300m Heap each:
+# Create a 3-node cluster v8.11 with 300m Heap each:
 helm install example-solr apache-solr/solr --version 0.8.0 \
-  --set image.tag=8.3 \
+  --set image.tag=8.11 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
   --set addressability.external.domainName="ing.local.domain" \
@@ -207,7 +207,7 @@ By default, the helm chart does not set the `replicas` field, so it is safe to u
 So we wish to upgrade to a newer Solr version:
 
 ```bash
-# Take note of the current version, which is 8.3.1
+# Take note of the current version, which is 8.11.2
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
