@@ -149,6 +149,7 @@ func main() {
 	if version.VersionSuffix != "" {
 		fullVersion += "-" + version.VersionSuffix
 	}
+	setupLog.Info("Writing logs to file", "path", logFile)
 	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", fullVersion))
 	setupLog.Info(fmt.Sprintf("solr-operator Git SHA: %s", version.GitSHA))
 	setupLog.Info(fmt.Sprintf("solr-operator Build Time: %s", version.BuildTime))
