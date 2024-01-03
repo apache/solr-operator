@@ -167,6 +167,21 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				}
 			}
 		}
+	} else {
+		// Need no individual services per onde, delete if found
+		for _, nodeName := range solrNodeNames {
+			serviceName := nodeName
+			foundService := &corev1.Service{}
+			err = r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: instance.Namespace}, foundService)
+			if err == nil {
+				err = r.Delete(ctx, foundService)
+				if err != nil {
+					return requeueOrNot, err
+				}
+			} else if !errors.IsNotFound(err) {
+				return requeueOrNot, err
+			}
+		}
 	}
 
 	// Generate HeadlessService
@@ -346,6 +361,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if err != nil {
 			return requeueOrNot, err
+		}
+	} else {
+		// If ingress exists, delete it
+		foundIngress := &netv1.Ingress{}
+		err = r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
+		if err == nil {
+			err = r.Delete(ctx, foundIngress)
+			if err != nil {
+				return requeueOrNot, err
+			}
 		}
 	}
 
