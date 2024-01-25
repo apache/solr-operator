@@ -1000,6 +1000,12 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "name": "k8s-probe-0",
         "role": null,
         "collection": null,
+        "path": "/admin/info/system"
+      },
+      {
+        "name": "k8s-probe-1",
+        "role": null,
+        "collection": null,
         "path": "/admin/info/health"
       },
       {
@@ -1057,7 +1063,7 @@ A few aspects of the default `security.json` configuration warrant a closer look
         "name": "k8s-probe-0",
         "role": null,
         "collection": null,
-        "path": "/admin/info/health"
+        "path": "/admin/info/system"
       }
 ``` 
 In this case, the `"role":null` indicates this endpoint allows anonymous access by unknown users. 
@@ -1153,6 +1159,7 @@ _Note: be sure to use a stronger password for real deployments_
 
 Users need to ensure their `security.json` contains the user supplied in the `basicAuthSecret` has read access to the following endpoints:
 ```
+/admin/info/system
 /admin/info/health
 /admin/collections
 /admin/metrics
