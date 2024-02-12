@@ -707,8 +707,11 @@ func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPol
 		},
 	}
 
-	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " -in " + DefaultKeyStorePath +
-		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
+	caCrtFileName := DefaultKeyStorePath + "/ca.crt"
+
+	cmd := "OPTIONAL_CACRT=$(test -e " + caCrtFileName + " && echo ' -in " + caCrtFileName + "'); " +
+		"openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " $OPTIONAL_CACRT " +
+		"-inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
 		"/pkcs12/" + DefaultPkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 
 	return corev1.Container{
