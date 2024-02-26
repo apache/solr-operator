@@ -178,6 +178,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				if err != nil {
 					return requeueOrNot, err
 				}
+				logger.Info("Deleted service for node", "node", serviceName)
 			} else if !errors.IsNotFound(err) {
 				return requeueOrNot, err
 			}
@@ -371,6 +372,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if err != nil {
 				return requeueOrNot, err
 			}
+			logger.Info("Deleted Ingress")
 		}
 	}
 
