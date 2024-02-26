@@ -168,7 +168,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 	} else {
-		// Need no individual services per onde, delete if found
+		// Need no individual services per node, delete if found
 		for _, nodeName := range solrNodeNames {
 			serviceName := nodeName
 			foundService := &corev1.Service{}
