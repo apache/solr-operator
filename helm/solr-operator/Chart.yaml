@@ -61,6 +61,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/624
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/648
+    - kind: fixed
+      description: The operator will now delete ingress and per-node services when external ingress is disabled.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/673
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/674
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
