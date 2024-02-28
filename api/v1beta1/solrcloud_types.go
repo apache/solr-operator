@@ -1115,7 +1115,7 @@ type SolrCloudStatus struct {
 	//+listMapKey:=name
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
-	// Replicas is the number of desired replicas in the cluster
+	// Replicas is the number of pods created by the StatefulSet
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	Replicas int32 `json:"replicas"`
@@ -1123,7 +1123,7 @@ type SolrCloudStatus struct {
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
-	// ReadyReplicas is the number of ready replicas in the cluster
+	// ReadyReplicas is the number of ready pods in the cluster
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	ReadyReplicas int32 `json:"readyReplicas"`
