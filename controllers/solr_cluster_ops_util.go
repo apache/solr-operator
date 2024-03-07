@@ -151,7 +151,7 @@ func retryNextQueuedClusterOpWithQueue(statefulSet *appsv1.StatefulSet, clusterO
 	return hasOp, err
 }
 
-func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownOpIsQueued bool, podList []corev1.Pod, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
+func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownOpIsQueued bool, podList []corev1.Pod, blockReconciliationOfStatefulSet bool, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
 	desiredPods := int(*instance.Spec.Replicas)
 	configuredPods := int(*statefulSet.Spec.Replicas)
 	if desiredPods != configuredPods {
@@ -170,11 +170,26 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 				Metadata:  strconv.Itoa(configuredPods - 1),
 			}
 		} else if desiredPods > configuredPods && (instance.Spec.Scaling.PopulatePodsOnScaleUp == nil || *instance.Spec.Scaling.PopulatePodsOnScaleUp) {
+			// We need to wait for all pods to become healthy to scale up in a managed fashion, otherwise
+			// the balancing will skip some pods
 			if len(podList) < configuredPods {
 				// There are not enough pods, the statefulSet controller has yet to create the previously desired pods.
 				// Do not start the scale up until these missing pods are created.
 				return nil, time.Second * 5, nil
 			}
+			// If Solr nodes are advertised by their individual node services (through an ingress)
+			// then make sure that the host aliases are set for all desired pods before starting a scale-up.
+			// If the host aliases do not already include the soon-to-be created pods, then Solr might not be able to balance
+			// replicas onto the new hosts.
+			// We need to make sure that the StatefulSet is updated with these new hostAliases before the scale up occurs.
+			if instance.UsesIndividualNodeServices() && instance.Spec.SolrAddressability.External.UseExternalAddress {
+				for _, pod := range podList {
+					if len(pod.Spec.HostAliases) < desiredPods {
+						return nil, time.Second * 5, nil
+					}
+				}
+			}
+
 			clusterOp = &SolrClusterOp{
 				Operation: ScaleUpLock,
 				Metadata:  strconv.Itoa(desiredPods),
@@ -371,7 +386,7 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 		// We won't kill pods that we need the cluster state for, but we can kill the pods that are already not running.
 		// This is important for scenarios where there is a bad pod config and nothing is running, but we need to do
 		// a restart to get a working pod config.
-		state, retryLater, apiError := util.GetNodeReplicaState(ctx, instance, hasReadyPod, logger)
+		state, retryLater, apiError := util.GetNodeReplicaState(ctx, instance, statefulSet, hasReadyPod, logger)
 		if apiError != nil {
 			return false, true, 0, nil, apiError
 		} else if !retryLater {

@@ -152,6 +152,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	hostNameIpMap := make(map[string]string)
 	// Generate a service for every Node
 	if instance.UsesIndividualNodeServices() {
+		// When updating the statefulSet below, the hostNameIpMap is just used to add new IPs or modify existing ones.
+		// When scaling down, the hostAliases that are no longer found here will not be removed from the hostAliases in the statefulSet pod spec.
+		// Therefore, it should be ok that we are not reconciling the node services that will be scaled down in the future.
+		// This is unfortunately the reality since we don't have the statefulSet yet to determine how many Solr pods are still running,
+		// we just have Spec.replicas which is the requested pod count.
 		for _, nodeName := range solrNodeNames {
 			err, ip := r.reconcileNodeService(ctx, logger, instance, nodeName)
 			if err != nil {
@@ -161,6 +166,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if instance.Spec.SolrAddressability.External.UseExternalAddress {
 				if ip == "" {
 					// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
+					// TODO: Make an event here
 					blockReconciliationOfStatefulSet = true
 				} else {
 					hostNameIpMap[instance.AdvertisedNodeHost(nodeName)] = ip
@@ -545,7 +551,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// a "locked" cluster operation
 			if clusterOp == nil {
 				_, scaleDownOpIsQueued := queuedRetryOps[ScaleDownLock]
-				clusterOp, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, scaleDownOpIsQueued, podList, logger)
+				clusterOp, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, scaleDownOpIsQueued, podList, blockReconciliationOfStatefulSet, logger)
 
 				// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
 				if clusterOp != nil {
