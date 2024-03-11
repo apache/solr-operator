@@ -360,29 +360,16 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 }
 
 // writeAllServiceInfoToFiles writes the following each to a separate file with the given base name & directory.
-//   - Service Spec/Status
-//   - Service Events
+//   - Service
 func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 	// Write service to a file
-	statusFile, err := os.Create(baseFilename + ".status.json")
+	statusFile, err := os.Create(baseFilename + ".json")
 	defer statusFile.Close()
-	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".json")
 	jsonBytes, marshErr := json.MarshalIndent(service, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
 	_, writeErr := statusFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
-
-	// Write events for service to a file
-	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
-	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service events: %s", baseFilename+".events.yaml")
-
-	eventList, err := rawK8sClient.CoreV1().Events(service.Namespace).Search(scheme.Scheme, service)
-	Expect(err).ToNot(HaveOccurred(), "Could not find events for service: %s", service.Name)
-	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
-	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service events json")
-	_, writeErr = eventsFile.Write(jsonBytes)
-	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service events json to file")
 }
 
 // writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.

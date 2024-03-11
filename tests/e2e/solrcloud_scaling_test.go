@@ -198,7 +198,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 		FIt("Scales Up", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()
 			solrCloud.Spec.Replicas = pointer.Int32(int32(3))
-			By("triggering a scale down via solrCloud replicas")
+			By("triggering a scale up via solrCloud replicas")
 			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to initiate scale up")
 
 			By("waiting for the scaleUp to begin")
@@ -212,9 +212,11 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 			// The first step is to increase the number of pods
 			// Check very often, as the new pods will be created quickly, which will cause the cluster op to change.
-			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
-			})
+			if int(*statefulSet.Spec.Replicas) != 3 {
+				statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
+					g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should be configured for 3 pods when scaling up")
+				})
+			}
 			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
 			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleUp lock.")
@@ -223,7 +225,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 			// Wait for new pods to come up, and when they do we should be doing a balanceReplicas clusterOp
 			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Status.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
+				g.Expect(found.Status.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should eventually have 3 pods created for it")
 			})
 			clusterOp, err = controllers.GetCurrentClusterOp(statefulSet)
 			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
@@ -259,20 +261,29 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 		FIt("Scales Up", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()
 			solrCloud.Spec.Replicas = pointer.Int32(int32(3))
-			By("triggering a scale down via solrCloud replicas")
+			By("triggering a scale up via solrCloud replicas")
 			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to initiate scale up")
 
 			By("waiting for the rolling restart to begin with hostAliases")
-			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
+			statefulSet := expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a update lock to add hostAliases.")
 				g.Expect(clusterOp.Operation).To(Equal(controllers.UpdateLock), "StatefulSet does not have a update lock to add hostAliases.")
 				g.Expect(found.Spec.Template.Spec.HostAliases).To(HaveLen(3), "Host aliases in the pod template do not have length 3, which is the number of pods to scale up to")
 			})
+			expectSolrCloudWithChecksAndTimeout(ctx, solrCloud, time.Second*5, time.Millisecond*5, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
+				g.Expect(cloud.Status.UpToDateNodes).To(BeEquivalentTo(0), "The Rolling Update never started, upToDateNodes should eventually be 0 when starting a restart")
+			})
+
+			By("Wait for the rolling update to be done")
+			expectSolrCloudWithChecksAndTimeout(ctx, solrCloud, time.Second*90, time.Millisecond*5, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
+				g.Expect(cloud.Status.UpToDateNodes).To(BeEquivalentTo(*statefulSet.Spec.Replicas), "The Rolling Update never completed, not all replicas up to date")
+				g.Expect(cloud.Status.ReadyReplicas).To(BeEquivalentTo(*statefulSet.Spec.Replicas), "The Rolling Update never completed, not all replicas ready")
+			})
 
 			By("waiting for the scaleUp to begin")
-			statefulSet := expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*30, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
+			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleUp lock.")
@@ -282,9 +293,11 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 			// The first step is to increase the number of pods
 			// Check very often, as the new pods will be created quickly, which will cause the cluster op to change.
-			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
-			})
+			if int(*statefulSet.Spec.Replicas) != 3 {
+				statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
+					g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should be configured for 3 pods when scaling up")
+				})
+			}
 			clusterOp, err := controllers.GetCurrentClusterOp(statefulSet)
 			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleUp lock.")
@@ -293,13 +306,15 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 			// Wait for new pods to come up, and when they do we should be doing a balanceReplicas clusterOp
 			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Status.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should still have 3 pods, because the scale down should first move Solr replicas")
+				g.Expect(found.Status.Replicas).To(HaveValue(BeEquivalentTo(3)), "StatefulSet should eventually have 3 pods created for it")
 			})
-			clusterOp, err = controllers.GetCurrentClusterOp(statefulSet)
-			Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
-			Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a balanceReplicas lock after new pods are created.")
-			Expect(clusterOp.Operation).To(Equal(controllers.BalanceReplicasLock), "StatefulSet does not have a balanceReplicas lock after new pods are created.")
-			Expect(clusterOp.Metadata).To(Equal("ScaleUp"), "StatefulSet balanceReplicas lock operation has the wrong metadata.")
+			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Millisecond*50, time.Millisecond*10, func(g Gomega, found *appsv1.StatefulSet) {
+				clusterOp, err = controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a balanceReplicas lock after new pods are created.")
+				g.Expect(clusterOp.Operation).To(Equal(controllers.BalanceReplicasLock), "StatefulSet does not have a balanceReplicas lock after new pods are created.")
+				g.Expect(clusterOp.Metadata).To(Equal("ScaleUp"), "StatefulSet balanceReplicas lock operation has the wrong metadata.")
+			})
 
 			By("waiting for the scaleUp to finish")
 			statefulSet = expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {

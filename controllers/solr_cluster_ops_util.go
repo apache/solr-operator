@@ -364,7 +364,8 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 		}
 		operationComplete = true
 		// Only do a re-balancing for rolling restarts that migrated replicas
-		if updateMetadata.RequiresReplicaMigration {
+		// If a scale-up will occur afterwards, skip the re-balancing, because it will occur after the scale-up anyway
+		if updateMetadata.RequiresReplicaMigration && *instance.Spec.Replicas <= *statefulSet.Spec.Replicas {
 			nextClusterOp = &SolrClusterOp{
 				Operation: BalanceReplicasLock,
 				Metadata:  "RollingUpdateComplete",
