@@ -325,36 +325,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	extAddressabilityOpts := instance.Spec.SolrAddressability.External
-	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
-		// Generate Ingress
-		ingress := util.GenerateIngress(instance, solrNodeNames)
-
-		// Check if the Ingress already exists
-		ingressLogger := logger.WithValues("ingress", ingress.Name)
-		foundIngress := &netv1.Ingress{}
-		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
-		if err != nil && errors.IsNotFound(err) {
-			ingressLogger.Info("Creating Ingress")
-			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
-				err = r.Create(ctx, ingress)
-			}
-		} else if err == nil {
-			var needsUpdate bool
-			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
-			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
-
-			// Update the found Ingress and write the result back if there are any changes
-			if needsUpdate && err == nil {
-				ingressLogger.Info("Updating Ingress")
-				err = r.Update(ctx, foundIngress)
-			}
-		}
-		if err != nil {
-			return requeueOrNot, err
-		}
-	}
-
 	var statefulSet *appsv1.StatefulSet
 
 	if !blockReconciliationOfStatefulSet {
@@ -421,6 +391,39 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if err != nil {
 		return requeueOrNot, err
+	}
+	if statefulSet != nil && statefulSet.Spec.Replicas != nil {
+		solrNodeNames = instance.GetSolrPodNames(int(*statefulSet.Spec.Replicas))
+	}
+
+	extAddressabilityOpts := instance.Spec.SolrAddressability.External
+	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
+		// Generate Ingress
+		ingress := util.GenerateIngress(instance, solrNodeNames)
+
+		// Check if the Ingress already exists
+		ingressLogger := logger.WithValues("ingress", ingress.Name)
+		foundIngress := &netv1.Ingress{}
+		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
+		if err != nil && errors.IsNotFound(err) {
+			ingressLogger.Info("Creating Ingress")
+			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
+				err = r.Create(ctx, ingress)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
+			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
+
+			// Update the found Ingress and write the result back if there are any changes
+			if needsUpdate && err == nil {
+				ingressLogger.Info("Updating Ingress")
+				err = r.Update(ctx, foundIngress)
+			}
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
 	}
 
 	// *********************************************************

@@ -166,6 +166,10 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			})
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
 
+			// Make sure that ingress still has 3 nodes at this point
+			ingress := expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+			Expect(ingress.Spec.Rules).To(HaveLen(4), "Wrong number of ingress rules. 3 nodes + 1 common endpoint. The third node rule should not be deleted until the node itself is deleted")
+
 			By("waiting for the scaleDown of the first pod to finish")
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(2)), "StatefulSet should now have 2 pods, after the replicas have been moved off the first pod.")
@@ -190,6 +194,11 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 				g.Expect(clusterOp.Operation).To(Equal(controllers.ScaleDownLock), "StatefulSet does not have a scaleDown lock.")
 				g.Expect(clusterOp.Metadata).To(Equal("1"), "StatefulSet scaling lock operation has the wrong metadata.")
 			})
+
+			// Make sure that ingress still has 2 nodes at this point
+			ingress = expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+			Expect(ingress.Spec.Rules).To(HaveLen(3), "Wrong number of ingress rules. 2 nodes + 1 common endpoint. The second node rule should not be deleted until the node itself is deleted")
+
 			// When the next scale down happens, the 3rd solr pod (ordinal 2) should be gone, and the statefulSet replicas should be 2 across the board.
 			// The first scale down should not be complete until this is done.
 			Expect(statefulSet.Spec.Replicas).To(HaveValue(BeEquivalentTo(2)), "StatefulSet should still have 2 pods configured, because the scale down should first move Solr replicas")
@@ -220,6 +229,10 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a ScaleDown lock after scaling is complete.")
 			})
+
+			// Make sure that ingress has 1 node at this point
+			ingress = expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+			Expect(ingress.Spec.Rules).To(HaveLen(2), "Wrong number of ingress rules. 1 nodes + 1 common endpoint.")
 
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
