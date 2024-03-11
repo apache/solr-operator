@@ -311,6 +311,26 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 			&statefulSet,
 		)
 	}
+
+	// Unfortunately the services don't have the technology label
+	req, err = labels.NewRequirement("solr-cloud", selection.Exists, make([]string, 0))
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector = labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundServices := &corev1.ServiceList{}
+	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr pods")
+	Expect(foundServices).ToNot(BeNil(), "No Solr services could be found")
+	for _, service := range foundServices.Items {
+		writeAllServiceInfoToFiles(
+			directory+service.Name+".service",
+			&service,
+		)
+	}
 }
 
 // writeAllStatefulSetInfoToFiles writes the following each to a separate file with the given base name & directory.
@@ -337,6 +357,19 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet events json")
 	_, writeErr = eventsFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet events json to file")
+}
+
+// writeAllServiceInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Service
+func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
+	// Write service to a file
+	statusFile, err := os.Create(baseFilename + ".json")
+	defer statusFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".json")
+	jsonBytes, marshErr := json.MarshalIndent(service, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
 }
 
 // writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.

@@ -24,6 +24,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	"github.com/robfig/cron/v3"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"net/url"
@@ -119,7 +120,7 @@ func (state NodeReplicaState) PodHasReplicas(cloud *solr.SolrCloud, podName stri
 	return isInClusterState && contents.replicas > 0
 }
 
-func GetNodeReplicaState(ctx context.Context, cloud *solr.SolrCloud, hasReadyPod bool, logger logr.Logger) (state NodeReplicaState, retryLater bool, err error) {
+func GetNodeReplicaState(ctx context.Context, cloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, hasReadyPod bool, logger logr.Logger) (state NodeReplicaState, retryLater bool, err error) {
 	clusterResp := &solr_api.SolrClusterStatusResponse{}
 	overseerResp := &solr_api.SolrOverseerStatusResponse{}
 
@@ -138,7 +139,7 @@ func GetNodeReplicaState(ctx context.Context, cloud *solr.SolrCloud, hasReadyPod
 			}
 		}
 		if err == nil {
-			state = findSolrNodeContents(clusterResp.ClusterStatus, overseerResp.Leader, GetAllManagedSolrNodeNames(cloud))
+			state = findSolrNodeContents(clusterResp.ClusterStatus, overseerResp.Leader, GetManagedSolrNodeNames(cloud, int(*statefulSet.Spec.Replicas)))
 		} else {
 			logger.Error(err, "Could not fetch cluster state information for cloud")
 		}
@@ -528,6 +529,15 @@ func SolrNodeName(solrCloud *solr.SolrCloud, podName string) string {
 
 func GetAllManagedSolrNodeNames(solrCloud *solr.SolrCloud) map[string]bool {
 	podNames := solrCloud.GetAllSolrPodNames()
+	allNodeNames := make(map[string]bool, len(podNames))
+	for _, podName := range podNames {
+		allNodeNames[SolrNodeName(solrCloud, podName)] = true
+	}
+	return allNodeNames
+}
+
+func GetManagedSolrNodeNames(solrCloud *solr.SolrCloud, currentlyConfiguredPodCount int) map[string]bool {
+	podNames := solrCloud.GetSolrPodNames(currentlyConfiguredPodCount)
 	allNodeNames := make(map[string]bool, len(podNames))
 	for _, podName := range podNames {
 		allNodeNames[SolrNodeName(solrCloud, podName)] = true

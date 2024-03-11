@@ -556,6 +556,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeClaimTemplates: pvcs,
 		},
 	}
+	if solrCloud.UsesHeadlessService() {
+		stateful.Spec.Template.Spec.Subdomain = solrCloud.HeadlessServiceName()
+	}
 
 	var imagePullSecrets []corev1.LocalObjectReference
 

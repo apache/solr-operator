@@ -432,7 +432,29 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
 		requireUpdate = true
-		to.Spec.HostAliases = from.Spec.HostAliases
+		if to.Spec.HostAliases == nil {
+			to.Spec.HostAliases = from.Spec.HostAliases
+		} else {
+			// Do not remove aliases that are no longer used.
+			// This is in case Solr is scaling down and we want to keep the old addresses for future use.
+			for _, fromAlias := range from.Spec.HostAliases {
+				found := false
+				for i, toAlias := range to.Spec.HostAliases {
+					if fromAlias.Hostnames[0] == toAlias.Hostnames[0] {
+						found = true
+						if !DeepEqualWithNils(toAlias, fromAlias) {
+							requireUpdate = true
+							to.Spec.HostAliases[i] = fromAlias
+							break
+						}
+					}
+				}
+				if !found {
+					requireUpdate = true
+					to.Spec.HostAliases = append(to.Spec.HostAliases, fromAlias)
+				}
+			}
+		}
 		logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
 	}
 
