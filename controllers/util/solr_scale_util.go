@@ -70,7 +70,7 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 				if !balanceComplete && err == nil {
 					logger.Info("Started balancing replicas across cluster.", "requestId", requestId)
 					requestInProgress = true
-				} else if err == nil {
+				} else if err != nil {
 					logger.Error(err, "Could not balance replicas across the cluster. Will try again.")
 				}
 			}
@@ -88,7 +88,7 @@ func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, s
 
 			// Delete the async request Id if the async request is successful or failed.
 			// If the request failed, this will cause a retry since the next reconcile won't find the async requestId in Solr.
-			if asyncState == "completed" || asyncState == "failed" {
+			if !requestInProgress {
 				if _, err = solr_api.DeleteAsyncRequest(ctx, solrCloud, requestId); err != nil {
 					logger.Error(err, "Could not delete Async request status.", "requestId", requestId)
 					balanceComplete = false
