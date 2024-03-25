@@ -385,7 +385,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 			})
 
 			By("waiting for the scaleUp to begin")
-			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond*5, func(g Gomega, found *appsv1.StatefulSet) {
+			statefulSet = expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*5, time.Millisecond, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a scaleUp lock.")
