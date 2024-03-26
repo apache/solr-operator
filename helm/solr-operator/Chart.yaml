@@ -62,12 +62,19 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/648
     - kind: fixed
-      description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy  
+      description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/688
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/689
+    - kind: fixed
+      description: SolrPrometheusExporter no longer fails liveness probes when the SolrCloud is too large
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/693
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/694
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
