@@ -207,8 +207,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	defaultProbeHandler := corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: corev1.URISchemeHTTP,
-			Path:   "/metrics",
-			Port:   intstr.FromInt(SolrMetricsPort),
+			// TODO: When 9.0 is the minimum supported version, this can be "/-/healthy"
+			Path: "/metrics?names[]=",
+			Port: intstr.FromInt(SolrMetricsPort),
 		},
 	}
 
