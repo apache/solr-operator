@@ -44,7 +44,10 @@ const (
 	DefaultSolrGCTune   = ""
 
 	DefaultBusyBoxImageRepo    = "library/busybox"
-	DefaultBusyBoxImageVersion = "1.28.0-glibc"
+	DefaultBusyBoxImageVersion = "1.36.1-glibc"
+	DefaultBusyBoxUserId       = int64(65534)
+	DefaultBusyBoxGroupId      = int64(65534)
+	DefaultBusyBoxRunAsNonRoot = true
 
 	DefaultZkReplicas                                = int32(3)
 	DefaultZkStorage                                 = "5Gi"
@@ -102,6 +105,9 @@ type SolrCloudSpec struct {
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
+
+	// +optional
+	BusyBoxSecurityContext *ContainerSecurityContext `json:"busyBoxSecurityContext,omitempty"`
 
 	// +optional
 	SolrJavaMem string `json:"solrJavaMem,omitempty"`
@@ -203,6 +209,12 @@ func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
 		spec.BusyBoxImage = &c
 	}
 	changed = spec.BusyBoxImage.withDefaults(DefaultBusyBoxImageRepo, DefaultBusyBoxImageVersion, DefaultPullPolicy) || changed
+
+	if spec.BusyBoxSecurityContext == nil {
+		c := ContainerSecurityContext{}
+		spec.BusyBoxSecurityContext = &c
+	}
+	changed = spec.BusyBoxSecurityContext.withDefaults(DefaultBusyBoxUserId, DefaultBusyBoxGroupId, DefaultBusyBoxRunAsNonRoot) || changed
 
 	return changed
 }
