@@ -61,6 +61,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/624
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/648
+    - kind: fixed
+      description: Avoid reset of security.json if get request fails  
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/659
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/660
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
