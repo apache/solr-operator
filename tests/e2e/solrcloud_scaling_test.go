@@ -24,6 +24,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
@@ -133,6 +135,46 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			})
 
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
+			queryCollection(ctx, solrCloud, solrCollection1, 0)
+			queryCollection(ctx, solrCloud, solrCollection2, 0)
+		})
+	})
+
+	FContext("with replica migration and deleted persistent data", func() {
+
+		BeforeEach(func() {
+			solrCloud.Spec.StorageOptions.PersistentStorage = &solrv1beta1.SolrPersistentDataStorageOptions{
+				VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyDelete,
+				PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
+					ObjectMeta: solrv1beta1.TemplateMeta{},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						Resources: corev1.ResourceRequirements{
+							Requests: map[corev1.ResourceName]resource.Quantity{"storage": resource.MustParse("5Gi")},
+						},
+					},
+				},
+			}
+		})
+
+		FIt("Scales Down", func(ctx context.Context) {
+			originalSolrCloud := solrCloud.DeepCopy()
+			solrCloud.Spec.Replicas = pointer.Int32(1)
+			By("triggering a scale down via solrCloud replicas")
+			Expect(k8sClient.Patch(ctx, solrCloud, client.MergeFrom(originalSolrCloud))).To(Succeed(), "Could not patch SolrCloud replicas to initiate scale down")
+
+			By("waiting for the scaleDown of cloud to finish")
+			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Minute*2, time.Millisecond*100, func(g Gomega, found *appsv1.StatefulSet) {
+				clusterOp, err := controllers.GetCurrentClusterOp(found)
+				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
+				g.Expect(clusterOp).To(BeNil(), "No more cluster operations should be running")
+				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(1)), "StatefulSet should eventually hav 1 pod, after the scale down is complete")
+			})
+
+			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(2))
+			expectNoPvc(ctx, solrCloud, "data-"+solrCloud.GetSolrPodName(2))
+			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
+			expectNoPvc(ctx, solrCloud, "data-"+solrCloud.GetSolrPodName(1))
+
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
 		})

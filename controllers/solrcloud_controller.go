@@ -428,7 +428,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
 	// Otherwise it will delete all PVCs possibly
 	if len(statefulSet.Spec.Selector.MatchLabels) > 0 {
-		if err = r.reconcileStorageFinalizer(ctx, instance, statefulSet.Spec.Selector.MatchLabels, logger); err != nil {
+		if err = r.reconcileStorageFinalizer(ctx, instance, statefulSet, logger); err != nil {
 			logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
 			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
@@ -481,6 +481,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
+			err = nil
 			if operationComplete {
 				if nextClusterOperation == nil {
 					// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
@@ -926,9 +927,10 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 // Logic derived from:
 // - https://book.kubebuilder.io/reference/using-finalizers.html
 // - https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629
-func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) error {
+func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) error {
 	// If persistentStorage is being used by the cloud, and the reclaim policy is set to "Delete",
 	// then set a finalizer for the storage on the cloud, and delete the PVCs if the solrcloud has been deleted.
+	pvcLabelSelector := statefulSet.Spec.Selector.MatchLabels
 
 	if cloud.Spec.StorageOptions.PersistentStorage != nil && cloud.Spec.StorageOptions.PersistentStorage.VolumeReclaimPolicy == solrv1beta1.VolumeReclaimPolicyDelete {
 		if cloud.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -940,7 +942,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 					return err
 				}
 			}
-			return r.cleanupOrphanPVCs(ctx, cloud, pvcLabelSelector, logger)
+			return r.cleanupOrphanPVCs(ctx, cloud, statefulSet, pvcLabelSelector, logger)
 		} else if util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
 			// The object is being deleted
 			logger.Info("Deleting PVCs for SolrCloud")
@@ -977,17 +979,22 @@ func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta
 	return pvcCount, nil
 }
 
-func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
 	// this check should make sure we do not delete the PVCs before the STS has scaled down
 	if cloud.Status.ReadyReplicas == cloud.Status.Replicas {
 		pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 		if err != nil {
 			return err
 		}
+		// We only want to delete PVCs if we will not use them in the future, as in the user has asked for less replicas.
+		// Even if the statefulSet currently has less replicas, we don't want to delete them if we will eventually scale back up.
 		if len(pvcList.Items) > int(*cloud.Spec.Replicas) {
 			for _, pvcItem := range pvcList.Items {
 				// delete only Orphan PVCs
-				if util.IsPVCOrphan(pvcItem.Name, *cloud.Spec.Replicas) {
+				// for orphans, we will use the status replicas (which is derived from the statefulSet)
+				// Don't use the Spec replicas here, because we might be rolling down 1-by-1 and the PVCs for
+				// soon-to-be-deleted pods should not be deleted until the pod is deleted.
+				if util.IsPVCOrphan(pvcItem.Name, *statefulSet.Spec.Replicas) {
 					r.deletePVC(ctx, pvcItem, logger)
 				}
 			}
