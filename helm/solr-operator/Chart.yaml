@@ -69,6 +69,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/648
     - kind: fixed
+      description: Avoid reset of security.json if get request fails  
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/659
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/660
+    - kind: fixed
       description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy
       links:
         - name: Github Issue
