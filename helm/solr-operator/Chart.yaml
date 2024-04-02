@@ -75,6 +75,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/693
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/694
+    - kind: security
+      description: Command-based Solr probes no longer echoes 'JAVA_TOOL_OPTIONS' values in Kubernetes events.
+      links:
+        - name: JIRA Issue
+          url: https://issues.apache.org/jira/browse/SOLR-17216
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/698
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
