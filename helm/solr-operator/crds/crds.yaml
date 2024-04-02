@@ -16923,14 +16923,13 @@ spec:
                 type: string
               readyReplicas:
                 default: 0
-                description: ReadyReplicas is the number of ready replicas in the
-                  cluster
+                description: ReadyReplicas is the number of ready pods in the cluster
                 format: int32
                 minimum: 0
                 type: integer
               replicas:
                 default: 0
-                description: Replicas is the number of desired replicas in the cluster
+                description: Replicas is the number of pods created by the StatefulSet
                 format: int32
                 minimum: 0
                 type: integer

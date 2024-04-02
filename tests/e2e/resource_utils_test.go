@@ -320,6 +320,19 @@ func expectNoStatefulSet(ctx context.Context, parentResource client.Object, stat
 	}).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
 }
 
+func expectNoPvc(ctx context.Context, parentResource client.Object, pvcName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, pvcName), &corev1.PersistentVolumeClaim{})
+	}).Should(MatchError("persistentvolumeclaims \""+pvcName+"\" not found"), "Pod exists when it should not")
+}
+
+func expectNoPvcNow(ctx context.Context, parentResource client.Object, pvcName string, additionalOffset ...int) {
+	ExpectWithOffset(
+		resolveOffset(additionalOffset),
+		k8sClient.Get(ctx, resourceKey(parentResource, pvcName), &corev1.PersistentVolumeClaim{}),
+	).To(MatchError("persistentvolumeclaims \""+pvcName+"\" not found"), "Pod exists when it should not")
+}
+
 func expectNoPod(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) {
 	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, podName), &corev1.Pod{})
