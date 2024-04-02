@@ -54,16 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: security
+      description: Command-based Solr probes no longer echoes 'JAVA_TOOL_OPTIONS' values in Kubernetes events.
       links:
-        - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+        - name: JIRA Issue
+          url: https://issues.apache.org/jira/browse/SOLR-17216
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/698
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.8.1-prerelease
