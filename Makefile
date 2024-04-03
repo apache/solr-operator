@@ -45,6 +45,7 @@ GO_LICENSES_VERSION=v1.6.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.20.0
 YQ_VERSION=v4.33.3
+CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION ?= 1.25.0
 
@@ -375,7 +376,7 @@ SETUP_ENVTEST = $(LOCALBIN)/setup-envtest
 .PHONY: setup-envtest
 setup-envtest: $(SETUP_ENVTEST) ## Download setup-envtest locally if necessary.
 $(SETUP_ENVTEST): $(LOCALBIN)
-	$(call go-get-tool,$(SETUP_ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-get-tool,$(SETUP_ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-$(CONTROLLER_RUNTIME_VERSION))
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 define go-get-tool

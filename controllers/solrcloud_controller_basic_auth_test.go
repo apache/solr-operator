@@ -20,6 +20,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -289,10 +290,10 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
 		expLivenessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\"",
+			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
 			solrCloud.Name, solrCloud.Name, expLivenessProbePath)
 		expReadinessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\"",
+			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
 			solrCloud.Name, solrCloud.Name, expReadinessProbePath)
 
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
@@ -350,7 +351,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 
 func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) {
 	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
-	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); " +
+	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); " +
 		"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
 		"echo $SECURITY_JSON > /tmp/security.json; " +
 		"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"

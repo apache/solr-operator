@@ -238,7 +238,7 @@ func addHostHeaderToProbe(httpGet *corev1.HTTPGetAction, host string) {
 
 func cmdToPutSecurityJsonInZk() string {
 	scriptsDir := "/opt/solr/server/scripts/cloud-scripts"
-	cmd := " ZK_SECURITY_JSON=$(%s/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); "
+	cmd := " ZK_SECURITY_JSON=$(%s/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); "
 	cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then echo $SECURITY_JSON > /tmp/security.json; %s/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
 	return fmt.Sprintf(cmd, scriptsDir, scriptsDir)
 }
@@ -496,13 +496,16 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 
 	// Future work - SOLR_TOOL_OPTIONS is only in 9.4.0, use JAVA_TOOL_OPTIONS until that is the minimum supported version
 	var javaToolOptionsStr string
+	var javaToolOptionsOutputFilter string
 	if len(javaToolOptions) > 0 {
 		javaToolOptionsStr = fmt.Sprintf("JAVA_TOOL_OPTIONS=%q ", strings.Join(javaToolOptions, " "))
+		javaToolOptionsOutputFilter = " 2>&1 | grep -v JAVA_TOOL_OPTIONS"
 	} else {
 		javaToolOptionsStr = ""
+		javaToolOptionsOutputFilter = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
+	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

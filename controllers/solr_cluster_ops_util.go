@@ -426,8 +426,8 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 	return
 }
 
-// cleanupManagedCloudScaleDown does the logic of cleaning-up an incomplete scale down operation.
-// This will remove any bad readinessConditions that the scaleDown might have set when trying to scaleDown pods.
+// cleanupManagedCloudRollingUpdate does the logic of cleaning-up an incomplete rolling update operation.
+// This will remove any bad readinessConditions that the rollingUpdate might have set when trying to restart pods.
 func cleanupManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, podList []corev1.Pod, logger logr.Logger) (err error) {
 	// First though, the scaleDown op might have set some pods to be "unready" before deletion. Undo that.
 	// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
