@@ -522,7 +522,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 				break
 			}
 		}
-		expCmd := "OPTIONAL_CACRT=$(test -e /var/solr/tls/ca.crt && echo ' -in /var/solr/tls/ca.crt'); openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		expCmd := "OPTIONAL_CACRT=\"$(test -e /var/solr/tls/ca.crt && echo ' -in /var/solr/tls/ca.crt')\"; openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
 		g.Expect(expInitContainer.Command[2]).To(Equal(expCmd), "Wrong TLS initContainer command")
 	}
