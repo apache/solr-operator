@@ -22,6 +22,8 @@ import (
 	"crypto/md5"
 	b64 "encoding/base64"
 	"fmt"
+	"strings"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 var _ = FDescribe("SolrCloud controller - TLS", func() {
@@ -522,7 +523,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 				break
 			}
 		}
-		expCmd := "OPTIONAL_CACRT=\"$(test -e /var/solr/tls/ca.crt && echo ' -in /var/solr/tls/ca.crt')\"; openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		expCmd := "OPTIONAL_CACRT=\"$(test -e /var/solr/tls/ca.crt && echo ' -certfile /var/solr/tls/ca.crt')\"; openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
 		g.Expect(expInitContainer.Command[2]).To(Equal(expCmd), "Wrong TLS initContainer command")
 	}
