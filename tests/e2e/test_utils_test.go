@@ -476,10 +476,10 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		"-verbose",
 		"-" + strings.ToLower(httpMethod),
 		fmt.Sprintf(
-			"\"%s://%s:%d%s%s\"",
+			"\"%s://%s%s%s%s\"",
 			solrCloud.UrlScheme(false),
 			hostname,
-			solrCloud.Spec.SolrAddressability.PodPort,
+			solrCloud.NodePortSuffix(false),
 			apiPath,
 			queryParamsString),
 	}

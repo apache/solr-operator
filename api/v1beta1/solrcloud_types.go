@@ -1227,6 +1227,13 @@ func (sc *SolrCloud) GetAllSolrPodNames() []string {
 	if sc.Spec.Replicas != nil {
 		replicas = int(*sc.Spec.Replicas)
 	}
+	if int(sc.Status.Replicas) > replicas {
+		replicas = int(sc.Status.Replicas)
+	}
+	return sc.GetSolrPodNames(replicas)
+}
+
+func (sc *SolrCloud) GetSolrPodNames(replicas int) []string {
 	podNames := make([]string, replicas)
 	statefulSetName := sc.StatefulSetName()
 	for i := range podNames {
