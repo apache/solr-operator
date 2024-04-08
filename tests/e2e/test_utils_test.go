@@ -313,6 +313,10 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 }
 
 func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) string {
+	return fetchClusterStatusWithErrorHandling(ctx, solrCloud, true)
+}
+
+func fetchClusterStatusWithErrorHandling(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, expectNoError bool) string {
 	response, err := callSolrApiInPod(
 		ctx,
 		solrCloud,
@@ -323,7 +327,9 @@ func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) s
 			"wt":     "json",
 		},
 	)
-	Expect(err).ToNot(HaveOccurred(), "Could not fetch clusterStatus for cloud")
+	if expectNoError {
+		Expect(err).ToNot(HaveOccurred(), "Could not fetch clusterStatus for cloud")
+	}
 
 	return response
 }

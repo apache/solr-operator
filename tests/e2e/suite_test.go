@@ -285,8 +285,23 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	req, err := labels.NewRequirement("technology", selection.In, []string{solrv1beta1.SolrTechnologyLabel, solrv1beta1.SolrPrometheusExporterTechnologyLabel})
 	Expect(err).ToNot(HaveOccurred())
 
-	labelSelector := labels.Everything().Add(*req)
 	listOps := &client.ListOptions{
+		Namespace: namespace,
+	}
+
+	foundSolrs := &solrv1beta1.SolrCloudList{}
+	Expect(k8sClient.List(ctx, foundSolrs, listOps)).To(Succeed(), "Could not fetch SolrClouds")
+	Expect(foundSolrs).ToNot(BeNil(), "No SolrClouds could be found")
+	for _, solrCloud := range foundSolrs.Items {
+		writeSolrClusterStatusInfoToFile(
+			ctx,
+			directory+solrCloud.Name,
+			&solrCloud,
+		)
+	}
+
+	labelSelector := labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
 		Namespace:     namespace,
 		LabelSelector: labelSelector,
 	}
@@ -330,6 +345,20 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 			directory+service.Name+".service",
 			&service,
 		)
+	}
+}
+
+// writeSolrClusterStatusInfoToFile writes the following each to a separate file with the given base name & directory.
+//   - SolrCloud's Cluster Status from the Collections API
+func writeSolrClusterStatusInfoToFile(ctx context.Context, baseFilename string, solrCloud *solrv1beta1.SolrCloud) {
+	clusterStatus := fetchClusterStatusWithErrorHandling(ctx, solrCloud, false)
+	if clusterStatus != "" {
+		// Write cluster status to a file
+		statusFile, err := os.Create(baseFilename + ".cluster-state.json")
+		defer statusFile.Close()
+		Expect(err).ToNot(HaveOccurred(), "Could not open file to save cluster status: %s", baseFilename+".cluster-state.json")
+		_, writeErr := statusFile.Write([]byte(clusterStatus))
+		Expect(writeErr).ToNot(HaveOccurred(), "Could not write cluster status json to file")
 	}
 }
 
