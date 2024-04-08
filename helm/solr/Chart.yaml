@@ -40,17 +40,7 @@ annotations:
   artifacthub.io/prerelease: "true"
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
-  artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
-      links:
-        - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
-        - name: Github PR
-          url: https://github.com/pr-url
+  artifacthub.io/changes: ""
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
