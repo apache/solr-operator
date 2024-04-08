@@ -66,6 +66,7 @@ func clearClusterOpLock(statefulSet *appsv1.StatefulSet) {
 }
 
 func setClusterOpLock(statefulSet *appsv1.StatefulSet, op SolrClusterOp) error {
+	op.LastStartTime = metav1.Now()
 	bytes, err := json.Marshal(op)
 	if err != nil {
 		return err
@@ -124,7 +125,6 @@ func retryNextQueuedClusterOp(statefulSet *appsv1.StatefulSet) (hasOp bool, err 
 	hasOp = len(clusterOpRetryQueue) > 0
 	if len(clusterOpRetryQueue) > 0 {
 		nextOp := clusterOpRetryQueue[0]
-		nextOp.LastStartTime = metav1.Now()
 		err = setClusterOpLock(statefulSet, nextOp)
 		if err != nil {
 			return hasOp, err
@@ -141,7 +141,6 @@ func retryNextQueuedClusterOpWithQueue(statefulSet *appsv1.StatefulSet, clusterO
 	hasOp = len(clusterOpQueue) > 0
 	if len(clusterOpQueue) > 0 {
 		nextOp := clusterOpQueue[0]
-		nextOp.LastStartTime = metav1.Now()
 		err = setClusterOpLock(statefulSet, nextOp)
 		if err != nil {
 			return hasOp, err

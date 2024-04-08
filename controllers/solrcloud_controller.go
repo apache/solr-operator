@@ -574,7 +574,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if clusterOp != nil {
 				// Starting a locked cluster operation!
 				originalStatefulSet := statefulSet.DeepCopy()
-				clusterOp.LastStartTime = metav1.Now()
 				err = setClusterOpLock(statefulSet, *clusterOp)
 				if err == nil {
 					err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet))
