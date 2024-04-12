@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.8.1
-appVersion: v0.8.1
+version: 0.8.2-prerelease
+appVersion: v0.8.2-prerelease
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -42,21 +42,21 @@ annotations:
   artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
-  artifacthub.io/changes: "- kind: security\n  description: Command-based Solr probes no longer echoes 'JAVA_TOOL_OPTIONS' values in Kubernetes events.\n  links:\n    - name: JIRA Issue\n      url: https://issues.apache.org/jira/browse/SOLR-17216\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/698\n- kind: changed\n  description: SolrClouds now support auto-readOnlyRootFilesystem setting.\n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/624\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/648\n  description: Avoid reset of security.json if get request fails  \n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/659\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/660\n- kind: fixed\n  description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy\n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/688\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/689\n- kind: fixed\n  description: SolrPrometheusExporter no longer fails liveness probes when the SolrCloud is too large\n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/693\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/694\n- kind: fixed\n  description: SolrClouds addressed via an Ingress now scale up and down safely.\n  links:\n    - name: Github Issue\n      url: https://github.com/apache/solr-operator/issues/682\n    - name: Github PR\n      url: https://github.com/apache/solr-operator/pull/692\n"
+  artifacthub.io/changes: "- kind: added\n  description: Addition 1\n  links:\n    - name: Github Issue\n      url: https://github.com/issue-url\n- kind: changed\n  description: Change 2\n  links:\n    - name: Github PR\n      url: https://github.com/pr-url\n"
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.8.1
+      image: apache/solr-operator:v0.8.2-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
