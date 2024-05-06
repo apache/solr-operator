@@ -453,6 +453,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		initContainers = append(initContainers, customPodOptions.InitContainers...)
 	}
 
+	AllowPrivilegeEscalationValue := false;
+	RunAsNonRootValue := false
+
 	containers := []corev1.Container{
 		{
 			Name:            SolrNodeContainer,
@@ -496,6 +499,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				PostStart: postStart,
 				PreStop:   preStop,
 			},
+			SecurityContext: &corev1.SecurityContext{
+                Capabilities: &corev1.Capabilities{
+                    Drop: []corev1.Capability{"ALL"},
+                },
+                SeccompProfile: &corev1.SeccompProfile{
+                    Type: "RuntimeDefault",
+                },
+                AllowPrivilegeEscalation: &AllowPrivilegeEscalationValue,
+                RunAsNonRoot:             &RunAsNonRootValue,
+            },
 		},
 	}
 
@@ -753,6 +766,9 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
+	AllowPrivilegeEscalationValue := false
+	RunAsNonRootValue := false
+
 	volumePrepResources := corev1.ResourceList{
 		corev1.ResourceCPU:    *DefaultSolrVolumePrepInitContainerCPU,
 		corev1.ResourceMemory: *DefaultSolrVolumePrepInitContainerMemory,
@@ -766,6 +782,16 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		Resources: corev1.ResourceRequirements{
 			Requests: volumePrepResources,
 			Limits:   volumePrepResources,
+		}
+		SecurityContext: &corev1.SecurityContext{
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+			},
+			SeccompProfile: &corev1.SeccompProfile{
+				Type: "RuntimeDefault",
+			},
+			AllowPrivilegeEscalation: &AllowPrivilegeEscalationValue,
+			RunAsNonRoot:             &RunAsNonRootValue,
 		},
 	}
 
