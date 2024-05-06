@@ -341,47 +341,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	extAddressabilityOpts := instance.Spec.SolrAddressability.External
-	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
-		// Generate Ingress
-		ingress := util.GenerateIngress(instance, solrNodeNames)
-
-		// Check if the Ingress already exists
-		ingressLogger := logger.WithValues("ingress", ingress.Name)
-		foundIngress := &netv1.Ingress{}
-		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
-		if err != nil && errors.IsNotFound(err) {
-			ingressLogger.Info("Creating Ingress")
-			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
-				err = r.Create(ctx, ingress)
-			}
-		} else if err == nil {
-			var needsUpdate bool
-			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
-			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
-
-			// Update the found Ingress and write the result back if there are any changes
-			if needsUpdate && err == nil {
-				ingressLogger.Info("Updating Ingress")
-				err = r.Update(ctx, foundIngress)
-			}
-		}
-		if err != nil {
-			return requeueOrNot, err
-		}
-	} else {
-		// If ingress exists, delete it
-		foundIngress := &netv1.Ingress{}
-		err = r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
-		if err == nil {
-			err = r.Delete(ctx, foundIngress)
-			if err != nil {
-				return requeueOrNot, err
-			}
-			logger.Info("Deleted Ingress")
-		}
-	}
-
 	var statefulSet *appsv1.StatefulSet
 
 	if !blockReconciliationOfStatefulSet {
@@ -480,6 +439,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if err != nil {
 			return requeueOrNot, err
+		}
+	} else {
+		// If ingress exists, delete it
+		foundIngress := &netv1.Ingress{}
+		err = r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
+		if err == nil {
+			err = r.Delete(ctx, foundIngress)
+			if err != nil {
+				return requeueOrNot, err
+			}
+			logger.Info("Deleted Ingress")
 		}
 	}
 
