@@ -152,6 +152,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	hostNameIpMap := make(map[string]string)
 	// Generate a service for every Node
 	if instance.UsesIndividualNodeServices() {
+		// When updating the statefulSet below, the hostNameIpMap is just used to add new IPs or modify existing ones.
+		// When scaling down, the hostAliases that are no longer found here will not be removed from the hostAliases in the statefulSet pod spec.
+		// Therefore, it should be ok that we are not reconciling the node services that will be scaled down in the future.
+		// This is unfortunately the reality since we don't have the statefulSet yet to determine how many Solr pods are still running,
+		// we just have Spec.replicas which is the requested pod count.
 		for _, nodeName := range solrNodeNames {
 			err, ip := r.reconcileNodeService(ctx, logger, instance, nodeName)
 			if err != nil {
@@ -161,6 +166,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if instance.Spec.SolrAddressability.External.UseExternalAddress {
 				if ip == "" {
 					// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
+					// TODO: Make an event here
 					blockReconciliationOfStatefulSet = true
 				} else {
 					hostNameIpMap[instance.AdvertisedNodeHost(nodeName)] = ip
@@ -443,6 +449,39 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return requeueOrNot, err
 	}
+	if statefulSet != nil && statefulSet.Spec.Replicas != nil {
+		solrNodeNames = instance.GetSolrPodNames(int(*statefulSet.Spec.Replicas))
+	}
+
+	extAddressabilityOpts := instance.Spec.SolrAddressability.External
+	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Ingress {
+		// Generate Ingress
+		ingress := util.GenerateIngress(instance, solrNodeNames)
+
+		// Check if the Ingress already exists
+		ingressLogger := logger.WithValues("ingress", ingress.Name)
+		foundIngress := &netv1.Ingress{}
+		err = r.Get(ctx, types.NamespacedName{Name: ingress.Name, Namespace: ingress.Namespace}, foundIngress)
+		if err != nil && errors.IsNotFound(err) {
+			ingressLogger.Info("Creating Ingress")
+			if err = controllerutil.SetControllerReference(instance, ingress, r.Scheme); err == nil {
+				err = r.Create(ctx, ingress)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundIngress, r.Scheme)
+			needsUpdate = util.CopyIngressFields(ingress, foundIngress, ingressLogger) || needsUpdate
+
+			// Update the found Ingress and write the result back if there are any changes
+			if needsUpdate && err == nil {
+				ingressLogger.Info("Updating Ingress")
+				err = r.Update(ctx, foundIngress)
+			}
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
+	}
 
 	// *********************************************************
 	// The operations after this require a statefulSet to exist,
@@ -455,7 +494,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
 	// Otherwise it will delete all PVCs possibly
 	if len(statefulSet.Spec.Selector.MatchLabels) > 0 {
-		if err = r.reconcileStorageFinalizer(ctx, instance, statefulSet.Spec.Selector.MatchLabels, logger); err != nil {
+		if err = r.reconcileStorageFinalizer(ctx, instance, statefulSet, logger); err != nil {
 			logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
 			updateRequeueAfter(&requeueOrNot, time.Second*15)
 		}
@@ -508,6 +547,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
+			err = nil
 			if operationComplete {
 				if nextClusterOperation == nil {
 					// Once the operation is complete, finish the cluster operation by deleting the statefulSet annotations
@@ -572,7 +612,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// a "locked" cluster operation
 			if clusterOp == nil {
 				_, scaleDownOpIsQueued := queuedRetryOps[ScaleDownLock]
-				clusterOp, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, scaleDownOpIsQueued, podList, logger)
+				clusterOp, retryLaterDuration, err = determineScaleClusterOpLockIfNecessary(ctx, r, instance, statefulSet, scaleDownOpIsQueued, podList, blockReconciliationOfStatefulSet, logger)
 
 				// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
 				if clusterOp != nil {
@@ -591,7 +631,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if clusterOp != nil {
 				// Starting a locked cluster operation!
 				originalStatefulSet := statefulSet.DeepCopy()
-				clusterOp.LastStartTime = metav1.Now()
 				err = setClusterOpLock(statefulSet, *clusterOp)
 				if err == nil {
 					err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet))
@@ -953,9 +992,10 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 // Logic derived from:
 // - https://book.kubebuilder.io/reference/using-finalizers.html
 // - https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629
-func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) error {
+func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) error {
 	// If persistentStorage is being used by the cloud, and the reclaim policy is set to "Delete",
 	// then set a finalizer for the storage on the cloud, and delete the PVCs if the solrcloud has been deleted.
+	pvcLabelSelector := statefulSet.Spec.Selector.MatchLabels
 
 	if cloud.Spec.StorageOptions.PersistentStorage != nil && cloud.Spec.StorageOptions.PersistentStorage.VolumeReclaimPolicy == solrv1beta1.VolumeReclaimPolicyDelete {
 		if cloud.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -967,7 +1007,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 					return err
 				}
 			}
-			return r.cleanupOrphanPVCs(ctx, cloud, pvcLabelSelector, logger)
+			return r.cleanupOrphanPVCs(ctx, cloud, statefulSet, pvcLabelSelector, logger)
 		} else if util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
 			// The object is being deleted
 			logger.Info("Deleting PVCs for SolrCloud")
@@ -1004,17 +1044,22 @@ func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta
 	return pvcCount, nil
 }
 
-func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
 	// this check should make sure we do not delete the PVCs before the STS has scaled down
 	if cloud.Status.ReadyReplicas == cloud.Status.Replicas {
 		pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 		if err != nil {
 			return err
 		}
+		// We only want to delete PVCs if we will not use them in the future, as in the user has asked for less replicas.
+		// Even if the statefulSet currently has less replicas, we don't want to delete them if we will eventually scale back up.
 		if len(pvcList.Items) > int(*cloud.Spec.Replicas) {
 			for _, pvcItem := range pvcList.Items {
 				// delete only Orphan PVCs
-				if util.IsPVCOrphan(pvcItem.Name, *cloud.Spec.Replicas) {
+				// for orphans, we will use the status replicas (which is derived from the statefulSet)
+				// Don't use the Spec replicas here, because we might be rolling down 1-by-1 and the PVCs for
+				// soon-to-be-deleted pods should not be deleted until the pod is deleted.
+				if util.IsPVCOrphan(pvcItem.Name, *statefulSet.Spec.Replicas) {
 					r.deletePVC(ctx, pvcItem, logger)
 				}
 			}
