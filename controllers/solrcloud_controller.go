@@ -1051,9 +1051,7 @@ func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solr
 				// Don't use the Spec replicas here, because we might be rolling down 1-by-1 and the PVCs for
 				// soon-to-be-deleted pods should not be deleted until the pod is deleted.
 				if util.IsPVCOrphan(pvcItem.Name, *statefulSet.Spec.Replicas) {
-					if e := r.deletePVC(ctx, pvcItem, logger); e != nil {
-						err = e
-					}
+					r.deletePVC(ctx, pvcItem, logger)
 				}
 			}
 		}
