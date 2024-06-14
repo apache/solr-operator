@@ -27,6 +27,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
 	"net/url"
@@ -53,6 +54,7 @@ const (
 	ScaleUpLock         SolrClusterOperationType = "ScalingUp"
 	UpdateLock          SolrClusterOperationType = "RollingUpdate"
 	BalanceReplicasLock SolrClusterOperationType = "BalanceReplicas"
+	PvcExpansionLock    SolrClusterOperationType = "PVCExpansion"
 )
 
 // RollingUpdateMetadata contains metadata for rolling update cluster operations.
@@ -148,6 +150,60 @@ func retryNextQueuedClusterOpWithQueue(statefulSet *appsv1.StatefulSet, clusterO
 		err = setClusterOpRetryQueue(statefulSet, clusterOpQueue[1:])
 	}
 	return hasOp, err
+}
+
+func determinePvcExpansionClusterOpLockIfNecessary(instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
+	if instance.Spec.StorageOptions.PersistentStorage != nil &&
+		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage() != nil &&
+		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage().String() != statefulSet.Annotations[util.StorageMinimumSizeAnnotation] {
+		// First make sure that the new Storage request is greater than what already is set.
+		// PVCs cannot be shrunk
+		newSize := instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage()
+		// If there is no old size to update, the StatefulSet can be just set to use the new PVC size without any issue.
+		// Only do a cluster operation if we are expanding from an existing size to a new size
+		if oldSizeStr, hasOldSize := statefulSet.Annotations[util.StorageMinimumSizeAnnotation]; hasOldSize {
+			if oldSize, e := resource.ParseQuantity(oldSizeStr); e != nil {
+				err = e
+				// TODO: add an event
+			} else {
+				// Only update to the new size if it is bigger, we cannot shrink PVCs
+				if newSize.Cmp(oldSize) > 0 {
+					clusterOp = &SolrClusterOp{
+						Operation: PvcExpansionLock,
+						Metadata:  newSize.String(),
+					}
+				}
+				// TODO: add an event saying that we cannot shrink PVCs
+			}
+		}
+	}
+	return
+}
+
+// handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
+// This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
+func handlePvcExpansion(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, logger logr.Logger) (operationComplete bool, retryLaterDuration time.Duration, err error) {
+	var newSize resource.Quantity
+	newSize, err = resource.ParseQuantity(clusterOp.Metadata)
+	if err != nil {
+		logger.Error(err, "Could not convert PvcExpansion metadata to a resource.Quantity, as it represents the new size of PVCs", "metadata", clusterOp.Metadata)
+		return
+	}
+	operationComplete, err = r.expandPVCs(ctx, instance, statefulSet.Spec.Selector.MatchLabels, newSize, logger)
+	if err == nil && operationComplete {
+		originalStatefulSet := statefulSet.DeepCopy()
+		statefulSet.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
+		statefulSet.Spec.Template.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to set the new minimum PVC size after PVCs the completion of PVC resizing", "newSize", newSize)
+			operationComplete = false
+		}
+		// Return and wait for the StatefulSet to be updated which will call the reconcile to start the rolling restart
+		retryLaterDuration = 0
+	} else if err == nil {
+		retryLaterDuration = time.Second * 5
+	}
+	return
 }
 
 func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownOpIsQueued bool, podList []corev1.Pod, blockReconciliationOfStatefulSet bool, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
@@ -291,7 +347,8 @@ func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, p
 // handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
 // This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
 func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, podList []corev1.Pod, logger logr.Logger) (operationComplete bool, nextClusterOperation *SolrClusterOp, err error) {
-	desiredPods, err := strconv.Atoi(clusterOp.Metadata)
+	desiredPods := 0
+	desiredPods, err = strconv.Atoi(clusterOp.Metadata)
 	if err != nil {
 		logger.Error(err, "Could not convert ScaleUp metadata to int, as it represents the number of nodes to scale to", "metadata", clusterOp.Metadata)
 		return

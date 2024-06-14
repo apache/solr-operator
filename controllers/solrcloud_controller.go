@@ -22,6 +22,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"sort"
@@ -483,6 +484,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			operationComplete, nextClusterOperation, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		case BalanceReplicasLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = util.BalanceReplicasForCluster(ctx, instance, statefulSet, clusterOp.Metadata, clusterOp.Metadata, logger)
+		case PvcExpansionLock:
+			operationComplete, retryLaterDuration, err = handlePvcExpansion(ctx, r, instance, statefulSet, clusterOp, logger)
 		default:
 			operationFound = false
 			// This shouldn't happen, but we don't want to be stuck if it does.
@@ -545,6 +548,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			// The operations will be actually run in future reconcile loops, but a clusterOpLock will be acquired here.
 			// And that lock will tell future reconcile loops that the operation needs to be done.
 			clusterOp, retryLaterDuration, err = determineRollingUpdateClusterOpLockIfNecessary(instance, outOfDatePods)
+			// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
+			if queueIdx, opIsQueued := queuedRetryOps[UpdateLock]; clusterOp != nil && opIsQueued {
+				clusterOpQueue[queueIdx] = *clusterOp
+				clusterOp = nil
+			}
+			clusterOp, retryLaterDuration, err = determinePvcExpansionClusterOpLockIfNecessary(instance, statefulSet)
 			// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
 			if queueIdx, opIsQueued := queuedRetryOps[UpdateLock]; clusterOp != nil && opIsQueued {
 				clusterOpQueue[queueIdx] = *clusterOp
@@ -932,6 +941,46 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 	return nil
 }
 
+func (r *SolrCloudReconciler) expandPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, err error) {
+	var pvcList corev1.PersistentVolumeClaimList
+	pvcList, err = r.getPVCList(ctx, cloud, pvcLabelSelector)
+	if err != nil {
+		return
+	}
+	expansionCompleteCount := 0
+	for _, pvcItem := range pvcList.Items {
+		if pvcExpansionComplete, e := r.expandPVC(ctx, &pvcItem, newSize, logger); e != nil {
+			err = e
+		} else if pvcExpansionComplete {
+			expansionCompleteCount += 1
+		}
+	}
+	// If all PVCs have been expanded, then we are done
+	expansionComplete = err == nil && expansionCompleteCount == len(pvcList.Items)
+	return
+}
+
+func (r *SolrCloudReconciler) expandPVC(ctx context.Context, pvc *corev1.PersistentVolumeClaim, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, err error) {
+	// If the current capacity is >= the new size, then there is nothing to do, expansion is complete
+	if pvc.Status.Capacity.Storage().Cmp(newSize) >= 0 {
+		// TODO: Eventually use the pvc.Status.AllocatedResources and pvc.Status.AllocatedResourceStatuses to determine the status of PVC Expansion and react to failures
+		expansionComplete = true
+	} else if !pvc.Spec.Resources.Requests.Storage().Equal(newSize) {
+		// Update the pvc if the capacity request is different.
+		// The newSize might be smaller than the current size, but this is supported as the last size might have been too
+		// big for the storage quota, so it was lowered.
+		// As long as the PVCs current capacity is lower than the new size, we are still good to update the PVC.
+		originalPvc := pvc.DeepCopy()
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
+		if err = r.Patch(ctx, pvc, client.StrategicMergeFrom(originalPvc)); err != nil {
+			logger.Error(err, "Error while expanding PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+		} else {
+			logger.Info("Expanded PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+		}
+	}
+	return
+}
+
 // Logic derived from:
 // - https://book.kubebuilder.io/reference/using-finalizers.html
 // - https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629
@@ -978,16 +1027,15 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 	return nil
 }
 
-func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (pvcCount int, err error) {
+func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (int, error) {
 	pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 	if err != nil {
 		return -1, err
 	}
-	pvcCount = len(pvcList.Items)
-	return pvcCount, nil
+	return len(pvcList.Items), nil
 }
 
-func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) error {
 	// this check should make sure we do not delete the PVCs before the STS has scaled down
 	if cloud.Status.ReadyReplicas == cloud.Status.Replicas {
 		pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
@@ -1003,28 +1051,31 @@ func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solr
 				// Don't use the Spec replicas here, because we might be rolling down 1-by-1 and the PVCs for
 				// soon-to-be-deleted pods should not be deleted until the pod is deleted.
 				if util.IsPVCOrphan(pvcItem.Name, *statefulSet.Spec.Replicas) {
-					r.deletePVC(ctx, pvcItem, logger)
+					if e := r.deletePVC(ctx, pvcItem, logger); e != nil {
+						err = e
+					}
 				}
 			}
 		}
+		return err
 	}
 	return nil
 }
 
-func (r *SolrCloudReconciler) getPVCList(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (pvList corev1.PersistentVolumeClaimList, err error) {
+func (r *SolrCloudReconciler) getPVCList(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (corev1.PersistentVolumeClaimList, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchLabels: pvcLabelSelector,
 	})
-	pvclistOps := &client.ListOptions{
+	pvcListOps := &client.ListOptions{
 		Namespace:     cloud.Namespace,
 		LabelSelector: selector,
 	}
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	err = r.Client.List(ctx, pvcList, pvclistOps)
+	err = r.Client.List(ctx, pvcList, pvcListOps)
 	return *pvcList, err
 }
 
-func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) error {
 	pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 	if err != nil {
 		return err
@@ -1032,7 +1083,7 @@ func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1b
 	for _, pvcItem := range pvcList.Items {
 		r.deletePVC(ctx, pvcItem, logger)
 	}
-	return nil
+	return err
 }
 
 func (r *SolrCloudReconciler) deletePVC(ctx context.Context, pvcItem corev1.PersistentVolumeClaim, logger logr.Logger) {
