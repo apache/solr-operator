@@ -19,7 +19,6 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ include "solr-operator.roleType" $ }}
 metadata:
-  creationTimestamp: null
   name: {{ include "solr-operator.fullname" $ }}-role
   namespace: {{ $namespace }}
 rules:
