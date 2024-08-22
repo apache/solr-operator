@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -59,7 +60,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("No Client TLS", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false, true)
 
 			//solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
 		})
@@ -70,7 +71,21 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("No Client TLS - Just a Keystore", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false, true)
+
+			solrCloud.Spec.SolrTLS.TrustStoreSecret = nil
+			solrCloud.Spec.SolrTLS.TrustStorePasswordSecret = nil
+
+			//solrCloud.Spec.SolrOpts = "-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake"
+		})
+
+		FIt("Can run", func() {})
+	})
+
+	FContext("No Client TLS - gen-pkcs12-keystore", func() {
+
+		BeforeEach(func(ctx context.Context) {
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false, false)
 
 			solrCloud.Spec.SolrTLS.TrustStoreSecret = nil
 			solrCloud.Spec.SolrTLS.TrustStorePasswordSecret = nil
@@ -84,7 +99,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("No Client TLS - CheckPeerName", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false, true)
 
 			solrCloud.Spec.SolrTLS.CheckPeerName = true
 
@@ -115,7 +130,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("With Client TLS - VerifyClientHostname", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
 			solrCloud.Spec.SolrTLS.VerifyClientHostname = true
 
@@ -139,7 +154,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("With Client TLS - CheckPeerName", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
 			solrCloud.Spec.SolrTLS.CheckPeerName = true
 
@@ -164,7 +179,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("With Client TLS - Client Auth Need", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
 			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Need
 
@@ -177,7 +192,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 	FContext("With Client TLS - Client Auth Want", func() {
 
 		BeforeEach(func(ctx context.Context) {
-			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true)
+			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
 			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Want
 
