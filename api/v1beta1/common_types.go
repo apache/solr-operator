@@ -122,6 +122,11 @@ type PodOptions struct {
 	// +optional
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 
+	// Removes the fsGroup securityContext from
+	// the StatefulSet for compatibility with OpenShift.
+	// +optional
+	Openshift bool `json:"openshift,omitempty"`
+
 	// ImagePullSecrets to apply to the pod.
 	// These are for init/sidecarContainers in addition to the imagePullSecret defined for the
 	// solr image.

@@ -543,18 +543,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &defaultFSGroup,
-					},
-					Volumes:        solrVolumes,
-					InitContainers: initContainers,
-					HostAliases:    hostAliases,
-					Containers:     containers,
-					ReadinessGates: podReadinessGates,
+					SecurityContext:               &corev1.PodSecurityContext{},
+					Volumes:                       solrVolumes,
+					InitContainers:                initContainers,
+					HostAliases:                   hostAliases,
+					Containers:                    containers,
+					ReadinessGates:                podReadinessGates,
 				},
 			},
 			VolumeClaimTemplates: pvcs,
 		},
+	}
+	if customPodOptions.Openshift != true {
+		stateful.Spec.Template.Spec.SecurityContext.FSGroup = &defaultFSGroup
 	}
 	if solrCloud.UsesHeadlessService() {
 		stateful.Spec.Template.Spec.Subdomain = solrCloud.HeadlessServiceName()
@@ -592,7 +593,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.PodSecurityContext != nil {
 			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
-			if stateful.Spec.Template.Spec.SecurityContext.FSGroup == nil {
+			if stateful.Spec.Template.Spec.SecurityContext.FSGroup == nil && customPodOptions.Openshift != true {
 				stateful.Spec.Template.Spec.SecurityContext.FSGroup = &defaultFSGroup
 			}
 		}
