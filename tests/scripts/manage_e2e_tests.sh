@@ -167,6 +167,9 @@ function start_cluster() {
   echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in KinD. This will allow us to test the CRDs, Helm chart and the Docker image."
   kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}" --config "${SCRIPT_DIR}/e2e-kind-config.yaml"
 
+  # TODO: Remove when the following issue is resolved: https://github.com/kubernetes-sigs/kind/issues/3734
+  kubectl patch storageclass standard -p '{"allowVolumeExpansion":true}'
+
   setup_cluster
 }
 
