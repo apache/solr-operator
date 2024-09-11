@@ -101,6 +101,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
+	reconcileGeneration := instance.ObjectMeta.Generation
+
 	changed := instance.WithDefaults(logger)
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
@@ -639,6 +641,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
+		newStatus.ObservedGeneration = reconcileGeneration
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
 		oldInstance := instance.DeepCopy()
 		instance.Status = newStatus
