@@ -55,7 +55,7 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: fixed
-      description: gen-pkcs12-keystore init container fails if the tls secret contains no ca.crt
+      description: gen-pkcs12-keystore initContainer now supports 'ca.crt'-less TLS secrets
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/684
