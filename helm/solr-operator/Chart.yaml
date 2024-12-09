@@ -54,6 +54,13 @@ annotations:
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
+    - kind: fixed
+      description: gen-pkcs12-keystore initContainer now supports 'ca.crt'-less TLS secrets
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/684
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/685
     - kind: changed
       description: SolrClouds now support auto-readOnlyRootFilesystem setting.
       links:
@@ -61,6 +68,7 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/624
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/648
+    - kind: fixed
       description: Avoid reset of security.json if get request fails  
       links:
         - name: Github Issue
