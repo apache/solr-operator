@@ -124,7 +124,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ### v0.8.0
 - **The minimum supported Solr version is now 8.11**
   If you are unable to use a newer version of Solr, please install the `v0.7.1` version of the Solr Operator.
-  However, it is strongly suggested to upgrade to newer versions of Solr that are actively supported.q
+  However, it is strongly suggested to upgrade to newer versions of Solr that are actively supported.
   See the [version compatibility matrix](#solr-versions) for more information.
 
 - **Kubernetes support is now limited to 1.22+.**  

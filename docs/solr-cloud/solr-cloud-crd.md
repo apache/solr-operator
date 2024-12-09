@@ -61,8 +61,9 @@ These options can be found in `SolrCloud.spec.dataStorage`
   - **`pvcTemplate`** - The template of the PVC to use for the solr data PVCs. By default the name will be "data".
     Only the `pvcTemplate.spec` field is required, metadata is optional.
     
-    Note: This template cannot be changed unless the SolrCloud is deleted and recreated.
-    This is a [limitation of StatefulSets and PVCs in Kubernetes](https://github.com/kubernetes/enhancements/issues/661).
+    Note: Currently, [Kubernetes does not support PVC resizing (expanding) in StatefulSets](https://github.com/kubernetes/enhancements/issues/661).
+    However, The Solr Operator will manage the PVC expansion for users until this is supported by default in Kubernetes.
+    Therefore the `pvcTemplate.spec` can have an update to `pvcTemplate.spec.resources.requests`, but all other fields should be considered immutable.
 - **`ephemeral`**
 
   There are two types of ephemeral volumes that can be specified.
