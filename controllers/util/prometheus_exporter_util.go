@@ -208,7 +208,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: corev1.URISchemeHTTP,
 			// TODO: When 9.0 is the minimum supported version, this can be "/-/healthy"
-			Path: "/metrics?names[]=",
+			Path: "/metrics?name[]=",
 			Port: intstr.FromInt(SolrMetricsPort),
 		},
 	}
