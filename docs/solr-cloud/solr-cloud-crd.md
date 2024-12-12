@@ -171,9 +171,9 @@ Please refer to the [SolrBackup documentation](../solr-backup) for more informat
 
 ## Zookeeper Reference
 
-Solr Clouds require an Apache Zookeeper to connect to.
+All SolrCloud resources run Solr in "cloud" mode, and require access to an Apache ZooKeeper cluster for state-management.
 
-The Solr operator gives a few options.
+The Solr operator gives a few options for ZooKeeper access:
 
 - Connecting to an already running zookeeper ensemble via [connection strings](#zk-connection-info)
 - [Spinning up a provided](#provided-instance) Zookeeper Ensemble in the same namespace via the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator)
