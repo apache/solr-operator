@@ -23,6 +23,7 @@ image:
   repository: apache/solr-operator
   tag: v0.9.0-prerelease
   pullPolicy: IfNotPresent
+  imagePullSecret: ""
 
 nameOverride: ""
 fullnameOverride: ""

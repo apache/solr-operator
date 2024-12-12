@@ -174,6 +174,7 @@ The command removes all the Kubernetes components associated with the chart and 
 | image.repository | string | `"apache/solr-operator"` | The repository of the Solr Operator image |
 | image.tag | string | `"v0.9.0-prerelease"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
+| image.imagePullSecret | string | `""` | PullSecret for the Solr Operator image |
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicaCount | int | `1` | The number of Solr Operator pods to run |
