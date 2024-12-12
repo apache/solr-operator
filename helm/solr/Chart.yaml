@@ -42,15 +42,12 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
-      description: Addition 1
+      description: SolrClouds now support namespace sharing among pod containers in a pod.
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/716
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/735
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

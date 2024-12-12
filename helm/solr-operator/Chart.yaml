@@ -61,13 +61,6 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/684
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/685
-    - kind: added
-      description: SolrClouds now support namespace sharing among pod containers in a pod.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/716
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/735
     - kind: changed
       description: SolrClouds now support auto-readOnlyRootFilesystem setting.
       links:
