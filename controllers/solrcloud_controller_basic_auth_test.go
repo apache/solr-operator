@@ -351,10 +351,13 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 
 func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) {
 	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
-	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); " +
-		"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
-		"echo $SECURITY_JSON > /tmp/security.json; " +
-		"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+	expCmd := "solr zk cp zk:/security.json /tmp/current_security.json >/dev/null 2>&1;  " +
+		"GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " +
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then  " +
+		"echo $SECURITY_JSON > /tmp/security.json;  solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; fi; elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " +
+		" echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'No security.json found. Put new security.json in ZK'; fi"
 	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 }
 
