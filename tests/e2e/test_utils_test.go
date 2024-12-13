@@ -581,6 +581,91 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 	}
 }
 
+func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	securityJsonSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-security-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		StringData: map[string]string{
+			"security.json": `{
+				"authentication": {
+				"blockUnknown": false,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					}
+				]
+				}
+			}`,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	Expect(k8sClient.Create(ctx, securityJsonSecret)).To(Succeed(), "Failed to create secret for security json in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, securityJsonSecret.Name)
+	return
+}
+
+func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	basicAuthSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-basic-auth-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		// Using default creds
+		StringData: map[string]string{
+			"username": "test-oper",
+			"password": "SolrRocks",
+		},
+		Type: corev1.SecretTypeBasicAuth,
+	}
+	Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Failed to create secret for basic auth in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, basicAuthSecret.Name)
+	return
+}
+
+func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud {
+	solrCloud := generateBaseSolrCloud(replicas)
+
+	// Ensure SolrSecurity is initialized
+	if solrCloud.Spec.SolrSecurity == nil {
+		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
+	}
+
+	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &corev1.SecretKeySelector{
+		LocalObjectReference: corev1.LocalObjectReference{
+			Name: solrCloud.Name + "-security-secret",
+		},
+		Key: "security.json",
+	}
+
+	solrCloud.Spec.SolrSecurity.AuthenticationType = "Basic"
+
+	solrCloud.Spec.SolrSecurity.BasicAuthSecret = solrCloud.Name + "-basic-auth-secret"
+
+	return solrCloud
+}
+
 func generateBaseSolrCloudWithPlacementPolicy(replicas int, placementPlugin string) *solrv1beta1.SolrCloud {
 	solrCloud := generateBaseSolrCloud(replicas)
 	solrCloud.Spec.CustomSolrKubeOptions.PodOptions.EnvVariables = []corev1.EnvVar{
