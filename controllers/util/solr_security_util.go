@@ -238,10 +238,10 @@ func addHostHeaderToProbe(httpGet *corev1.HTTPGetAction, host string) {
 
 func cmdToPutSecurityJsonInZk() string {
 	cmd := " solr zk cp zk:/security.json /tmp/current_security.json >/dev/null 2>&1; " +
-		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?" +
+		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
 		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
 		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then " + // File doesn't exist, is empty, or is just '{}'
-		" echo $SECURITY_JSON > /tmp/security.json; " +
+		" echo $SECURITY_JSON > /tmp/security.json;" +
 		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
 		" echo 'Blank security.json found. Put new security.json in ZK'; " +
 		"fi; " + // TODO: Consider checking a diff and still applying over the top

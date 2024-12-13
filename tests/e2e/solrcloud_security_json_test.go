@@ -35,7 +35,7 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 	})
 
 	JustBeforeEach(func(ctx context.Context) {
-		By("generating the security.json secret")
+		By("generating the security.json secret and basic auth secret")
 		generateSolrSecuritySecret(ctx, solrCloud)
 		generateSolrBasicAuthSecret(ctx, solrCloud)
 
