@@ -237,10 +237,20 @@ func addHostHeaderToProbe(httpGet *corev1.HTTPGetAction, host string) {
 }
 
 func cmdToPutSecurityJsonInZk() string {
-	scriptsDir := "/opt/solr/server/scripts/cloud-scripts"
-	cmd := " ZK_SECURITY_JSON=$(%s/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); "
-	cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then echo $SECURITY_JSON > /tmp/security.json; %s/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-	return fmt.Sprintf(cmd, scriptsDir, scriptsDir)
+	cmd := " solr zk cp zk:/security.json /tmp/current_security.json >/dev/null 2>&1; " +
+		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
+		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then " + // File doesn't exist, is empty, or is just '{}'
+		" echo $SECURITY_JSON > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; " +
+		"fi; " + // TODO: Consider checking a diff and still applying over the top
+		"elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " + // JSON doesn't exist, but not other error types
+		" echo $SECURITY_JSON > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'No security.json found. Put new security.json in ZK'; " +
+		"fi"
+	return cmd
 }
 
 // Add auth data to the supplied Context using secrets already resolved (stored in the SecurityConfig)
