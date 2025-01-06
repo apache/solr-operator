@@ -581,6 +581,9 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 	}
 }
 
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
 func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
 	securityJsonSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
