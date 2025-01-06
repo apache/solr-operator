@@ -103,6 +103,15 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/682
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/692
+    - kind: fixed
+      description: setup-zk initContainer now gracefully handles absent security.json on initial upload.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/720
+        - name: Additional Github Issue
+          url: https://github.com/apache/solr-operator/issues/731
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/738
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
