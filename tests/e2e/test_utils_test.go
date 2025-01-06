@@ -41,10 +41,12 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
@@ -291,6 +293,49 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	queryCollectionWithGomega(ctx, solrCloud, collection, 0, g, additionalOffset)
 }
 
+func commitCollectionExpectingUnauthorized(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, additionalOffset ...int) {
+	commitCollectionWithGomegaExpectingUnauthorized(ctx, solrCloud, collection, Default, resolveOffset(additionalOffset))
+}
+
+func commitCollectionWithGomegaExpectingUnauthorized(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, g Gomega, additionalOffset ...int) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+		response, err := curlSolrInPod(
+			ctx,
+			solrCloud,
+			"get",
+			fmt.Sprintf("/solr/%s/update", collection),
+			map[string]string{
+				"wt":     "json",
+				"commit": "true",
+			},
+		)
+		innerG.Expect(err).To(HaveOccurred(), "Commit should have been blocked")
+		innerG.Expect(response).To(HaveHTTPStatus(401), "Unexpected success occurred while committing Solr Collection '%s'", collection)
+	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Unexpectedly, succesfully committed collection: %v", fetchClusterStatus(ctx, solrCloud))
+}
+
+func commitCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	commitCollectionWithGomega(ctx, solrCloud, collection, docCount, Default, resolveOffset(additionalOffset))
+}
+
+func commitCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+		response, err := curlSolrInPod(
+			ctx,
+			solrCloud,
+			"get",
+			fmt.Sprintf("/solr/%s/update", collection),
+			map[string]string{
+				"wt":     "json",
+				"commit": "true",
+			},
+		)
+		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
+		innerG.Expect(response).To(ContainSubstring("\"status\":%d", 0), "Error occurred while querying Solr Collection '%s'", collection)
+	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
+	// Only wait 5 seconds for the collection to be query-able
+}
+
 func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
 	queryCollectionWithGomega(ctx, solrCloud, collection, docCount, Default, resolveOffset(additionalOffset))
 }
@@ -492,6 +537,57 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 	return runExecForContainer(ctx, util.SolrNodeContainer, solrCloud.GetRandomSolrPodName(), solrCloud.Namespace, command)
 }
 
+func curlSolrInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, httpMethod string, apiPath string, queryParams map[string]string) (response string, err error) {
+	var queryParamsSlice []string
+	for param, val := range queryParams {
+		queryParamsSlice = append(queryParamsSlice, param+"="+val)
+	}
+	queryParamsString := strings.Join(queryParamsSlice, "&")
+	if len(queryParamsString) > 0 {
+		queryParamsString = "?" + queryParamsString
+	}
+
+	pod, err := createCurlPod(ctx, solrCloud)
+
+	command := []string{
+		"curl",
+		fmt.Sprintf(
+			"\"%s%s%s%s\"",
+			solrCloud.Status.InternalCommonAddress,
+			solrCloud.NodePortSuffix(false),
+			apiPath,
+			queryParamsString),
+	}
+	return runExecForContainer(ctx, util.SolrNodeContainer, pod.Name, pod.Namespace, command)
+}
+
+func createCurlPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) (pod *v1.Pod, err error) {
+	// Define the curl pod
+	curlPod := &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "curl-pod",
+			Namespace: solrCloud.Namespace,
+		},
+		Spec: v1.PodSpec{
+			Containers: []v1.Container{
+				{
+					Name:  "curl",
+					Image: "curlimages/curl:latest", // Lightweight image with curl installed
+					Args: []string{
+						"tail",
+						"-f",
+						"/dev/null",
+					},
+				},
+			},
+			RestartPolicy: v1.RestartPolicyNever,
+		},
+	}
+
+	// Create the curl pod
+	return rawK8sClient.CoreV1().Pods(solrCloud.Namespace).Create(context.TODO(), curlPod, metav1.CreateOptions{})
+}
+
 func runExecForContainer(ctx context.Context, container string, podName string, namespace string, command []string) (response string, err error) {
 	req := rawK8sClient.CoreV1().RESTClient().Post().
 		Resource("pods").
@@ -584,14 +680,8 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 // Uses default password from docs : SolrRocks
 // The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
 // See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
-func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
-	securityJsonSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.Name + "-security-secret",
-			Namespace: solrCloud.Namespace,
-		},
-		StringData: map[string]string{
-			"security.json": `{
+func generateBasicSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrSecuritySecret(ctx, solrCloud, `{
 				"authentication": {
 				"blockUnknown": false,
 				"class": "solr.BasicAuthPlugin",
@@ -618,7 +708,65 @@ func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.Solr
 					}
 				]
 				}
-			}`,
+			}`)
+
+}
+
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
+func generateStricterSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrSecuritySecret(ctx, solrCloud, `{
+				"authentication": {
+				"blockUnknown": false,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					},
+					{
+					"name": "update",
+					"role": "test-oper"
+					}
+				]
+				}
+			}`)
+
+}
+
+func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, securityJson string) {
+
+	existingSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Namespace: solrCloud.Namespace, Name: solrCloud.Name + "-security-secret"}, existingSecret)
+	if err == nil {
+		By("deleting the existing secret " + existingSecret.Name)
+		deleteAndWait(ctx, existingSecret)
+	}
+
+	securityJsonSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-security-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		StringData: map[string]string{
+			"security.json": securityJson,
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
@@ -649,13 +797,26 @@ func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.Sol
 
 func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud {
 	solrCloud := generateBaseSolrCloud(replicas)
+	one := intstr.FromInt(1)
+	hundredPerc := intstr.FromString("100%")
+	solrCloud.Spec.UpdateStrategy = solrv1beta1.SolrUpdateStrategy{
+		Method: "Managed",
+		ManagedUpdateOptions: solrv1beta1.ManagedUpdateOptions{
+			MaxPodsUnavailable:          &one,
+			MaxShardReplicasUnavailable: &hundredPerc,
+		},
+	}
 
 	// Ensure SolrSecurity is initialized
 	if solrCloud.Spec.SolrSecurity == nil {
 		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
 	}
 
-	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &corev1.SecretKeySelector{
+	if solrCloud.Spec.SolrSecurity.BootstrapSecurityJson == nil {
+		solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &solrv1beta1.BootstrapSecurityJson{}
+	}
+
+	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson.SecurityJsonSecret = &corev1.SecretKeySelector{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: solrCloud.Name + "-security-secret",
 		},
