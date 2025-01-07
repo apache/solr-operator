@@ -2784,6 +2784,10 @@ spec:
                           type: string
                         description: Node Selector to be added for the StatefulSet.
                         type: object
+                      openshift:
+                        description: Removes the fsGroup securityContext from the
+                          StatefulSet for compatibility with OpenShift.
+                        type: boolean
                       podSecurityContext:
                         description: PodSecurityContext is the security context for
                           the pod.
