@@ -25,6 +25,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,6 +37,11 @@ import (
 func newBoolPtr(value bool) *bool {
 	newBool := value
 	return &newBool
+}
+
+func newIntPtr(value int64) *int64 {
+	newInt := value
+	return &newInt
 }
 
 var _ = FDescribe("SolrCloud controller - General", func() {
@@ -140,6 +146,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits).To(Equal(testResources.Limits), "Resources.Limits is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests).To(Equal(testResources.Requests), "Resources.Requests is not the same as the one provided in podOptions")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext).To(BeNil(), "SecurityContext is not the expected default value, 'nil'")
 			extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
@@ -213,6 +220,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
 						DefaultInitContainerResources: testResources2,
 						InitContainers:                extraContainers1,
+						ContainerSecurityContext: &corev1.SecurityContext{
+							RunAsNonRoot:           newBoolPtr(true),
+							ReadOnlyRootFilesystem: newBoolPtr(true),
+							RunAsUser:              newIntPtr(123),
+							Capabilities: &corev1.Capabilities{
+								Add: []corev1.Capability{"someCapability"},
+							},
+						},
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,
@@ -274,6 +289,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].StartupProbe, testProbeStartup, "Incorrect Startup Probe")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect container lifecycle")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources).To(Equal(testResources), "Incorrect container resources")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext).To(Not(BeNil()))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.RunAsNonRoot).To(PointTo(BeTrue()))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.ReadOnlyRootFilesystem).To(PointTo(BeTrue()))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.RunAsUser).To(PointTo(Equal(int64(123))))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add).To(HaveLen(1))
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add[0]).To(Equal(corev1.Capability("someCapability")))
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Resources).To(Equal(testResources2), "Incorrect initContainer[0] resources")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Resources).To(Equal(testResources2), "Incorrect initContainer[1] resources")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].Resources).ToNot(Equal(testResources2), "Incorrect initContainer[2] resources, should not use the default override")

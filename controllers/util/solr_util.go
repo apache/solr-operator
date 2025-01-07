@@ -453,6 +453,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		initContainers = append(initContainers, customPodOptions.InitContainers...)
 	}
 
+	var containerSecurityContext *corev1.SecurityContext
+	if customPodOptions != nil {
+		containerSecurityContext = customPodOptions.ContainerSecurityContext
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:            SolrNodeContainer,
@@ -496,6 +501,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				PostStart: postStart,
 				PreStop:   preStop,
 			},
+			SecurityContext: containerSecurityContext,
 		},
 	}
 
