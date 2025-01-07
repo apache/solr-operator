@@ -105,7 +105,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/692
     - kind: added
-      description: 'imagePullSecret' now used when fetching operator image, if provided.
+      description: "'imagePullSecret' now used when fetching operator image, if provided."
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/718
