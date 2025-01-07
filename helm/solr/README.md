@@ -290,6 +290,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |
 | podOptions.podSecurityContext | object |  | Security context for the Solr pod |
+| podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |

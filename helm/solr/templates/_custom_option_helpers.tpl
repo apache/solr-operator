@@ -59,6 +59,10 @@ nodeSelector:
 podSecurityContext:
   {{- toYaml .Values.podOptions.podSecurityContext | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.containerSecurityContext -}}
+containerSecurityContext:
+  {{- toYaml .Values.podOptions.containerSecurityContext | nindent 2 }}
+{{ end }}
 {{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:
   {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) | nindent 2 }}
