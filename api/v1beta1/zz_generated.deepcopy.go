@@ -518,11 +518,6 @@ func (in *PodOptions) DeepCopyInto(out *PodOptions) {
 		*out = new(int64)
 		**out = **in
 	}
-	if in.ShareProcessNamespace != nil {
-		in, out := &in.ShareProcessNamespace, &out.ShareProcessNamespace
-		*out = new(bool)
-		**out = **in
-	}
 	if in.TopologySpreadConstraints != nil {
 		in, out := &in.TopologySpreadConstraints, &out.TopologySpreadConstraints
 		*out = make([]v1.TopologySpreadConstraint, len(*in))

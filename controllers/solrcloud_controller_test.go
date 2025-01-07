@@ -216,7 +216,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
 						DefaultInitContainerResources: testResources2,
 						InitContainers:                extraContainers1,
-						ShareProcessNamespace:         &testShareProcessNamespace,
+						ShareProcessNamespace:         testShareProcessNamespace,
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,

@@ -123,9 +123,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.TerminationGracePeriodSeconds != nil {
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
-		if customPodOptions.ShareProcessNamespace != nil {
-			shareProcessNamespace = *customPodOptions.ShareProcessNamespace
-		}
+		shareProcessNamespace = customPodOptions.ShareProcessNamespace
 	}
 
 	// The isNotStopped readiness gate will always be used for managedUpdates
