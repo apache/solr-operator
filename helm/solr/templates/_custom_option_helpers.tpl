@@ -37,7 +37,7 @@ resources:
 serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
 {{ end }}
 {{- if .Values.podOptions.shareProcessNamespace -}}
-shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace}}
+shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace }}
 {{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
