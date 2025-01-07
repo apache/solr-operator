@@ -53,6 +53,7 @@ annotations:
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
+  # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: fixed
       description: gen-pkcs12-keystore initContainer now supports 'ca.crt'-less TLS secrets
@@ -112,6 +113,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/731
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/738
+    - kind: added
+      description: "'imagePullSecret' now used when fetching operator image, if provided."
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/718
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/734
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.0-prerelease
