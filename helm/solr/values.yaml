@@ -300,6 +300,8 @@ podOptions:
   # Set Solr service account individually instead of the global "serviceAccount.name"
   serviceAccountName: ""
 
+  shareProcessNamespace: false
+
   # Manage where the Solr pods are scheduled
   affinity: {}
   tolerations: []
