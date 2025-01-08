@@ -312,8 +312,23 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	for _, pod := range foundPods.Items {
 		writeAllPodInfoToFiles(
 			ctx,
-			directory+pod.Name,
+			directory+pod.Name+".pod",
 			&pod,
+		)
+	}
+
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPVCs := &corev1.PersistentVolumeClaimList{}
+	Expect(k8sClient.List(ctx, foundPVCs, listOps)).To(Succeed(), "Could not fetch Solr PVCs")
+	Expect(foundPVCs).ToNot(BeNil(), "No Solr PVCs could be found")
+	for _, pvc := range foundPVCs.Items {
+		writeAllPvcInfoToFiles(
+			directory+pvc.Name+".pvc",
+			&pvc,
 		)
 	}
 
@@ -386,6 +401,32 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet events json")
 	_, writeErr = eventsFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet events json to file")
+}
+
+// writeAllPvcInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - PVC Spec/Status
+//   - PVC Events
+func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeClaim) {
+	// Write PVC to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	defer statusFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC status: %s", baseFilename+".status.json")
+	jsonBytes, marshErr := json.MarshalIndent(pvc, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC json to file")
+
+	// Write events for PVC to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	defer eventsFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC events: %s", baseFilename+".events.yaml")
+
+	eventList, err := rawK8sClient.CoreV1().Events(pvc.Namespace).Search(scheme.Scheme, pvc)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for PVC: %s", pvc.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC events json to file")
 }
 
 // writeAllServiceInfoToFiles writes the following each to a separate file with the given base name & directory.
