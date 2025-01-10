@@ -141,6 +141,10 @@ type PodOptions struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
+	// Should process namespace sharing be enabled on created pods
+	// +optional
+	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
+
 	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
 	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
 	//

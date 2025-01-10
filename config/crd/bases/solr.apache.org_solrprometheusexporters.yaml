@@ -3341,6 +3341,10 @@ spec:
                       serviceAccountName:
                         description: Optional Service Account to run the pod under.
                         type: string
+                      shareProcessNamespace:
+                        description: Should process namespace sharing be enabled on
+                          created pods
+                        type: boolean
                       sidecarContainers:
                         description: Sidecar containers to run in the pod. These are
                           in addition to the Solr Container
