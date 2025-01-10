@@ -53,6 +53,7 @@ annotations:
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
+  # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: fixed
       description: gen-pkcs12-keystore initContainer now supports 'ca.crt'-less TLS secrets
@@ -61,6 +62,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/684
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/685
+    - kind: added
+      description: SolrClouds now support namespace sharing among pod containers in a pod.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/716
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/735
     - kind: changed
       description: SolrClouds now support auto-readOnlyRootFilesystem setting.
       links:
@@ -103,6 +111,22 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/682
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/692
+    - kind: fixed
+      description: setup-zk initContainer now gracefully handles absent security.json on initial upload.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/720
+        - name: Additional Github Issue
+          url: https://github.com/apache/solr-operator/issues/731
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/738
+    - kind: added
+      description: "'imagePullSecret' now used when fetching operator image, if provided."
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/718
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/734
     - kind: fixed
       description: The operator will now delete ingress and per-node services when external ingress is disabled.
       links:
