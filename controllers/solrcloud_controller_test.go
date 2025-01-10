@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	pointer "k8s.io/utils/pointer"
 	"strconv"
 	"strings"
 )
@@ -37,11 +38,6 @@ import (
 func newBoolPtr(value bool) *bool {
 	newBool := value
 	return &newBool
-}
-
-func newIntPtr(value int64) *int64 {
-	newInt := value
-	return &newInt
 }
 
 var _ = FDescribe("SolrCloud controller - General", func() {
@@ -225,7 +221,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						ContainerSecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:           newBoolPtr(true),
 							ReadOnlyRootFilesystem: newBoolPtr(true),
-							RunAsUser:              newIntPtr(123),
+							RunAsUser:              pointer.Int64(123),
 							Capabilities: &corev1.Capabilities{
 								Add: []corev1.Capability{"someCapability"},
 							},
