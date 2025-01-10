@@ -73,6 +73,10 @@ type PodOptions struct {
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 
+	// ContainerSecurityContext the container-level security context used by the pod's primary container
+	// +optional
+	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
+
 	// Additional environment variables to pass to the default container.
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`

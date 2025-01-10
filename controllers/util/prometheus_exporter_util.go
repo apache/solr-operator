@@ -213,6 +213,11 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		},
 	}
 
+	var containerSecurityContext *corev1.SecurityContext
+	if customPodOptions != nil {
+		containerSecurityContext = customPodOptions.ContainerSecurityContext
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:            SolrPrometheusExporterContainer,
@@ -245,6 +250,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 			},
+			SecurityContext: containerSecurityContext,
 		},
 	}
 
