@@ -356,6 +356,12 @@ func expectNoIngress(ctx context.Context, parentResource client.Object, ingressN
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
 }
 
+func eventuallyExpectNoIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
+	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
 func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalOffset ...int) *policyv1.PodDisruptionBudget {
 	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
 }

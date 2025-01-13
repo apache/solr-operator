@@ -743,4 +743,38 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
 		})
 	})
+
+	FContext("SolrCloud with external addressability", func() {
+		BeforeEach(func() {
+			replicas := int32(1)
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				Replicas: &replicas,
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				SolrAddressability: solrv1beta1.SolrAddressabilityOptions{
+					External: &solrv1beta1.ExternalAddressability{
+						Method:             solrv1beta1.Ingress,
+						UseExternalAddress: true,
+						HideNodes:          false,
+						DomainName:         "test.solr.org",
+					},
+				},
+			}
+		})
+		// TODO Move to solrcloud_controller_ingress_test, unless we add service coverage in this same section?
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the created ingress")
+			expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+
+			By("ensuring the ingress disappears when externalAddressability settings change")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External = nil
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Disable externalAddressability for the solrcloud")
+			})
+			eventuallyExpectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
+		})
+	})
 })
