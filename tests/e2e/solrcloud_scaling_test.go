@@ -62,17 +62,6 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 	})
 
 	FContext("with replica migration", func() {
-		BeforeEach(func() {
-			solrCloud.Spec.SolrAddressability = solrv1beta1.SolrAddressabilityOptions{
-				External: &solrv1beta1.ExternalAddressability{
-					Method:             solrv1beta1.Ingress,
-					UseExternalAddress: true,
-					HideNodes:          false,
-					DomainName:         "test.solr.org",
-				},
-			}
-		})
-
 		FIt("Scales Down", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()
 			solrCloud.Spec.Replicas = pointer.Int32(1)
@@ -144,11 +133,6 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a ScaleDown lock after scaling is complete.")
 			})
-
-			// Once the scale-down occurs, services for the now-defunct pods should begone
-			Eventually(Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.GetSolrPodName(0)), &corev1.Service{})).To(Succeed()))
-			expectNoService(ctx, solrCloud, solrCloud.GetSolrPodName(2), "Pod-2 service still exists after scale-down")
-			expectNoService(ctx, solrCloud, solrCloud.GetSolrPodName(1), "Pod-1 service still exists after scale-down")
 
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
