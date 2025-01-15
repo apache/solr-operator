@@ -26,6 +26,8 @@ rules:
   - ""
   resources:
   - configmaps
+  - secrets
+  - services
   verbs:
   - create
   - delete
@@ -38,20 +40,13 @@ rules:
   - ""
   resources:
   - configmaps/status
+  - services/status
   verbs:
   - get
 - apiGroups:
   - ""
   resources:
   - persistentvolumeclaims
-  verbs:
-  - delete
-  - get
-  - list
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - pods
   verbs:
   - delete
@@ -72,56 +67,9 @@ rules:
   - get
   - patch
 - apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services/status
-  verbs:
-  - get
-- apiGroups:
   - apps
   resources:
   - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - deployments/status
-  verbs:
-  - get
-- apiGroups:
-  - apps
-  resources:
   - statefulsets
   verbs:
   - create
@@ -134,6 +82,7 @@ rules:
 - apiGroups:
   - apps
   resources:
+  - deployments/status
   - statefulsets/status
   verbs:
   - get
@@ -171,57 +120,7 @@ rules:
   - solr.apache.org
   resources:
   - solrbackups
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrbackups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrbackups/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
   - solrclouds
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrclouds/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
-  - solrclouds/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - solr.apache.org
-  resources:
   - solrprometheusexporters
   verbs:
   - create
@@ -234,12 +133,16 @@ rules:
 - apiGroups:
   - solr.apache.org
   resources:
+  - solrbackups/finalizers
+  - solrclouds/finalizers
   - solrprometheusexporters/finalizers
   verbs:
   - update
 - apiGroups:
   - solr.apache.org
   resources:
+  - solrbackups/status
+  - solrclouds/status
   - solrprometheusexporters/status
   verbs:
   - get

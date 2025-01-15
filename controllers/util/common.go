@@ -664,6 +664,15 @@ func CopyResources(from, to *corev1.ResourceRequirements, basePath string, logge
 	return requireUpdate
 }
 
+func CopyVolumeResources(from, to *corev1.VolumeResourceRequirements, basePath string, logger logr.Logger) (requireUpdate bool) {
+
+	requireUpdate = CopyContainerResourceList(&from.Requests, &to.Requests, basePath+"Requests", logger) || requireUpdate
+
+	requireUpdate = CopyContainerResourceList(&from.Limits, &to.Limits, basePath+"Limits", logger) || requireUpdate
+
+	return requireUpdate
+}
+
 func CopyContainerResourceList(fromPtr, toPtr *corev1.ResourceList, basePath string, logger logr.Logger) (requireUpdate bool) {
 	to := *toPtr
 	from := *fromPtr
