@@ -280,7 +280,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.ObjectMeta.Annotations).To(HaveKey(util.SolrScheduledRestartAnnotation), "Pod Template does not have scheduled restart annotation when it should")
 			// Remove the annotation when we know that it exists, we don't know the exact value so we can't check it below.
 			delete(statefulSet.Spec.Template.Annotations, util.SolrScheduledRestartAnnotation)
-			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(map[string]string{"solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations)), "Incorrect pod annotations")
+			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(map[string]string{util.ServiceTypeAnnotation: util.HeadlessServiceType, "solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations)), "Incorrect pod annotations")
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(testNodeSelectors), "Incorrect pod node selectors")
 
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe, testProbeLivenessNonDefaults, "Incorrect Liveness Probe")

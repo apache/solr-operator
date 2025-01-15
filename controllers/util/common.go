@@ -431,8 +431,9 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 	requireUpdate = CopyPodVolumes(&from.Spec.Volumes, &to.Spec.Volumes, basePath+"Spec.Volumes", logger) || requireUpdate
 
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
-		requireUpdate = true
+		hostAliasUpdate := false
 		if to.Spec.HostAliases == nil {
+			hostAliasUpdate = true
 			to.Spec.HostAliases = from.Spec.HostAliases
 		} else {
 			// Do not remove aliases that are no longer used.
@@ -443,19 +444,22 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 					if fromAlias.Hostnames[0] == toAlias.Hostnames[0] {
 						found = true
 						if !DeepEqualWithNils(toAlias, fromAlias) {
-							requireUpdate = true
+							hostAliasUpdate = true
 							to.Spec.HostAliases[i] = fromAlias
 							break
 						}
 					}
 				}
 				if !found {
-					requireUpdate = true
+					hostAliasUpdate = true
 					to.Spec.HostAliases = append(to.Spec.HostAliases, fromAlias)
 				}
 			}
 		}
-		logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
+		if hostAliasUpdate {
+			requireUpdate = true
+			logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
+		}
 	}
 
 	if !DeepEqualWithNils(to.Spec.ImagePullSecrets, from.Spec.ImagePullSecrets) {

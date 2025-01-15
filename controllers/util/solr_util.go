@@ -52,6 +52,10 @@ const (
 	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
+	ServiceTypeAnnotation            = "service-type" // "solr.apache.org/serviceType"
+	HeadlessServiceType              = "headless"
+	PerNodeServiceType               = "external"
+	CommonServiceType                = "common"
 
 	// Protected StatefulSet annotations
 	// These are to be saved on a statefulSet update
@@ -125,6 +129,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 		shareProcessNamespace = customPodOptions.ShareProcessNamespace
 	}
+	if podAnnotations == nil {
+		podAnnotations = make(map[string]string, 1)
+	}
+	var serviceType string
+	if solrCloud.UsesHeadlessService() {
+		serviceType = HeadlessServiceType
+	} else if solrCloud.UsesIndividualNodeServices() {
+		serviceType = PerNodeServiceType
+	}
+	podAnnotations[ServiceTypeAnnotation] = serviceType
 
 	// The isNotStopped readiness gate will always be used for managedUpdates
 	podReadinessGates := []corev1.PodReadinessGate{
@@ -413,9 +427,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Did the user provide a custom log config?
 	if reconcileConfigInfo[LogXmlFile] != "" {
 		if reconcileConfigInfo[LogXmlMd5Annotation] != "" {
-			if podAnnotations == nil {
-				podAnnotations = make(map[string]string, 1)
-			}
 			podAnnotations[LogXmlMd5Annotation] = reconcileConfigInfo[LogXmlMd5Annotation]
 		}
 
@@ -432,9 +443,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
 	// so we get a rolling restart when the configMap changes
 	if reconcileConfigInfo[SolrXmlMd5Annotation] != "" {
-		if podAnnotations == nil {
-			podAnnotations = make(map[string]string, 1)
-		}
 		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
 	}
 
@@ -912,7 +920,7 @@ func getAppProtocol(solrCloud *solr.SolrCloud) *string {
 // solrCloud: SolrCloud instance
 func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "common"
+	labels[ServiceTypeAnnotation] = CommonServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -964,7 +972,7 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 // solrCloud: SolrCloud instance
 func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "headless"
+	labels[ServiceTypeAnnotation] = HeadlessServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -1019,7 +1027,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 // nodeName: string node
 func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "external"
+	labels[ServiceTypeAnnotation] = PerNodeServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
