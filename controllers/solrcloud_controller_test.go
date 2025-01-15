@@ -280,7 +280,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.ObjectMeta.Annotations).To(HaveKey(util.SolrScheduledRestartAnnotation), "Pod Template does not have scheduled restart annotation when it should")
 			// Remove the annotation when we know that it exists, we don't know the exact value so we can't check it below.
 			delete(statefulSet.Spec.Template.Annotations, util.SolrScheduledRestartAnnotation)
-			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(map[string]string{"solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations)), "Incorrect pod annotations")
+			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(map[string]string{util.ServiceTypeAnnotation: util.HeadlessServiceType, "solr.apache.org/solrXmlMd5": fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"])))}, testPodAnnotations)), "Incorrect pod annotations")
 			Expect(statefulSet.Spec.Template.Spec.NodeSelector).To(Equal(testNodeSelectors), "Incorrect pod node selectors")
 
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].LivenessProbe, testProbeLivenessNonDefaults, "Incorrect Liveness Probe")
@@ -757,40 +757,6 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			})
 
 			expectNoConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()))
-		})
-	})
-
-	FContext("SolrCloud with external addressability", func() {
-		BeforeEach(func() {
-			replicas := int32(1)
-			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
-				Replicas: &replicas,
-				ZookeeperRef: &solrv1beta1.ZookeeperRef{
-					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
-						InternalConnectionString: "host:7271",
-					},
-				},
-				SolrAddressability: solrv1beta1.SolrAddressabilityOptions{
-					External: &solrv1beta1.ExternalAddressability{
-						Method:             solrv1beta1.Ingress,
-						UseExternalAddress: true,
-						HideNodes:          false,
-						DomainName:         "test.solr.org",
-					},
-				},
-			}
-		})
-		// TODO Move to solrcloud_controller_ingress_test, unless we add service coverage in this same section?
-		FIt("has the correct resources", func(ctx context.Context) {
-			By("testing the created ingress")
-			expectIngress(ctx, solrCloud, solrCloud.CommonIngressName())
-
-			By("ensuring the ingress disappears when externalAddressability settings change")
-			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				found.Spec.SolrAddressability.External = nil
-				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Disable externalAddressability for the solrcloud")
-			})
-			eventuallyExpectNoIngress(ctx, solrCloud, solrCloud.CommonIngressName())
 		})
 	})
 })

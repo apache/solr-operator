@@ -173,22 +173,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				}
 			}
 		}
-	} else {
-		// Need no individual services per node, delete if found
-		for _, nodeName := range solrNodeNames {
-			serviceName := nodeName
-			foundService := &corev1.Service{}
-			err = r.Get(ctx, types.NamespacedName{Name: serviceName, Namespace: instance.Namespace}, foundService)
-			if err == nil {
-				err = r.Delete(ctx, foundService)
-				if err != nil {
-					return requeueOrNot, err
-				}
-				logger.Info("Deleted service for node", "node", serviceName)
-			} else if !errors.IsNotFound(err) {
-				return requeueOrNot, err
-			}
-		}
 	}
 
 	// Generate HeadlessService
@@ -342,7 +326,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	var statefulSet *appsv1.StatefulSet
-
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet that should exist
 		expectedStatefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
@@ -396,12 +379,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	} else {
 		// If we are blocking the reconciliation of the statefulSet, we still want to find information about it.
-		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				return requeueOrNot, err
-			} else {
+		statefulSet = &appsv1.StatefulSet{}
+		if e := r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet); e != nil {
+			if errors.IsNotFound(e) {
 				statefulSet = nil
+			} else {
+				err = e
 			}
 		}
 	}
@@ -665,6 +648,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
+	// Remove unused services if necessary
+	err = r.cleanupUnconfiguredServices(ctx, instance, podList, logger)
+	if err != nil && !errors.IsNotFound(err) {
+		return requeueOrNot, err
+	}
+
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
 		oldInstance := instance.DeepCopy()
@@ -678,7 +667,76 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return requeueOrNot, err
 }
 
-// InitializePods Ensure that all SolrCloud Pods are initialized
+// cleanupUnconfiguredServices remove services that are no longer defined by the SolrCloud resource, and no longer in use by pods.
+// This does not currently include removing per-node services that are no longer in use because the SolrCloud has been scaled down.
+func (r *SolrCloudReconciler) cleanupUnconfiguredServices(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, podList []corev1.Pod, logger logr.Logger) (err error) {
+	var onlyServiceTypeInUse string
+	if solrCloud.UsesHeadlessService() {
+		onlyServiceTypeInUse = util.HeadlessServiceType
+	} else if solrCloud.UsesIndividualNodeServices() {
+		onlyServiceTypeInUse = util.PerNodeServiceType
+	} else {
+		// This should never happen, there are only 2 options
+		return
+	}
+	for _, pod := range podList {
+		if pod.Annotations == nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
+			if onlyServiceTypeInUse != pod.Annotations[util.ServiceTypeAnnotation] {
+				// Only remove services if all pods are using the same, and configured, type of service.
+				// Otherwise, we are in transition between service types and need to wait to delete anything.
+				return
+			}
+		} else {
+			// If we have a pod missing this annotation, then it has not been fully updated to a supported Operator version.
+			// We don't have the information, so assume both serviceTypes are in use, and don't remove anything.
+			return
+		}
+	}
+
+	// If we are at this point, then we can assume we are completely transitioned and can delete the unused services
+	if solrCloud.UsesHeadlessService() {
+		err = r.deleteServicesOfType(ctx, solrCloud, util.PerNodeServiceType, logger)
+	} else if solrCloud.UsesIndividualNodeServices() {
+		err = r.deleteServicesOfType(ctx, solrCloud, util.HeadlessServiceType, logger)
+	}
+	return
+}
+
+func (r *SolrCloudReconciler) deleteServicesOfType(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceType string, logger logr.Logger) (err error) {
+	foundServices := &corev1.ServiceList{}
+	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels[util.ServiceTypeAnnotation] = serviceType
+
+	serviceSelector := labels.SelectorFromSet(selectorLabels)
+	listOps := &client.ListOptions{
+		Namespace:     solrCloud.Namespace,
+		LabelSelector: serviceSelector,
+	}
+
+	if err = r.List(ctx, foundServices, listOps); err != nil {
+		logger.Error(err, "Error listing services for SolrCloud", "serviceType", serviceType)
+		return
+	}
+
+	for _, headlessService := range foundServices.Items {
+		if e := r.deleteService(ctx, &headlessService, logger); e != nil {
+			// Don't break, just add the error for later
+			err = e
+		}
+	}
+	return
+}
+
+func (r *SolrCloudReconciler) deleteService(ctx context.Context, service *corev1.Service, logger logr.Logger) (err error) {
+	logger.Info("Deleting Service for SolrCloud", "Service", service.Name)
+	err = r.Client.Delete(ctx, service)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Error deleting unused Service for SolrCloud", "Service", service.Name)
+	}
+	return
+}
+
+// initializePods Ensure that all SolrCloud Pods are initialized
 func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
