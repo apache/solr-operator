@@ -618,6 +618,12 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				logger.Info("Update required because field changed", "field", containerBasePath+"TerminationMessagePolicy", "from", to[i].TerminationMessagePolicy, "to", from[i].TerminationMessagePolicy)
 				to[i].TerminationMessagePolicy = from[i].TerminationMessagePolicy
 			}
+
+			if !DeepEqualWithNils(to[i].SecurityContext, from[i].SecurityContext) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"SecurityContext", "from", to[i].SecurityContext, "to", from[i].SecurityContext)
+				to[i].SecurityContext = from[i].SecurityContext
+			}
 		}
 	}
 	return requireUpdate

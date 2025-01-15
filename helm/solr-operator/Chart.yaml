@@ -127,6 +127,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/718
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/734
+    - kind: added
+      description: "SolrCloud now accepts container-level securityContext settings for Solr container."
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/489
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/743
     - kind: fixed
       description: The operator will now delete ingress and per-node services when external ingress is disabled.
       links:
