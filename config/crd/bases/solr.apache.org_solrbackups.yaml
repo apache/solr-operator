@@ -19,7 +19,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.9.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.15.0
+    controller-gen.kubebuilder.io/version: v0.16.4
   name: solrbackups.solr.apache.org
 spec:
   group: solr.apache.org
@@ -93,7 +93,6 @@ spec:
                 description: |-
                   Set this backup to be taken recurrently, with options for scheduling and storage.
 
-
                   NOTE: This is only supported for Solr Clouds version 8.9+, as it uses the incremental backup API.
                 properties:
                   disabled:
@@ -113,12 +112,10 @@ spec:
                     description: |-
                       Perform a backup on the given schedule, in CRON format.
 
-
                       Multiple CRON syntaxes are supported
                         - Standard CRON (e.g. "CRON_TZ=Asia/Seoul 0 6 * * ?")
                         - Predefined Schedules (e.g. "@yearly", "@weekly", "@daily", etc.)
                         - Intervals (e.g. "@every 10h30m")
-
 
                       For more information please check this reference:
                       https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format
