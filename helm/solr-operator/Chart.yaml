@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.9.0-prerelease
-appVersion: v0.9.0-prerelease
+version: 0.10.0-prerelease
+appVersion: v0.10.0-prerelease
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -55,95 +55,19 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
-    - kind: fixed
-      description: gen-pkcs12-keystore initContainer now supports 'ca.crt'-less TLS secrets
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/684
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/685
     - kind: added
-      description: SolrClouds now support namespace sharing among pod containers in a pod.
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/716
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/735
+          url: https://github.com/issue-url
     - kind: changed
-      description: SolrClouds now support auto-readOnlyRootFilesystem setting.
+      description: Change 2
       links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/624
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/648
-    - kind: fixed
-      description: Avoid reset of security.json if get request fails  
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/659
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/660
-    - kind: fixed
-      description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/688
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/689
-    - kind: fixed
-      description: SolrPrometheusExporter no longer fails liveness probes when the SolrCloud is too large
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/693
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/694
-    - kind: security
-      description: Command-based Solr probes no longer echoes 'JAVA_TOOL_OPTIONS' values in Kubernetes events.
-      links:
-        - name: JIRA Issue
-          url: https://issues.apache.org/jira/browse/SOLR-17216
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/698
-    - kind: fixed
-      description: SolrClouds addressed via an Ingress now scale up and down safely.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/682
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/692
-    - kind: fixed
-      description: setup-zk initContainer now gracefully handles absent security.json on initial upload.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/720
-        - name: Additional Github Issue
-          url: https://github.com/apache/solr-operator/issues/731
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/738
-    - kind: added
-      description: "'imagePullSecret' now used when fetching operator image, if provided."
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/718
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/734
-    - kind: added
-      description: "SolrCloud now accepts container-level securityContext settings for Solr container."
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/489
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/743
-    - kind: fixed
-      description: The operator will now delete ingress and per-node services when external ingress is disabled.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/673
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/674
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.9.0-prerelease
+      image: apache/solr-operator:v0.10.0-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
