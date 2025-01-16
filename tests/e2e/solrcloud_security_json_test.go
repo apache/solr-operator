@@ -41,8 +41,8 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 
 	JustBeforeEach(func(ctx context.Context) {
 		By("generating the security.json secret and basic auth secret")
+		generateStarterSolrBasicAuthSecret(ctx, solrCloud)
 		generateBasicSolrSecuritySecret(ctx, solrCloud)
-		generateSolrBasicAuthSecret(ctx, solrCloud)
 
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
@@ -57,8 +57,10 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 		By("creating a first Solr Collection")
 		createAndQueryCollection(ctx, solrCloud, "basic", 2, 1)
 
+		// Because overwrite=false, this won't apply new security json
+		// Pods will start back up, demonstrating that this was not applied
 		By("updating security.json secret")
-		generateStricterSolrSecuritySecret(ctx, solrCloud)
+		generateBreakingSolrSecuritySecret(ctx, solrCloud)
 
 		patchedSolrCloud := solrCloud.DeepCopy()
 		patchedSolrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
@@ -98,19 +100,21 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 		By("querying existing Solr Collection")
 		queryCollection(ctx, solrCloud, "basic", 0, 0)
 
-		By("committing existing Solr Collection with no auth")
-		commitCollection(ctx, solrCloud, "basic", 0)
+		// Now with overwrite set to true, we'll update the applied security to allow "new-oper" user
+		// Operator will continue to use "test-oper" user until we update the basic auth secret
+		By("updating security.json secret")
+		generateUpdatedSolrSecuritySecret(ctx, solrCloud)
 
-		finalPatchedSolrCloud := solrCloud.DeepCopy()
-		finalPatchedSolrCloud.Spec.SolrSecurity.BootstrapSecurityJson.Overwrite = true
-		finalPatchedSolrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
+		secondPatchedSolrCloud := solrCloud.DeepCopy()
+		secondPatchedSolrCloud.Spec.SolrSecurity.BootstrapSecurityJson.Overwrite = true
+		secondPatchedSolrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
 			Annotations: map[string]string{
 				"test": "restart-2",
 			},
 		}
 
 		By("triggering a restart to overwrite the security.json")
-		Expect(k8sClient.Patch(ctx, finalPatchedSolrCloud, client.MergeFrom(solrCloud))).To(Succeed(), "Could not update security spec for SolrCloud pod to initiate restart")
+		Expect(k8sClient.Patch(ctx, secondPatchedSolrCloud, client.MergeFrom(solrCloud))).To(Succeed(), "Could not update security spec for SolrCloud pod to initiate restart")
 
 		// Trimmed down check where we just want the rolling restart to begin then end, as we're not testing restarts here
 		By("waiting for the second restart to begin")
@@ -132,14 +136,34 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 			g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a balanceReplicas lock after balancing is complete.")
 		})
 
-		By("Waiting for the SolrCloud to come up healthy after new security applied")
-		expectSolrCloudToBeReady(ctx, newFoundCloud)
+		// This takes effect immediately (e.g. operater starts using it)
+		// We will perform one more rolling update to demonstrate that the operater can still auth to Solr
+		By("updating basic auth secret with new username")
+		generateSolrBasicAuthSecret(ctx, solrCloud, "new-oper")
 
-		By("querying existing Solr Collection with no auth")
-		queryCollection(ctx, newFoundCloud, "basic", 0, 0)
+		finalPatchedSolrCloud := solrCloud.DeepCopy()
+		finalPatchedSolrCloud.Spec.SolrSecurity.BootstrapSecurityJson.Overwrite = true
+		finalPatchedSolrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
+			Annotations: map[string]string{
+				"test": "restart-3",
+			},
+		}
 
-		By("committing existing Solr Collection with no auth and expecting to fail")
-		commitCollectionExpectingUnauthorized(ctx, newFoundCloud, "basic", 0)
+		By("triggering final restart to show operater authorizing with new uesrname")
+		Expect(k8sClient.Patch(ctx, finalPatchedSolrCloud, client.MergeFrom(solrCloud))).To(Succeed(), "Could not update security spec for SolrCloud pod to initiate restart")
+
+		// Trimmed down check where we just want the rolling restart to begin then end, as we're not testing restarts here
+		By("waiting for the final restart to begin")
+		finalFoundCloud := expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
+			g.Expect(cloud.Status.UpToDateNodes).To(BeZero(), "Cloud did not get to a state with zero up-to-date replicas when rolling restart began.")
+		})
+
+		// After all pods are ready, make sure that the SolrCloud status is correct
+		By("waiting for the final restart to complete")
+		expectSolrCloudWithChecks(ctx, finalFoundCloud, func(g Gomega, cloud *solrv1beta1.SolrCloud) {
+			g.Expect(cloud.Status.UpToDateNodes).To(Equal(int32(2)), "The SolrCloud did not finish the rolling restart as not all nodes are up to date. Only reached %d", solrCloud.Status.UpToDateNodes)
+			g.Expect(cloud.Status.ReadyReplicas).To(Equal(int32(2)), "The SolrCloud did not finish the rolling restart as not all nodes are ready. Only reached %d", solrCloud.Status.ReadyReplicas)
+		})
 	})
 
 	FContext("Provided Zookeeper", func() {
