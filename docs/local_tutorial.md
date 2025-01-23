@@ -90,9 +90,9 @@ This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-
 
 ```bash
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.8.1/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.9.0/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.8.1
+$ helm install solr-operator apache-solr/solr-operator --version 0.9.0
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -122,9 +122,9 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a 3-node cluster v8.11.2 with 300m Heap each:
-helm install example-solr apache-solr/solr --version 0.8.1 \
-  --set image.tag=8.11.2 \
+# Create a 3-node cluster v8.11 with 300m Heap each:
+helm install example-solr apache-solr/solr --version 0.9.0 \
+  --set image.tag=8.11 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
   --set addressability.external.domainName="ing.local.domain" \
@@ -211,9 +211,9 @@ So we wish to upgrade to a newer Solr version:
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
-helm upgrade example-solr apache-solr/solr --version 0.8.1 \
+helm upgrade example-solr apache-solr/solr --version 0.9.0 \
   --reuse-values \
-  --set image.tag=8.11.3
+  --set image.tag=8.7
 
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column

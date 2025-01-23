@@ -55,6 +55,11 @@ export PATH="$PATH:$GOPATH/bin" # You likely want to add this line to your ~/.ba
 make install-dependencies
 ```
 
+Note: if you have previously installed/older versions of dependencies, you can first clear these dependencies with:
+```bash
+make clean
+```
+
 ## Build the Solr CRDs
 
 If you have changed anything in the [APIs directory](/api/v1beta1), you will need to run the following command to regenerate all Solr CRDs.
