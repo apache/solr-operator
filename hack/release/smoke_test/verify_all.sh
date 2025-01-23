@@ -112,12 +112,11 @@ echo "Download all artifacts and verify signatures"
           gpg --verify "${artifact}.asc" "${artifact}" \
             || { echo "Invalid signature for ${artifact}. Aborting!"; exit 1; }
         fi
+        # If a helm chart has a provenance file, and a GPG Key was provided, then verify the provenance file
+        if [[ -f "${artifact}.prov" && -n "${GPG_KEY:-}" ]]; then
+          helm verify "${artifact}"
+        fi
       done
-
-      # If a helm chart has a provenance file, and a GPG Key was provided, then verify the provenance file
-      if [[ -f "${artifact}.prov" && -n "${GPG_KEY:-}" ]]; then
-        helm verify "${artifact}"
-      fi
     )
   done
 
