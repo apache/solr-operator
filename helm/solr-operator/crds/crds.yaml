@@ -17704,6 +17704,11 @@ spec:
                 description: InternalCommonAddress is the internal common http address
                   for all solr nodes
                 type: string
+              observedGeneration:
+                description: ObservedGeneration represents the most recent generation
+                  observed for this SolrCloud.
+                format: int64
+                type: integer
               podSelector:
                 description: PodSelector for SolrCloud pods, required by the HPA
                 type: string
@@ -17848,6 +17853,7 @@ spec:
                 type: object
             required:
             - internalCommonAddress
+            - observedGeneration
             - podSelector
             - readyReplicas
             - replicas
