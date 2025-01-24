@@ -130,7 +130,7 @@ function run_tests() {
       GINKGO_PARAMS+=("${param}" "${!envName}")
     fi
   done
-  GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
+  GINKGO_PARAMS+=("${RAW_GINKGO[@]:-}")
 
   GINKGO_EDITOR_INTEGRATION=true ginkgo --randomize-all "${GINKGO_PARAMS[@]}" "${REPO_DIR}"/tests/e2e/...
 

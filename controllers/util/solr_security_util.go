@@ -23,6 +23,11 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/rand"
+	"regexp"
+	"strings"
+	"time"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,12 +35,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"math/rand"
-	"regexp"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"strings"
-	"time"
 )
 
 const (
@@ -49,10 +50,11 @@ const (
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,
 // such as the secret holding credentials the operator should use to make calls to secure Solr
 type SecurityConfig struct {
-	SolrSecurity      *solr.SolrSecurityOptions
-	CredentialsSecret *corev1.Secret
-	SecurityJson      string
-	SecurityJsonSrc   *corev1.EnvVarSource
+	SolrSecurity          *solr.SolrSecurityOptions
+	CredentialsSecret     *corev1.Secret
+	SecurityJson          string
+	SecurityJsonSrc       *corev1.EnvVarSource
+	SecurityJsonOverwrite bool
 }
 
 // Given a SolrCloud instance and an API service client, produce a SecurityConfig needed to enable Solr security
@@ -117,6 +119,7 @@ func reconcileForBasicAuthWithBootstrappedSecurityJson(ctx context.Context, clie
 
 		// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
 		security.SecurityJson = string(bootstrapSecret.Data[SecurityJsonFile])
+		security.SecurityJsonOverwrite = false
 		basicAuthSecret = authSecret
 	}
 
@@ -136,6 +139,7 @@ func reconcileForBasicAuthWithBootstrappedSecurityJson(ctx context.Context, clie
 		} else {
 			// stash this so we can configure the setup-zk initContainer to bootstrap the security.json in ZK
 			security.SecurityJson = string(bootstrapSecret.Data[SecurityJsonFile])
+			security.SecurityJsonOverwrite = false
 			security.SecurityJsonSrc = &corev1.EnvVarSource{
 				SecretKeyRef: &corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: bootstrapSecret.Name}, Key: SecurityJsonFile}}
@@ -166,13 +170,14 @@ func reconcileForBasicAuthWithUserProvidedSecret(ctx context.Context, client *cl
 
 	// is there a user-provided security.json in a secret?
 	// in this config, we don't need to enforce the user providing a security.json as they can bootstrap the security.json however they want
-	if sec.BootstrapSecurityJson != nil {
-		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson, instance.Namespace)
+	if sec.BootstrapSecurityJson != nil && sec.BootstrapSecurityJson.SecurityJsonSecret != nil {
+		securityJson, err := loadSecurityJsonFromSecret(ctx, client, sec.BootstrapSecurityJson.SecurityJsonSecret, instance.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		security.SecurityJson = securityJson
-		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson}
+		security.SecurityJsonSrc = &corev1.EnvVarSource{SecretKeyRef: sec.BootstrapSecurityJson.SecurityJsonSecret}
+		security.SecurityJsonOverwrite = sec.BootstrapSecurityJson.Overwrite
 	} // else no user-provided secret, no sweat for us
 
 	return security, nil
@@ -240,11 +245,16 @@ func cmdToPutSecurityJsonInZk() string {
 	cmd := " solr zk cp zk:/security.json /tmp/current_security.json >/dev/null 2>&1; " +
 		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
 		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
-		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then " + // File doesn't exist, is empty, or is just '{}'
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json; then " + // File doesn't exist, is empty, or is just '{}'
 		" echo $SECURITY_JSON > /tmp/security.json;" +
 		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
 		" echo 'Blank security.json found. Put new security.json in ZK'; " +
-		"fi; " + // TODO: Consider checking a diff and still applying over the top
+		"elif [ \"${SECURITY_JSON_OVERWRITE}\" = true ] && [ \"$(cat /tmp/current_security.json)\" != \"$(echo $SECURITY_JSON)\" ]; then " + // We want to overwrite the security config if there's a diff
+		" echo $SECURITY_JSON > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'Diff found. Overwriting security.json in ZK'; " +
+		" else " +
+		" echo 'Not overwriting security.json'; fi; " +
 		"elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " + // JSON doesn't exist, but not other error types
 		" echo $SECURITY_JSON > /tmp/security.json;" +
 		" solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +

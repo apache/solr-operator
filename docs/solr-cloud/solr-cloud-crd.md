@@ -1126,8 +1126,11 @@ spec:
     bootstrapSecurityJson:
       name: my-custom-security-json
       key: security.json
+      overwrite: false
 ```
 For `Basic` authentication, if you don't supply a `security.json` Secret, then the operator assumes you are bootstrapping the security configuration via some other means.
+
+If `overwrite` is set to `true`, the security.json for the cluster will be updated if there is a difference between the underlying secret and the security.json in ZK.
 
 Refer to the example `security.json` shown in the Authorization section above to help you get started crafting your own custom configuration. 
 

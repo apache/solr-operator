@@ -937,7 +937,7 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 			g.Expect(zkSetupInitContainer.Command[2]).To(ContainSubstring(expChrootCmd), "ZK Setup command does init the chroot")
 			expNumVars := 3
 			if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" {
-				expNumVars = 4 // one more for SECURITY_JSON
+				expNumVars = 5 // two more for SECURITY_JSON and SECURITY_JSON_OVERWRITE
 			}
 			g.Expect(zkSetupInitContainer.Env).To(HaveLen(expNumVars), "Wrong number of envVars for zk-setup init container")
 		}

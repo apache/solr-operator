@@ -45,6 +45,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
@@ -584,14 +585,8 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 // Uses default password from docs : SolrRocks
 // The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
 // See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
-func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
-	securityJsonSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.Name + "-security-secret",
-			Namespace: solrCloud.Namespace,
-		},
-		StringData: map[string]string{
-			"security.json": `{
+func generateBasicSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrSecuritySecret(ctx, solrCloud, `{
 				"authentication": {
 				"blockUnknown": false,
 				"class": "solr.BasicAuthPlugin",
@@ -618,7 +613,103 @@ func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.Solr
 					}
 				]
 				}
-			}`,
+			}`)
+
+}
+
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
+// Reusing the password as the salt is not entirely clear
+//
+// Same as the basic security json, except we allow a new user that the operater will use
+func generateUpdatedSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrSecuritySecret(ctx, solrCloud, `{
+				"authentication": {
+				"blockUnknown": false,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c=",
+					"new-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"new-oper": "new-oper",
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					}
+				]
+				}
+			}`)
+
+}
+
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
+//
+// This would break default probes because we are blocking unknown requests
+func generateBreakingSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrSecuritySecret(ctx, solrCloud, `{
+				"authentication": {
+				"blockUnknown": true,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					}
+				]
+				}
+			}`)
+
+}
+
+func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, securityJson string) {
+
+	existingSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Namespace: solrCloud.Namespace, Name: solrCloud.Name + "-security-secret"}, existingSecret)
+	if err == nil {
+		By("deleting the existing secret " + existingSecret.Name)
+		deleteAndWait(ctx, existingSecret)
+	}
+
+	securityJsonSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-security-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		StringData: map[string]string{
+			"security.json": securityJson,
 		},
 		Type: corev1.SecretTypeOpaque,
 	}
@@ -628,7 +719,20 @@ func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.Solr
 	return
 }
 
-func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+func generateStarterSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	generateSolrBasicAuthSecret(ctx, solrCloud, "test-oper")
+	return
+}
+
+func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, username string) {
+
+	existingSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Namespace: solrCloud.Namespace, Name: solrCloud.Name + "-basic-auth-secret"}, existingSecret)
+	if err == nil {
+		By("deleting the existing secret " + existingSecret.Name)
+		deleteAndWait(ctx, existingSecret)
+	}
+
 	basicAuthSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrCloud.Name + "-basic-auth-secret",
@@ -636,7 +740,7 @@ func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.Sol
 		},
 		// Using default creds
 		StringData: map[string]string{
-			"username": "test-oper",
+			"username": username,
 			"password": "SolrRocks",
 		},
 		Type: corev1.SecretTypeBasicAuth,
@@ -649,13 +753,27 @@ func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.Sol
 
 func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud {
 	solrCloud := generateBaseSolrCloud(replicas)
+	one := intstr.FromInt(1)
+	hundredPerc := intstr.FromString("100%")
+	solrCloud.Spec.UpdateStrategy = solrv1beta1.SolrUpdateStrategy{
+		Method: "Managed",
+		ManagedUpdateOptions: solrv1beta1.ManagedUpdateOptions{
+			MaxPodsUnavailable:          &one,
+			MaxShardReplicasUnavailable: &hundredPerc,
+		},
+	}
 
 	// Ensure SolrSecurity is initialized
 	if solrCloud.Spec.SolrSecurity == nil {
 		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
 	}
 
-	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &corev1.SecretKeySelector{
+	if solrCloud.Spec.SolrSecurity.BootstrapSecurityJson == nil {
+		solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &solrv1beta1.BootstrapSecurityJson{}
+		solrCloud.Spec.SolrSecurity.ProbesRequireAuth = true
+	}
+
+	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson.SecurityJsonSecret = &corev1.SecretKeySelector{
 		LocalObjectReference: corev1.LocalObjectReference{
 			Name: solrCloud.Name + "-security-secret",
 		},

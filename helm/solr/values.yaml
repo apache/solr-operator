@@ -71,6 +71,7 @@ solrOptions:
     # bootstrapSecurityJson:
     #   name: my-custom-security-json-secret
     #   key: security.json
+    #   overwrite: false
 
 
 # Specify how the SolrCloud should be addressable
