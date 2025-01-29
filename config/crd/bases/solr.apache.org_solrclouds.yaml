@@ -16022,7 +16022,6 @@ spec:
                 type: object
             required:
             - internalCommonAddress
-            - observedGeneration
             - podSelector
             - readyReplicas
             - replicas

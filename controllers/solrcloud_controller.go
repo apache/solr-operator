@@ -117,23 +117,23 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	newStatus := solrv1beta1.SolrCloudStatus{}
 
-	// Updating ObservedGeneration after checking requeueOrNot to ensure that the operator has finished processing changes in spec, regardless of whether the reconciliation is successful or not. 
+	// Updating ObservedGeneration after checking requeueOrNot to ensure that the operator has finished processing changes in spec, regardless of whether the reconciliation is successful or not.
 	// It simply indicates that the operator has tried all possible actions.
-	defer func ()  {
+	defer func() {
 		if instance.GetDeletionTimestamp() != nil || reflect.DeepEqual(instance.Status, solrv1beta1.SolrCloudStatus{}) {
-         	   logger.Info("Skipping ObservedGeneration update due to empty status or instance deletion")
-	           return
-	        }
-		if (instance.Status.ObservedGeneration == nil || *instance.Status.ObservedGeneration!=reconcileGeneration){
-			if (!requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0){
+			logger.Info("Skipping ObservedGeneration update due to empty status or instance deletion")
+			return
+		}
+		if instance.Status.ObservedGeneration == nil || *instance.Status.ObservedGeneration != reconcileGeneration {
+			if !requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0 {
 				logger.Info("Updating Solrcloud Observed Generation")
-				oldinstance:= instance.DeepCopy()
+				oldinstance := instance.DeepCopy()
 				instance.Status.ObservedGeneration = &reconcileGeneration
 				err := r.Status().Patch(ctx, instance, client.MergeFrom(oldinstance))
 				if err != nil {
 					logger.Error(err, "Failed to patch ObservedGeneration")
 				}
-		    }
+			}
 
 		}
 
@@ -663,13 +663,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
-		if !requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0{
-			    newStatus.ObservedGeneration = &reconcileGeneration
-		}else if newStatus.ObservedGeneration!=nil{
-			newStatus.ObservedGeneration= instance.Status.ObservedGeneration
-		}else {
-			zero := int64(0)
-			newStatus.ObservedGeneration = &zero
+		if !requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0 {
+			newStatus.ObservedGeneration = &reconcileGeneration
+		} else if newStatus.ObservedGeneration != nil {
+			newStatus.ObservedGeneration = instance.Status.ObservedGeneration
+		} else {
+			defaultObservedGeneration := int64(0)
+			newStatus.ObservedGeneration = &defaultObservedGeneration
 		}
 		oldInstance := instance.DeepCopy()
 		instance.Status = newStatus
