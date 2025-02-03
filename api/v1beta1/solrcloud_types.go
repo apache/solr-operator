@@ -1630,7 +1630,7 @@ type BootstrapSecurityJson struct {
 	// Flag to indicate if the operator should overwrite an existing security.json if there are changes
 	// as compared to the underlying secret
 	// +optional
-	Overwrite bool `json:"probesRequireAuth,omitempty"`
+	Overwrite bool `json:"overwrite,omitempty"`
 }
 
 type SolrSecurityOptions struct {

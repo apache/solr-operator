@@ -10230,7 +10230,7 @@ spec:
                         - key
                         type: object
                         x-kubernetes-map-type: atomic
-                      probesRequireAuth:
+                      overwrite:
                         description: |-
                           Flag to indicate if the operator should overwrite an existing security.json if there are changes
                           as compared to the underlying secret
