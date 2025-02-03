@@ -177,9 +177,12 @@ var _ = FDescribe("SolrCloud controller - Basic Auth", func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
 				AuthenticationType: solrv1beta1.Basic,
 				BasicAuthSecret:    basicAuthSecretName,
-				BootstrapSecurityJson: &corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json"},
-					Key:                  util.SecurityJsonFile,
+				BootstrapSecurityJson: &solrv1beta1.BootstrapSecurityJson{
+					SecurityJsonSecret: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: "my-security-json"},
+						Key:                  util.SecurityJsonFile,
+					},
+					Overwrite: false,
 				},
 			}
 		})
@@ -324,10 +327,11 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {
-				g.Expect(expInitContainer.Env).To(HaveLen(10), "Wrong number of env vars using ACLs and Basic Auth")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced the Solr Pod env vars")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced the Solr Pod env vars")
-				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
+				g.Expect(expInitContainer.Env).To(HaveLen(11), "Wrong number of env vars using ACLs and Basic Auth")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-3].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced the Solr Pod env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced the Solr Pod env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON_OVERWRITE"), "Env var SECURITY_JSON_OVERWRITE is misplaced the Solr Pod env vars")
+				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-3], true)
 			} // else this ref not using ACLs
 
 			expectPutSecurityJsonInZkCmd(g, expInitContainer)
@@ -353,9 +357,15 @@ func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) 
 	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
 	expCmd := "solr zk cp zk:/security.json /tmp/current_security.json >/dev/null 2>&1;  " +
 		"GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " +
-		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then  " +
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json; then  " +
 		"echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
-		" echo 'Blank security.json found. Put new security.json in ZK'; fi; elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; " +
+		"elif [ \"${SECURITY_JSON_OVERWRITE}\" = true ] && [ \"$(cat /tmp/current_security.json)\" != \"$(echo $SECURITY_JSON)\" ]; then " +
+		" echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
+		" echo 'Diff found. Overwriting security.json in ZK'; " +
+		" else " +
+		" echo 'Not overwriting security.json'; fi; " +
+		"elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " +
 		" echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json >/dev/null 2>&1; " +
 		" echo 'No security.json found. Put new security.json in ZK'; fi"
 	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")

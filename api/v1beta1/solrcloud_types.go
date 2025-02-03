@@ -19,11 +19,12 @@ package v1beta1
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"math/rand"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -681,7 +682,8 @@ type ManagedUpdateOptions struct {
 	// The maximum number of pods that can be unavailable during the update.
 	// Value can be an absolute number (ex: 5) or a percentage of the desired number of pods (ex: 10%).
 	// Absolute number is calculated from percentage by rounding down.
-	// If the provided number is 0 or negative, then all pods will be allowed to be updated in unison.
+	// If the provided number is 0, then all pods will be allowed to be updated in unison.
+	// Negatives are not allowed.
 	//
 	// Defaults to 25%.
 	//
@@ -691,7 +693,8 @@ type ManagedUpdateOptions struct {
 	// The maximum number of replicas for each shard that can be unavailable during the update.
 	// Value can be an absolute number (ex: 5) or a percentage of replicas in a shard (ex: 25%).
 	// Absolute number is calculated from percentage by rounding down.
-	// If the provided number is 0 or negative, then all replicas will be allowed to be updated in unison.
+	// If the provided number is 0 , then all replicas will be allowed to be updated in unison.
+	// Negatives are not allowed.
 	//
 	// Defaults to 1.
 	//
@@ -1621,6 +1624,15 @@ const (
 	Basic AuthenticationType = "Basic"
 )
 
+type BootstrapSecurityJson struct {
+	SecurityJsonSecret *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
+
+	// Flag to indicate if the operator should overwrite an existing security.json if there are changes
+	// as compared to the underlying secret
+	// +optional
+	Overwrite bool `json:"overwrite,omitempty"`
+}
+
 type SolrSecurityOptions struct {
 	// Indicates the authentication plugin type that is being used by Solr; for now only "Basic" is supported by the
 	// Solr operator but support for other authentication plugins may be added in the future.
@@ -1649,7 +1661,5 @@ type SolrSecurityOptions struct {
 
 	// Configure a user-provided security.json from a secret to allow for advanced security config.
 	// If not specified, the operator bootstraps a security.json with basic auth enabled.
-	// This is a bootstrapping config only; once Solr is initialized, the security config should be managed by the security API.
-	// +optional
-	BootstrapSecurityJson *corev1.SecretKeySelector `json:"bootstrapSecurityJson,omitempty"`
+	BootstrapSecurityJson *BootstrapSecurityJson `json:"bootstrapSecurityJson,omitempty"`
 }
