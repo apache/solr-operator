@@ -116,8 +116,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	requeueOrNot := reconcile.Result{}
 
 	newStatus := solrv1beta1.SolrCloudStatus{}
+	var updateObservedGeneration bool
 
-	// Updating ObservedGeneration after checking requeueOrNot to ensure that the operator has finished processing changes in spec, regardless of whether the reconciliation is successful or not.
+	// Update the observed generation if reconcile exits early due to an error, indicating no further progress can be made.
 	// It simply indicates that the operator has tried all possible actions.
 	defer func() {
 		if instance.GetDeletionTimestamp() != nil || reflect.DeepEqual(instance.Status, solrv1beta1.SolrCloudStatus{}) {
@@ -125,7 +126,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return
 		}
 		if instance.Status.ObservedGeneration == nil || *instance.Status.ObservedGeneration != reconcileGeneration {
-			if !requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0 {
+			if updateObservedGeneration == true {
 				logger.Info("Updating Solrcloud Observed Generation")
 				oldinstance := instance.DeepCopy()
 				instance.Status.ObservedGeneration = &reconcileGeneration
@@ -134,9 +135,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					logger.Error(err, "Failed to patch ObservedGeneration")
 				}
 			}
-
 		}
-
 	}()
 
 	blockReconciliationOfStatefulSet := false
@@ -661,16 +660,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return requeueOrNot, err
 		}
 	}
+
+	updateObservedGeneration = false
+	newStatus.ObservedGeneration = instance.Status.ObservedGeneration
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
-		if !requeueOrNot.Requeue && requeueOrNot.RequeueAfter == 0 {
-			newStatus.ObservedGeneration = &reconcileGeneration
-		} else if newStatus.ObservedGeneration != nil {
-			newStatus.ObservedGeneration = instance.Status.ObservedGeneration
-		} else {
-			defaultObservedGeneration := int64(0)
-			newStatus.ObservedGeneration = &defaultObservedGeneration
-		}
+		newStatus.ObservedGeneration = &reconcileGeneration
 		oldInstance := instance.DeepCopy()
 		instance.Status = newStatus
 		err = r.Status().Patch(ctx, instance, client.MergeFrom(oldInstance))
