@@ -1169,6 +1169,13 @@ func CreateSolrIngressRules(solrCloud *solr.SolrCloud, nodeNames []string, domai
 			}
 		}
 	}
+	if solrCloud.Spec.SolrAddressability.External.HostName != "" {
+		for _, domainName := range domainNames {
+			rule := CreateHostNameIngressRule(solrCloud, domainName)
+			ingressRules = append(ingressRules, rule)
+			allHosts = append(allHosts, rule.Host)
+		}
+	}
 	return
 }
 
@@ -1217,6 +1224,34 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 								Name: nodeName,
 								Port: netv1.ServiceBackendPort{
 									Number: int32(solrCloud.NodePort()),
+								},
+							},
+						},
+						PathType: &pathType,
+					},
+				},
+			},
+		},
+	}
+	return ingressRule
+}
+
+// CreateHostNameIngressRule returns a new Ingress Rule generated for a SolrCloud under the given hostName in the solrCloud instance
+// solrCloud: SolrCloud instance
+// domainName: string Domain for the ingress rule to use
+func CreateHostNameIngressRule(solrCloud *solr.SolrCloud, domainName string) (ingressRule netv1.IngressRule) {
+	pathType := netv1.PathTypeImplementationSpecific
+	ingressRule = netv1.IngressRule{
+		Host: solrCloud.ExternalHostNameUrl(domainName, false),
+		IngressRuleValue: netv1.IngressRuleValue{
+			HTTP: &netv1.HTTPIngressRuleValue{
+				Paths: []netv1.HTTPIngressPath{
+					{
+						Backend: netv1.IngressBackend{
+							Service: &netv1.IngressServiceBackend{
+								Name: solrCloud.CommonServiceName(),
+								Port: netv1.ServiceBackendPort{
+									Number: int32(solrCloud.Spec.SolrAddressability.CommonServicePort),
 								},
 							},
 						},

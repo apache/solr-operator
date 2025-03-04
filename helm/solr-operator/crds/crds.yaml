@@ -10157,6 +10157,12 @@ spec:
                           The number of services this affects could range from 1 (a headless service for ExternalDNS) to the number of Solr pods your cloud contains (individual node services for Ingress/LoadBalancer).
                           Defaults to false.
                         type: boolean
+                      hostName:
+                        description: |-
+                          Provide a custom host / dns name for the ingress resource that gets created.
+                          This uses the DomainName, so you only specify the actual Host in front of it.
+                          e.g. given.domain.name.com -> my-solr-ingress.given.domain.name.com
+                        type: string
                       ingressTLSTermination:
                         description: |-
                           IngressTLSTermination tells the SolrCloud Ingress to terminate TLS on incoming connections.
