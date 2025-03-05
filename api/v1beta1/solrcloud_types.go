@@ -540,6 +540,11 @@ type ExternalAddressability struct {
 	// +optional
 	AdditionalDomainNames []string `json:"additionalDomainNames,omitempty"`
 
+	// Provide a custom host / dns name for the ingress resource that gets created.
+	// This uses the DomainName, so you only specify the actual Host in front of it.
+	// e.g. given.domain.name.com -> my-solr-ingress.given.domain.name.com
+	HostName string `json:"hostName,omitempty"`
+
 	// NodePortOverride defines the port to have all Solr node service(s) listen on and advertise itself as if advertising through an Ingress or LoadBalancer.
 	// This overrides the default usage of the podPort.
 	//
@@ -1456,6 +1461,12 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 		// Ingress does not require a port, since the port is whatever the ingress is listening on (80 and 443)
 		url += sc.CommonPortSuffix(true)
 	}
+	return url
+}
+
+// ExternalHostNameUrl assumes we are using Ingress as the Addressability method
+func (sc *SolrCloud) ExternalHostNameUrl(domainName string, withPort bool) (url string) {
+	url = fmt.Sprintf("%s.%s", sc.Spec.SolrAddressability.External.HostName, domainName)
 	return url
 }
 
