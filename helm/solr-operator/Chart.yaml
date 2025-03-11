@@ -55,16 +55,15 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: fixed 
+      description: "initContainers can once again connect to ZooKeeper when Solr 9.8.x images are used"
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/762
+        - name: JIRA Issue
+          url: https://issues.apache.org/jira/browse/SOLR-17690
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/756
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.1-prerelease
