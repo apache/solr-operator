@@ -38,6 +38,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.8.x`        | :x: | :x: |        :x:         |        :x:         | :heavy_check_mark: |
+|       `v0.9.x`        | :x: | :x: |        :x:         |        :x:         | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -51,6 +52,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.6.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
 |       `v0.7.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
 |       `v0.8.x`        |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: :one: |    :heavy_check_mark:    |
+|       `v0.9.x`        |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: :one: |    :heavy_check_mark:    |
 
 **Exceptions**
 * :one: `SolrTLS` and `SolrClientTLS` are not supported
