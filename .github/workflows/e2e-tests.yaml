@@ -53,9 +53,9 @@ jobs:
 
     steps:
       # Setup
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
 
@@ -63,7 +63,7 @@ jobs:
 
       - name: Install dev dependencies
         id: cache-bin
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: bin
           key: ${{ runner.os }}-code-dependencies-${{ matrix.go-version }}-${{ hashFiles('Makefile') }}
