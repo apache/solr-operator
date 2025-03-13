@@ -20,7 +20,7 @@ metadata:
 spec:
   replicas: 1
   solrImage:
-    tag: 8.7.0
+    tag: "8.11"
   customSolrKubeOptions:
     podOptions:
       nodeSelector:
