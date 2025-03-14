@@ -240,7 +240,7 @@ func cmdToPutSecurityJsonInZk() string {
 	cmd := " solr zk cp zk:/security.json /tmp/current_security.json -z $ZK_HOST >/dev/null 2>&1; " +
 		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
 		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
-		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ]; then " + // File doesn't exist, is empty, or is just '{}'
+		"if [[ ! -s /tmp/current_security.json ]] || grep -q '^{}$' /tmp/current_security.json ; then " + // File doesn't exist, is empty, or is just '{}'
 		" echo $SECURITY_JSON > /tmp/security.json;" +
 		" solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
 		" echo 'Blank security.json found. Put new security.json in ZK'; " +
