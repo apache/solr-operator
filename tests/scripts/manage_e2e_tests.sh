@@ -81,7 +81,8 @@ fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
 fi
-IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
+#IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
+IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO[@]:-()}); unset IFS
 
 CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
 export CLUSTER_NAME
