@@ -393,6 +393,7 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
           { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
+          { "name": "k8s-replica-balancing", "role":"k8s", "collection": null, "path":"/api/cluster/replicas/balance" },
           { "name": "read", "role":["admin","users"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": ["admin"] },

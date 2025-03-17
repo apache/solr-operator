@@ -1033,6 +1033,12 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "path": "/admin/ping"
       },
       {
+        "name": "k8s-replica-balancing",
+        "role": "k8s",
+        "collection": null,
+        "path": "/api/cluster/replicas/balance"
+      },
+      {
         "name": "read",
         "role": [ "admin", "users" ]
       },
@@ -1165,6 +1171,7 @@ Users need to ensure their `security.json` contains the user supplied in the `ba
 /admin/metrics
 /admin/ping (for collection="*")
 /admin/zookeeper/status
+/api/cluster/replicas/balance
 ```
 _Tip: see the authorization rules defined by the default `security.json` as a guide for configuring access for the operator user_
 
