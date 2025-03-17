@@ -71,6 +71,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/761
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/766
+    - kind: fixed
+      description: "Fix `setup-zk` initContainer no-such-file-or-directory warning"
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/759
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/769
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.1-prerelease
