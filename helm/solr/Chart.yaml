@@ -42,15 +42,7 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
-      description: Addition 1
-      links:
-        - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
-        - name: Github PR
-          url: https://github.com/pr-url
+      description: "Requires version v0.9.1 of the solr-operator helm chart"
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
