@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -233,7 +234,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}
 
 	additionalOffset += 1
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -246,7 +247,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}).Within(time.Second*10).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
 	// Only wait 5 seconds when trying to create the asyncCommand
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -271,7 +272,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
 	}).Within(time.Second*40).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -296,7 +297,7 @@ func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, coll
 }
 
 func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
-	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -476,6 +477,20 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		queryParamsString = "?" + queryParamsString
 	}
 
+	toolOpts := ""
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solrv1beta1.Basic {
+		basicAuthSecretName := solrCloud.BasicAuthSecretName()
+		basicAuthSecret := &corev1.Secret{}
+		if err = k8sClient.Get(ctx, resourceKey(solrCloud, basicAuthSecretName), basicAuthSecret); err != nil {
+			return "", err
+		}
+		toolOpts =
+			"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" +
+				string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) +
+				" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+	}
+	GinkgoLogr.Info(toolOpts)
+
 	command := []string{
 		"solr",
 		"api",
@@ -488,6 +503,12 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 			solrCloud.NodePortSuffix(false),
 			apiPath,
 			queryParamsString),
+	}
+	if toolOpts != "" {
+		commandString := fmt.Sprintf("%s %s", toolOpts, strings.Join(command, " "))
+		commandString = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(commandString), " ")
+
+		command = []string{"sh", "-c", fmt.Sprintf("%q", commandString)}
 	}
 	return runExecForContainer(ctx, util.SolrNodeContainer, solrCloud.GetRandomSolrPodName(), solrCloud.Namespace, command)
 }
@@ -654,17 +675,6 @@ func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud 
 	if solrCloud.Spec.SolrSecurity == nil {
 		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
 	}
-
-	solrCloud.Spec.SolrSecurity.BootstrapSecurityJson = &corev1.SecretKeySelector{
-		LocalObjectReference: corev1.LocalObjectReference{
-			Name: solrCloud.Name + "-security-secret",
-		},
-		Key: "security.json",
-	}
-
-	solrCloud.Spec.SolrSecurity.AuthenticationType = "Basic"
-
-	solrCloud.Spec.SolrSecurity.BasicAuthSecret = solrCloud.Name + "-basic-auth-secret"
 
 	return solrCloud
 }

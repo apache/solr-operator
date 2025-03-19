@@ -78,6 +78,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/759
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/769
+    - kind: fixed
+      description: "Fix default bootstrapped permissions for replica balancing"
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/653
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/770
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.1-prerelease

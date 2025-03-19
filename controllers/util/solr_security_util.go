@@ -117,6 +117,9 @@ func reconcileForBasicAuthWithBootstrappedSecurityJson(ctx context.Context, clie
 
 		// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
 		security.SecurityJson = string(bootstrapSecret.Data[SecurityJsonFile])
+		security.SecurityJsonSrc = &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: bootstrapSecret.Name}, Key: SecurityJsonFile}}
 		basicAuthSecret = authSecret
 	}
 
@@ -393,7 +396,9 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
           { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "read", "role":["admin","users"] },
+          { "name": "k8s-replica-balancing", "role":"k8s", "collection": null, "path":"/____v2/cluster/replicas/balance" },
+          { "name": "collection-admin-edit", "role":"k8s" },
+          { "name": "read", "role":["admin","users","k8s"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": ["admin"] },
           { "name": "security-edit", "role": ["admin"] },
