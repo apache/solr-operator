@@ -85,6 +85,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/653
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/770
+    - kind: fixed
+      description: "Fix unneeded ERROR logging for non-existent resources"
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/773
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.9.1-prerelease
