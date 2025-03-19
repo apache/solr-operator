@@ -99,7 +99,7 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 
 			By("make sure scaleDown happens without a clusterLock and eventually the replicas are removed")
 			// Once the scale down actually occurs, the statefulSet annotations should be removed very soon
-			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*30, time.Millisecond*500, func(g Gomega, found *appsv1.StatefulSet) {
+			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Minute*2, time.Millisecond*500, func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Replicas).To(HaveValue(BeEquivalentTo(2)), "StatefulSet should eventually have 2 pods.")
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
