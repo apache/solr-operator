@@ -106,6 +106,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	var err error
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
+	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
@@ -338,12 +339,31 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	}
 
 	foundServices := &corev1.ServiceList{}
-	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr pods")
+	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr services")
 	Expect(foundServices).ToNot(BeNil(), "No Solr services could be found")
 	for _, service := range foundServices.Items {
 		writeAllServiceInfoToFiles(
 			directory+service.Name+".service",
 			&service,
+		)
+	}
+
+	// Unfortunately the secrets don't have a technology label
+	req, err = labels.NewRequirement("solr-cloud", selection.Exists, make([]string, 0))
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector = labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundSecrets := &corev1.SecretList{}
+	Expect(k8sClient.List(ctx, foundSecrets, listOps)).To(Succeed(), "Could not fetch Solr secrets")
+	for _, secret := range foundSecrets.Items {
+		writeAllSecretInfoToFiles(
+			directory+secret.Name+".secret",
+			&secret,
 		)
 	}
 }
@@ -399,6 +419,19 @@ func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
 	_, writeErr := statusFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
+}
+
+// writeAllSecretInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Service
+func writeAllSecretInfoToFiles(baseFilename string, secret *corev1.Secret) {
+	// Write service to a file
+	statusFile, err := os.Create(baseFilename + ".json")
+	defer statusFile.Close()
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save secret status: %s", baseFilename+".json")
+	jsonBytes, marshErr := json.MarshalIndent(secret, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize secret json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write secret json to file")
 }
 
 // writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.
