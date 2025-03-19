@@ -17,7 +17,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    operator.solr.apache.org/version: v0.9.1-prerelease
+    operator.solr.apache.org/version: v0.9.1
     argocd.argoproj.io/sync-options: Replace=true
     controller-gen.kubebuilder.io/version: v0.16.4
   name: solrbackups.solr.apache.org
