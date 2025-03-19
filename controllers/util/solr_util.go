@@ -402,6 +402,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		envVars = append(envVars, backupEnvVars...)
 	}
 
+	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
+	var postStart *corev1.LifecycleHandler
+	if hasChroot {
+		postStart = &corev1.LifecycleHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
+			},
+		}
+	}
+
 	// Default preStop hook
 	preStop := &corev1.LifecycleHandler{
 		Exec: &corev1.ExecAction{
@@ -446,18 +456,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	var postStart *corev1.LifecycleHandler
-	initContainers, doesInitZk := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
-	if !doesInitZk && hasChroot {
-		// Only have a postStart command to create the chRoot, if:
-		//   - it is not '/' (which does not need to be created)
-		//   - there is not an initContainer that already does this
-		postStart = &corev1.LifecycleHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
-			},
-		}
-	}
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -705,7 +704,7 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 	expected.Spec.Replicas = found.Spec.Replicas
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, security *SecurityConfig) (containers []corev1.Container, doesInitZk bool) {
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, security *SecurityConfig) (containers []corev1.Container) {
 	// The setup of the solr.xml will always be necessary
 	volumeMounts := []corev1.VolumeMount{
 		{
@@ -791,7 +790,6 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, security); hasZKSetupContainer {
 		containers = append(containers, zkSetupContainer)
-		doesInitZk = true
 	}
 
 	// If the user has provided custom resources for the default init containers, use them
@@ -805,7 +803,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
-	return containers, doesInitZk
+	return containers
 }
 
 func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort int, path string) corev1.ProbeHandler {
