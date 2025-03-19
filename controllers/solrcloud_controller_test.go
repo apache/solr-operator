@@ -136,7 +136,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-3], foundEnv[len(foundEnv)-1]))
 
 			// Other Pod Options Checks
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil since there is no chRoot to ensure exists.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil.")
 			Expect(statefulSet.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
@@ -372,7 +372,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Incorrect statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(ConsistOf("sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"), "Incorrect post-start command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 
 			// PodDisruptionBudget creation should be enabled by default
