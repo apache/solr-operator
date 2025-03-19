@@ -426,11 +426,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	} else {
 		// If ingress exists, delete it
 		foundIngress := &netv1.Ingress{}
-		err = r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
-		if err == nil {
-			err = r.Delete(ctx, foundIngress)
-			if err != nil {
-				return requeueOrNot, err
+		ingressErr := r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
+		if ingressErr == nil {
+			ingressErr = r.Delete(ctx, foundIngress)
+			if ingressErr != nil && !errors.IsNotFound(ingressErr) {
+				return requeueOrNot, ingressErr
 			}
 			logger.Info("Deleted Ingress")
 		}
@@ -642,16 +642,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return requeueOrNot, err
 		}
 	} else { // PDB is disabled, make sure that we delete any previously created pdb that might exist.
-		err = r.Client.Delete(ctx, pdb)
-		if err != nil && !errors.IsNotFound(err) {
-			return requeueOrNot, err
+		pdbError := r.Client.Delete(ctx, pdb)
+		if pdbError != nil && !errors.IsNotFound(pdbError) {
+			return requeueOrNot, pdbError
 		}
 	}
 
 	// Remove unused services if necessary
-	err = r.cleanupUnconfiguredServices(ctx, instance, podList, logger)
-	if err != nil && !errors.IsNotFound(err) {
-		return requeueOrNot, err
+	serviceCleanupError := r.cleanupUnconfiguredServices(ctx, instance, podList, logger)
+	if serviceCleanupError != nil && !errors.IsNotFound(serviceCleanupError) {
+		return requeueOrNot, serviceCleanupError
 	}
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
@@ -727,13 +727,14 @@ func (r *SolrCloudReconciler) deleteServicesOfType(ctx context.Context, solrClou
 	return
 }
 
-func (r *SolrCloudReconciler) deleteService(ctx context.Context, service *corev1.Service, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) deleteService(ctx context.Context, service *corev1.Service, logger logr.Logger) error {
 	logger.Info("Deleting Service for SolrCloud", "Service", service.Name)
-	err = r.Client.Delete(ctx, service)
+	err := r.Client.Delete(ctx, service)
 	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Error deleting unused Service for SolrCloud", "Service", service.Name)
+		return err
 	}
-	return
+	return nil
 }
 
 // initializePods Ensure that all SolrCloud Pods are initialized
@@ -1129,7 +1130,7 @@ func (r *SolrCloudReconciler) deletePVC(ctx context.Context, pvcItem corev1.Pers
 	}
 	logger.Info("Deleting PVC for SolrCloud", "PVC", pvcItem.Name)
 	err := r.Client.Delete(ctx, pvcDelete)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Error deleting PVC for SolrCloud", "PVC", pvcDelete.Name)
 	}
 }
