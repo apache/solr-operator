@@ -36,7 +36,7 @@ There may be breaking changes between the version you are using and the version 
 To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=8.8
+helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=8.11
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
