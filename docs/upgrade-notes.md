@@ -38,6 +38,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.6.x`        | :x: | :x: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.7.x`        | :x: | :x: |        :x:         | :heavy_check_mark: | :heavy_check_mark: |
 |       `v0.8.x`        | :x: | :x: |        :x:         |        :x:         | :heavy_check_mark: |
+|       `v0.9.x`        | :x: | :x: |        :x:         |        :x:         | :heavy_check_mark: |
 
 ### Solr Versions
 
@@ -51,6 +52,7 @@ If you want to skip versions when upgrading, be sure to check out the [upgrading
 |       `v0.6.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
 |       `v0.7.x`        | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: :one: | :heavy_check_mark: :one: |
 |       `v0.8.x`        |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: :one: |    :heavy_check_mark:    |
+|       `v0.9.x`        |        :x:         |        :x:         | :heavy_check_mark: | :heavy_check_mark: :one: |    :heavy_check_mark:    |
 
 **Exceptions**
 * :one: `SolrTLS` and `SolrClientTLS` are not supported
@@ -113,8 +115,8 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 
 ```bash
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.9.0/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.9.0
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.9.1/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version 0.9.1
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
