@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.9.1
-appVersion: v0.9.1
+version: 0.9.2-prerelease
+appVersion: v0.9.2-prerelease
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -42,57 +42,32 @@ annotations:
   artifacthub.io/category: "database"
   artifacthub.io/operator: "true"
   artifacthub.io/operatorCapabilities: Full Lifecycle
-  artifacthub.io/prerelease: "false"
+  artifacthub.io/prerelease: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr
   artifacthub.io/links: |
     - name: "Tutorials"
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/signKey: |
-    fingerprint: E05FDF113D89E7FB4A2DF4B2684D544160392455
+    fingerprint: <fingerprint>
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
-    - kind: fixed
-      description: "initContainers can once again connect to ZooKeeper when Solr 9.8.x images are used"
+    - kind: added
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/762
-        - name: JIRA Issue
-          url: https://issues.apache.org/jira/browse/SOLR-17690
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/756
-    - kind: fixed
-      description: "Fix upgrade to v0.9 by updating pod readiness gates for existing clouds"
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/761
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/766
-    - kind: fixed
-      description: "Fix `setup-zk` initContainer no-such-file-or-directory warning"
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/759
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/769
-    - kind: fixed
-      description: "Fix default bootstrapped permissions for replica balancing"
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/653
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/770
-    - kind: fixed
-      description: "Fix unneeded ERROR logging for non-existent resources"
+          url: https://github.com/issue-url
+    - kind: changed
+      description: Change 2
       links:
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/773
+          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.9.1
+      image: apache/solr-operator:v0.9.2-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
