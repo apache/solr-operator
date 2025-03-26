@@ -78,6 +78,16 @@ spec:
         {{- else }}
         - "--leader-elect=false"
         {{- end }}
+        - --zap-devel={{ .Values.logger.devel }}
+        {{- if .Values.logger.encoder }}
+        - --zap-encoder={{ .Values.logger.encoder }}
+        {{- end }}
+        {{- if .Values.logger.level }}
+        - --zap-log-level={{ .Values.logger.level }}
+        {{- end }}
+        {{- if .Values.logger.stacktraceLevel }}
+        - --zap-stacktrace-level={{ .Values.logger.stacktraceLevel }}
+        {{- end }}
 
         env:
           - name: POD_NAMESPACE

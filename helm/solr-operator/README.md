@@ -191,6 +191,10 @@ The command removes all the Kubernetes components associated with the chart and 
 | tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr Operator pod |
 | priorityClassName | string | `""` | Give a priorityClassName for the Solr Operator pod |
 | sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr Operator in its pod |
+| logger.devel | boolean | `false` | Enable development mode for the Solr Operator logger. This will log at the debug level with the console encoder. Default is `false` which logs at `info` level with `json` encoder. |
+| logger.level | string |  | Overrides the log level. Can be one of `debug`, `info`, `error`, or any integer value > 0 which corresponds to custom debug levels of increasing verbosity|
+| logger.encoder | string | | Overrides the log format. Use `console` or `json`. |
+| logger.stacktraceLevel | string | | Overrides the level for stackTrace logging. |
 
 ### Configuring the Zookeeper Operator
 

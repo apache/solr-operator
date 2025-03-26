@@ -56,6 +56,11 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
+      description: Ability to configure log encoder, level and stacktrace level
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/778
+    - kind: added
       description: Addition 1
       links:
         - name: Github Issue
