@@ -19,6 +19,14 @@
 
 replicaCount: 1
 
+logger:
+  # devel=true sets encoder=console, level=debug, stacktrace-level=warn
+  # devel=false sets encoder=json, level=info, stacktrace-level=error
+  devel: false
+  #encoder: json
+  #level: error
+  #stacktraceLevel: error
+
 image:
   repository: apache/solr-operator
   tag: v0.10.0-prerelease
