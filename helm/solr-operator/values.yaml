@@ -19,10 +19,12 @@
 
 replicaCount: 1
 
-logger:
-  # devel=true sets encoder=console, level=debug, stacktrace-level=warn
-  # devel=false sets encoder=json, level=info, stacktrace-level=error
-  devel: false
+# Development mode configures certain settings for convenient development.
+# When 'true', logging will use: encoder=console, level=debug, stacktrace-level=warn
+development: false
+
+# These are default logger settings in production mode, but can be overridden here
+logger: {}
   #encoder: json
   #level: error
   #stacktraceLevel: error

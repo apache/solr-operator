@@ -78,7 +78,7 @@ spec:
         {{- else }}
         - "--leader-elect=false"
         {{- end }}
-        - --zap-devel={{ .Values.logger.devel }}
+        - --zap-devel={{ .Values.development }}
         {{- if .Values.logger.encoder }}
         - --zap-encoder={{ .Values.logger.encoder }}
         {{- end }}
