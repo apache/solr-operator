@@ -60,6 +60,8 @@ annotations:
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/778
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/779
     - kind: added
       description: Addition 1
       links:
