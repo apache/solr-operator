@@ -391,7 +391,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Add all necessary information for connection to Zookeeper
-	zkEnvVars, zkSolrOpt, hasChroot := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
+	zkEnvVars, zkSolrOpt, _ := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
 	if zkSolrOpt != "" {
 		allSolrOpts = append(allSolrOpts, zkSolrOpt)
 	}
@@ -400,16 +400,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Add envVars for backupRepos if any are needed
 	if len(backupEnvVars) > 0 {
 		envVars = append(envVars, backupEnvVars...)
-	}
-
-	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
-	var postStart *corev1.LifecycleHandler
-	if hasChroot {
-		postStart = &corev1.LifecycleHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
-			},
-		}
 	}
 
 	// Default preStop hook
@@ -508,8 +498,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
-				PostStart: postStart,
-				PreStop:   preStop,
+				PreStop: preStop,
 			},
 			SecurityContext: containerSecurityContext,
 		},
@@ -1229,7 +1218,6 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 	return ingressRule
 }
 
-// TODO: Have this replace the postStart hook for creating the chroot
 func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, security *SecurityConfig) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
 

@@ -55,21 +55,16 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: changed
+      description: A container PostStart Hook is no longer used to create the ZooKeeper ChRoot, instead the initContainer will manage this
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/774
     - kind: added
       description: Ability to configure log encoder, level and stacktrace level
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/778
-    - kind: added
-      description: Addition 1
-      links:
-        - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
-        - name: Github PR
-          url: https://github.com/pr-url
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
