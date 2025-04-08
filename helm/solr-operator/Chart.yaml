@@ -60,8 +60,13 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/774
+    - kind: changed
+      description: The default logging format is now `json`, and default log level is `info`.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/779
     - kind: added
-      description: Ability to configure log encoder, level and stacktrace level
+      description: Ability to configure `development` mode as well as log encoder, log level and stacktrace log level
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/778
