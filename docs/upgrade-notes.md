@@ -125,6 +125,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ## Upgrade Warnings and Notes
 
+### v0.10.0
+- **Logging now defaults to JSON format**
+  The new default for CLI flag `--zap-devel` is now `false`, causing log encoding to be `json` and log level to be `info`.
+  There is a new helm value `development` that can be set to `true` to switch to `console` encoding and `debug` level
+  that was the default in previous versions.
+
 ### v0.8.0
 - **The minimum supported Solr version is now 8.11**
   If you are unable to use a newer version of Solr, please install the `v0.7.1` version of the Solr Operator.

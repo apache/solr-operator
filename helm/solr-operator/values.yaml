@@ -19,6 +19,16 @@
 
 replicaCount: 1
 
+# Development mode configures certain settings for convenient development.
+# When 'true', logging will use: encoder=console, level=debug, stacktrace-level=warn
+development: false
+
+# These are default logger settings in production mode, but can be overridden here
+logger: {}
+  #encoder: json
+  #level: error
+  #stacktraceLevel: error
+
 image:
   repository: apache/solr-operator
   tag: v0.10.0-prerelease
