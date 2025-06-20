@@ -303,6 +303,8 @@ podOptions:
 
   shareProcessNamespace: false
 
+  enableServiceLinks: true
+
   # Manage where the Solr pods are scheduled
   affinity: {}
   tolerations: []
