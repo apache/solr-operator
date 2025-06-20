@@ -145,7 +145,7 @@ type PodOptions struct {
 	// +optional
 	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
 
-	// Should process namespace sharing be enabled on created pods
+	// Should service environment variables be created on containers
 	// +optional
 	EnableServiceLinks bool `json:"enableServiceLinks,omitempty"`
 
