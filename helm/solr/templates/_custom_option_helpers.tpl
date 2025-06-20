@@ -39,6 +39,9 @@ serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
 {{- if .Values.podOptions.shareProcessNamespace -}}
 shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace }}
 {{ end }}
+{{- if .Values.podOptions.enableServiceLinks -}}
+enableServiceLinks: {{ .Values.podOptions.enableServiceLinks }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}
