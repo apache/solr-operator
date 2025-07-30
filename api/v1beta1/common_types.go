@@ -145,6 +145,10 @@ type PodOptions struct {
 	// +optional
 	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
 
+	// Should service environment variables be created on containers
+	// +optional
+	EnableServiceLinks bool `json:"enableServiceLinks,omitempty"`
+
 	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
 	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
 	//

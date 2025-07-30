@@ -3717,6 +3717,11 @@ spec:
                         description: Should process namespace sharing be enabled on
                           created pods
                         type: boolean
+                      enableServiceLinks: 
+                        description: |-
+                          Should service environment variables be created on containers. 
+                          More info: https://kubernetes.io/docs/tutorials/services/connect-applications-service/#accessing-the-service
+                        type: boolean
                       sidecarContainers:
                         description: Sidecar containers to run in the pod. These are
                           in addition to the Solr Container

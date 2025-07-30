@@ -150,6 +150,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.ShareProcessNamespace).Should(PointTo(BeFalse()))
+			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).Should(PointTo(BeTrue()))
 			Expect(statefulSet.Spec.Template.Spec.ReadinessGates).To(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrIsNotStoppedReadinessCondition}), "All pods should contain the isNotStopped readinessGate.")
 
 			By("testing the Solr Common Service")
@@ -174,6 +175,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 	FContext("Solr Cloud with Custom Kube Options", func() {
 		three := intstr.FromInt(3)
 		testShareProcessNamespace := true
+		testEnableServiceLinks := false
 		BeforeEach(func() {
 			replicas := int32(4)
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
@@ -227,6 +229,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 							},
 						},
 						ShareProcessNamespace: testShareProcessNamespace,
+						EnableServiceLinks: testEnableServiceLinks,
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,
@@ -305,6 +308,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints).To(HaveLen(len(testTopologySpreadConstraints)), "Wrong number of topologySpreadConstraints")
 			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[0]).To(Equal(testTopologySpreadConstraints[0]), "Wrong first topologySpreadConstraint")
 			Expect(statefulSet.Spec.Template.Spec.ShareProcessNamespace).To(Equal(&testShareProcessNamespace), "Wrong shareProcessNamespace value")
+			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).To(Equal(&testEnableServiceLinks), "Wrong enableServiceLinks value")
 			expectedSecondTopologyConstraint := testTopologySpreadConstraints[1].DeepCopy()
 			expectedSecondTopologyConstraint.LabelSelector = statefulSet.Spec.Selector
 			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[1]).To(Equal(*expectedSecondTopologyConstraint), "Wrong second topologySpreadConstraint")
