@@ -223,7 +223,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 								Add: []corev1.Capability{"CHOWN", "DAC_OVERRIDE"},
 							},
 						},
-						InitContainers:                extraContainers1,
+						InitContainers: extraContainers1,
 						ContainerSecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:           newBoolPtr(true),
 							ReadOnlyRootFilesystem: newBoolPtr(true),
