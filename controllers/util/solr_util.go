@@ -1236,6 +1236,9 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "SOLR_OPTS",
 			Value: strings.Join(allSolrOpts, " "),
+		}, corev1.EnvVar{
+			Name:  "SOLR_TOOL_OPTS",
+			Value: strings.Join(allSolrOpts, " "),
 		})
 	}
 
