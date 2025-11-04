@@ -72,6 +72,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/778
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/779
+    - kind: fixed
+      description: SOLR_TOOL_OPTS is now set, allowing 'setup-zk' initContainer to obey ZK connection settings
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/717
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/804
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
