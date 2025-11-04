@@ -95,7 +95,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
 | solrOptions.solrModules | []string | | List of packaged Solr Modules to load when running Solr. Note: There is no need to specify solr modules necessary for other parts of the Spec (i.e. `backupRepositories[].gcs`), those will be added automatically. |
-| solrOptions.additionalLibs | []string | | List of paths in the Solr Image to add to the classPath when running Solr. Note: There is no need to include paths for solrModules here if already listed in `solrModules`, those paths will be added automatically. |
+| solrOptions.additionalLibs | []string | | List of paths in the Solr Image to add to the classPath when running Solr. (There is no need to include paths for solrModules here if already listed in `solrModules`, those paths will be added automatically.) Note that this setting has no effect on solrcloud clusters that rely on a user-provided `solr.xml` file. |
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
