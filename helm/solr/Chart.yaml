@@ -16,7 +16,7 @@ apiVersion: v2
 name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
 version: 0.10.0-prerelease
-appVersion: 8.11.1
+appVersion: 9.9.0
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org
 sources:
@@ -65,7 +65,7 @@ annotations:
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
-      image: solr:8.11
+      image: solr:9.9.0
       whitelisted: true
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
