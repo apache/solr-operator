@@ -198,9 +198,26 @@ func main() {
 		}
 	}
 
+	// Fetch k8s api credentials and detect platform
+	restConfig := ctrl.GetConfigOrDie()
+
+	autodetect, err := controllers.NewAutodetect(restConfig)
+	if err != nil {
+		setupLog.Error(err, "failed to setup auto-detect routine")
+		os.Exit(1)
+	}
+
+	isOpenShift, err := autodetect.IsOpenshift()
+	setupLog.Info("autodetect", "isOpenShift", isOpenShift)
+	if err != nil {
+		setupLog.Error(err, "unable to detect the platform")
+		os.Exit(1)
+	}
+
 	if err = (&controllers.SolrCloudReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		IsOpenShift: isOpenShift,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrCloud")
 		os.Exit(1)
