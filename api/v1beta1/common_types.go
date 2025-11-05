@@ -161,6 +161,10 @@ type PodOptions struct {
 	// DefaultInitContainerResources are the resource requirements for the default init container(s) created by the Solr Operator, if any are created.
 	// +optional
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
+
+	// DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+	// +optional
+	DefaultInitContainerSecurityContext *corev1.SecurityContext `json:"defaultInitContainerSecurityContext,omitempty"`
 }
 
 // ServiceOptions defines custom options for services

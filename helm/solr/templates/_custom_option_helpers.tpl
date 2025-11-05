@@ -109,6 +109,10 @@ topologySpreadConstraints:
 defaultInitContainerResources:
   {{- toYaml .Values.podOptions.defaultInitContainerResources | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.defaultInitContainerSecurityContext -}}
+defaultInitContainerSecurityContext:
+  {{- toYaml .Values.podOptions.defaultInitContainerSecurityContext | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*

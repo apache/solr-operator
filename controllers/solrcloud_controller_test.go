@@ -217,7 +217,13 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						ServiceAccountName:            testServiceAccountName,
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
 						DefaultInitContainerResources: testResources2,
-						InitContainers:                extraContainers1,
+						DefaultInitContainerSecurityContext: &corev1.SecurityContext{
+							RunAsNonRoot: newBoolPtr(true),
+							Capabilities: &corev1.Capabilities{
+								Add: []corev1.Capability{"CHOWN", "DAC_OVERRIDE"},
+							},
+						},
+						InitContainers: extraContainers1,
 						ContainerSecurityContext: &corev1.SecurityContext{
 							RunAsNonRoot:           newBoolPtr(true),
 							ReadOnlyRootFilesystem: newBoolPtr(true),
@@ -297,6 +303,15 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Resources).To(Equal(testResources2), "Incorrect initContainer[0] resources")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Resources).To(Equal(testResources2), "Incorrect initContainer[1] resources")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].Resources).ToNot(Equal(testResources2), "Incorrect initContainer[2] resources, should not use the default override")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext).To(Not(BeNil()), "InitContainer[0] should have security context")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsNonRoot).To(PointTo(BeTrue()), "Incorrect initContainer[0] security context runAsNonRoot")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.Capabilities.Add).To(HaveLen(2), "Incorrect number of capabilities in initContainer[0]")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.Capabilities.Add).To(ContainElements(corev1.Capability("CHOWN"), corev1.Capability("DAC_OVERRIDE")), "Incorrect capabilities in initContainer[0]")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext).To(Not(BeNil()), "InitContainer[1] should have security context")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.RunAsNonRoot).To(PointTo(BeTrue()), "Incorrect initContainer[1] security context runAsNonRoot")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.Capabilities.Add).To(HaveLen(2), "Incorrect number of capabilities in initContainer[1]")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.Capabilities.Add).To(ContainElements(corev1.Capability("CHOWN"), corev1.Capability("DAC_OVERRIDE")), "Incorrect capabilities in initContainer[1]")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].SecurityContext).To(BeNil(), "InitContainer[2] should not have custom security context since it's user-provided")
 			Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(testTolerations), "Incorrect Tolerations for Pod")
 			Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
 			Expect(statefulSet.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect imagePullSecrets")
