@@ -76,7 +76,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.8.1}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.10.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
