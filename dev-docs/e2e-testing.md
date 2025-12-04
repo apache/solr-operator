@@ -47,7 +47,7 @@ $ make e2e-tests TEST_SEED=89724023 SOLR_IMAGE=apache/solr-nightly:10.0.0-SNAPSH
   The default parallelism is `3`.
 - **SOLR_IMAGE** - The solr docker image label to use in the integration tests.
   It is recommended to use only supported versions for the Solr Operator version being tested.
-  Default is `solr:9.9.0`.
+  Default is `solr:9.10.0`.
 - **KUBERETES_VERSION** - A full Kubernetes version, starting with `v`, to use when creating the KinD Cluster.
   To find a list of all possible versions, check the [KinD Node Docker tags](https://hub.docker.com/r/kindest/node/tags).
   Default is `v1.26.6`.

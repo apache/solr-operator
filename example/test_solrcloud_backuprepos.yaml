@@ -20,7 +20,7 @@ metadata:
 spec:
   replicas: 1
   solrImage:
-    tag: "9.0.0"
+    tag: "9.10.0"
   backupRepositories:
     # "Volume" repositories store backup data in a Kubernetes volume.
     - name: "volume_repository_1"

@@ -122,9 +122,9 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
 ```bash
-# Create a 3-node cluster v9.9.0 with 300m Heap each:
+# Create a 3-node cluster v9.10.0 with 300m Heap each:
 helm install example-solr apache-solr/solr --version 0.10.0-prerelease \
-  --set image.tag=9.9.0 \
+  --set image.tag=9.10.0 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
   --set addressability.external.domainName="ing.local.domain" \
@@ -213,7 +213,7 @@ curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
 helm upgrade example-solr apache-solr/solr --version 0.10.0-prerelease \
   --reuse-values \
-  --set image.tag=9.9.0
+  --set image.tag=9.10.0
 
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column

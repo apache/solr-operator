@@ -23,4 +23,4 @@ spec:
       name: "example"
   numThreads: 4
   image:
-    tag: "9.9.0"
+    tag: "9.10.0"
