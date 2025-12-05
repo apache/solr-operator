@@ -114,7 +114,7 @@ annotations:
                     storage: "20Gi"
         replicas: 3
         solrImage:
-          tag: 8.11
+          tag: 9.10.0
         solrJavaMem: "-Xms4g -Xmx4g"
         customSolrKubeOptions:
           podOptions:
@@ -155,7 +155,7 @@ annotations:
             name: "example"
         numThreads: 4
         image:
-          tag: 8.11
+          tag: 9.10.0
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrBackup
       metadata:

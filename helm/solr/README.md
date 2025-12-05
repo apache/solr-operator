@@ -36,7 +36,7 @@ There may be breaking changes between the version you are using and the version 
 To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=8.11
+helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.10.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -50,7 +50,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=8.11
+helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.10.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
@@ -76,19 +76,19 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 
 ### Running Solr
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| Key | Type | Default           | Description |
+|-----|------|-------------------|-------------|
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"solr"` | The repository of the Solr image |
-| image.tag | string | `"8.11"` | The tag/version of Solr to run |
-| image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
-| image.imagePullSecret | string |  | PullSecret for the Solr image |
+| image.tag | string | `"9.10.0"` | The tag/version of Solr to run |
+| image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
+| image.imagePullSecret | string | | PullSecret for the Solr image |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
 | busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
-| busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
-| busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
+| busyBoxImage.pullPolicy | string | | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
+| busyBoxImage.imagePullSecret | string | | PullSecret for the BusyBox image |
 | solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | Java memory parameters |
 | solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line.  ZooKeeper-connection related properties should be reserved for `solrOptions.zkJavaOpts` (see below). |
 | solrOptions.zkJavaOpts | string | `""` | Additional java arguments required to connect to ZooKeeper to pass via the command line |
@@ -104,11 +104,11 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
-| updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
+| updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) |                   | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | availability.podDisruptionBudget.enabled | boolean | `true` | Create [PodDisruptionBudget(s)](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) to ensure the availability of SolrNodes. |
 | availability.podDisruptionBudget.method | string | `"ClusterWide"` | The method by which PodDisruptionBudgets should be created. The only option currently is `ClusterWide`. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
-| serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
+| serviceAccount.name | string | | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
 | backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 | scaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
 | scaling.populatePodsOnScaleUp | boolean | `true` | While scaling up the SolrCloud, migrate replicas onto the new Solr Pods after they are created. This uses the Balance Replicas API in Solr that is only available in Solr 9.3+. This option will be ignored if using an unsupported version of Solr.  |

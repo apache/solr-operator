@@ -28,7 +28,7 @@ spec:
               storage: "5Gi"
   replicas: 3
   solrImage:
-    tag: "8.11"
+    tag: "9.10.0"
   solrJavaMem: "-Xms1g -Xmx3g"
   solrModules:
     - jaegertracer-configurator

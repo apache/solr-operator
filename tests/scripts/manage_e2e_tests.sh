@@ -35,7 +35,7 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
     -h  Display this help and exit
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -k  Kubernetes Version to test with (full tag, e.g. v1.24.16) (Optional, defaults to a compatible version)
-    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 8.11). (Optional, defaults to a compatible version)
+    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 9.10.0). (Optional, defaults to a compatible version)
     -a  Load additional local images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
 EOF
 }
@@ -76,7 +76,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.8.1}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.10.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
