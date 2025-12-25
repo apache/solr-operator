@@ -101,3 +101,28 @@ mTLS:
 # Enable metrics for the Solr Operator
 metrics:
   enable: true
+
+# Logging settings for the Solr Operator
+logging:
+  # Log to a file in addition to stdErr
+  file:
+    # Whether to enable logging to a file
+    enabled: true
+    # The path of the log file within the volume
+    path: "operator.log"
+
+    # The volume that will be used to store the log file(s)
+    volume:
+      name: logs
+      emptyDir:
+        sizeLimit: 100Mi
+
+    # The log rotation policy
+    rotation:
+      enabled: true
+      numOldFilesToKeep: 3
+      maxFileSize: 20M
+      emptyDir:
+        sizeLimit: 100Mi
+
+

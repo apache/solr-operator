@@ -26,6 +26,7 @@ import (
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -60,6 +61,7 @@ var (
 
 	// Operator scope
 	watchNamespaces string
+	logFile         string
 
 	// External Operator dependencies
 	useZookeeperCRD bool
@@ -90,6 +92,7 @@ func init() {
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
+	flag.StringVar(&logFile, "log-file", "", "A location to write logs to, if provided. This will not stop logs from being printed to stdout.")
 
 	flag.BoolVar(&clientSkipVerify, "tls-skip-verify-server", true, "Controls whether a client verifies the server's certificate chain and host name. If true (insecure), TLS accepts any certificate presented by the server and any host name in that certificate.")
 	flag.StringVar(&clientCertPath, "tls-client-cert-path", "", "Path where a TLS client cert can be found")
@@ -118,9 +121,25 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+
 	opts := zap.Options{
 		Development: true,
 	}
+
+	// Log to a file if requested by the user
+	logFile = strings.TrimSpace(logFile)
+	if logFile != "" {
+		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
+		if err != nil {
+			panic(err)
+		}
+		opts.DestWriter = io.MultiWriter(os.Stderr, file)
+		defer func() {
+			file.Sync()
+			file.Close()
+		}()
+	}
+
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
@@ -130,6 +149,7 @@ func main() {
 	if version.VersionSuffix != "" {
 		fullVersion += "-" + version.VersionSuffix
 	}
+	setupLog.Info("Writing logs to file", "path", logFile)
 	setupLog.Info(fmt.Sprintf("solr-operator Version: %v", fullVersion))
 	setupLog.Info(fmt.Sprintf("solr-operator Git SHA: %s", version.GitSHA))
 	setupLog.Info(fmt.Sprintf("solr-operator Build Time: %s", version.BuildTime))

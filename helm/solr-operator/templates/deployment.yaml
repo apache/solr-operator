@@ -58,6 +58,11 @@ spec:
         {{- if .Values.watchNamespaces }}
         - --watch-namespaces={{- include "solr-operator.watchNamespaces" . -}}
         {{- end }}
+        {{- with ( include "solr-operator.logging.file" .) }}
+        {{- if . }}
+        - --log-file={{- . -}}
+        {{- end }}
+        {{- end }}
         {{- if .Values.mTLS.clientCertSecret }}
         - --tls-client-cert-path={{- include "solr-operator.mTLS.clientCertDirectory" . -}}/tls.crt
         - --tls-client-cert-key-path={{- include "solr-operator.mTLS.clientCertDirectory" . -}}/tls.key
@@ -119,9 +124,11 @@ spec:
 
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
-        {{- if (include "solr-operator.mTLS.volumeMounts" .) }}
+        {{- with include "solr-operator.volumeMounts" . }}
+        {{- if . }}
         volumeMounts:
-          {{- include "solr-operator.mTLS.volumeMounts" .  | nindent 10 }}
+          {{- .  | nindent 10 }}
+        {{- end }}
         {{- end }}
 
         {{- if .Values.metrics.enable }}
@@ -129,9 +136,11 @@ spec:
           - containerPort: 8080
             name: metrics
         {{- end }}
-      {{- if (include "solr-operator.mTLS.volumes" .) }}
+      {{- with include "solr-operator.volumes" . }}
+      {{- if . }}
       volumes:
-        {{- include "solr-operator.mTLS.volumes" . | nindent 8 }}
+        {{- . | nindent 8 }}
+      {{- end }}
       {{- end }}
 
       {{- if .Values.sidecarContainers }}
