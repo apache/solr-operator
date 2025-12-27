@@ -224,6 +224,43 @@ type AdditionalVolume struct {
 	DefaultContainerMount *corev1.VolumeMount `json:"defaultContainerMount,omitempty"`
 }
 
+// ContainerSecurityContext defines RunAsNonRoot, RunAsGroup and RunAsUser options
+type ContainerSecurityContext struct {
+	// The UID to run the entrypoint of the container process.
+	// +optional
+	RunAsUser *int64 `json:"runAsUser,omitempty" protobuf:"varint,4,opt,name=runAsUser"`
+	// The GID to run the entrypoint of the container process.
+	// +optional
+	RunAsGroup *int64 `json:"runAsGroup,omitempty" protobuf:"varint,8,opt,name=runAsGroup"`
+	// Indicates that the container must run as a non-root user.
+	// +optional
+	RunAsNonRoot *bool `json:"runAsNonRoot,omitempty" protobuf:"varint,5,opt,name=runAsNonRoot"`
+}
+
+func (c *ContainerSecurityContext) withDefaults(userId int64, groupId int64, nonRoot bool) (changed bool) {
+	if c.RunAsUser == nil {
+		changed = true
+		c.RunAsUser = &userId
+	}
+	if c.RunAsGroup == nil {
+		changed = true
+		c.RunAsGroup = &groupId
+	}
+	if c.RunAsNonRoot == nil {
+		changed = true
+		c.RunAsNonRoot = &nonRoot
+	}
+	return changed
+}
+
+func (c *ContainerSecurityContext) ToSC() *corev1.SecurityContext {
+	return &corev1.SecurityContext{
+		RunAsUser:    c.RunAsUser,
+		RunAsGroup:   c.RunAsGroup,
+		RunAsNonRoot: c.RunAsNonRoot,
+	}
+}
+
 // ContainerImage defines the fields needed for a Docker repository image. The
 // format here matches the predominant format used in Helm charts.
 type ContainerImage struct {

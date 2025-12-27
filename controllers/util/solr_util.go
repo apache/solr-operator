@@ -774,6 +774,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 			Requests: volumePrepResources,
 			Limits:   volumePrepResources,
 		},
+		SecurityContext: solrCloud.Spec.BusyBoxSecurityContext.ToSC(),
 	}
 
 	containers = append(containers, volumePrepInitContainer)
