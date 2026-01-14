@@ -28,6 +28,14 @@ on:
         description: 'URL to solr Helm chart tarball (e.g., https://dist.apache.org/repos/dist/release/solr/solr-operator/v0.10.0/helm-charts/solr-0.10.0.tgz)'
         required: true
         type: string
+      dry-run:
+        description: 'Dry run - download and verify charts but do not push to OCI registry'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   publish-oci:
@@ -39,44 +47,152 @@ jobs:
         with:
           version: 'latest'
 
+      - name: Login to Docker Hub
+        if: ${{ !inputs.dry-run }}
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Validate Input URLs
+        run: |
+          # Validate URLs are from expected Apache dist domain
+          if [[ ! "${{ inputs.solr-operator-chart-url }}" =~ ^https://dist\.apache\.org/repos/dist/(release|dev)/solr/ ]]; then
+            echo "Error: solr-operator-chart-url must be from dist.apache.org"
+            exit 1
+          fi
+          if [[ ! "${{ inputs.solr-chart-url }}" =~ ^https://dist\.apache\.org/repos/dist/(release|dev)/solr/ ]]; then
+            echo "Error: solr-chart-url must be from dist.apache.org"
+            exit 1
+          fi
+          echo "✓ URLs validated"
+
       - name: Download Helm Charts
         run: |
+          set -e
           echo "Downloading solr-operator chart from: ${{ inputs.solr-operator-chart-url }}"
-          wget -O solr-operator.tgz "${{ inputs.solr-operator-chart-url }}"
+          curl --fail --show-error --location --retry 3 --retry-delay 5 \
+            -o solr-operator.tgz "${{ inputs.solr-operator-chart-url }}"
 
           echo "Downloading solr chart from: ${{ inputs.solr-chart-url }}"
-          wget -O solr.tgz "${{ inputs.solr-chart-url }}"
+          curl --fail --show-error --location --retry 3 --retry-delay 5 \
+            -o solr.tgz "${{ inputs.solr-chart-url }}"
 
-          echo "Charts downloaded successfully"
+          echo "Charts downloaded successfully:"
           ls -lh *.tgz
 
-      - name: Login to Docker Hub
+          # Verify they are valid tar files
+          echo "Verifying chart integrity..."
+          tar -tzf solr-operator.tgz > /dev/null
+          tar -tzf solr.tgz > /dev/null
+          echo "✓ Charts are valid tarballs"
+
+      - name: Download and Verify Checksums
         run: |
-          echo "Logging in to Docker Hub as ${{ secrets.DOCKERHUB_USER }}"
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login docker.io -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
-          echo "Login successful"
+          set -e
+          echo "Downloading checksums..."
+
+          # Download SHA512 checksums
+          curl --fail --show-error --location --retry 3 --retry-delay 5 \
+            -o solr-operator.tgz.sha512 "${{ inputs.solr-operator-chart-url }}.sha512"
+
+          curl --fail --show-error --location --retry 3 --retry-delay 5 \
+            -o solr.tgz.sha512 "${{ inputs.solr-chart-url }}.sha512"
+
+          echo "Checksums downloaded:"
+          ls -lh *.sha512
+
+          # Verify SHA512 checksums
+          echo "Verifying solr-operator chart checksum..."
+          sha512sum -c solr-operator.tgz.sha512
+          echo "✓ solr-operator chart checksum verified"
+
+          echo "Verifying solr chart checksum..."
+          sha512sum -c solr.tgz.sha512
+          echo "✓ solr chart checksum verified"
+
+          echo ""
+          echo "✅ All checksums verified successfully"
+
+      - name: Extract Chart Versions
+        id: versions
+        run: |
+          # Extract version from solr-operator chart
+          OPERATOR_VERSION=$(tar -xzOf solr-operator.tgz solr-operator/Chart.yaml | grep '^version:' | awk '{print $2}')
+          echo "operator-version=${OPERATOR_VERSION}" >> $GITHUB_OUTPUT
+          echo "Solr Operator Chart Version: ${OPERATOR_VERSION}"
+
+          # Extract version from solr chart
+          SOLR_VERSION=$(tar -xzOf solr.tgz solr/Chart.yaml | grep '^version:' | awk '{print $2}')
+          echo "solr-version=${SOLR_VERSION}" >> $GITHUB_OUTPUT
+          echo "Solr Chart Version: ${SOLR_VERSION}"
 
       - name: Push solr-operator chart to OCI registry
+        if: ${{ !inputs.dry-run }}
         run: |
-          echo "Pushing solr-operator chart to oci://docker.io/apache/solr-operator-chart"
+          echo "Pushing solr-operator chart (version ${{ steps.versions.outputs.operator-version }}) to oci://docker.io/apache/solr-operator-chart"
           helm push solr-operator.tgz oci://docker.io/apache/solr-operator-chart
-          echo "solr-operator chart pushed successfully"
+          echo "✓ solr-operator chart pushed successfully"
 
       - name: Push solr chart to OCI registry
+        if: ${{ !inputs.dry-run }}
         run: |
-          echo "Pushing solr chart to oci://docker.io/apache/solr-chart"
+          echo "Pushing solr chart (version ${{ steps.versions.outputs.solr-version }}) to oci://docker.io/apache/solr-chart"
           helm push solr.tgz oci://docker.io/apache/solr-chart
-          echo "solr chart pushed successfully"
+          echo "✓ solr chart pushed successfully"
 
-      - name: Logout from Docker Hub
-        if: always()
+      - name: Dry Run Summary
+        if: ${{ inputs.dry-run }}
         run: |
-          helm registry logout docker.io
-          echo "Logged out from Docker Hub"
+          echo "## 🧪 Dry Run Mode - No Charts Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Validation Results" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ URLs validated from dist.apache.org" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Charts downloaded successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Chart integrity verified (valid tarballs)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ SHA512 checksums verified" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Chart versions extracted" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Chart Information" >> $GITHUB_STEP_SUMMARY
+          echo "- **Solr Operator Version**: \`${{ steps.versions.outputs.operator-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Solr Chart Version**: \`${{ steps.versions.outputs.solr-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "Run this workflow again with **dry-run = false** to publish the charts to OCI registries." >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Published Charts
+        if: ${{ !inputs.dry-run }}
+        run: |
+          echo "Verifying charts are accessible from OCI registry..."
+
+          # Verify solr-operator chart
+          echo "Pulling solr-operator chart version ${{ steps.versions.outputs.operator-version }}..."
+          helm pull oci://docker.io/apache/solr-operator-chart --version ${{ steps.versions.outputs.operator-version }}
+          echo "✓ solr-operator chart verified"
+
+          # Verify solr chart
+          echo "Pulling solr chart version ${{ steps.versions.outputs.solr-version }}..."
+          helm pull oci://docker.io/apache/solr-chart --version ${{ steps.versions.outputs.solr-version }}
+          echo "✓ solr chart verified"
 
       - name: Summary
-        if: success()
+        if: ${{ success() && !inputs.dry-run }}
         run: |
-          echo "✅ Successfully published Helm charts to OCI registries:"
-          echo "  - oci://docker.io/apache/solr-operator-chart"
-          echo "  - oci://docker.io/apache/solr-chart"
+          echo "## ✅ Successfully Published Helm Charts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The following charts have been published to OCI registries:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Solr Operator Chart" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: \`oci://docker.io/apache/solr-operator-chart\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`${{ steps.versions.outputs.operator-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Install**: \`helm install solr-operator oci://docker.io/apache/solr-operator-chart --version ${{ steps.versions.outputs.operator-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Solr Chart" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: \`oci://docker.io/apache/solr-chart\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: \`${{ steps.versions.outputs.solr-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Install**: \`helm install solr oci://docker.io/apache/solr-chart --version ${{ steps.versions.outputs.solr-version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Verification" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Charts downloaded and checksums verified" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Charts pushed to OCI registries" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Charts verified as accessible from OCI registry" >> $GITHUB_STEP_SUMMARY

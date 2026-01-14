@@ -1133,16 +1133,24 @@ groups:
       3. Fill in the workflow inputs:
          - solr-operator-chart-url: {{ solr_operator_chart_url }}
          - solr-chart-url: {{ solr_chart_url }}
+         - dry-run: false (set to true for validation without publishing)
 
-      4. Click "Run workflow" to start the publishing job
+      4. Optional: Run with dry-run=true first to verify:
+         - URLs are valid and accessible
+         - Charts download successfully
+         - SHA512 checksums match
+         - Chart versions are correct
 
-      5. Monitor the workflow execution for any errors
+      5. Click "Run workflow" to start the job
 
-      6. Verify successful completion by checking that both charts are accessible:
+      6. Monitor the workflow execution for any errors
+
+      7. Verify successful completion by checking that both charts are accessible:
          helm pull oci://docker.io/apache/solr-operator-chart --version {{ release_version[1:] }}
          helm pull oci://docker.io/apache/solr-chart --version {{ release_version[1:] }}
 
       Note: The workflow uses repository secrets DOCKERHUB_USER and DOCKERHUB_TOKEN for authentication.
+      The workflow automatically verifies SHA512 checksums before publishing.
     links:
       - '{{ workflow_url }}'
       - '{{ solr_operator_chart_url }}'
