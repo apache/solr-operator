@@ -54,8 +54,12 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
 - [Local Tutorial](https://apache.github.io/solr-operator/docs/local_tutorial)
-- [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
-  - The released helm charts and their instructions should be used for all safe and stable deployments.
+- **Helm Chart Installation**
+  - The Helm charts are available via OCI registry (recommended):
+    - **Solr Operator**: `helm install solr-operator oci://docker.io/apache/solr-operator-chart --version <VERSION>`
+    - **Solr Cloud**: `helm install solr oci://docker.io/apache/solr-chart --version <VERSION>`
+  - Or via traditional HTTPS repository: [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
+  - The released helm charts should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
 - [Running the Solr Operator](https://apache.github.io/solr-operator/docs/running-the-operator)
 - [Known Issues](https://apache.github.io/solr-operator/docs/known-issues)

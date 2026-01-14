@@ -1,0 +1,82 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+name: Publish Helm Charts to OCI Registry
+
+on:
+  workflow_dispatch:
+    inputs:
+      solr-operator-chart-url:
+        description: 'URL to solr-operator Helm chart tarball (e.g., https://dist.apache.org/repos/dist/release/solr/solr-operator/v0.10.0/helm-charts/solr-operator-0.10.0.tgz)'
+        required: true
+        type: string
+      solr-chart-url:
+        description: 'URL to solr Helm chart tarball (e.g., https://dist.apache.org/repos/dist/release/solr/solr-operator/v0.10.0/helm-charts/solr-0.10.0.tgz)'
+        required: true
+        type: string
+
+jobs:
+  publish-oci:
+    name: Publish Helm Charts to OCI Registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'latest'
+
+      - name: Download Helm Charts
+        run: |
+          echo "Downloading solr-operator chart from: ${{ inputs.solr-operator-chart-url }}"
+          wget -O solr-operator.tgz "${{ inputs.solr-operator-chart-url }}"
+
+          echo "Downloading solr chart from: ${{ inputs.solr-chart-url }}"
+          wget -O solr.tgz "${{ inputs.solr-chart-url }}"
+
+          echo "Charts downloaded successfully"
+          ls -lh *.tgz
+
+      - name: Login to Docker Hub
+        run: |
+          echo "Logging in to Docker Hub as ${{ secrets.DOCKERHUB_USER }}"
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | helm registry login docker.io -u "${{ secrets.DOCKERHUB_USER }}" --password-stdin
+          echo "Login successful"
+
+      - name: Push solr-operator chart to OCI registry
+        run: |
+          echo "Pushing solr-operator chart to oci://docker.io/apache/solr-operator-chart"
+          helm push solr-operator.tgz oci://docker.io/apache/solr-operator-chart
+          echo "solr-operator chart pushed successfully"
+
+      - name: Push solr chart to OCI registry
+        run: |
+          echo "Pushing solr chart to oci://docker.io/apache/solr-chart"
+          helm push solr.tgz oci://docker.io/apache/solr-chart
+          echo "solr chart pushed successfully"
+
+      - name: Logout from Docker Hub
+        if: always()
+        run: |
+          helm registry logout docker.io
+          echo "Logged out from Docker Hub"
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "✅ Successfully published Helm charts to OCI registries:"
+          echo "  - oci://docker.io/apache/solr-operator-chart"
+          echo "  - oci://docker.io/apache/solr-chart"

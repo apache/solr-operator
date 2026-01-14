@@ -31,19 +31,34 @@ If you do not wish to use the Zookeeper Operator, set:
 - `zookeeper-operator.use: false`
 
 
-### Adding the Solr Operator Helm Chart Repository
-You should only need to add the solr operator helm chart repository once, by running the following command:
-
-```bash
-helm repo add apache-solr https://solr.apache.org/charts
-```
-
 ### Installing the Chart
 
-To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+The Solr Operator Helm chart can be installed using either the OCI registry (recommended) or the traditional HTTPS repository.
+
+#### Installation via OCI Registry (Recommended)
+
+The Helm chart is available directly from Docker Hub as an OCI artifact, which provides a more reliable distribution mechanism and doesn't require adding a repository.
 
 ```bash
+# Install CRDs first
 kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+
+# Install the Solr Operator from OCI registry
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease
+```
+
+#### Installation via HTTPS Repository (Traditional)
+
+If you prefer the traditional method, you can add the Helm repository and install from there.
+
+```bash
+# Add the repository (only needed once)
+helm repo add apache-solr https://solr.apache.org/charts
+
+# Install CRDs first
+kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+
+# Install the Solr Operator from HTTPS repository
 helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
@@ -57,7 +72,13 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
 
 ```bash
+# Upgrade CRDs first
 kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+
+# Upgrade via OCI registry (recommended)
+helm upgrade solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease
+
+# Or upgrade via HTTPS repository (traditional)
 helm upgrade solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
@@ -67,18 +88,20 @@ If you want to specify the namespace for the installation, use the `--namespace`
 All resources will be deployed to the given namespace.
 
 ```bash
-helm install solr-operator apache-solr/solr-operator --namespace solr
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease --namespace solr
 ```
 
 If you want to only watch that namespace, or others, then you will have to provide the `watchNamespaces` option.
 
 ```bash
 # Watch the namespace where the operator is deployed to (just pass the boolean true)
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces=true
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease --namespace solr --set watchNamespaces=true
+
 # Watch a single namespace different than the one being deployed to
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces=other
-# Watch multiple namespaces (commmas must be escaped in the set string)
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces="team1\,team2\,team3"
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease --namespace solr --set watchNamespaces=other
+
+# Watch multiple namespaces (commas must be escaped in the set string)
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease --namespace solr --set watchNamespaces="team1\,team2\,team3"
 ```
 
 Note: Passing `false` or `""` to the `watchNamespaces` variable will both result in the operator watchting all namespaces in the Kube cluster.
@@ -91,7 +114,11 @@ If you have solr operator installations in multiple namespaces that are managed 
 This can be done with the `--skip-crds` helm option.
 
 ```bash
-helm install solr-operator apache-solr/solr-operator --skip-crds --namespace solr
+# Via OCI registry
+helm install solr-operator oci://docker.io/apache/solr-operator-chart --version 0.10.0-prerelease --skip-crds --namespace solr
+
+# Or via HTTPS repository
+helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease --skip-crds --namespace solr
 ```
 
 **Helm will not upgrade CRDs once they have been installed.

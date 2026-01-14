@@ -1109,6 +1109,45 @@ groups:
           logfile: upload_helm.log
           tee: true
   - !Todo
+    id: publish_helm_charts_oci
+    title: Publish Helm charts to OCI registry (Docker Hub)
+    depends: publish_helm_charts
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      solr_operator_chart_url: '{{ dist_release_url }}/helm-charts/solr-operator-{{ release_version[1:] }}.tgz'
+      solr_chart_url: '{{ dist_release_url }}/helm-charts/solr-{{ release_version[1:] }}.tgz'
+      workflow_url: https://github.com/apache/solr-operator/actions/workflows/publish-helm-oci.yaml
+    description: |
+      Publish the Helm charts to OCI registries on Docker Hub using the GitHub Actions workflow.
+
+      This task publishes the voted Helm charts to OCI registries, making them available via:
+        - oci://docker.io/apache/solr-operator-chart
+        - oci://docker.io/apache/solr-chart
+
+      Steps to publish:
+      1. Navigate to the GitHub Actions workflow:
+         {{ workflow_url }}
+
+      2. Click the "Run workflow" button on the right side
+
+      3. Fill in the workflow inputs:
+         - solr-operator-chart-url: {{ solr_operator_chart_url }}
+         - solr-chart-url: {{ solr_chart_url }}
+
+      4. Click "Run workflow" to start the publishing job
+
+      5. Monitor the workflow execution for any errors
+
+      6. Verify successful completion by checking that both charts are accessible:
+         helm pull oci://docker.io/apache/solr-operator-chart --version {{ release_version[1:] }}
+         helm pull oci://docker.io/apache/solr-chart --version {{ release_version[1:] }}
+
+      Note: The workflow uses repository secrets DOCKERHUB_USER and DOCKERHUB_TOKEN for authentication.
+    links:
+      - '{{ workflow_url }}'
+      - '{{ solr_operator_chart_url }}'
+      - '{{ solr_chart_url }}'
+  - !Todo
     id: publish_crds
     title: Publish the staged CRDs
     depends: svn_release_mv
@@ -1167,11 +1206,14 @@ groups:
     depends:
       - publish_docker_image
       - publish_helm_charts
+      - publish_helm_charts_oci
     description: |
       Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} version of the Solr Operator and Solr Helm Charts.
       Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
 
       The ChangeLog is very finicky, so make sure that it renders correctly.
+
+      Also verify that the OCI registry information is correctly displayed on ArtifactHub.
     links:
       - https://artifacthub.io/packages/helm/apache-solr/solr-operator
       - https://artifacthub.io/packages/helm/apache-solr/solr
