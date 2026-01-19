@@ -105,6 +105,24 @@ rules:
   verbs:
   - get
 - apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - backendtlspolicies/status
+  verbs:
+  - get
+- apiGroups:
   - networking.k8s.io
   resources:
   - ingresses
