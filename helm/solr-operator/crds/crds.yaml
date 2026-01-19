@@ -10147,6 +10147,56 @@ spec:
                           For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true.
                           If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above.
                         type: string
+                      gateway:
+                        description: |-
+                          Gateway defines settings for Kubernetes Gateway API routing.
+
+                          This option is only available when Method=Gateway.
+                          The referenced Gateway must already exist and be managed by your platform team.
+                          The Solr Operator only manages the HTTPRoute resources.
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations to add to HTTPRoute resources
+                            type: object
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels to add to HTTPRoute resources
+                            type: object
+                          parentRefs:
+                            description: |-
+                              ParentRefs specifies the Gateway(s) to attach HTTPRoutes to.
+                              This is required when using method=Gateway.
+
+                              The referenced Gateway must already exist and be managed by your platform team.
+                              The Solr Operator only manages the HTTPRoute resources.
+                            items:
+                              description: GatewayParentReference identifies a parent
+                                Gateway resource to attach HTTPRoutes to
+                              properties:
+                                name:
+                                  description: Name of the Gateway resource
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the Gateway resource.
+                                    If not specified, defaults to the HTTPRoute's namespace.
+                                  type: string
+                                sectionName:
+                                  description: |-
+                                    SectionName refers to a specific listener on the Gateway.
+                                    For example, "https" or "http".
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            minItems: 1
+                            type: array
+                        required:
+                        - parentRefs
+                        type: object
                       hideCommon:
                         description: |-
                           Do not expose the common Solr service externally. This affects a single service.
@@ -10186,6 +10236,7 @@ spec:
                         enum:
                         - Ingress
                         - ExternalDNS
+                        - Gateway
                         type: string
                       nodePortOverride:
                         description: |-

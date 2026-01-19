@@ -35,6 +35,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -70,6 +71,8 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
@@ -433,6 +436,130 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				return requeueOrNot, ingressErr
 			}
 			logger.Info("Deleted Ingress")
+		}
+	}
+
+	// Reconcile Gateway API HTTPRoutes
+	if extAddressabilityOpts != nil && extAddressabilityOpts.Method == solrv1beta1.Gateway {
+		// Validate that gateway config is provided
+		if extAddressabilityOpts.Gateway == nil || len(extAddressabilityOpts.Gateway.ParentRefs) == 0 {
+			return requeueOrNot, fmt.Errorf("gateway.parentRefs is required when using method=Gateway")
+		}
+
+		// Reconcile Common HTTPRoute (if not hidden)
+		if !extAddressabilityOpts.HideCommon {
+			commonHTTPRoute := util.GenerateCommonHTTPRoute(instance, solrNodeNames)
+			commonHTTPRouteLogger := logger.WithValues("httproute", commonHTTPRoute.Name)
+			foundCommonHTTPRoute := &gatewayv1.HTTPRoute{}
+			err = r.Get(ctx, types.NamespacedName{Name: commonHTTPRoute.Name, Namespace: commonHTTPRoute.Namespace}, foundCommonHTTPRoute)
+			if err != nil && errors.IsNotFound(err) {
+				commonHTTPRouteLogger.Info("Creating common HTTPRoute")
+				if err = controllerutil.SetControllerReference(instance, commonHTTPRoute, r.Scheme); err == nil {
+					err = r.Create(ctx, commonHTTPRoute)
+				}
+			} else if err == nil {
+				var needsUpdate bool
+				needsUpdate, err = util.OvertakeControllerRef(instance, foundCommonHTTPRoute, r.Scheme)
+				needsUpdate = util.CopyHTTPRouteFields(commonHTTPRoute, foundCommonHTTPRoute, commonHTTPRouteLogger) || needsUpdate
+
+				if needsUpdate && err == nil {
+					commonHTTPRouteLogger.Info("Updating common HTTPRoute")
+					err = r.Update(ctx, foundCommonHTTPRoute)
+				}
+			}
+			if err != nil {
+				return requeueOrNot, err
+			}
+		} else {
+			// Delete common HTTPRoute if it exists but should be hidden
+			foundCommonHTTPRoute := &gatewayv1.HTTPRoute{}
+			err := r.Get(ctx, types.NamespacedName{Name: instance.CommonHTTPRouteName(), Namespace: instance.GetNamespace()}, foundCommonHTTPRoute)
+			if err == nil {
+				logger.Info("Deleting common HTTPRoute (hideCommon=true)")
+				err = r.Delete(ctx, foundCommonHTTPRoute)
+				if err != nil && !errors.IsNotFound(err) {
+					return requeueOrNot, err
+				}
+			}
+		}
+
+		// Reconcile Node HTTPRoutes (if not hidden)
+		if !extAddressabilityOpts.HideNodes {
+			for _, nodeName := range solrNodeNames {
+				nodeHTTPRoute := util.GenerateNodeHTTPRoute(instance, nodeName)
+				nodeHTTPRouteLogger := logger.WithValues("httproute", nodeHTTPRoute.Name)
+				foundNodeHTTPRoute := &gatewayv1.HTTPRoute{}
+				err = r.Get(ctx, types.NamespacedName{Name: nodeHTTPRoute.Name, Namespace: nodeHTTPRoute.Namespace}, foundNodeHTTPRoute)
+				if err != nil && errors.IsNotFound(err) {
+					nodeHTTPRouteLogger.Info("Creating node HTTPRoute")
+					if err = controllerutil.SetControllerReference(instance, nodeHTTPRoute, r.Scheme); err == nil {
+						err = r.Create(ctx, nodeHTTPRoute)
+					}
+				} else if err == nil {
+					var needsUpdate bool
+					needsUpdate, err = util.OvertakeControllerRef(instance, foundNodeHTTPRoute, r.Scheme)
+					needsUpdate = util.CopyHTTPRouteFields(nodeHTTPRoute, foundNodeHTTPRoute, nodeHTTPRouteLogger) || needsUpdate
+
+					if needsUpdate && err == nil {
+						nodeHTTPRouteLogger.Info("Updating node HTTPRoute")
+						err = r.Update(ctx, foundNodeHTTPRoute)
+					}
+				}
+				if err != nil {
+					return requeueOrNot, err
+				}
+			}
+		}
+
+		// Cleanup orphaned node HTTPRoutes (when scaling down)
+		httpRouteList := &gatewayv1.HTTPRouteList{}
+		labelSelector := labels.SelectorFromSet(instance.SharedLabels())
+		listOps := &client.ListOptions{
+			Namespace:     instance.Namespace,
+			LabelSelector: labelSelector,
+		}
+		err = r.List(ctx, httpRouteList, listOps)
+		if err == nil {
+			for _, httpRoute := range httpRouteList.Items {
+				// Skip the common HTTPRoute
+				if httpRoute.Name == instance.CommonHTTPRouteName() {
+					continue
+				}
+				// Check if this node still exists
+				nodeExists := false
+				for _, nodeName := range solrNodeNames {
+					if httpRoute.Name == instance.NodeHTTPRouteName(nodeName) {
+						nodeExists = true
+						break
+					}
+				}
+				// Delete orphaned HTTPRoute
+				if !nodeExists {
+					logger.Info("Deleting orphaned node HTTPRoute", "httproute", httpRoute.Name)
+					err = r.Delete(ctx, &httpRoute)
+					if err != nil && !errors.IsNotFound(err) {
+						return requeueOrNot, err
+					}
+				}
+			}
+		}
+	} else {
+		// If not using Gateway method, clean up any existing HTTPRoutes
+		httpRouteList := &gatewayv1.HTTPRouteList{}
+		labelSelector := labels.SelectorFromSet(instance.SharedLabels())
+		listOps := &client.ListOptions{
+			Namespace:     instance.Namespace,
+			LabelSelector: labelSelector,
+		}
+		err := r.List(ctx, httpRouteList, listOps)
+		if err == nil && len(httpRouteList.Items) > 0 {
+			logger.Info("Cleaning up HTTPRoutes (method changed from Gateway)")
+			for _, httpRoute := range httpRouteList.Items {
+				err = r.Delete(ctx, &httpRoute)
+				if err != nil && !errors.IsNotFound(err) {
+					return requeueOrNot, err
+				}
+			}
 		}
 	}
 
@@ -1191,6 +1318,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}). /* for authentication */
 		Owns(&netv1.Ingress{}).
+		Owns(&gatewayv1.HTTPRoute{}).
 		Owns(&policyv1.PodDisruptionBudget{})
 
 	var err error
