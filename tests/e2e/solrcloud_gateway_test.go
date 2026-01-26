@@ -23,6 +23,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var _ = Describe("E2E - SolrCloud - Gateway API", func() {
