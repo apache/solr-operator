@@ -656,6 +656,16 @@ type SolrGatewayOptions struct {
 	// Labels to add to HTTPRoute resources
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// BackendTLSPolicy defines TLS configuration for backend connections from Gateway to Solr pods.
+	//
+	// This is used when Solr pods are running with TLS enabled (spec.solrTLS) and the Gateway
+	// needs to establish secure connections to the backend services.
+	//
+	// The Solr Operator will create BackendTLSPolicy resources for each HTTPRoute.
+	//
+	// +optional
+	BackendTLSPolicy *SolrBackendTLSPolicy `json:"backendTLSPolicy,omitempty"`
 }
 
 // GatewayParentReference identifies a parent Gateway resource to attach HTTPRoutes to
@@ -672,6 +682,44 @@ type GatewayParentReference struct {
 	// For example, "https" or "http".
 	// +optional
 	SectionName *string `json:"sectionName,omitempty"`
+}
+
+// SolrBackendTLSPolicy defines backend TLS configuration for Gateway API
+// +kubebuilder:validation:MaxProperties=1
+type SolrBackendTLSPolicy struct {
+	// CACertificateRefs contains one or more references to Kubernetes objects that contain
+	// TLS certificates of the Certificate Authorities that can be used as a trust anchor
+	// to validate the certificates presented by the backend.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=8
+	CACertificateRefs []GatewayCertificateReference `json:"caCertificateRefs,omitempty"`
+
+	// WellKnownCACertificates specifies whether system CA certificates may be used in the
+	// TLS handshake between the gateway and backend pod.
+	//
+	// If WellKnownCACertificates is unspecified or empty (""), then CACertificateRefs must be
+	// specified with at least one entry for a valid configuration.
+	//
+	// Only one of CACertificateRefs or WellKnownCACertificates may be specified, not both.
+	//
+	// +optional
+	WellKnownCACertificates *string `json:"wellKnownCACertificates,omitempty"`
+}
+
+// GatewayCertificateReference identifies a certificate object in Kubernetes
+type GatewayCertificateReference struct {
+	// Name of the Kubernetes resource (e.g., ConfigMap or Secret)
+	Name string `json:"name"`
+
+	// Kind of the resource (e.g., "ConfigMap" or "Secret")
+	// +optional
+	// +kubebuilder:default="ConfigMap"
+	Kind *string `json:"kind,omitempty"`
+
+	// Group of the resource
+	// +optional
+	Group *string `json:"group,omitempty"`
 }
 
 type SolrUpdateStrategy struct {
@@ -1355,6 +1403,16 @@ func (sc *SolrCloud) NodeHTTPRouteName(nodeName string) string {
 	return nodeName
 }
 
+// CommonBackendTLSPolicyName returns the name of the common BackendTLSPolicy for the cloud
+func (sc *SolrCloud) CommonBackendTLSPolicyName() string {
+	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// NodeBackendTLSPolicyName returns the name of the BackendTLSPolicy for a specific node
+func (sc *SolrCloud) NodeBackendTLSPolicyName(nodeName string) string {
+	return nodeName
+}
+
 // ProvidedZookeeperName returns the provided zk cluster
 func (sc *SolrCloud) ProvidedZookeeperName() string {
 	return fmt.Sprintf("%s-solrcloud-zookeeper", sc.GetName())
@@ -1525,6 +1583,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 func (ea *ExternalAddressability) HasIngressTLSTermination() bool {
 	if ea != nil && ea.Method == Ingress && ea.IngressTLSTermination != nil {
 		return ea.IngressTLSTermination.UseDefaultTLSSecret || ea.IngressTLSTermination.TLSSecret != ""
+	}
+	return false
+}
+
+func (ea *ExternalAddressability) HasBackendTLSPolicy() bool {
+	if ea != nil && ea.Method == Gateway && ea.Gateway != nil && ea.Gateway.BackendTLSPolicy != nil {
+		return (ea.Gateway.BackendTLSPolicy.CACertificateRefs != nil && len(ea.Gateway.BackendTLSPolicy.CACertificateRefs) > 0) ||
+			(ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != nil && *ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != "")
 	}
 	return false
 }

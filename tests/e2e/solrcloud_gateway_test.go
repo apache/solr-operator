@@ -148,4 +148,134 @@ var _ = FDescribe("E2E - SolrCloud - Gateway API", func() {
 			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 		})
 	})
+
+	FContext("BackendTLSPolicy Management", func() {
+		var (
+			caCertConfigMapName = "solr-ca-cert"
+		)
+
+		FIt("Creates and manages BackendTLSPolicy resources", func(ctx context.Context) {
+			By("verifying BackendTLSPolicy resources do not exist initially")
+			expectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
+			nodeNames := solrCloud.GetAllSolrPodNames()
+			for _, nodeName := range nodeNames {
+				expectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName))
+			}
+
+			By("enabling BackendTLSPolicy with CA certificate reference")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy = &solrv1beta1.SolrBackendTLSPolicy{
+					CACertificateRefs: []solrv1beta1.GatewayCertificateReference{
+						{
+							Name: caCertConfigMapName,
+						},
+					},
+				}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud to add BackendTLSPolicy")
+			})
+
+			By("verifying Common BackendTLSPolicy was created correctly")
+			commonPolicy := expectBackendTLSPolicyWithChecks(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName(), func(g Gomega, policy *gatewayv1.BackendTLSPolicy) {
+				g.Expect(policy.Spec.TargetRefs).To(HaveLen(1), "BackendTLSPolicy should have one target ref")
+				g.Expect(string(policy.Spec.TargetRefs[0].Name)).To(Equal(solrCloud.CommonServiceName()), "BackendTLSPolicy should target common service")
+				g.Expect(string(policy.Spec.TargetRefs[0].Kind)).To(Equal("Service"), "BackendTLSPolicy should target Service kind")
+				g.Expect(string(policy.Spec.Validation.Hostname)).To(Equal(solrCloud.CommonServiceName()), "BackendTLSPolicy hostname should match service name")
+				g.Expect(policy.Spec.Validation.CACertificateRefs).To(HaveLen(1), "BackendTLSPolicy should have one CA cert ref")
+				g.Expect(string(policy.Spec.Validation.CACertificateRefs[0].Name)).To(Equal(caCertConfigMapName), "CA cert ref name should match")
+				g.Expect(string(policy.Spec.Validation.CACertificateRefs[0].Kind)).To(Equal("ConfigMap"), "CA cert ref kind should default to ConfigMap")
+				g.Expect(string(policy.Spec.Validation.CACertificateRefs[0].Group)).To(Equal(""), "CA cert ref group should be empty (core API)")
+			})
+			Expect(commonPolicy).ToNot(BeNil())
+
+			By("verifying Node BackendTLSPolicy resources were created correctly")
+			for _, nodeName := range nodeNames {
+				nodePolicy := expectBackendTLSPolicyWithChecks(ctx, solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName), func(g Gomega, policy *gatewayv1.BackendTLSPolicy) {
+					g.Expect(policy.Spec.TargetRefs).To(HaveLen(1), "BackendTLSPolicy should have one target ref")
+					g.Expect(string(policy.Spec.TargetRefs[0].Name)).To(Equal(nodeName), "BackendTLSPolicy should target node service")
+					g.Expect(string(policy.Spec.Validation.Hostname)).To(Equal(nodeName), "BackendTLSPolicy hostname should match node service name")
+					g.Expect(policy.Spec.Validation.CACertificateRefs).To(HaveLen(1), "BackendTLSPolicy should have one CA cert ref")
+				})
+				Expect(nodePolicy).ToNot(BeNil())
+			}
+
+			By("updating BackendTLSPolicy to use wellKnownCACertificates")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				wellKnown := "System"
+				found.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy = &solrv1beta1.SolrBackendTLSPolicy{
+					WellKnownCACertificates: &wellKnown,
+				}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud BackendTLSPolicy to use wellKnownCACertificates")
+			})
+
+			By("verifying BackendTLSPolicy was updated to use wellKnownCACertificates")
+			expectBackendTLSPolicyWithChecks(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName(), func(g Gomega, policy *gatewayv1.BackendTLSPolicy) {
+				g.Expect(policy.Spec.Validation.CACertificateRefs).To(BeNil(), "CACertificateRefs should be nil when using wellKnownCACertificates")
+				g.Expect(policy.Spec.Validation.WellKnownCACertificates).ToNot(BeNil(), "WellKnownCACertificates should be set")
+				g.Expect(string(*policy.Spec.Validation.WellKnownCACertificates)).To(Equal("System"), "WellKnownCACertificates should be 'System'")
+			})
+
+			By("disabling node external addressability and verifying node BackendTLSPolicy resources are deleted")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External.HideNodes = true
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud to hide nodes")
+			})
+
+			By("verifying node BackendTLSPolicy resources were deleted")
+			for _, nodeName := range nodeNames {
+				eventuallyExpectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName))
+			}
+
+			By("verifying common BackendTLSPolicy still exists")
+			expectBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
+
+			By("removing BackendTLSPolicy configuration")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy = nil
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud to remove BackendTLSPolicy")
+			})
+
+			By("verifying all BackendTLSPolicy resources were deleted")
+			eventuallyExpectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
+		})
+
+		FIt("Cleans up BackendTLSPolicy when changing from Gateway method", func(ctx context.Context) {
+			By("enabling BackendTLSPolicy")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy = &solrv1beta1.SolrBackendTLSPolicy{
+					CACertificateRefs: []solrv1beta1.GatewayCertificateReference{
+						{
+							Name: caCertConfigMapName,
+						},
+					},
+				}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud to add BackendTLSPolicy")
+			})
+
+			By("verifying BackendTLSPolicy resources exist")
+			expectBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
+			nodeNames := solrCloud.GetAllSolrPodNames()
+			for _, nodeName := range nodeNames {
+				expectBackendTLSPolicy(ctx, solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName))
+			}
+
+			By("changing external addressability method from Gateway to Ingress")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.External.Method = solrv1beta1.Ingress
+				found.Spec.SolrAddressability.External.Gateway = nil
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Couldn't update the solrCloud to change method to Ingress")
+			})
+
+			By("verifying all BackendTLSPolicy resources were cleaned up")
+			eventuallyExpectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
+			for _, nodeName := range nodeNames {
+				eventuallyExpectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName))
+			}
+
+			By("verifying HTTPRoutes were also cleaned up")
+			eventuallyExpectNoHTTPRoute(ctx, solrCloud, solrCloud.CommonHTTPRouteName())
+			for _, nodeName := range nodeNames {
+				eventuallyExpectNoHTTPRoute(ctx, solrCloud, solrCloud.NodeHTTPRouteName(nodeName))
+			}
+		})
+	})
 })

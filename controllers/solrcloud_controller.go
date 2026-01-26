@@ -73,6 +73,8 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
@@ -539,6 +541,99 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					err = r.Delete(ctx, &httpRoute)
 					if err != nil && !errors.IsNotFound(err) {
 						return requeueOrNot, err
+					}
+				}
+			}
+		}
+
+		// Reconcile BackendTLSPolicy resources if configured
+		if extAddressabilityOpts.HasBackendTLSPolicy() {
+			// Reconcile Common BackendTLSPolicy (if not hidden)
+			if !extAddressabilityOpts.HideCommon {
+				commonPolicy := util.GenerateCommonBackendTLSPolicy(instance)
+				if commonPolicy != nil {
+					commonPolicyLogger := logger.WithValues("backendtlspolicy", commonPolicy.Name)
+					foundCommonPolicy := &gatewayv1.BackendTLSPolicy{}
+					err = r.Get(ctx, types.NamespacedName{Name: commonPolicy.Name, Namespace: commonPolicy.Namespace}, foundCommonPolicy)
+
+					if err != nil && errors.IsNotFound(err) {
+						commonPolicyLogger.Info("Creating BackendTLSPolicy")
+						if err = controllerutil.SetControllerReference(instance, commonPolicy, r.Scheme); err == nil {
+							err = r.Create(ctx, commonPolicy)
+						}
+					} else if err == nil {
+						var needsUpdate bool
+						needsUpdate, err = util.OvertakeControllerRef(instance, foundCommonPolicy, r.Scheme)
+						if err == nil && util.CopyBackendTLSPolicyFields(commonPolicy, foundCommonPolicy, commonPolicyLogger) {
+							needsUpdate = true
+						}
+						if needsUpdate {
+							commonPolicyLogger.Info("Updating BackendTLSPolicy")
+							err = r.Update(ctx, foundCommonPolicy)
+						}
+					}
+					if err != nil {
+						return requeueOrNot, err
+					}
+				}
+			}
+
+			// Reconcile Node BackendTLSPolicies (if not hidden)
+			if !extAddressabilityOpts.HideNodes {
+				for _, nodeName := range solrNodeNames {
+					nodePolicy := util.GenerateNodeBackendTLSPolicy(instance, nodeName)
+					if nodePolicy != nil {
+						nodePolicyLogger := logger.WithValues("backendtlspolicy", nodePolicy.Name)
+						foundNodePolicy := &gatewayv1.BackendTLSPolicy{}
+						err = r.Get(ctx, types.NamespacedName{Name: nodePolicy.Name, Namespace: nodePolicy.Namespace}, foundNodePolicy)
+
+						if err != nil && errors.IsNotFound(err) {
+							nodePolicyLogger.Info("Creating BackendTLSPolicy")
+							if err = controllerutil.SetControllerReference(instance, nodePolicy, r.Scheme); err == nil {
+								err = r.Create(ctx, nodePolicy)
+							}
+						} else if err == nil {
+							var needsUpdate bool
+							needsUpdate, err = util.OvertakeControllerRef(instance, foundNodePolicy, r.Scheme)
+							if err == nil && util.CopyBackendTLSPolicyFields(nodePolicy, foundNodePolicy, nodePolicyLogger) {
+								needsUpdate = true
+							}
+							if needsUpdate {
+								nodePolicyLogger.Info("Updating BackendTLSPolicy")
+								err = r.Update(ctx, foundNodePolicy)
+							}
+						}
+
+						if err != nil {
+							return requeueOrNot, err
+						}
+					}
+				}
+			}
+
+			// Cleanup orphaned node BackendTLSPolicies (when scaling down)
+			backendTLSPolicyList := &gatewayv1.BackendTLSPolicyList{}
+			err = r.List(ctx, backendTLSPolicyList, listOps)
+			if err == nil {
+				for _, policy := range backendTLSPolicyList.Items {
+					// Skip the common BackendTLSPolicy
+					if policy.Name == instance.CommonBackendTLSPolicyName() {
+						continue
+					}
+					// Check if this node still exists
+					nodeExists := false
+					for _, nodeName := range solrNodeNames {
+						if policy.Name == instance.NodeBackendTLSPolicyName(nodeName) {
+							nodeExists = true
+							break
+						}
+					}
+					if !nodeExists {
+						logger.Info("Deleting orphaned BackendTLSPolicy", "backendtlspolicy", policy.Name)
+						err = r.Delete(ctx, &policy)
+						if err != nil && !errors.IsNotFound(err) {
+							return requeueOrNot, err
+						}
 					}
 				}
 			}

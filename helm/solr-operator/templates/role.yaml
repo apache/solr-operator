@@ -89,6 +89,7 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
+  - backendtlspolicies
   - httproutes
   verbs:
   - create
@@ -101,25 +102,8 @@ rules:
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
-  - httproutes/status
-  verbs:
-  - get
-- apiGroups:
-  - gateway.networking.k8s.io
-  resources:
-  - backendtlspolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - gateway.networking.k8s.io
-  resources:
   - backendtlspolicies/status
+  - httproutes/status
   verbs:
   - get
 - apiGroups:
