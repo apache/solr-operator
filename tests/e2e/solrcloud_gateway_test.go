@@ -25,7 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = FDescribe("E2E - SolrCloud - Gateway API", func() {
+var _ = Describe("E2E - SolrCloud - Gateway API", func() {
 	var (
 		solrCloud        *solrv1beta1.SolrCloud
 		gatewayNamespace = "default"
@@ -66,9 +66,9 @@ var _ = FDescribe("E2E - SolrCloud - Gateway API", func() {
 		createAndQueryCollection(ctx, solrCloud, "basic", 1, 1)
 	})
 
-	FContext("Can Remove HTTPRoutes and Services when changing addressability", func() {
+	Context("Can Remove HTTPRoutes and Services when changing addressability", func() {
 
-		FIt("Can adapt to changing needs", func(ctx context.Context) {
+		It("Can adapt to changing needs", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 			// Pod Annotations test
@@ -149,12 +149,12 @@ var _ = FDescribe("E2E - SolrCloud - Gateway API", func() {
 		})
 	})
 
-	FContext("BackendTLSPolicy Management", func() {
+	Context("BackendTLSPolicy Management", func() {
 		var (
 			caCertConfigMapName = "solr-ca-cert"
 		)
 
-		FIt("Creates and manages BackendTLSPolicy resources", func(ctx context.Context) {
+		It("Creates and manages BackendTLSPolicy resources", func(ctx context.Context) {
 			By("verifying BackendTLSPolicy resources do not exist initially")
 			expectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
 			nodeNames := solrCloud.GetAllSolrPodNames()
@@ -238,7 +238,7 @@ var _ = FDescribe("E2E - SolrCloud - Gateway API", func() {
 			eventuallyExpectNoBackendTLSPolicy(ctx, solrCloud, solrCloud.CommonBackendTLSPolicyName())
 		})
 
-		FIt("Cleans up BackendTLSPolicy when changing from Gateway method", func(ctx context.Context) {
+		It("Cleans up BackendTLSPolicy when changing from Gateway method", func(ctx context.Context) {
 			By("enabling BackendTLSPolicy")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				found.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy = &solrv1beta1.SolrBackendTLSPolicy{

@@ -685,11 +685,18 @@ type GatewayParentReference struct {
 }
 
 // SolrBackendTLSPolicy defines backend TLS configuration for Gateway API
+//
+// For a valid BackendTLSPolicy configuration, exactly one of CACertificateRefs or
+// WellKnownCACertificates must be specified. The operator validates this constraint
+// via the HasBackendTLSPolicy() function before creating BackendTLSPolicy resources.
+//
 // +kubebuilder:validation:MaxProperties=1
 type SolrBackendTLSPolicy struct {
 	// CACertificateRefs contains one or more references to Kubernetes objects that contain
 	// TLS certificates of the Certificate Authorities that can be used as a trust anchor
 	// to validate the certificates presented by the backend.
+	//
+	// If specified, WellKnownCACertificates must not be set.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=8
@@ -702,6 +709,7 @@ type SolrBackendTLSPolicy struct {
 	// specified with at least one entry for a valid configuration.
 	//
 	// Only one of CACertificateRefs or WellKnownCACertificates may be specified, not both.
+	// If specified, CACertificateRefs must not be set.
 	//
 	// +optional
 	WellKnownCACertificates *string `json:"wellKnownCACertificates,omitempty"`

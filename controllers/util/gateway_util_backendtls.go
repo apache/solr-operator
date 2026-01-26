@@ -33,7 +33,7 @@ func GenerateCommonBackendTLSPolicy(solrCloud *solr.SolrCloud) *gatewayv1.Backen
 
 	// Get the full FQDN for hostname validation
 	domainName := solrCloud.Spec.SolrAddressability.External.DomainName
-	hostname := solrCloud.ExternalCommonUrl(domainName, false)
+	fqdn := solrCloud.ExternalCommonUrl(domainName, false)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	backendTLSConfig := solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy
@@ -79,7 +79,7 @@ func GenerateCommonBackendTLSPolicy(solrCloud *solr.SolrCloud) *gatewayv1.Backen
 				},
 			},
 			Validation: gatewayv1.BackendTLSPolicyValidation{
-				Hostname: gatewayv1.PreciseHostname(hostname),
+				Hostname: gatewayv1.PreciseHostname(fqdn),
 			},
 		},
 	}
@@ -104,7 +104,7 @@ func GenerateNodeBackendTLSPolicy(solrCloud *solr.SolrCloud, nodeName string) *g
 
 	// Get the full FQDN for hostname validation
 	domainName := solrCloud.Spec.SolrAddressability.External.DomainName
-	hostname := solrCloud.ExternalNodeUrl(nodeName, domainName, false)
+	fqdn := solrCloud.ExternalNodeUrl(nodeName, domainName, false)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	backendTLSConfig := solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy
@@ -150,7 +150,7 @@ func GenerateNodeBackendTLSPolicy(solrCloud *solr.SolrCloud, nodeName string) *g
 				},
 			},
 			Validation: gatewayv1.BackendTLSPolicyValidation{
-				Hostname: gatewayv1.PreciseHostname(hostname),
+				Hostname: gatewayv1.PreciseHostname(fqdn),
 			},
 		},
 	}
