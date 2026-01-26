@@ -55,8 +55,8 @@ The same services are created as with other external addressability methods:
 The Gateway mode assumes the following resources already exist in your cluster:
 
 1. **Gateway API CRDs**: The Gateway API CRDs must be installed in your cluster
-   - Minimum version: v1.0.0
-   - Required CRDs: `Gateway`, `GatewayClass`, `HTTPRoute`
+   - Minimum version: v1.4.0 (required for `BackendTLSPolicy` support)
+   - Required CRDs: `Gateway`, `GatewayClass`, `HTTPRoute`, `BackendTLSPolicy` (optional, for TLS backends)
    
 2. **Gateway Resource**: A Gateway resource must already exist and be managed by your platform team
    - The operator only manages HTTPRoute resources, not the Gateway itself
@@ -129,7 +129,7 @@ The operator also supports creating `BackendTLSPolicy` resources to configure se
 
 ### Configuring BackendTLSPolicy
 
-The Solr Operator can automatically create and manage `BackendTLSPolicy` resources (Gateway API v1) when configured in the SolrCloud spec:
+The Solr Operator can automatically create and manage `BackendTLSPolicy` resources (Gateway API v1alpha3) when configured in the SolrCloud spec:
 
 ```yaml
 apiVersion: solr.apache.org/v1beta1
@@ -209,15 +209,17 @@ These policies configure the Gateway to validate backend TLS certificates and es
 
 ### Gateway Implementation Support
 
-**Note**: `BackendTLSPolicy` is part of the Gateway API standard (v1alpha2+), but support varies by implementation:
+**Note**: `BackendTLSPolicy` is part of the Gateway API standard (GA in v1.4.0+), but support varies by implementation:
 
 | Gateway Implementation | BackendTLSPolicy Support |
 |------------------------|--------------------------|
-| **Standard Gateway API** | ✅ v1alpha2+ |
+| **Standard Gateway API** | ✅ v1 (GA as of v1.4.0) |
 | **Envoy Gateway** | ✅ Full support |
 | **Istio** | ⚠️ Use `DestinationRule` instead |
-| **NGINX Gateway Fabric** | ✅ Experimental support |
+| **NGINX Gateway Fabric** | ✅ Supported |
 | **GKE Gateway** | ⚠️ Automatic via `appProtocol` |
+
+**Requirements**: Gateway API v1.4.0 or later is required for `BackendTLSPolicy` support.
 
 Refer to your Gateway implementation's documentation for specific backend TLS configuration requirements.
 
