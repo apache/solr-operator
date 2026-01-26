@@ -215,6 +215,7 @@ These policies configure the Gateway to validate backend TLS certificates and es
 |------------------------|--------------------------|
 | **Standard Gateway API** | ✅ v1 (GA as of v1.4.0) |
 | **Envoy Gateway** | ✅ Full support |
+| **kgateway** | ✅ Full support |
 | **Istio** | ⚠️ Use `DestinationRule` instead |
 | **NGINX Gateway Fabric** | ✅ Supported |
 | **GKE Gateway** | ⚠️ Automatic via `appProtocol` |
