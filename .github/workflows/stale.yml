@@ -1,0 +1,60 @@
+# This workflow warns of PRs that have had no activity for a specified amount of time.
+#
+# For more information, see https://github.com/actions/stale
+name: Mark stale pull requests
+
+on:
+  # Run every day at 00:00 UTC
+  schedule:
+    - cron: '0 0 * * *'
+  # Or run on demand
+  workflow_dispatch:
+
+jobs:
+  stale:
+    if: github.repository == 'apache/solr-operator'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/stale@v10
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          days-before-pr-stale: 60
+          days-before-issue-stale: 180  # Somewhat longer time for issues going stale
+          days-before-close: 60         # Close PRs or issues marked as stale after 60 days
+          exempt-draft-pr: true         # don't mark draft PRs as stale
+          exempt-pr-labels: "exempt-stale" # don't mark PRs with these labels as stale
+          stale-pr-label: "stale"
+          close-pr-label: "closed-stale"
+          stale-issue-label: 'stale'
+          close-issue-label: 'closed-stale'
+
+          stale-issue-message: >
+            This issue has had no activity for 6 months and is now labeled as stale. 
+            Any new activity will remove the stale label. 
+            If this is a bug report, consider providing more information for easier reproduction.
+            If this is a feature request, consider pinging the dev@solr.apache.org mailing list for more attention.
+            To exempt this issue from being marked as stale, add the label "exempt-stale".
+            If left unattended, this issue will be closed after another 60 days of inactivity.
+            Thank you for your engagement!
+
+          stale-pr-message: >
+            This PR has had no activity for 60 days and is now labeled as stale. 
+            Any new activity will remove the stale label. 
+            To attract more reviewers, please tag people who might be familiar with the code area and/or notify the dev@solr.apache.org mailing list.
+            To exempt this PR from being marked as stale, make it a draft PR or add the label "exempt-stale".
+            If left unattended, this PR will be closed after another 60 days of inactivity.
+            Thank you for your contribution!
+
+          close-issue-message: >
+            This issue is now closed due to 60 days of inactivity after being marked as stale. 
+            Re-opening this issue is still possible, in which case it will be marked as active again.
+
+          close-pr-message: >
+            This PR is now closed due to 60 days of inactivity after being marked as stale. 
+            Re-opening this PR is still possible, in which case it will be marked as active again.
+
+          operations-per-run: 100       # operations budget
