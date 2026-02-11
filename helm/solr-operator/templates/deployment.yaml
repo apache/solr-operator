@@ -133,7 +133,10 @@ spec:
       volumes:
         {{- include "solr-operator.mTLS.volumes" . | nindent 8 }}
       {{- end }}
-
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end -}}
       {{- if .Values.sidecarContainers }}
       {{ toYaml .Values.sidecarContainers | nindent 6 }}
       {{- end }}
