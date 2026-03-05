@@ -57,4 +57,4 @@ jobs:
             This PR is now closed due to 60 days of inactivity after being marked as stale. 
             Re-opening this PR is still possible, in which case it will be marked as active again.
 
-          operations-per-run: 100       # operations budget
+          operations-per-run: 20       # operations budget
