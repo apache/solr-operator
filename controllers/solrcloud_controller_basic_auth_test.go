@@ -354,9 +354,9 @@ func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) 
 	expCmd := "solr zk cp zk:/security.json /tmp/current_security.json -z $ZK_HOST >/dev/null 2>&1;  " +
 		"GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " +
 		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ; then  " +
-		"echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		"printf '%s' \"$SECURITY_JSON\" > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
 		" echo 'Blank security.json found. Put new security.json in ZK'; fi; elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " +
-		" echo $SECURITY_JSON > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
 		" echo 'No security.json found. Put new security.json in ZK'; fi"
 	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 }
