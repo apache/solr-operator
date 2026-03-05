@@ -72,6 +72,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/778
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/779
+    - kind: fixed
+      description: fixed initContainer to import security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/798
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/800
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
