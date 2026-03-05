@@ -324,10 +324,11 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {
-				g.Expect(expInitContainer.Env).To(HaveLen(10), "Wrong number of env vars using ACLs and Basic Auth")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced the Solr Pod env vars")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced the Solr Pod env vars")
-				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
+				g.Expect(expInitContainer.Env).To(HaveLen(11), "Wrong number of env vars using ACLs and Basic Auth")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-3].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced among the initContainer env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SOLR_TOOL_OPTS"), "Env var SOLR_TOOL_OPTS is misplaced among the initContainer env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced among the initContainer env vars")
+				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-3], true)
 			} // else this ref not using ACLs
 
 			expectPutSecurityJsonInZkCmd(g, expInitContainer)

@@ -73,12 +73,19 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/779
     - kind: fixed
-      description: fixed initContainer to import security.json
+      description: Fixed initContainer script that imports security.json
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/798
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/800
+    - kind: fixed
+      description: SOLR_TOOL_OPTS is now set, allowing 'setup-zk' initContainer to obey ZK connection settings
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/717
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/804
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
@@ -114,7 +121,7 @@ annotations:
                     storage: "20Gi"
         replicas: 3
         solrImage:
-          tag: 8.11
+          tag: 9.10.0
         solrJavaMem: "-Xms4g -Xmx4g"
         customSolrKubeOptions:
           podOptions:
@@ -155,7 +162,7 @@ annotations:
             name: "example"
         numThreads: 4
         image:
-          tag: 8.11
+          tag: 9.10.0
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrBackup
       metadata:

@@ -76,7 +76,7 @@ var (
 	logger       logr.Logger
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
-	defaultSolrImage     = "solr:8.11"
+	defaultSolrImage     = "solr:9.10.0"
 
 	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)

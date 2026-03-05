@@ -33,7 +33,7 @@ Test the release candidate in a Kind cluster
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -g  GPG Key (fingerprint) used to sign the artifacts (Optional, if not provided then the helm chart will not be verified)
     -k  Kubernetes Version to test with (full tag, e.g. v1.26.6) (Optional, defaults to a compatible version)
-    -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 8.11). (Optional, defaults to a compatible version)
+    -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 9.10.0). (Optional, defaults to a compatible version)
 EOF
 }
 
@@ -77,7 +77,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-8.11}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.10.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"

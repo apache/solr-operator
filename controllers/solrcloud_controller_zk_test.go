@@ -583,9 +583,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 			expectedInitContainerEnvVars := map[string]string{
-				"SOLR_ZK_OPTS":    testSolrZKOpts,
-				"SOLR_OPTS":       "$(SOLR_ZK_OPTS) " + testSolrOpts,
-				"ZKCLI_JVM_FLAGS": "-Dsolr.zk.opts=this",
+				"SOLR_ZK_OPTS":   testSolrZKOpts,
+				"SOLR_OPTS":      "$(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_TOOL_OPTS": "$(SOLR_ZK_OPTS) " + testSolrOpts,
 			}
 			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[1].Env)
 		})
