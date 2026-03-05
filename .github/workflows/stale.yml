@@ -1,7 +1,7 @@
 # This workflow warns of PRs that have had no activity for a specified amount of time.
 #
 # For more information, see https://github.com/actions/stale
-name: Mark stale pull requests
+name: Mark stale pull requests and issues
 
 on:
   # Run every day at 00:00 UTC
