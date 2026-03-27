@@ -220,29 +220,29 @@ spec:
     maxSaved: 3
 EOF
 
-#printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
-#cat <<EOF | kubectl apply -f -
-#apiVersion: solr.apache.org/v1beta1
-#kind: SolrPrometheusExporter
-#metadata:
-#  name: example
-#spec:
-#  solrReference:
-#    cloud:
-#      name: "example"
-#  numThreads: 4
-#EOF
-#
-#printf "\nWait for the Solr Prometheus Exporter to be ready\n"
-#sleep 5
-#kubectl rollout status deployment/example-solr-metrics
-#
-## Expose the Solr Prometheus Exporter service to localhost
-#kubectl port-forward service/example-solr-metrics 18984:80 || true &
-#sleep 15
-#
-#printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
-#curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
+printf "\nCreate a Solr Prometheus Exporter to expose metrics for the Solr Cloud\n"
+cat <<EOF | kubectl apply -f -
+apiVersion: solr.apache.org/v1beta1
+kind: SolrPrometheusExporter
+metadata:
+  name: example
+spec:
+  solrReference:
+    cloud:
+      name: "example"
+  numThreads: 4
+EOF
+
+printf "\nWait for the Solr Prometheus Exporter to be ready\n"
+sleep 5
+kubectl rollout status deployment/example-solr-metrics
+
+# Expose the Solr Prometheus Exporter service to localhost
+kubectl port-forward service/example-solr-metrics 18984:80 || true &
+sleep 15
+
+printf "\nQuery the prometheus exporter, test for 'http://example-solrcloud-*.example-solrcloud-headless.default:8983/solr' (internal) URL being scraped.\n"
+curl --silent "http://localhost:18984/metrics" | grep 'http://example-solrcloud-.*.example-solrcloud-headless.default:8983/solr' > /dev/null
 
 printf "\nWait 22 seconds, so that more backups can be taken.\n"
 sleep 22
