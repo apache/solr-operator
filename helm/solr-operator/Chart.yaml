@@ -15,8 +15,8 @@
 apiVersion: v2
 name: solr-operator
 description: The Solr Operator enables easy management of Solr resources within Kubernetes.
-version: 0.9.0-prerelease
-appVersion: v0.9.0-prerelease
+version: 0.10.0-prerelease
+appVersion: v0.10.0-prerelease
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org/operator
 sources:
@@ -53,51 +53,42 @@ annotations:
     url: https://dist.apache.org/repos/dist/release/solr/KEYS
   # Add change log for a single release here.
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
+  # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: changed
-      description: SolrClouds now support auto-readOnlyRootFilesystem setting.
+      description: A container PostStart Hook is no longer used to create the ZooKeeper ChRoot, instead the initContainer will manage this
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/774
+    - kind: changed
+      description: The default logging format is now `json`, and default log level is `info`.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/779
+    - kind: added
+      description: Ability to configure `development` mode as well as log encoder, log level and stacktrace log level
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/624
+          url: https://github.com/apache/solr-operator/issues/778
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/648
-      description: Avoid reset of security.json if get request fails  
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/659
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/660
+          url: https://github.com/apache/solr-operator/pull/779
     - kind: fixed
-      description: SolrCloud scaling is now safe when using persistent storage with a 'Delete' reclaim policy
+      description: Fixed initContainer script that imports security.json
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/688
+          url: https://github.com/apache/solr-operator/issues/798
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/689
+          url: https://github.com/apache/solr-operator/pull/800
     - kind: fixed
-      description: SolrPrometheusExporter no longer fails liveness probes when the SolrCloud is too large
+      description: SOLR_TOOL_OPTS is now set, allowing 'setup-zk' initContainer to obey ZK connection settings
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/693
+          url: https://github.com/apache/solr-operator/issues/717
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/694
-    - kind: security
-      description: Command-based Solr probes no longer echoes 'JAVA_TOOL_OPTIONS' values in Kubernetes events.
-      links:
-        - name: JIRA Issue
-          url: https://issues.apache.org/jira/browse/SOLR-17216
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/698
-    - kind: fixed
-      description: SolrClouds addressed via an Ingress now scale up and down safely.
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/682
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/692
+          url: https://github.com/apache/solr-operator/pull/804
   artifacthub.io/images: |
     - name: solr-operator
-      image: apache/solr-operator:v0.9.0-prerelease
+      image: apache/solr-operator:v0.10.0-prerelease
   artifacthub.io/crds: |
     - kind: SolrCloud
       version: v1beta1
@@ -130,7 +121,7 @@ annotations:
                     storage: "20Gi"
         replicas: 3
         solrImage:
-          tag: 8.11
+          tag: 9.10.0
         solrJavaMem: "-Xms4g -Xmx4g"
         customSolrKubeOptions:
           podOptions:
@@ -171,7 +162,7 @@ annotations:
             name: "example"
         numThreads: 4
         image:
-          tag: 8.11
+          tag: 9.10.0
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrBackup
       metadata:

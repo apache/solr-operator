@@ -172,9 +172,9 @@ Please refer to the [SolrBackup documentation](../solr-backup) for more informat
 
 ## Zookeeper Reference
 
-Solr Clouds require an Apache Zookeeper to connect to.
+All SolrCloud resources run Solr in "cloud" mode, and require access to an Apache ZooKeeper cluster for state-management.
 
-The Solr operator gives a few options.
+The Solr operator gives a few options for ZooKeeper access:
 
 - Connecting to an already running zookeeper ensemble via [connection strings](#zk-connection-info)
 - [Spinning up a provided](#provided-instance) Zookeeper Ensemble in the same namespace via the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator)
@@ -1034,6 +1034,16 @@ Take a moment to review these authorization rules so that you're aware of the ro
         "path": "/admin/ping"
       },
       {
+        "name": "k8s-replica-balancing",
+        "role": "k8s",
+        "collection": null,
+        "path": "/____v2/cluster/replicas/balance"
+      },
+      {
+        "name": "collection-admin-edit",
+        "role": "k8s"
+      },
+      {
         "name": "read",
         "role": [ "admin", "users" ]
       },
@@ -1166,6 +1176,12 @@ Users need to ensure their `security.json` contains the user supplied in the `ba
 /admin/metrics
 /admin/ping (for collection="*")
 /admin/zookeeper/status
+/____v2/cluster/replicas/balance
+```
+
+And the following named permissions:
+```aiignore
+collection-admin-edit
 ```
 _Tip: see the authorization rules defined by the default `security.json` as a guide for configuring access for the operator user_
 

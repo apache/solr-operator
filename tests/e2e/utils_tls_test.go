@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certmanagermetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -39,10 +40,10 @@ const (
 	clientAuthSecret         = "client-auth"
 )
 
-func generateBaseSolrCloudWithSecretTLS(ctx context.Context, replicas int, includeClientTLS bool) (solrCloud *solrv1beta1.SolrCloud) {
+func generateBaseSolrCloudWithSecretTLS(ctx context.Context, replicas int, includeClientTLS bool, createKeyStore bool) (solrCloud *solrv1beta1.SolrCloud) {
 	solrCloud = generateBaseSolrCloud(replicas)
 
-	solrCertSecret, tlsPasswordSecret, clientCertSecret, clientTlsPasswordSecret := generateSolrCert(ctx, solrCloud, includeClientTLS)
+	solrCertSecret, tlsPasswordSecret, clientCertSecret, clientTlsPasswordSecret := generateSolrCert(ctx, solrCloud, includeClientTLS, createKeyStore)
 
 	solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
 		PKCS12Secret: &corev1.SecretKeySelector{
@@ -303,7 +304,7 @@ func installSolrIssuer(ctx context.Context, namespace string) {
 	expectSecret(ctx, clusterCA, secretName)
 }
 
-func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, includeClientTLS bool) (certSecretName string, tlsPasswordSecretName string, clientTLSCertSecretName string, clientTLSPasswordSecretName string) {
+func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, includeClientTLS bool, createKeyStore bool) (certSecretName string, tlsPasswordSecretName string, clientTLSCertSecretName string, clientTLSPasswordSecretName string) {
 	// First create a secret to use as a password for the keystore/truststore
 	tlsPasswordSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -338,7 +339,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 			SecretName: certSecretName,
 			Keystores: &certmanagerv1.CertificateKeystores{
 				PKCS12: &certmanagerv1.PKCS12Keystore{
-					Create: true,
+					Create: createKeyStore,
 					PasswordSecretRef: certmanagermetav1.SecretKeySelector{
 						LocalObjectReference: certmanagermetav1.LocalObjectReference{
 							Name: tlsPasswordSecret.Name,

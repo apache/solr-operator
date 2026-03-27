@@ -327,7 +327,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	var statefulSet *appsv1.StatefulSet
-
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet that should exist
 		expectedStatefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
@@ -381,12 +380,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	} else {
 		// If we are blocking the reconciliation of the statefulSet, we still want to find information about it.
-		err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				return requeueOrNot, err
-			} else {
+		statefulSet = &appsv1.StatefulSet{}
+		if e := r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet); e != nil {
+			if errors.IsNotFound(e) {
 				statefulSet = nil
+			} else {
+				err = e
 			}
 		}
 	}
@@ -424,6 +423,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 		if err != nil {
 			return requeueOrNot, err
+		}
+	} else {
+		// If ingress exists, delete it
+		foundIngress := &netv1.Ingress{}
+		ingressErr := r.Get(ctx, types.NamespacedName{Name: instance.CommonIngressName(), Namespace: instance.GetNamespace()}, foundIngress)
+		if ingressErr == nil {
+			ingressErr = r.Delete(ctx, foundIngress)
+			if ingressErr != nil && !errors.IsNotFound(ingressErr) {
+				return requeueOrNot, ingressErr
+			}
+			logger.Info("Deleted Ingress")
 		}
 	}
 
@@ -641,10 +651,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return requeueOrNot, err
 		}
 	} else { // PDB is disabled, make sure that we delete any previously created pdb that might exist.
-		err = r.Client.Delete(ctx, pdb)
-		if err != nil && !errors.IsNotFound(err) {
-			return requeueOrNot, err
+		pdbError := r.Client.Delete(ctx, pdb)
+		if pdbError != nil && !errors.IsNotFound(pdbError) {
+			return requeueOrNot, pdbError
 		}
+	}
+
+	// Remove unused services if necessary
+	serviceCleanupError := r.cleanupUnconfiguredServices(ctx, instance, podList, logger)
+	if serviceCleanupError != nil && !errors.IsNotFound(serviceCleanupError) {
+		return requeueOrNot, serviceCleanupError
 	}
 
 	if !reflect.DeepEqual(instance.Status, newStatus) {
@@ -660,7 +676,77 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return requeueOrNot, err
 }
 
-// InitializePods Ensure that all SolrCloud Pods are initialized
+// cleanupUnconfiguredServices remove services that are no longer defined by the SolrCloud resource, and no longer in use by pods.
+// This does not currently include removing per-node services that are no longer in use because the SolrCloud has been scaled down.
+func (r *SolrCloudReconciler) cleanupUnconfiguredServices(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, podList []corev1.Pod, logger logr.Logger) (err error) {
+	var onlyServiceTypeInUse string
+	if solrCloud.UsesHeadlessService() {
+		onlyServiceTypeInUse = util.HeadlessServiceType
+	} else if solrCloud.UsesIndividualNodeServices() {
+		onlyServiceTypeInUse = util.PerNodeServiceType
+	} else {
+		// This should never happen, there are only 2 options
+		return
+	}
+	for _, pod := range podList {
+		if pod.Annotations == nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
+			if onlyServiceTypeInUse != pod.Annotations[util.ServiceTypeAnnotation] {
+				// Only remove services if all pods are using the same, and configured, type of service.
+				// Otherwise, we are in transition between service types and need to wait to delete anything.
+				return
+			}
+		} else {
+			// If we have a pod missing this annotation, then it has not been fully updated to a supported Operator version.
+			// We don't have the information, so assume both serviceTypes are in use, and don't remove anything.
+			return
+		}
+	}
+
+	// If we are at this point, then we can assume we are completely transitioned and can delete the unused services
+	if solrCloud.UsesHeadlessService() {
+		err = r.deleteServicesOfType(ctx, solrCloud, util.PerNodeServiceType, logger)
+	} else if solrCloud.UsesIndividualNodeServices() {
+		err = r.deleteServicesOfType(ctx, solrCloud, util.HeadlessServiceType, logger)
+	}
+	return
+}
+
+func (r *SolrCloudReconciler) deleteServicesOfType(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, serviceType string, logger logr.Logger) (err error) {
+	foundServices := &corev1.ServiceList{}
+	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels[util.ServiceTypeAnnotation] = serviceType
+
+	serviceSelector := labels.SelectorFromSet(selectorLabels)
+	listOps := &client.ListOptions{
+		Namespace:     solrCloud.Namespace,
+		LabelSelector: serviceSelector,
+	}
+
+	if err = r.List(ctx, foundServices, listOps); err != nil {
+		logger.Error(err, "Error listing services for SolrCloud", "serviceType", serviceType)
+		return
+	}
+
+	for _, headlessService := range foundServices.Items {
+		if e := r.deleteService(ctx, &headlessService, logger); e != nil {
+			// Don't break, just add the error for later
+			err = e
+		}
+	}
+	return
+}
+
+func (r *SolrCloudReconciler) deleteService(ctx context.Context, service *corev1.Service, logger logr.Logger) error {
+	logger.Info("Deleting Service for SolrCloud", "Service", service.Name)
+	err := r.Client.Delete(ctx, service)
+	if err != nil && !errors.IsNotFound(err) {
+		logger.Error(err, "Error deleting unused Service for SolrCloud", "Service", service.Name)
+		return err
+	}
+	return nil
+}
+
+// initializePods Ensure that all SolrCloud Pods are initialized
 func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
 	foundPods := &corev1.PodList{}
 	selectorLabels := solrCloud.SharedLabels()
@@ -1093,7 +1179,7 @@ func (r *SolrCloudReconciler) deletePVC(ctx context.Context, pvcItem corev1.Pers
 	}
 	logger.Info("Deleting PVC for SolrCloud", "PVC", pvcItem.Name)
 	err := r.Client.Delete(ctx, pvcDelete)
-	if err != nil {
+	if err != nil && !errors.IsNotFound(err) {
 		logger.Error(err, "Error deleting PVC for SolrCloud", "PVC", pvcDelete.Name)
 	}
 }

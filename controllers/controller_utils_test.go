@@ -241,7 +241,7 @@ func expectService(ctx context.Context, parentResource client.Object, serviceNam
 func expectServiceWithChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -275,7 +275,7 @@ func expectServiceWithChecks(ctx context.Context, parentResource client.Object, 
 func expectServiceWithConsistentChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -299,10 +299,23 @@ func expectNoService(ctx context.Context, parentResource client.Object, serviceN
 	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
 }
 
+func eventuallyExpectNoService(ctx context.Context, parentResource client.Object, serviceName string, message string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})
+	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
+}
+
 func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames []string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
 		for _, serviceName := range serviceNames {
-			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message, "service", serviceName)
+		}
+	}).Should(Succeed())
+}
+func eventuallyExpectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames []string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		for _, serviceName := range serviceNames {
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message, "service", serviceName)
 		}
 	}).Should(Succeed())
 }
@@ -352,6 +365,12 @@ func expectIngressWithConsistentChecks(ctx context.Context, parentResource clien
 
 func expectNoIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
+	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
+func eventuallyExpectNoIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
 }

@@ -98,6 +98,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testPodAnnotations, map[string]string{
 				"solr.apache.org/solrXmlMd5":          solrXmlMd5,
 				util.SolrBackupRepositoriesAnnotation: "test-repo",
+				util.ServiceTypeAnnotation:            util.HeadlessServiceType,
 			})), "Incorrect pod annotations")
 
 			// Env Variable Tests
@@ -321,6 +322,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			Expect(statefulSet.Spec.Template.Annotations).To(Equal(map[string]string{
 				"solr.apache.org/solrXmlMd5":          fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"]))),
 				util.SolrBackupRepositoriesAnnotation: "another,test-repo",
+				util.ServiceTypeAnnotation:            util.HeadlessServiceType,
 			}), "Incorrect pod annotations")
 		})
 	})

@@ -17,7 +17,7 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 LOCALBIN = $(PROJECT_DIR)/bin
 
 GO_VERSION = $(shell go version | sed -r 's/^.*([0-9]+\.[0-9]+\.[0-9]+).*$$/\1/g')
-REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | sed -r 's/^go ([0-9]+\.[0-9]+)$$/\1/g')
+REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | head -1 | sed -r 's/^go ([0-9]+\.[0-9]+).*$$/\1/g')
 
 ifeq (,$(findstring $(REQUIRED_GO_VERSION),$(GO_VERSION)))
 $(error Unsupported go version found $(GO_VERSION), please install go $(REQUIRED_GO_VERSION))
@@ -40,7 +40,7 @@ ARCH = $(shell go env GOARCH)
 TEST_PARALLELISM ?= 3
 
 KUSTOMIZE_VERSION=v4.5.2
-CONTROLLER_GEN_VERSION=v0.15.0
+CONTROLLER_GEN_VERSION=v0.16.4
 GO_LICENSES_VERSION=v1.6.0
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.23.0

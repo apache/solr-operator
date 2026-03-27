@@ -38,8 +38,8 @@ Next, install the Solr Operator chart. Note this is using Helm v3, use the offic
 This will install the [Zookeeper Operator](https://github.com/pravega/zookeeper-operator) by default.
 
 ```bash
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.9.0-prerelease/all-with-dependencies.yaml
-$ helm install solr-operator apache-solr/solr-operator --version 0.9.0-prerelease
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+$ helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -148,7 +148,18 @@ The final image will only contain the solr-operator binary and necessary License
 * **--health-probe-bind-address=** The address to bind the health probe servlet on.
   If only a port is provided (e.g. `:8081`), then the metrics server will respond to requests with any Host header.
   (defaults to _:8081_)
-                        
+
+* **--zap-devel** Enables development mode. 
+  Changes logging to `console` encoder and `debug` level. (_true_ | _false_, defaults to _false_)
+
+* **--zap-log-level** Overrides the log level. 
+  Can be one of `debug`, `info`, `error`, or any integer value > 0 for custom verbosity. (_string_, defaults to _empty_)
+
+* **--zap-encoder** Overrides the log format.
+  Use `console` or `json`. (_string_, defaults to _empty_)
+
+* **--zap-stacktrace-level** Overrides the level for stack trace logging. (_string_, defaults to _empty_)
+
 ## Client Auth for mTLS-enabled Solr clusters
 
 For SolrCloud instances that run with mTLS enabled (see `spec.solrTLS.clientAuth`), the operator needs to supply a trusted certificate when making API calls to the Solr pods it is managing.

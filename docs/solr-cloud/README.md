@@ -22,7 +22,8 @@ Child Pages:
 - [Managed Updates](managed-updates.md)
 - [Scaling](scaling.md)
 
-The Solr Operator supports creating and managing Solr Clouds.
+The Solr Operator supports creating and managing Solr Clouds clusters via its 'solrcloud' resource.
+(Note: running Solr in "standalone" mode is not supported.)
 
 This page outlines how to create, update and delete a SolrCloud in Kubernetes.
 

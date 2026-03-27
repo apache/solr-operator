@@ -208,9 +208,14 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		HTTPGet: &corev1.HTTPGetAction{
 			Scheme: corev1.URISchemeHTTP,
 			// TODO: When 9.0 is the minimum supported version, this can be "/-/healthy"
-			Path: "/metrics?names[]=",
+			Path: "/metrics?name[]=",
 			Port: intstr.FromInt(SolrMetricsPort),
 		},
+	}
+
+	var containerSecurityContext *corev1.SecurityContext
+	if customPodOptions != nil {
+		containerSecurityContext = customPodOptions.ContainerSecurityContext
 	}
 
 	containers := []corev1.Container{
@@ -245,6 +250,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 			},
+			SecurityContext: containerSecurityContext,
 		},
 	}
 

@@ -252,7 +252,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 				PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
 					ObjectMeta: solrv1beta1.TemplateMeta{},
 					Spec: corev1.PersistentVolumeClaimSpec{
-						Resources: corev1.ResourceRequirements{
+						Resources: corev1.VolumeResourceRequirements{
 							Requests: map[corev1.ResourceName]resource.Quantity{"storage": resource.MustParse("5Gi")},
 						},
 					},

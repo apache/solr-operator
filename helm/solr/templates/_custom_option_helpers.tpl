@@ -36,6 +36,9 @@ resources:
 {{- if (include "solr.serviceAccountName.solr" .) -}}
 serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
 {{ end }}
+{{- if .Values.podOptions.shareProcessNamespace -}}
+shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}
@@ -58,6 +61,10 @@ nodeSelector:
 {{- if .Values.podOptions.podSecurityContext -}}
 podSecurityContext:
   {{- toYaml .Values.podOptions.podSecurityContext | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.containerSecurityContext -}}
+containerSecurityContext:
+  {{- toYaml .Values.podOptions.containerSecurityContext | nindent 2 }}
 {{ end }}
 {{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:

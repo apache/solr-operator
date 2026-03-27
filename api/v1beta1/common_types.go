@@ -73,6 +73,10 @@ type PodOptions struct {
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 
+	// ContainerSecurityContext the container-level security context used by the pod's primary container
+	// +optional
+	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
+
 	// Additional environment variables to pass to the default container.
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`
@@ -136,6 +140,10 @@ type PodOptions struct {
 	// Optional Service Account to run the pod under.
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
+
+	// Should process namespace sharing be enabled on created pods
+	// +optional
+	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
 
 	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
 	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
