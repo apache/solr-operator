@@ -48,7 +48,7 @@ image:
 
 busyBoxImage: {}
   # repository: "busybox"
-  # tag: "1.28.0-glibc"
+  # tag: "1.36.1-glibc"
   # pullPolicy: ""
   # imagePullSecret: ""
 
