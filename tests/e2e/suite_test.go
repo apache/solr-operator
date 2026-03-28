@@ -19,10 +19,17 @@ package e2e
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/version"
 	certManagerApi "github.com/cert-manager/cert-manager/pkg/api"
@@ -31,7 +38,6 @@ import (
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,16 +46,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"math/rand"
-	"os"
-	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"strings"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -229,7 +229,7 @@ var _ = JustAfterEach(func(ctx context.Context) {
 			getSolrOperatorPodName(ctx, solrOperatorReleaseNamespace),
 			solrOperatorReleaseNamespace,
 			&startTime,
-			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
+			fmt.Sprintf("%q:%q", "namespace", testNamespace()),
 		)
 		// Always save the logs of the Solr Operator for the test
 		writeAllSolrInfoToFiles(
@@ -530,22 +530,18 @@ func writePodLogsToFile(ctx context.Context, filename string, podName string, po
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
 	defer podLogs.Close()
 
-	var logReader io.Reader
-	logReader = podLogs
-
 	if filterLinesWithString != "" {
-		filteredWriter := bytes.NewBufferString("")
 		scanner := bufio.NewScanner(podLogs)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.Contains(line, filterLinesWithString) {
-				io.WriteString(filteredWriter, line)
-				io.WriteString(filteredWriter, "\n")
+				io.WriteString(logFile, line)
+				io.WriteString(logFile, "\n")
 			}
 		}
-		logReader = filteredWriter
+	} else {
+		_, err = io.Copy(logFile, podLogs)
 	}
 
-	_, err = io.Copy(logFile, logReader)
 	Expect(err).ToNot(HaveOccurred(), "Could not write podLogs to file: %s", filename)
 }
