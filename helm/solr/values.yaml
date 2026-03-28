@@ -335,6 +335,9 @@ podOptions:
   # Resources for the init containers created by the Solr Operator
   defaultInitContainerResources: {}
 
+  # Security context for the init containers created by the Solr Operator
+  defaultInitContainerSecurityContext: {}
+
   volumes: []
     # - name:
     #   defaultContainerMount: {}
