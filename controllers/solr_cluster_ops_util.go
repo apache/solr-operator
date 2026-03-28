@@ -180,8 +180,7 @@ func determinePvcExpansionClusterOpLockIfNecessary(instance *solrv1beta1.SolrClo
 	return
 }
 
-// handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
-// This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
+// handlePvcExpansion handles the logic of a persistent volume claim expansion operation.
 func handlePvcExpansion(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, logger logr.Logger) (operationComplete bool, retryLaterDuration time.Duration, err error) {
 	var newSize resource.Quantity
 	newSize, err = resource.ParseQuantity(clusterOp.Metadata)
