@@ -680,7 +680,7 @@ func (r *SolrCloudReconciler) cleanupUnconfiguredServices(ctx context.Context, s
 		return
 	}
 	for _, pod := range podList {
-		if pod.Annotations == nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
+		if pod.Annotations != nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
 			if onlyServiceTypeInUse != pod.Annotations[util.ServiceTypeAnnotation] {
 				// Only remove services if all pods are using the same, and configured, type of service.
 				// Otherwise, we are in transition between service types and need to wait to delete anything.
