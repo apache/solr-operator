@@ -403,8 +403,8 @@ func writeSolrClusterStatusInfoToFile(ctx context.Context, baseFilename string, 
 func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.StatefulSet) {
 	// Write statefulSet to a file
 	statusFile, err := os.Create(baseFilename + ".status.json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(statefulSet, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -412,8 +412,8 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 
 	// Write events for statefulSet to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
 
 	eventList, err := rawK8sClient.CoreV1().Events(statefulSet.Namespace).Search(scheme.Scheme, statefulSet)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for statefulSet: %s", statefulSet.Name)
@@ -429,8 +429,8 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeClaim) {
 	// Write PVC to a file
 	statusFile, err := os.Create(baseFilename + ".status.json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(pvc, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -438,8 +438,8 @@ func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeCla
 
 	// Write events for PVC to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
 
 	eventList, err := rawK8sClient.CoreV1().Events(pvc.Namespace).Search(scheme.Scheme, pvc)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for PVC: %s", pvc.Name)
@@ -454,8 +454,8 @@ func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeCla
 func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 	// Write service to a file
 	statusFile, err := os.Create(baseFilename + ".json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(service, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -467,8 +467,8 @@ func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 func writeAllSecretInfoToFiles(baseFilename string, secret *corev1.Secret) {
 	// Write service to a file
 	statusFile, err := os.Create(baseFilename + ".json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save secret status: %s", baseFilename+".json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(secret, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize secret json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -482,8 +482,8 @@ func writeAllSecretInfoToFiles(baseFilename string, secret *corev1.Secret) {
 func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev1.Pod) {
 	// Write pod to a file
 	statusFile, err := os.Create(baseFilename + ".status.json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(pod, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -491,8 +491,8 @@ func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev
 
 	// Write events for pod to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
 
 	eventList, err := rawK8sClient.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for pod: %s", pod.Name)
@@ -535,8 +535,8 @@ func writePodLogsToFile(ctx context.Context, filename string, podName string, po
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.Contains(line, filterLinesWithString) {
-				io.WriteString(logFile, line)
-				io.WriteString(logFile, "\n")
+				_, err = io.WriteString(logFile, line)
+				_, err = io.WriteString(logFile, "\n")
 			}
 		}
 	} else {
