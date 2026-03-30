@@ -564,8 +564,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				clusterOp = nil
 			}
 			clusterOp, retryLaterDuration, err = determinePvcExpansionClusterOpLockIfNecessary(instance, statefulSet)
-			// If the new clusterOperation is an update to a queued clusterOp, just change the operation that is already queued
-			if queueIdx, opIsQueued := queuedRetryOps[UpdateLock]; clusterOp != nil && opIsQueued {
+			// If the new clusterOperation is an update to a queued PVC expansion clusterOp, just change the operation that is already queued
+			if queueIdx, opIsQueued := queuedRetryOps[PvcExpansionLock]; clusterOp != nil && opIsQueued {
 				clusterOpQueue[queueIdx] = *clusterOp
 				clusterOp = nil
 			}
@@ -1047,21 +1047,34 @@ func (r *SolrCloudReconciler) expandPVCs(ctx context.Context, cloud *solrv1beta1
 }
 
 func (r *SolrCloudReconciler) expandPVC(ctx context.Context, pvc *corev1.PersistentVolumeClaim, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, err error) {
-	// If the current capacity is >= the new size, then there is nothing to do, expansion is complete
-	if pvc.Status.Capacity.Storage().Cmp(newSize) >= 0 {
+	// If the current capacity is >= the new size, then there is nothing to do, expansion is complete.
+	// Treat missing capacity as zero.
+	capacityQty, hasCapacity := pvc.Status.Capacity[corev1.ResourceStorage]
+	if !hasCapacity {
+		capacityQty = resource.Quantity{}
+	}
+	if capacityQty.Cmp(newSize) >= 0 {
 		// TODO: Eventually use the pvc.Status.AllocatedResources and pvc.Status.AllocatedResourceStatuses to determine the status of PVC Expansion and react to failures
 		expansionComplete = true
-	} else if !pvc.Spec.Resources.Requests.Storage().Equal(newSize) {
-		// Update the pvc if the capacity request is different.
-		// The newSize might be smaller than the current size, but this is supported as the last size might have been too
-		// big for the storage quota, so it was lowered.
-		// As long as the PVCs current capacity is lower than the new size, we are still good to update the PVC.
-		originalPvc := pvc.DeepCopy()
-		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
-		if err = r.Patch(ctx, pvc, client.StrategicMergeFrom(originalPvc)); err != nil {
-			logger.Error(err, "Error while expanding PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
-		} else {
-			logger.Info("Expanded PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+	} else {
+		// Determine if the current request already matches the desired size.
+		requestQty, hasRequest := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+		sameRequest := hasRequest && requestQty.Equal(newSize)
+		if !sameRequest {
+			// Update the pvc if the capacity request is different.
+			// The newSize might be smaller than the current size, but this is supported as the last size might have been too
+			// big for the storage quota, so it was lowered.
+			// As long as the PVCs current capacity is lower than the new size, we are still good to update the PVC.
+			originalPvc := pvc.DeepCopy()
+			if pvc.Spec.Resources.Requests == nil {
+				pvc.Spec.Resources.Requests = corev1.ResourceList{}
+			}
+			pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
+			if err = r.Patch(ctx, pvc, client.StrategicMergeFrom(originalPvc)); err != nil {
+				logger.Error(err, "Error while expanding PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+			} else {
+				logger.Info("Expanded PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+			}
 		}
 	}
 	return

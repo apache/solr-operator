@@ -62,7 +62,7 @@ These options can be found in `SolrCloud.spec.dataStorage`
     Only the `pvcTemplate.spec` field is required, metadata is optional.
     
     Note: Currently, [Kubernetes does not support PVC resizing (expanding) in StatefulSets](https://github.com/kubernetes/enhancements/issues/661).
-    However, The Solr Operator will manage the PVC expansion for users until this is supported by default in Kubernetes.
+    However, the Solr Operator will manage the PVC expansion for users until this is supported by default in Kubernetes.
     Therefore the `pvcTemplate.spec` can have an update to `pvcTemplate.spec.resources.requests`, but all other fields should be considered immutable.
 - **`ephemeral`**
 
