@@ -21,13 +21,14 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -563,11 +564,14 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				clusterOpQueue[queueIdx] = *clusterOp
 				clusterOp = nil
 			}
-			clusterOp, retryLaterDuration, err = determinePvcExpansionClusterOpLockIfNecessary(instance, statefulSet)
-			// If the new clusterOperation is an update to a queued PVC expansion clusterOp, just change the operation that is already queued
-			if queueIdx, opIsQueued := queuedRetryOps[PvcExpansionLock]; clusterOp != nil && opIsQueued {
-				clusterOpQueue[queueIdx] = *clusterOp
-				clusterOp = nil
+
+			if clusterOp == nil {
+				clusterOp, retryLaterDuration, err = determinePvcExpansionClusterOpLockIfNecessary(instance, statefulSet)
+				// If the new clusterOperation is an update to a queued PVC expansion clusterOp, just change the operation that is already queued
+				if queueIdx, opIsQueued := queuedRetryOps[PvcExpansionLock]; clusterOp != nil && opIsQueued {
+					clusterOpQueue[queueIdx] = *clusterOp
+					clusterOp = nil
+				}
 			}
 
 			// If a non-managed scale needs to take place, this method will update the StatefulSet without starting

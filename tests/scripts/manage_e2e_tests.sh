@@ -96,7 +96,7 @@ export RAW_GINKGO
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
-export CERT_MANAGER_VERSION=1.12.3
+export CERT_MANAGER_VERSION=1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
 
 function add_image_to_kind_repo_if_local() {
