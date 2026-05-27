@@ -330,6 +330,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
+					SolrMajorVersion: 9,
 					SolrImage: &solrv1beta1.ContainerImage{
 						Tag:             "should-be-the-same",
 						PullPolicy:      corev1.PullAlways,
@@ -499,6 +500,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
+					SolrMajorVersion: 9,
 					SolrImage: &solrv1beta1.ContainerImage{
 						Tag:             "should-be-the-same",
 						PullPolicy:      corev1.PullAlways,

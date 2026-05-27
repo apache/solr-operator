@@ -587,7 +587,7 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 			Namespace: testNamespace(),
 		},
 		Spec: solrv1beta1.SolrCloudSpec{
-			Replicas:    pointer.Int32(int32(replicas)),
+			Replicas:         pointer.Int32(int32(replicas)),
 			SolrMajorVersion: parseMajorVersion(strings.Split(solrImage+":", ":")[1]),
 			// Set the image to reflect the inputs given via EnvVars.
 			SolrImage: &solrv1beta1.ContainerImage{

@@ -324,7 +324,7 @@ func TestUseSecureProbeForSolr9(t *testing.T) {
 	solrCloud := &solr.SolrCloud{
 		Spec: solr.SolrCloudSpec{
 			SolrMajorVersion: 9,
-			SolrImage:   &solr.ContainerImage{Repository: "library/solr", Tag: "9.10.0"},
+			SolrImage:        &solr.ContainerImage{Repository: "library/solr", Tag: "9.10.0"},
 		},
 	}
 	probe := newProbeForTest()
@@ -342,7 +342,7 @@ func TestUseSecureProbeForSolr10(t *testing.T) {
 	solrCloud := &solr.SolrCloud{
 		Spec: solr.SolrCloudSpec{
 			SolrMajorVersion: 10,
-			SolrImage:   &solr.ContainerImage{Repository: "library/solr", Tag: "10.0.0"},
+			SolrImage:        &solr.ContainerImage{Repository: "library/solr", Tag: "10.0.0"},
 		},
 	}
 	probe := newProbeForTest()
@@ -376,8 +376,8 @@ func newSolrCloudForTest(tag string, modules []string) *solr.SolrCloud {
 	cloud := &solr.SolrCloud{
 		Spec: solr.SolrCloudSpec{
 			SolrMajorVersion: solrVersion,
-			SolrImage:   &solr.ContainerImage{Repository: "library/solr", Tag: tag},
-			SolrModules: modules,
+			SolrImage:        &solr.ContainerImage{Repository: "library/solr", Tag: tag},
+			SolrModules:      modules,
 		},
 	}
 	cloud.WithDefaults(logr.Discard())

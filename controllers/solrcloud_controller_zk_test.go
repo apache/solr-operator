@@ -51,6 +51,9 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 	})
 
 	JustBeforeEach(func(ctx context.Context) {
+		if solrCloud.Spec.SolrMajorVersion == 0 {
+			solrCloud.Spec.SolrMajorVersion = 9
+		}
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
