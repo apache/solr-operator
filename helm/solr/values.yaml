@@ -46,6 +46,11 @@ image:
   pullPolicy: ""
   imagePullSecret: ""
 
+# Solr major version (8, 9, or 10). Required by the operator; must match the
+# major version of image.tag. Defaults to 9 to match the default image.tag.
+# When pointing image.tag at a Solr 10.x image, set this to 10.
+solrMajorVersion: 9
+
 busyBoxImage: {}
   # repository: "busybox"
   # tag: "1.28.0-glibc"

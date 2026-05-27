@@ -74,6 +74,15 @@ type SolrCloudSpec struct {
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
 
+	// Solr major version (8, 9, or 10). Determines version-specific operator
+	// behavior such as solr.xml format, CLI flags, and env vars.
+	// Required — image tags alone are not reliably parseable.
+	//
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Minimum=8
+	// +kubebuilder:validation:Maximum=10
+	SolrMajorVersion int `json:"solrMajorVersion"`
+
 	// Customize how the cloud data is stored.
 	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
 	//
@@ -1325,6 +1334,11 @@ func (scs SolrCloudStatus) DissectZkInfo() (zkConnectionString string, zkServer 
 
 func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
 	return zkInfo.InternalConnectionString + zkInfo.ChRoot
+}
+
+// IsSolr10OrLater returns true if this SolrCloud targets Solr 10+.
+func (sc *SolrCloud) IsSolr10OrLater() bool {
+	return sc.Spec.SolrMajorVersion >= 10
 }
 
 // UsesHeadlessService returns whether the given solrCloud requires a headless service to be created for it.

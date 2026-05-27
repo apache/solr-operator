@@ -10165,6 +10165,14 @@ spec:
               solrLogLevel:
                 description: Set the Solr Log level, defaults to INFO
                 type: string
+              solrMajorVersion:
+                description: |-
+                  Solr major version (8, 9, or 10). Determines version-specific operator
+                  behavior such as solr.xml format, CLI flags, and env vars.
+                  Required — image tags alone are not reliably parseable.
+                maximum: 10
+                minimum: 8
+                type: integer
               solrModules:
                 description: |-
                   List of Solr Modules to be loaded when starting Solr
@@ -17422,6 +17430,8 @@ spec:
                         type: object
                     type: object
                 type: object
+            required:
+            - solrMajorVersion
             type: object
           status:
             description: SolrCloudStatus defines the observed state of SolrCloud

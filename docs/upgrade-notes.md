@@ -126,6 +126,24 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 ## Upgrade Warnings and Notes
 
 ### v0.10.0
+- **`SolrCloud.spec.solrMajorVersion` is a new required CRD field**
+  A new field `spec.solrMajorVersion` (int, 8–10) drives version-specific operator behavior for Solr 10 support.
+  The field is required at the CRD level: CRD validation rejects CRs that omit it.
+  Existing SolrCloud CRs authored by hand must add the field (e.g. `solrMajorVersion: 9`) before upgrading the operator.
+  The `helm/solr` chart defaults the new `solrMajorVersion` value to `9` (matching the default `image.tag` of `9.10.0`), so existing chart users keep working without action.
+  When pointing `image.tag` at a Solr 10.x image, set `solrMajorVersion: 10`.
+
+- **Solr 10 upgrades require removing the `SolrPrometheusExporter` first**
+  `solr-exporter` was removed from the Solr distribution in Solr 10.
+  If a `SolrPrometheusExporter` is deployed against a SolrCloud, bumping the SolrCloud's Solr version to 10.x without first deleting the exporter resource will stall the rolling upgrade and require a rollback.
+  Delete the `SolrPrometheusExporter`, let the change settle, then bump the Solr version.
+
+- **Solr 10: `SOLR_MODULES` is now set by the operator**
+  On Solr 10 the contrib directory (`/opt/solr/contrib/<module>/lib`) and `/opt/solr/dist` no longer exist in the official image, so the operator can no longer add modules via `sharedLib` contrib paths.
+  Instead, on Solr 10 the operator emits a `SOLR_MODULES` env var on Solr pods, built from the configured module list.
+  If you previously declared modules by setting `SOLR_MODULES` in a custom Solr image's Dockerfile, the pod-spec env var will override that value after the upgrade.
+  Declare modules through the operator instead: `spec.solrModules` on the CR, or `solrOptions.solrModules` in the `helm/solr` chart.
+
 - **Logging now defaults to JSON format**
   The new default for CLI flag `--zap-devel` is now `false`, causing log encoding to be `json` and log level to be `info`.
   There is a new helm value `development` that can be set to `true` to switch to `console` encoding and `debug` level

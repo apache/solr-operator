@@ -85,6 +85,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | image.tag | string | `"9.10.0"` | The tag/version of Solr to run |
 | image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string | | PullSecret for the Solr image |
+| solrMajorVersion | int | `9` | Solr major version (8, 9, or 10). Must match `image.tag`'s major version. When pointing `image.tag` at a Solr 10.x image, set this to `10`. |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
 | busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
 | busyBoxImage.pullPolicy | string | | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |

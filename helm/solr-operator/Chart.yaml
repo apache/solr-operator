@@ -86,6 +86,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/717
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/804
+    - kind: added
+      description: Support for Solr 10. A new required SolrCloud field `spec.solrMajorVersion` (8-10) selects version-specific operator behavior; see upgrade notes before bumping a SolrCloud to Solr 10.x.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/821
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
