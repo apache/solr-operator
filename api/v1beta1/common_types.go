@@ -194,6 +194,59 @@ type IngressOptions struct {
 	IngressClassName *string `json:"ingressClassName,omitempty"`
 }
 
+// HTTPRouteOptions defines the options for generating an HTTPRoute resource of the Gateway API.
+type HTTPRouteOptions struct {
+	// Name is the name of the HTTPRoute Kubernetes resource to be created.
+	Name string `json:"name"`
+
+	// Annotations to be added for the HTTPRoute.
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels to be added for the HTTPRoute.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// ParentRefs references the resources (usually Gateways) that this HTTPRoute wants to be attached to.
+	// +optional
+	ParentRefs []HTTPRouteParentReference `json:"parentRefs,omitempty"`
+
+	// Hostnames defines a set of hostnames that should match this HTTPRoute.
+	// At least one hostname should be provided.
+	// +optional
+	Hostnames []string `json:"hostnames,omitempty"`
+}
+
+// HTTPRouteParentReference defines a reference to a parent resource to which an HTTPRoute should be attached.
+// This is typically a Gateway resource.
+type HTTPRouteParentReference struct {
+	// Group is the group of the referent.
+	// Defaults to "gateway.networking.k8s.io".
+	// +optional
+	Group *string `json:"group,omitempty"`
+
+	// Kind is the Kubernetes kind of the referent.
+	// Defaults to "Gateway".
+	// +optional
+	Kind *string `json:"kind,omitempty"`
+
+	// Namespace is the namespace of the referent.
+	// Defaults to the namespace of the HTTPRoute.
+	// +optional
+	Namespace *string `json:"namespace,omitempty"`
+
+	// Name is the name of the referent.
+	Name string `json:"name"`
+
+	// SectionName is the name of a section within the target resource (e.g., a listener name on a Gateway).
+	// +optional
+	SectionName *string `json:"sectionName,omitempty"`
+
+	// Port is the network port this Route targets on the referenced parent resource.
+	// +optional
+	Port *int32 `json:"port,omitempty"`
+}
+
 // ConfigMapOptions defines custom options for configMaps
 type ConfigMapOptions struct {
 	// Annotations to be added for the ConfigMap.

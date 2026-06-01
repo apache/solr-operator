@@ -237,6 +237,11 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+
+	// HTTPRouteOptions defines the custom options for HTTPRoute resources of the Gateway API to be generated for the solrCloud.
+	// A separate HTTPRoute resource will be generated for each entry in this list.
+	// +optional
+	HTTPRouteOptions []HTTPRouteOptions `json:"httpRouteOptions,omitempty"`
 }
 
 type SolrDataStorageOptions struct {

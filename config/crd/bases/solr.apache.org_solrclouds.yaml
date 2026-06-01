@@ -2192,6 +2192,76 @@ spec:
                         description: Labels to be added for the Ingress.
                         type: object
                     type: object
+                  httpRouteOptions:
+                    description: HTTPRouteOptions defines a list of custom options
+                      for HTTPRoute resources of the Gateway API to be generated for
+                      the solrCloud. A separate HTTPRoute resource will be generated
+                      for each entry in this list.
+                    items:
+                      description: HTTPRouteOptions defines the options for generating
+                        an HTTPRoute resource of the Gateway API.
+                      properties:
+                        annotations:
+                          additionalProperties:
+                            type: string
+                          description: Annotations to be added for the HTTPRoute.
+                          type: object
+                        hostnames:
+                          description: Hostnames defines a set of hostnames that should
+                            match this HTTPRoute. At least one hostname should be provided.
+                          items:
+                            type: string
+                          type: array
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels to be added for the HTTPRoute.
+                          type: object
+                        name:
+                          description: Name is the name of the HTTPRoute Kubernetes
+                            resource to be created.
+                          type: string
+                        parentRefs:
+                          description: ParentRefs references the resources (usually
+                            Gateways) that this HTTPRoute wants to be attached to.
+                          items:
+                            description: HTTPRouteParentReference defines a reference
+                              to a parent resource to which an HTTPRoute should be
+                              attached. This is typically a Gateway resource.
+                            properties:
+                              group:
+                                description: Group is the group of the referent. Defaults
+                                  to gateway.networking.k8s.io.
+                                type: string
+                              kind:
+                                description: Kind is the Kubernetes kind of the referent.
+                                  Defaults to Gateway.
+                                type: string
+                              name:
+                                description: Name is the name of the referent.
+                                type: string
+                              namespace:
+                                description: Namespace is the namespace of the referent.
+                                  Defaults to the namespace of the HTTPRoute.
+                                type: string
+                              port:
+                                description: Port is the network port this Route targets
+                                  on the referenced parent resource.
+                                format: int32
+                                type: integer
+                              sectionName:
+                                description: SectionName is the name of a section
+                                  within the target resource (e.g., a listener name
+                                  on a Gateway).
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          type: array
+                      required:
+                      - name
+                      type: object
+                    type: array
                   nodeServiceOptions:
                     description: |-
                       NodeServiceOptions defines the custom options for the individual solrCloud Node services, if they are created.
