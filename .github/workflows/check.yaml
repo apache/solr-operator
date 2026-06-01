@@ -16,6 +16,9 @@
 name: Build & Check (Lint & Unit Test)
 
 on:
+  push:
+    branches:
+      - 'issue_829_gateway_support'
   pull_request:
     branches:
       - 'main'
