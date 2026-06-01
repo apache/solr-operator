@@ -16,6 +16,7 @@
 name: Build & Check (Lint & Unit Test)
 
 on:
+  # TODO remove before merge in main!
   push:
     branches:
       - 'issue_829_gateway_support'
