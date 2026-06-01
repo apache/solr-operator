@@ -48,6 +48,7 @@ import (
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -86,6 +87,8 @@ func init() {
 	utilruntime.Must(solrv1beta1.AddToScheme(scheme))
 
 	utilruntime.Must(zkApi.AddToScheme(scheme))
+
+	utilruntime.Must(gatewayv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")

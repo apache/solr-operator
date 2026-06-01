@@ -19,6 +19,7 @@ require (
 	k8s.io/client-go v0.31.3
 	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 	sigs.k8s.io/controller-runtime v0.19.4
+	sigs.k8s.io/gateway-api v1.1.0
 )
 
 require (
@@ -159,7 +160,6 @@ require (
 	k8s.io/kube-openapi v0.0.0-20240430033511-f0e62f92d13f // indirect
 	k8s.io/kubectl v0.31.3 // indirect
 	oras.land/oras-go v1.2.5 // indirect
-	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/kustomize/api v0.17.2 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.17.1 // indirect

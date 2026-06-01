@@ -48,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -70,6 +71,8 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
@@ -433,6 +436,53 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				return requeueOrNot, ingressErr
 			}
 			logger.Info("Deleted Ingress")
+		}
+	}
+
+	// Reconcile HTTPRoutes defined in HTTPRouteOptions
+	desiredHTTPRoutes := util.GenerateHTTPRoutes(instance)
+	desiredHTTPRouteNames := make(map[string]struct{}, len(desiredHTTPRoutes))
+	for _, httpRoute := range desiredHTTPRoutes {
+		desiredHTTPRouteNames[httpRoute.Name] = struct{}{}
+		httpRouteLogger := logger.WithValues("httpRoute", httpRoute.Name)
+		foundHTTPRoute := &gatewayv1.HTTPRoute{}
+		err = r.Get(ctx, types.NamespacedName{Name: httpRoute.Name, Namespace: httpRoute.Namespace}, foundHTTPRoute)
+		if err != nil && errors.IsNotFound(err) {
+			httpRouteLogger.Info("Creating HTTPRoute")
+			if err = controllerutil.SetControllerReference(instance, httpRoute, r.Scheme); err == nil {
+				err = r.Create(ctx, httpRoute)
+			}
+		} else if err == nil {
+			var needsUpdate bool
+			needsUpdate, err = util.OvertakeControllerRef(instance, foundHTTPRoute, r.Scheme)
+			needsUpdate = util.CopyHTTPRouteFields(httpRoute, foundHTTPRoute, httpRouteLogger) || needsUpdate
+			if needsUpdate && err == nil {
+				httpRouteLogger.Info("Updating HTTPRoute")
+				err = r.Update(ctx, foundHTTPRoute)
+			}
+		}
+		if err != nil {
+			return requeueOrNot, err
+		}
+	}
+
+	// Delete any HTTPRoutes that are owned by this SolrCloud but are no longer desired
+	existingHTTPRoutes := &gatewayv1.HTTPRouteList{}
+	if listErr := r.List(ctx, existingHTTPRoutes,
+		client.InNamespace(instance.GetNamespace()),
+		client.MatchingLabels(instance.SharedLabelsWith(map[string]string{})),
+	); listErr == nil {
+		for i := range existingHTTPRoutes.Items {
+			existing := &existingHTTPRoutes.Items[i]
+			if metav1.IsControlledBy(existing, instance) {
+				if _, stillDesired := desiredHTTPRouteNames[existing.Name]; !stillDesired {
+					deleteLogger := logger.WithValues("httpRoute", existing.Name)
+					deleteLogger.Info("Deleting orphaned HTTPRoute")
+					if deleteErr := r.Delete(ctx, existing); deleteErr != nil && !errors.IsNotFound(deleteErr) {
+						return requeueOrNot, deleteErr
+					}
+				}
+			}
 		}
 	}
 
@@ -1191,6 +1241,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}). /* for authentication */
 		Owns(&netv1.Ingress{}).
+		Owns(&gatewayv1.HTTPRoute{}).
 		Owns(&policyv1.PodDisruptionBudget{})
 
 	var err error

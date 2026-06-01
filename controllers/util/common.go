@@ -33,6 +33,7 @@ import (
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 var (
@@ -305,6 +306,51 @@ func CopyIngressFields(from, to *netv1.Ingress, logger logr.Logger) bool {
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", "Spec.IngressClassName", "from", to.Spec.IngressClassName, "to", from.Spec.IngressClassName)
 		to.Spec.IngressClassName = from.Spec.IngressClassName
+	}
+
+	return requireUpdate
+}
+
+// CopyHTTPRouteFields copies the owned fields from one HTTPRoute to another.
+// Returns true if any field was changed.
+func CopyHTTPRouteFields(from, to *gatewayv1.HTTPRoute, logger logr.Logger) bool {
+	logger = logger.WithValues("kind", "httpRoute")
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
+
+	if !DeepEqualWithNils(to.Spec.ParentRefs, from.Spec.ParentRefs) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.ParentRefs", "from", to.Spec.ParentRefs, "to", from.Spec.ParentRefs)
+		to.Spec.ParentRefs = from.Spec.ParentRefs
+	}
+
+	if !DeepEqualWithNils(to.Spec.Hostnames, from.Spec.Hostnames) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.Hostnames", "from", to.Spec.Hostnames, "to", from.Spec.Hostnames)
+		to.Spec.Hostnames = from.Spec.Hostnames
+	}
+
+	if len(to.Spec.Rules) != len(from.Spec.Rules) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.Rules", "from", to.Spec.Rules, "to", from.Spec.Rules)
+		to.Spec.Rules = from.Spec.Rules
+	} else {
+		for i := range from.Spec.Rules {
+			fromRule := &from.Spec.Rules[i]
+			toRule := &to.Spec.Rules[i]
+			ruleBase := "Spec.Rules[" + strconv.Itoa(i) + "]."
+
+			if !DeepEqualWithNils(toRule.Matches, fromRule.Matches) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", ruleBase+"Matches", "from", toRule.Matches, "to", fromRule.Matches)
+				toRule.Matches = fromRule.Matches
+			}
+
+			if !DeepEqualWithNils(toRule.BackendRefs, fromRule.BackendRefs) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", ruleBase+"BackendRefs", "from", toRule.BackendRefs, "to", fromRule.BackendRefs)
+				toRule.BackendRefs = fromRule.BackendRefs
+			}
+		}
 	}
 
 	return requireUpdate
