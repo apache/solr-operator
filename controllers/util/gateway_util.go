@@ -39,10 +39,14 @@ func GenerateCommonHTTPRoute(solrCloud *solr.SolrCloud, nodeNames []string) *gat
 
 	// Create advertised domain name and possible additional domain names
 	allDomains := append([]string{extOpts.DomainName}, extOpts.AdditionalDomainNames...)
-	hostnames := make([]gatewayv1.Hostname, 0, len(allDomains))
+	hostnames := make([]gatewayv1.Hostname, 0, len(allDomains)+len(gatewayOpts.AdditionalHostnames))
 	for _, domain := range allDomains {
 		hostname := gatewayv1.Hostname(solrCloud.ExternalCommonUrl(domain, false))
 		hostnames = append(hostnames, hostname)
+	}
+	// Append user-specified additional hostnames for the common route
+	for _, h := range gatewayOpts.AdditionalHostnames {
+		hostnames = append(hostnames, gatewayv1.Hostname(h))
 	}
 
 	// Convert parentRefs from our type to Gateway API type

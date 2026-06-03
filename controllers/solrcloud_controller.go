@@ -35,7 +35,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -49,6 +48,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -631,7 +631,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					if policy.Name == instance.CommonBackendTLSPolicyName() {
 						continue
 					}
-					
+
 					// Delete if hideNodes is true, or if this node no longer exists (scale-down)
 					shouldDelete := extAddressabilityOpts.HideNodes
 					if !shouldDelete {
@@ -645,7 +645,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						}
 						shouldDelete = !nodeExists
 					}
-					
+
 					if shouldDelete {
 						if extAddressabilityOpts.HideNodes {
 							logger.Info("Deleting node BackendTLSPolicy (hideNodes=true)", "backendtlspolicy", policy.Name)

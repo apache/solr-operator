@@ -649,6 +649,14 @@ type SolrGatewayOptions struct {
 	// +kubebuilder:validation:MinItems=1
 	ParentRefs []GatewayParentReference `json:"parentRefs"`
 
+	// AdditionalHostnames specifies extra hostnames to include in the common HTTPRoute.
+	// These are appended to the auto-generated hostnames derived from DomainName and AdditionalDomainNames.
+	// This is useful for adding alias hostnames that should also route to the common Solr service.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	AdditionalHostnames []string `json:"additionalHostnames,omitempty"`
+
 	// Annotations to add to HTTPRoute resources
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`

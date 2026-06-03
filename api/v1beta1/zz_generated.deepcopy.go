@@ -1131,6 +1131,11 @@ func (in *SolrGatewayOptions) DeepCopyInto(out *SolrGatewayOptions) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.AdditionalHostnames != nil {
+		in, out := &in.AdditionalHostnames, &out.AdditionalHostnames
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Annotations != nil {
 		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
