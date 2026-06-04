@@ -37,6 +37,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // Add one to an optional offset
@@ -478,6 +479,47 @@ func eventuallyExpectNoIngress(ctx context.Context, parentResource client.Object
 	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
+func expectHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) *gatewayv1.HTTPRoute {
+	return expectHTTPRouteWithChecks(ctx, parentResource, httpRouteName, nil, resolveOffset(additionalOffset))
+}
+
+func expectHTTPRouteWithChecks(ctx context.Context, parentResource client.Object, httpRouteName string, additionalChecks func(Gomega, *gatewayv1.HTTPRoute), additionalOffset ...int) *gatewayv1.HTTPRoute {
+	httpRoute := &gatewayv1.HTTPRoute{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), httpRoute)).To(Succeed(), "Expected HTTPRoute does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, httpRoute)
+		}
+	}).Should(Succeed())
+	return httpRoute
+}
+
+func expectHTTPRouteWithConsistentChecks(ctx context.Context, parentResource client.Object, httpRouteName string, additionalChecks func(Gomega, *gatewayv1.HTTPRoute), additionalOffset ...int) *gatewayv1.HTTPRoute {
+	httpRoute := &gatewayv1.HTTPRoute{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), httpRoute)).To(Succeed(), "Expected HTTPRoute does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, httpRoute)
+		}
+	}).Should(Succeed())
+
+	return httpRoute
+}
+
+func expectNoHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), &gatewayv1.HTTPRoute{})
+	}).Should(MatchError("httproutes.gateway.networking.k8s.io \""+httpRouteName+"\" not found"), "HTTPRoute exists when it should not")
+}
+
+func eventuallyExpectNoHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), &gatewayv1.HTTPRoute{})
+	}).Should(MatchError("httproutes.gateway.networking.k8s.io \""+httpRouteName+"\" not found"), "HTTPRoute exists when it should not")
 }
 
 func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalOffset ...int) *policyv1.PodDisruptionBudget {

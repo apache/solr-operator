@@ -21,6 +21,7 @@ Child Pages:
 - [All SolrCloud CRD Options](solr-cloud-crd.md) - Please refer here when trying to find new SolrCloud options/features.
 - [Managed Updates](managed-updates.md)
 - [Scaling](scaling.md)
+- [Gateway API](gateway-api.md) - Using Gateway API for external addressability
 
 The Solr Operator supports creating and managing Solr Clouds clusters via its 'solrcloud' resource.
 (Note: running Solr in "standalone" mode is not supported.)

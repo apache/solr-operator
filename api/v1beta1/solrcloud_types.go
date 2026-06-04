@@ -563,11 +563,20 @@ type ExternalAddressability struct {
 	//
 	// +optional
 	IngressTLSTermination *SolrIngressTLSTermination `json:"ingressTLSTermination,omitempty"`
+
+	// Gateway defines settings for Kubernetes Gateway API routing.
+	//
+	// This option is only available when Method=Gateway.
+	// The referenced Gateway must already exist and be managed by your platform team.
+	// The Solr Operator only manages the HTTPRoute resources.
+	//
+	// +optional
+	Gateway *SolrGatewayOptions `json:"gateway,omitempty"`
 }
 
 // ExternalAddressabilityMethod is a string enumeration type that enumerates
 // all possible ways that a SolrCloud can be made addressable external to the kubernetes cluster.
-// +kubebuilder:validation:Enum=Ingress;ExternalDNS
+// +kubebuilder:validation:Enum=Ingress;ExternalDNS;Gateway
 type ExternalAddressabilityMethod string
 
 const (
@@ -576,6 +585,9 @@ const (
 
 	// Use ExternalDNS to make the Solr service(s) externally addressable
 	ExternalDNS ExternalAddressabilityMethod = "ExternalDNS"
+
+	// Use Gateway API to make the Solr service(s) externally addressable
+	Gateway ExternalAddressabilityMethod = "Gateway"
 
 	// Make Solr service(s) type:LoadBalancer to make them externally addressable
 	// NOTE: This option is not currently supported.
@@ -624,6 +636,106 @@ type SolrIngressTLSTermination struct {
 	//
 	// +optional
 	TLSSecret string `json:"tlsSecret,omitempty"`
+}
+
+// SolrGatewayOptions defines how a SolrCloud should be exposed via Kubernetes Gateway API
+type SolrGatewayOptions struct {
+	// ParentRefs specifies the Gateway(s) to attach HTTPRoutes to.
+	// This is required when using method=Gateway.
+	//
+	// The referenced Gateway must already exist and be managed by your platform team.
+	// The Solr Operator only manages the HTTPRoute resources.
+	//
+	// +kubebuilder:validation:MinItems=1
+	ParentRefs []GatewayParentReference `json:"parentRefs"`
+
+	// AdditionalHostnames specifies extra hostnames to include in the common HTTPRoute.
+	// These are appended to the auto-generated hostnames derived from DomainName and AdditionalDomainNames.
+	// This is useful for adding alias hostnames that should also route to the common Solr service.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	AdditionalHostnames []string `json:"additionalHostnames,omitempty"`
+
+	// Annotations to add to HTTPRoute resources
+	// +optional
+	Annotations map[string]string `json:"annotations,omitempty"`
+
+	// Labels to add to HTTPRoute resources
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// BackendTLSPolicy defines TLS configuration for backend connections from Gateway to Solr pods.
+	//
+	// This is used when Solr pods are running with TLS enabled (spec.solrTLS) and the Gateway
+	// needs to establish secure connections to the backend services.
+	//
+	// The Solr Operator will create BackendTLSPolicy resources for each HTTPRoute.
+	//
+	// +optional
+	BackendTLSPolicy *SolrBackendTLSPolicy `json:"backendTLSPolicy,omitempty"`
+}
+
+// GatewayParentReference identifies a parent Gateway resource to attach HTTPRoutes to
+type GatewayParentReference struct {
+	// Name of the Gateway resource
+	Name string `json:"name"`
+
+	// Namespace of the Gateway resource.
+	// If not specified, defaults to the HTTPRoute's namespace.
+	// +optional
+	Namespace *string `json:"namespace,omitempty"`
+
+	// SectionName refers to a specific listener on the Gateway.
+	// For example, "https" or "http".
+	// +optional
+	SectionName *string `json:"sectionName,omitempty"`
+}
+
+// SolrBackendTLSPolicy defines backend TLS configuration for Gateway API
+//
+// For a valid BackendTLSPolicy configuration, exactly one of CACertificateRefs or
+// WellKnownCACertificates must be specified. The operator validates this constraint
+// via the HasBackendTLSPolicy() function before creating BackendTLSPolicy resources.
+//
+// +kubebuilder:validation:MaxProperties=1
+type SolrBackendTLSPolicy struct {
+	// CACertificateRefs contains one or more references to Kubernetes objects that contain
+	// TLS certificates of the Certificate Authorities that can be used as a trust anchor
+	// to validate the certificates presented by the backend.
+	//
+	// If specified, WellKnownCACertificates must not be set.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=8
+	CACertificateRefs []GatewayCertificateReference `json:"caCertificateRefs,omitempty"`
+
+	// WellKnownCACertificates specifies whether system CA certificates may be used in the
+	// TLS handshake between the gateway and backend pod.
+	//
+	// If WellKnownCACertificates is unspecified or empty (""), then CACertificateRefs must be
+	// specified with at least one entry for a valid configuration.
+	//
+	// Only one of CACertificateRefs or WellKnownCACertificates may be specified, not both.
+	// If specified, CACertificateRefs must not be set.
+	//
+	// +optional
+	WellKnownCACertificates *string `json:"wellKnownCACertificates,omitempty"`
+}
+
+// GatewayCertificateReference identifies a certificate object in Kubernetes
+type GatewayCertificateReference struct {
+	// Name of the Kubernetes resource (e.g., ConfigMap or Secret)
+	Name string `json:"name"`
+
+	// Kind of the resource (e.g., "ConfigMap" or "Secret")
+	// +optional
+	// +kubebuilder:default="ConfigMap"
+	Kind *string `json:"kind,omitempty"`
+
+	// Group of the resource
+	// +optional
+	Group *string `json:"group,omitempty"`
 }
 
 type SolrUpdateStrategy struct {
@@ -1297,6 +1409,26 @@ func (sc *SolrCloud) CommonIngressName() string {
 	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
 }
 
+// CommonHTTPRouteName returns the name of the common HTTPRoute for the cloud
+func (sc *SolrCloud) CommonHTTPRouteName() string {
+	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// NodeHTTPRouteName returns the name of the HTTPRoute for a specific node
+func (sc *SolrCloud) NodeHTTPRouteName(nodeName string) string {
+	return nodeName
+}
+
+// CommonBackendTLSPolicyName returns the name of the common BackendTLSPolicy for the cloud
+func (sc *SolrCloud) CommonBackendTLSPolicyName() string {
+	return fmt.Sprintf("%s-solrcloud-common", sc.GetName())
+}
+
+// NodeBackendTLSPolicyName returns the name of the BackendTLSPolicy for a specific node
+func (sc *SolrCloud) NodeBackendTLSPolicyName(nodeName string) string {
+	return nodeName
+}
+
 // ProvidedZookeeperName returns the provided zk cluster
 func (sc *SolrCloud) ProvidedZookeeperName() string {
 	return fmt.Sprintf("%s-solrcloud-zookeeper", sc.GetName())
@@ -1340,8 +1472,8 @@ func (sc *SolrCloud) UsesIndividualNodeServices() bool {
 }
 
 func (extOpts *ExternalAddressability) UsesIndividualNodeServices() bool {
-	// LoadBalancer and Ingress will not work with headless services if each pod needs to be exposed externally.
-	return extOpts != nil && !extOpts.HideNodes && (extOpts.Method == Ingress || extOpts.Method == LoadBalancer)
+	// LoadBalancer, Ingress, and Gateway will not work with headless services if each pod needs to be exposed externally.
+	return extOpts != nil && !extOpts.HideNodes && (extOpts.Method == Ingress || extOpts.Method == LoadBalancer || extOpts.Method == Gateway)
 }
 
 func (sc *SolrCloud) CommonExternalPrefix() string {
@@ -1435,11 +1567,13 @@ func (sc *SolrCloud) ExternalNodeUrl(nodeName string, domainName string, withPor
 		url = fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), domainName)
 	} else if sc.Spec.SolrAddressability.External.Method == ExternalDNS {
 		url = fmt.Sprintf("%s.%s", nodeName, sc.ExternalDnsDomain(domainName))
+	} else if sc.Spec.SolrAddressability.External.Method == Gateway {
+		url = fmt.Sprintf("%s.%s", sc.NodeIngressPrefix(nodeName), domainName)
 	}
 	// TODO: Add LoadBalancer stuff here
 
-	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress {
-		// Ingress does not require a port, since the port is whatever the ingress is listening on (80 and 443)
+	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress && sc.Spec.SolrAddressability.External.Method != Gateway {
+		// Ingress and Gateway do not require a port, since the port is whatever the ingress/gateway is listening on (80 and 443)
 		url += sc.NodePortSuffix(true)
 	}
 	return url
@@ -1450,11 +1584,13 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 		url = fmt.Sprintf("%s.%s", sc.CommonExternalPrefix(), domainName)
 	} else if sc.Spec.SolrAddressability.External.Method == ExternalDNS {
 		url = fmt.Sprintf("%s.%s", sc.CommonServiceName(), sc.ExternalDnsDomain(domainName))
+	} else if sc.Spec.SolrAddressability.External.Method == Gateway {
+		url = fmt.Sprintf("%s.%s", sc.CommonExternalPrefix(), domainName)
 	}
 	// TODO: Add LoadBalancer stuff here
 
-	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress {
-		// Ingress does not require a port, since the port is whatever the ingress is listening on (80 and 443)
+	if withPort && sc.Spec.SolrAddressability.External.Method != Ingress && sc.Spec.SolrAddressability.External.Method != Gateway {
+		// Ingress and Gateway do not require a port, since the port is whatever the ingress/gateway is listening on (80 and 443)
 		url += sc.CommonPortSuffix(true)
 	}
 	return url
@@ -1463,6 +1599,14 @@ func (sc *SolrCloud) ExternalCommonUrl(domainName string, withPort bool) (url st
 func (ea *ExternalAddressability) HasIngressTLSTermination() bool {
 	if ea != nil && ea.Method == Ingress && ea.IngressTLSTermination != nil {
 		return ea.IngressTLSTermination.UseDefaultTLSSecret || ea.IngressTLSTermination.TLSSecret != ""
+	}
+	return false
+}
+
+func (ea *ExternalAddressability) HasBackendTLSPolicy() bool {
+	if ea != nil && ea.Method == Gateway && ea.Gateway != nil && ea.Gateway.BackendTLSPolicy != nil {
+		return (ea.Gateway.BackendTLSPolicy.CACertificateRefs != nil && len(ea.Gateway.BackendTLSPolicy.CACertificateRefs) > 0) ||
+			(ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != nil && *ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != "")
 	}
 	return false
 }
