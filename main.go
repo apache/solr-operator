@@ -26,7 +26,6 @@ import (
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
-	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -34,6 +33,7 @@ import (
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
