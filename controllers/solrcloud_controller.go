@@ -21,12 +21,13 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -58,9 +59,14 @@ type SolrCloudReconciler struct {
 }
 
 var useZkCRD bool
+var useGatewayAPI bool
 
 func UseZkCRD(useCRD bool) {
 	useZkCRD = useCRD
+}
+
+func UseGatewayAPI(useGateway bool) {
+	useGatewayAPI = useGateway
 }
 
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
@@ -448,6 +454,11 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return requeueOrNot, fmt.Errorf("gateway.parentRefs is required when using method=Gateway")
 		}
 
+		// Validate that BackendTLSPolicy requires solrTLS to be configured
+		if extAddressabilityOpts.HasBackendTLSPolicy() && instance.Spec.SolrTLS == nil {
+			return requeueOrNot, fmt.Errorf("invalid config: `spec.customSolrKubeOptions.addressability.external.gateway.backendTLSPolicy` requires `spec.solrTLS` to be configured, because BackendTLSPolicy instructs the gateway to use TLS when connecting to Solr backends")
+		}
+
 		// Reconcile Common HTTPRoute (if not hidden)
 		if !extAddressabilityOpts.HideCommon {
 			commonHTTPRoute := util.GenerateCommonHTTPRoute(instance, solrNodeNames)
@@ -513,7 +524,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 		}
 
-		// Cleanup orphaned node HTTPRoutes (when scaling down)
+		// Cleanup orphaned node HTTPRoutes (when scaling down or hideNodes=true)
 		httpRouteList := &gatewayv1.HTTPRouteList{}
 		labelSelector := labels.SelectorFromSet(instance.SharedLabels())
 		listOps := &client.ListOptions{
@@ -527,17 +538,26 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				if httpRoute.Name == instance.CommonHTTPRouteName() {
 					continue
 				}
-				// Check if this node still exists
-				nodeExists := false
-				for _, nodeName := range solrNodeNames {
-					if httpRoute.Name == instance.NodeHTTPRouteName(nodeName) {
-						nodeExists = true
-						break
+
+				// Delete if hideNodes is true, or if this node no longer exists (scale-down)
+				shouldDelete := extAddressabilityOpts.HideNodes
+				if !shouldDelete {
+					nodeExists := false
+					for _, nodeName := range solrNodeNames {
+						if httpRoute.Name == instance.NodeHTTPRouteName(nodeName) {
+							nodeExists = true
+							break
+						}
 					}
+					shouldDelete = !nodeExists
 				}
-				// Delete orphaned HTTPRoute
-				if !nodeExists {
-					logger.Info("Deleting orphaned node HTTPRoute", "httproute", httpRoute.Name)
+
+				if shouldDelete {
+					if extAddressabilityOpts.HideNodes {
+						logger.Info("Deleting node HTTPRoute (hideNodes=true)", "httproute", httpRoute.Name)
+					} else {
+						logger.Info("Deleting orphaned node HTTPRoute", "httproute", httpRoute.Name)
+					}
 					err = r.Delete(ctx, &httpRoute)
 					if err != nil && !errors.IsNotFound(err) {
 						return requeueOrNot, err
@@ -1463,7 +1483,6 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&corev1.Secret{}). /* for authentication */
 		Owns(&netv1.Ingress{}).
-		Owns(&gatewayv1.HTTPRoute{}).
 		Owns(&policyv1.PodDisruptionBudget{})
 
 	var err error
@@ -1484,6 +1503,10 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zkApi.ZookeeperCluster{})
+	}
+
+	if useGatewayAPI {
+		ctrlBuilder = ctrlBuilder.Owns(&gatewayv1.HTTPRoute{})
 	}
 
 	return ctrlBuilder.Complete(r)

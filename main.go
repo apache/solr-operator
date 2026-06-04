@@ -64,6 +64,7 @@ var (
 
 	// External Operator dependencies
 	useZookeeperCRD bool
+	useGatewayAPI   bool
 
 	// mTLS information
 	clientSkipVerify  bool
@@ -92,6 +93,7 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
+	flag.BoolVar(&useGatewayAPI, "gateway-api", true, "The operator will not use the Gateway API CRDs when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 
 	flag.BoolVar(&clientSkipVerify, "tls-skip-verify-server", true, "Controls whether a client verifies the server's certificate chain and host name. If true (insecure), TLS accepts any certificate presented by the server and any host name in that certificate.")
@@ -183,6 +185,7 @@ func main() {
 	}
 
 	controllers.UseZkCRD(useZookeeperCRD)
+	controllers.UseGatewayAPI(useGatewayAPI)
 
 	// watch TLS files for update
 	if clientCertPath != "" {

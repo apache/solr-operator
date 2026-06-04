@@ -3,7 +3,7 @@
     contributor license agreements.  See the NOTICE file distributed with
     this work for additional information regarding copyright ownership.
     The ASF licenses this file to You under the Apache License, Version 2.0
-    the "License"); you may not use this file except in compliance with
+    (the "License"); you may not use this file except in compliance with
     the License.  You may obtain a copy of the License at
 
         http://www.apache.org/licenses/LICENSE-2.0
@@ -45,9 +45,9 @@ All HTTPRoutes are owned by the SolrCloud resource and will be automatically cle
 
 ### Services
 
-The same services are created as with other external addressability methods:
+The same services are created as with other external addressability methods, depending on whether per-node Services are required:
 - Common service (load-balanced)
-- Headless service (for internal cluster communication)
+- Headless service (when not using per-node services)
 - Per-node services (when individual node access is enabled)
 
 ## What the Operator Assumes
@@ -129,7 +129,7 @@ The operator also supports creating `BackendTLSPolicy` resources to configure se
 
 ### Configuring BackendTLSPolicy
 
-The Solr Operator can automatically create and manage `BackendTLSPolicy` resources (Gateway API v1alpha3) when configured in the SolrCloud spec:
+The Solr Operator can automatically create and manage `BackendTLSPolicy` resources (Gateway API v1) when configured in the SolrCloud spec:
 
 ```yaml
 apiVersion: solr.apache.org/v1beta1

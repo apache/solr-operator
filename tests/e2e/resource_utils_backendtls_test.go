@@ -18,8 +18,8 @@
 package e2e
 
 import (
-	"golang.org/x/net/context"
 	. "github.com/onsi/gomega"
+	"golang.org/x/net/context"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
