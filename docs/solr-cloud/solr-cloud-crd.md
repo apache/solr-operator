@@ -64,6 +64,10 @@ These options can be found in `SolrCloud.spec.dataStorage`
     Note: Currently, [Kubernetes does not support PVC resizing (expanding) in StatefulSets](https://github.com/kubernetes/enhancements/issues/661).
     However, the Solr Operator will manage the PVC expansion for users until this is supported by default in Kubernetes.
     Therefore the `pvcTemplate.spec` can have an update to `pvcTemplate.spec.resources.requests`, but all other fields should be considered immutable.
+
+    The storage size can only be increased (PVCs cannot be shrunk), and the backing [`StorageClass` must allow volume expansion](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#expanding-persistent-volumes-claims) (`allowVolumeExpansion: true`).
+    When the size is increased, the operator resizes the data PVCs and then performs a rolling restart of the SolrCloud so the new capacity is picked up on each node.
+    If the storage class does not allow expansion, or the request would shrink the PVCs, the operator emits a warning event on the SolrCloud and leaves the storage unchanged.
 - **`ephemeral`**
 
   There are two types of ephemeral volumes that can be specified.
