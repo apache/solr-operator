@@ -21,6 +21,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"strconv"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
@@ -30,10 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"net/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"time"
 )
 
 // SolrClusterOp contains metadata for cluster operations performed on SolrClouds.
@@ -152,30 +153,54 @@ func retryNextQueuedClusterOpWithQueue(statefulSet *appsv1.StatefulSet, clusterO
 	return hasOp, err
 }
 
-func determinePvcExpansionClusterOpLockIfNecessary(instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
-	if instance.Spec.StorageOptions.PersistentStorage != nil &&
-		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage() != nil &&
-		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage().String() != statefulSet.Annotations[util.StorageMinimumSizeAnnotation] {
-		// First make sure that the new Storage request is greater than what already is set.
-		// PVCs cannot be shrunk
-		newSize := instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage()
-		// If there is no old size to update, the StatefulSet can be just set to use the new PVC size without any issue.
-		// Only do a cluster operation if we are expanding from an existing size to a new size
-		if oldSizeStr, hasOldSize := statefulSet.Annotations[util.StorageMinimumSizeAnnotation]; hasOldSize {
-			if oldSize, e := resource.ParseQuantity(oldSizeStr); e != nil {
-				err = e
-				// TODO: add an event
-			} else {
-				// Only update to the new size if it is bigger, we cannot shrink PVCs
-				if newSize.Cmp(oldSize) > 0 {
-					clusterOp = &SolrClusterOp{
-						Operation: PvcExpansionLock,
-						Metadata:  newSize.String(),
-					}
-				}
-				// TODO: add an event saying that we cannot shrink PVCs
-			}
+func determinePvcExpansionClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
+	if instance.Spec.StorageOptions.PersistentStorage == nil ||
+		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage() == nil {
+		return
+	}
+	newSize := instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage()
+	// If there is no old size to update, the StatefulSet can just be set to use the new PVC size without any issue.
+	// Only do a cluster operation if we are expanding from an existing size to a new size.
+	oldSizeStr, hasOldSize := statefulSet.Annotations[util.StorageMinimumSizeAnnotation]
+	if !hasOldSize || newSize.String() == oldSizeStr {
+		return
+	}
+	oldSize, e := resource.ParseQuantity(oldSizeStr)
+	if e != nil {
+		err = e
+		logger.Error(err, "Could not parse the existing minimum PVC size from the StatefulSet annotation", "annotation", util.StorageMinimumSizeAnnotation, "value", oldSizeStr)
+		if r.Recorder != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionError",
+				"Could not parse the existing minimum data PVC size %q recorded on the StatefulSet: %v", oldSizeStr, e)
 		}
+		return
+	}
+	// PVCs cannot be shrunk, so only proceed if the new size is strictly bigger than the recorded size.
+	if newSize.Cmp(oldSize) <= 0 {
+		logger.Info("Cannot shrink existing data PVCs; ignoring the decreased storage request", "currentSize", oldSize.String(), "requestedSize", newSize.String())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionForbidden",
+				"Cannot shrink data PersistentVolumeClaims from %s to %s; PersistentVolumeClaims can only be expanded.", oldSize.String(), newSize.String())
+		}
+		return
+	}
+	// Pre-flight: make sure the storage class backing the data PVCs allows volume expansion. If it
+	// explicitly does not, there is no point acquiring a cluster operation lock that can never
+	// complete; surface it as an event instead.
+	if allowed, className, scErr := r.storageClassAllowsExpansion(ctx, instance, statefulSet.Spec.Selector.MatchLabels); scErr != nil {
+		// Could not determine; proceed best-effort and let the PVC patch surface any hard rejection.
+		logger.Error(scErr, "Could not verify whether the storage class allows volume expansion; proceeding with the expansion attempt")
+	} else if !allowed {
+		logger.Info("Storage class does not allow volume expansion; ignoring the increased storage request", "storageClass", className, "currentSize", oldSize.String(), "requestedSize", newSize.String())
+		if r.Recorder != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionForbidden",
+				"Storage class %q does not allow volume expansion (allowVolumeExpansion); cannot expand data PersistentVolumeClaims from %s to %s.", className, oldSize.String(), newSize.String())
+		}
+		return
+	}
+	clusterOp = &SolrClusterOp{
+		Operation: PvcExpansionLock,
+		Metadata:  newSize.String(),
 	}
 	return
 }
@@ -188,19 +213,37 @@ func handlePvcExpansion(ctx context.Context, r *SolrCloudReconciler, instance *s
 		logger.Error(err, "Could not convert PvcExpansion metadata to a resource.Quantity, as it represents the new size of PVCs", "metadata", clusterOp.Metadata)
 		return
 	}
-	operationComplete, err = r.expandPVCs(ctx, instance, statefulSet.Spec.Selector.MatchLabels, newSize, logger)
+	var resizeInfeasible bool
+	operationComplete, resizeInfeasible, err = r.expandPVCs(ctx, instance, statefulSet.Spec.Selector.MatchLabels, newSize, logger)
 	if err == nil && operationComplete {
 		originalStatefulSet := statefulSet.DeepCopy()
 		statefulSet.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
+		if statefulSet.Spec.Template.Annotations == nil {
+			statefulSet.Spec.Template.Annotations = make(map[string]string, 1)
+		}
 		statefulSet.Spec.Template.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
 		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
 			logger.Error(err, "Error while patching StatefulSet to set the new minimum PVC size after PVCs the completion of PVC resizing", "newSize", newSize)
 			operationComplete = false
+		} else {
+			logger.Info("All PersistentVolumeClaims have been expanded, now issuing a rolling restart", "statefulSet", statefulSet.Name)
 		}
 		// Return and wait for the StatefulSet to be updated which will call the reconcile to start the rolling restart
 		retryLaterDuration = 0
 	} else if err == nil {
-		retryLaterDuration = time.Second * 5
+		if resizeInfeasible {
+			// The storage backend has declared the requested size infeasible. There is nothing the
+			// operator can do until the user lowers the requested size, so surface it as an event and
+			// back off significantly instead of retrying tightly.
+			if r.Recorder != nil {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionInfeasible",
+					"The storage backend reported that expanding the data PersistentVolumeClaims to %s is infeasible (e.g. it exceeds backend or quota limits). Reduce the requested storage size to a feasible value to recover.",
+					newSize.String())
+			}
+			retryLaterDuration = time.Minute
+		} else {
+			retryLaterDuration = time.Second * 5
+		}
 	}
 	return
 }
