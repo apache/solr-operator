@@ -199,8 +199,9 @@ func main() {
 	}
 
 	if err = (&controllers.SolrCloudReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("solrcloud-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrCloud")
 		os.Exit(1)
