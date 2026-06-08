@@ -16,8 +16,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-_Since v0.8.0_
-
 Solr Clouds are complex distributed systems, and thus require additional help when trying to scale up or down.
 
 Scaling/Autoscaling can mean different things in different situations, and this is true even within the `SolrCloud.spec.scaling` section.

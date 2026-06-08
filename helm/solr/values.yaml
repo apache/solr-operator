@@ -63,7 +63,7 @@ solrOptions:
 
   # Enable authentication for the Solr Cloud
   # More information can be found at:
-  # https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#authentication-and-authorization
+  # https://solr.apache.org/guide/operator/latest/solr-cloud/authentication-and-authorization.html
   security: {}
     # authenticationType: Basic
     # basicAuthSecret: secret-name
@@ -74,7 +74,7 @@ solrOptions:
 
 
 # Specify how the SolrCloud should be addressable
-# https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#addressability
+# https://solr.apache.org/guide/operator/latest/solr-cloud/addressability.html
 addressability:
   podPort: 8983
   commonServicePort: null
@@ -234,7 +234,7 @@ zk:
 
 # Enable TLS between your SolrCloud nodes
 # More information can be found at:
-# https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods
+# https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods
 solrTLS: {}
   # pkcs12Secret:
   #   name: secret-name

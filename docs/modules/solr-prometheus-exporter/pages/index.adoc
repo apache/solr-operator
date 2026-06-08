@@ -44,11 +44,10 @@ If `SolrPrometheusExporter.spec.solrRef.cloud.name` is used and no image informa
 If any `SolrPrometheusExporter.spec.image.*` option is provided, then the Prometheus Exporter will use its own image.
 
 ==== ACLs
-_Since v0.2.7_
 
 The Prometheus Exporter can be set up to use ZK ACLs when connecting to Zookeeper.
 
-If the prometheus exporter has been provided the name of a solr cloud, through `cloud.name`, then the solr operator will load up the ZK ACL Secret information found in the xref:solr-cloud:solr-cloud-crd.adoc#acls[SolrCloud spec].
+If the prometheus exporter has been provided the name of a solr cloud, through `cloud.name`, then the solr operator will load up the ZK ACL Secret information found in the xref:solr-cloud:zookeeper.adoc#acls[SolrCloud spec].
 In order for the prometheus exporter to have visibility to these secrets, it must be deployed to the same namespace as the referenced SolrCloud or the same exact secrets must exist in both namespaces.
 
 If explicit Zookeeper connection information has been provided, through `cloud.zkConnectionInfo`, then ACL information must be provided in the same section.
@@ -72,7 +71,6 @@ In order to use this functionality, use the following spec field:
 
 
 === Solr TLS
-_Since v0.3.0_
 
 If you're relying on a self-signed certificate (or any certificate that requires importing the CA into the Java trust store) for Solr pods, then the Prometheus Exporter will not be able to make requests for metrics.
 You'll need to duplicate your TLS config from your SolrCloud CRD definition to your Prometheus exporter CRD definition as shown in the example below:
@@ -96,12 +94,10 @@ spec:
 **This only applies to the SolrJ client the exporter uses to make requests to your TLS-enabled Solr pods and does not enable HTTPS for the exporter service.**
 
 ==== Mounted TLS Directory
-_Since v0.4.0_
 
 You can use the `spec.solrReference.solrTLS.mountedTLSDir.path` to point to a directory containing certificate files mounted by an external agent or CSI driver.
 
 === Prometheus Exporter with Basic Auth
-_Since v0.3.0_
 
 If you enable basic auth for your SolrCloud cluster, then you need to point the Prometheus exporter at the basic auth secret containing the credentials for making API requests to `/admin/metrics` and `/admin/ping` for all collections.
 
@@ -132,7 +128,7 @@ This user account will need access to the following endpoints in Solr:
       },
 ----
 
-For more details on configuring Solr security with the operator, see xref:solr-cloud:solr-cloud-crd.adoc#authentication-and-authorization[Authentication and Authorization]
+For more details on configuring Solr security with the operator, see xref:solr-cloud:authentication-and-authorization.adoc[Authentication and Authorization]
 
 == Prometheus Stack
 
@@ -222,7 +218,6 @@ curl http://localhost:8080/metrics
 ----
 
 ==== Customize Prometheus Exporter Config
-_Since v0.3.0_
 
 Each Solr pod exposes metrics as JSON from the `/solr/admin/metrics` endpoint. To see this in action, open a port-forward to a Solr pod and send a request to `http://localhost:8983/solr/admin/metrics`.
 

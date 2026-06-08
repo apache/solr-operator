@@ -18,6 +18,11 @@
 .Solr Clouds
 * xref:index.adoc[Overview]
 * xref:solr-cloud-crd.adoc[]
+** xref:addressability.adoc[]
+** xref:zookeeper.adoc[]
+** xref:custom-solr-config.adoc[Custom Solr Configuration]
+** xref:tls.adoc[]
+** xref:authentication-and-authorization.adoc[]
 * xref:cluster-operations.adoc[]
 * xref:managed-updates.adoc[]
 * xref:scaling.adoc[]

@@ -131,7 +131,7 @@ See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud
 
 ### Addressability Options
 
-See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/addressability.html) for more information.
 
 If providing external addressability, then `method` and `domainName` must be provided.
 External addressability is disabled by default.
@@ -210,7 +210,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 
 ### TLS Options
 
-See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Solr TLS is disabled by default. Provide any of the following to enable it.
 
@@ -238,7 +238,7 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 
 #### Client TLS Options
 
-See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Configure Solr to use a separate TLS certificate for client auth.
 

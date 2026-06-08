@@ -16,8 +16,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-_Since v0.8.0_
-
 Solr Clouds are complex distributed systems, and thus any operations that deal with data availability should be handled with care.
 
 == Cluster Operation Locks

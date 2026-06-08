@@ -41,7 +41,7 @@ Please follow the instructions from the xref:getting-started:local-tutorial.adoc
 === Install the necessary dependencies
 
 Install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator], which this operator depends on by default.
-It is optional, however, as described in the xref:solr-cloud:solr-cloud-crd.adoc#zookeeper-reference[Zookeeper Reference] section in the CRD docs.
+It is optional, however, as described in the xref:solr-cloud:zookeeper.adoc[Zookeeper Reference] section in the CRD docs.
 
 [source,bash]
 ----
