@@ -33,9 +33,15 @@ There may be breaking changes between the version you are using and the version 
 
 ### Installing the Chart
 
-To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+The Solr Helm chart can be installed using either the OCI registry (recommended) or the traditional HTTPS helm repository.
+
+To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version:
 
 ```bash
+# Via OCI registry (recommended)
+helm install example oci://docker.io/apache/solr-chart --version 0.10.0-prerelease --set image.tag=9.10.0
+
+# Or via HTTPS helm repository (traditional)
 helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.10.0
 ```
 
@@ -50,6 +56,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
+# Via OCI registry (recommended)
+helm upgrade example oci://docker.io/apache/solr-chart --version 0.10.0-prerelease --reuse-values --set image.tag=9.10.0
+
+# Or via HTTPS repository (traditional)
 helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.10.0
 ```
 
