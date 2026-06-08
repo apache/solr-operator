@@ -227,8 +227,16 @@ smoke-test: build-release-artifacts ## Run a full smoke test on a set of local r
 .PHONY: check
 check: lint test ## Do all checks, lints and tests for the Solr Operator
 
+# Antora's content aggregation is git-based, so the docs build only works in a
+# git checkout. Include it in `lint` only when .git is present; this skips it
+# for an unpacked release source tarball (e.g. `make check` during smoke tests).
+DOCS_LINT :=
+ifneq ($(wildcard $(PROJECT_DIR)/.git),)
+DOCS_LINT := check-docs
+endif
+
 .PHONY: lint
-lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm check-docs ## Lint the codebase to check for formatting and correctness
+lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm $(DOCS_LINT) ## Lint the codebase to check for formatting and correctness
 
 .PHONY: check-format
 check-format: ## Check the codebase to make sure it adheres to golang standards
