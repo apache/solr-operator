@@ -100,19 +100,22 @@ fi
 
 # Update Docs (Remove this when docs are generated with versioning info)
 {
-  cat docs/local_tutorial.md | \
+  cat docs/modules/getting-started/pages/local-tutorial.adoc | \
   sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/local_tutorial.md.tmp && mv docs/local_tutorial.md.tmp docs/local_tutorial.md
+} > docs/modules/getting-started/pages/local-tutorial.adoc.tmp && mv docs/modules/getting-started/pages/local-tutorial.adoc.tmp docs/modules/getting-started/pages/local-tutorial.adoc
 {
-  cat docs/upgrade-notes.md | \
+  cat docs/modules/upgrade-notes/pages/upgrade-notes.adoc | \
   sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/upgrade-notes.md.tmp && mv docs/upgrade-notes.md.tmp docs/upgrade-notes.md
+} > docs/modules/upgrade-notes/pages/upgrade-notes.adoc.tmp && mv docs/modules/upgrade-notes/pages/upgrade-notes.adoc.tmp docs/modules/upgrade-notes/pages/upgrade-notes.adoc
 {
-  cat docs/running-the-operator.md | \
+  cat docs/modules/getting-started/pages/running-the-operator.adoc | \
   sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
   sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/running-the-operator.md.tmp && mv docs/running-the-operator.md.tmp docs/running-the-operator.md
+} > docs/modules/getting-started/pages/running-the-operator.adoc.tmp && mv docs/modules/getting-started/pages/running-the-operator.adoc.tmp docs/modules/getting-started/pages/running-the-operator.adoc
+
+# Regenerate the operator Antora component descriptor (docs/antora.yml) from version/version.go
+./hack/docs/generate_antora_yaml.sh
 
 make manifests

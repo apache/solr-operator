@@ -18,21 +18,22 @@
 
 The Apache Solr Operator is a https://kubernetes.io/docs/concepts/extend-kubernetes/operator/[Kubernetes Operator] that makes it easy to deploy, manage, and scale Apache Solr in a cloud-native environment.
 
-[NOTE]
-====
-This guide is being migrated to Antora.
-As pages are migrated they will appear in the navigation menu on the left.
-====
+== Getting started
 
-== What the Operator manages
+* xref:getting-started:local-tutorial.adoc[] -- run Solr on Kubernetes locally, end to end.
+* xref:getting-started:running-the-operator.adoc[] -- install and configure the operator.
+
+== Managing Solr
 
 The operator provides several Kubernetes Custom Resources (CRDs) for running Solr:
 
-* *SolrCloud* -- run and manage a complete SolrCloud cluster, including ZooKeeper dependencies, autoscaling, and rolling updates.
-* *SolrBackup* -- schedule and manage backups of Solr collections.
-* *SolrPrometheusExporter* -- expose Solr metrics to Prometheus for monitoring.
+* xref:solr-cloud:index.adoc[Solr Clouds] -- run and manage a complete SolrCloud cluster, including ZooKeeper dependencies, autoscaling, and rolling updates.
+* xref:solr-backup:index.adoc[Solr Backups] -- schedule and manage backups of Solr collections.
+* xref:solr-prometheus-exporter:index.adoc[Solr Metrics] -- expose Solr metrics to Prometheus for monitoring.
 
-== Getting started
+== Reference
 
-To install the operator and run your first SolrCloud, follow the tutorials and operational guides linked from the navigation menu.
+* xref:upgrade-notes:upgrade-notes.adoc[] and xref:upgrade-notes:known-issues.adoc[].
+* xref:development:development.adoc[] -- build, test, and contribute to the operator.
+
 For the broader Apache Solr documentation, see the {solr-ref-guide}[Solr Reference Guide].

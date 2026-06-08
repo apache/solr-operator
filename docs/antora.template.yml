@@ -25,6 +25,12 @@ display_version: '@DISPLAY_VERSION@'
 start_page: ROOT:index.adoc
 nav:
   - modules/ROOT/nav.adoc
+  - modules/getting-started/nav.adoc
+  - modules/solr-cloud/nav.adoc
+  - modules/solr-backup/nav.adoc
+  - modules/solr-prometheus-exporter/nav.adoc
+  - modules/upgrade-notes/nav.adoc
+  - modules/development/nav.adoc
 asciidoc:
   attributes:
     idseparator: '-'
