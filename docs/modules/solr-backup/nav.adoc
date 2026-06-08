@@ -17,4 +17,4 @@
 
 .Solr Backups
 * xref:index.adoc[]
-** xref:backup-repositories.adoc[]
+* xref:backup-repositories.adoc[]
