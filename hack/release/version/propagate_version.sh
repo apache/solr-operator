@@ -84,13 +84,3 @@ fi
 
 
 # Update Docs (Remove this when docs are generated with versioning info)
-{
-  cat docs/local_tutorial.md | \
-  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
-  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/local_tutorial.md.tmp && mv docs/local_tutorial.md.tmp docs/local_tutorial.md
-{
-  cat docs/running-the-operator.md | \
-  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
-  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/running-the-operator.md.tmp && mv docs/running-the-operator.md.tmp docs/running-the-operator.md
