@@ -59,7 +59,7 @@ solrOptions:
 
   # Enable authentication for the Solr Cloud
   # More information can be found at:
-  # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#authentication-and-authorization
+  # https://solr.apache.org/guide/operator/0_5/solr-cloud/authentication-and-authorization.html
   security: {}
     # authenticationType: Basic
     # basicAuthSecret: secret-name
@@ -70,7 +70,7 @@ solrOptions:
 
 
 # Specify how the SolrCloud should be addressable
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability
+# https://solr.apache.org/guide/operator/0_5/solr-cloud/addressability.html
 addressability:
   podPort: 8983
   commonServicePort: null
@@ -88,7 +88,7 @@ addressability:
     # ingressTLSTerminationSecret: ""
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
+# https://solr.apache.org/guide/operator/0_5/solr-cloud/solr-cloud-crd.html#update-strategy
 updateStrategy:
   method: "Managed"
   # Options for the managed update method
@@ -107,7 +107,7 @@ updateStrategy:
   restartSchedule: ""
 
 # More information can be found at:
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
+# https://solr.apache.org/guide/operator/0_5/solr-cloud/solr-cloud-crd.html#data-storage
 dataStorage:
   # Either persistent or ephemeral
   type: "ephemeral"
@@ -139,7 +139,7 @@ dataStorage:
 
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
-# - https://apache.github.io/solr-operator/docs/solr-backup
+# - https://solr.apache.org/guide/operator/0_5/solr-backup/index.html
 # - kubectl explain solrcloud.spec.backupRepositories
 backupRepositories: []
   # - name: example-repo # Required
@@ -205,7 +205,7 @@ zk:
 
 # Enable TLS between your SolrCloud nodes
 # More information can be found at:
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods
+# https://solr.apache.org/guide/operator/0_5/solr-cloud/tls.html#enable-tls-between-solr-pods
 solrTLS: {}
   # pkcs12Secret:
   #   name: secret-name
