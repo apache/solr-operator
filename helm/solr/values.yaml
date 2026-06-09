@@ -135,6 +135,7 @@ dataStorage:
       labels: {}
       annotations: {}
       storageClassName: ""
+      volumeAttributesClassName: ""
 
 # How to control availability for Solr Nodes
 availability:
