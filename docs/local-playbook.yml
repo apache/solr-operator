@@ -37,7 +37,7 @@ content:
     - url: ..
       # HEAD builds the current worktree, including uncommitted changes.
       branches: HEAD
-      start_path: docs
+      start_path: docs/build/staging
       # No "edit this page" links in local preview.
       edit_url: false
 
