@@ -738,9 +738,13 @@ groups:
         comment: Remove the prerelase suffix from the version.
         stdout: true
       - !Command
-        cmd: ./hack/release/version/propagate_version.sh
+        cmd: make propagate-version
         comment: Propagate the new version throughout the repo.
         logfile: propagate_version.log
+        tee: true
+      - !Command
+        cmd: make generate-antora-yaml
+        comment: Regenerate the committed docs/antora.yml to the released version.
         tee: true
       - !Command
         cmd: ./hack/release/artifacts/set_signing_key.sh -f "{{ gpg_fingerprint | default('<gpg_fingerprint>', True) }}"

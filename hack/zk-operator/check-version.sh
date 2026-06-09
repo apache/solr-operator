@@ -45,8 +45,8 @@ if (grep -E "https://raw.githubusercontent.com/pravega/zookeeper-operator/" hack
   printf "\nVersion not correct for all locations in file 'hack/release/artifacts/create_crds.sh' ^ \n" >&2 && exit 1
 fi
 
-if (grep -E "helm install zookeeper-operator" docs/development.md | grep -v -E "${ZK_OP_VERSION#v}"); then
-  printf "\nVersion not correct for all locations in file 'docs/development.md' ^ \nMake sure that this version does not contain a 'v'.\n" >&2 && exit 1
+if (grep -E "helm install zookeeper-operator" docs/modules/development/pages/development.adoc | grep -v -E "${ZK_OP_VERSION#v}"); then
+  printf "\nVersion not correct for all locations in file 'docs/modules/development/pages/development.adoc' ^ \nMake sure that this version does not contain a 'v'.\n" >&2 && exit 1
 fi
 
 HELM_DEPENDENCY_VERSION="$(yq eval '.dependencies[] | select(.name = "zookeeper-operator") | .version' helm/solr-operator/Chart.yaml)"

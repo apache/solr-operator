@@ -1,0 +1,523 @@
+= Solr TLS
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+== Enable TLS Between Solr Pods
+
+A common approach to securing traffic to your Solr cluster is to perform <<enable-ingress-tls-termination,**TLS termination** at the Ingress>> and leave all traffic between Solr pods un-encrypted.
+However, depending on how you expose Solr on your network, you may also want to encrypt traffic between Solr pods.
+The Solr operator provides **optional** configuration settings to enable TLS for encrypting traffic between Solr pods.
+
+Enabling TLS for Solr is a straight-forward process once you have a https://en.wikipedia.org/wiki/PKCS_12[**PKCS12 keystore**] containing an https://en.wikipedia.org/wiki/X.509[X.509] certificate and private key; as of Java 8, PKCS12 is the default keystore format supported by the JVM.
+
+There are three basic use cases supported by the Solr operator. First, you can use cert-manager to issue a certificate and store the resulting PKCS12 keystore in a Kubernetes TLS secret.
+Alternatively, you can create the TLS secret manually from a certificate obtained by some other means. In both cases, you simply point your SolrCloud CRD to the resulting TLS secret and corresponding keystore password secret.
+Lastly, as of **v0.4.0**, you can supply the path to a directory containing TLS files that are mounted by some external agent or CSI driver.
+
+=== Use cert-manager to issue the certificate
+
+https://cert-manager.io/docs/[cert-manager] is a popular Kubernetes controller for managing TLS certificates, including renewing certificates prior to expiration.
+One of the primary benefits of cert-manager is it supports pluggable certificate `Issuer` implementations, including a self-signed Issuer for local development and an https://tools.ietf.org/html/rfc8555[ACME compliant] Issuer for working with services like https://letsencrypt.org/[Let's Encrypt].
+
+If you already have a TLS certificate you want to use for Solr, then you don't need cert-manager and can skip down to <<i-already-have-a-tls-certificate,I already have a TLS Certificate>> later in this section.
+If you do not have a TLS certificate, then we recommend installing **cert-manager** as it makes working with TLS in Kubernetes much easier.
+
+==== Install cert-manager
+
+Given its popularity, cert-manager may already be installed in your Kubernetes cluster. To check if `cert-manager` is already installed, do:
+
+[source,bash]
+----
+kubectl get crds -l app.kubernetes.io/instance=cert-manager
+----
+
+If installed, you should see the following cert-manager related CRDs:
+
+----
+certificaterequests.cert-manager.io
+certificates.cert-manager.io
+challenges.acme.cert-manager.io
+clusterissuers.cert-manager.io
+issuers.cert-manager.io
+orders.acme.cert-manager.io
+----
+
+If not installed, use Helm to install it into the `cert-manager` namespace:
+
+[source,bash]
+----
+if ! helm repo list | grep -q "https://charts.jetstack.io"; then
+  helm repo add jetstack https://charts.jetstack.io
+  helm repo update
+fi
+
+kubectl create ns cert-manager
+helm upgrade --install cert-manager jetstack/cert-manager \
+  --namespace cert-manager \
+  --version v1.1.0 \
+  --set installCRDs=true
+----
+
+You'll need admin privileges to install the CRDs in a shared K8s cluster, so work with your friendly Kubernetes admin to install if needed (most likely cert-manager will already be installed).
+Refer to the https://cert-manager.io/docs/installation/kubernetes/[cert-manager Installation] instructions for more information.
+
+==== Create cert-manager Certificate
+
+Once cert-manager is installed, you need to create an `Issuer` or `ClusterIssuer` CRD and then request a certificate using a https://cert-manager.io/docs/usage/certificate/[Certificate CRD].
+Refer to the https://cert-manager.io/docs/[cert-manager docs] on how to define a certificate.
+
+Certificate Issuers are typically platform specific. For instance, on GKE, to create a Let's Encrypt Issuer you need a service account with various cloud DNS permissions granted for DNS01 challenges to work, see: https://cert-manager.io/docs/configuration/acme/dns01/google/.
+
+The DNS names in your certificate should match the Solr addressability settings in your SolrCloud CRD. For instance, if your SolrCloud CRD uses the following settings:
+
+[source,yaml]
+----
+spec:
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+----
+
+Then your certificate needs the following domains specified:
+
+[source,yaml]
+----
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  ...
+spec:
+  dnsNames:
+  - '*.k8s.solr.cloud'
+  - k8s.solr.cloud
+----
+
+The wildcard DNS name will cover all SolrCloud nodes such as `<NS>-solrcloud-1.k8s.solr.cloud`.
+
+Also, when requesting your certificate, keep in mind that internal DNS names in Kubernetes are not valid for public certificates.
+For instance `<svc>.<namespace>.svc.cluster.local` is internal to Kubernetes and certificate issuer services like LetsEncrypt
+will not generate a certificate for K8s internal DNS names (you'll get errors during certificate issuing).
+
+Another benefit is cert-manager can create a https://cert-manager.io/docs/release-notes/release-notes-0.15/#general-availability-of-jks-and-pkcs-12-keystores[PKCS12] keystore automatically when issuing a `Certificate`,
+which allows the Solr operator to mount the keystore directly on our Solr pods. Ensure your certificate instance requests **pkcs12 keystore** gets created using config similar to the following:
+
+[source,yaml]
+----
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef:
+        key: password-key
+        name: pkcs12-password-secret
+----
+
+NOTE: the example structure above goes in your certificate CRD YAML, not SolrCloud.
+
+You need to create the keystore secret (e.g. `pkcs12-password-secret`) in the same namespace before requesting the certificate, see: https://cert-manager.io/docs/reference/api-docs/#cert-manager.io/v1.PKCS12Keystore.
+Although a keystore password is not required for PKCS12, **cert-manager** requires a password when requesting a `pkcs12` keystore for your certificate.
+Moreover, most JVMs require a password for pkcs12 keystores, not supplying a password typically results in errors like the following:
+
+----
+Caused by: java.security.UnrecoverableKeyException: Get Key failed: null
+	at java.base/sun.security.pkcs12.PKCS12KeyStore.engineGetKey(Unknown Source)
+	at java.base/sun.security.util.KeyStoreDelegator.engineGetKey(Unknown Source)
+	at java.base/java.security.KeyStore.getKey(Unknown Source)
+	at java.base/sun.security.ssl.SunX509KeyManagerImpl.<init>(Unknown Source)
+----
+
+Consequently, the Solr operator requires you to use a non-null password for your keystore.
+
+Here's an example of how to use cert-manager to generate a self-signed certificate:
+
+[source,yaml]
+----
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pkcs12-password-secret
+data:
+  password-key: SOME_PASSWORD_HERE
+
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: selfsigned-issuer
+spec:
+  selfSigned: {}
+
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: selfsigned-cert
+spec:
+  subject:
+    organizations: ["dev"]
+  dnsNames:
+    - localhost
+    - dev-dev-solrcloud.ing.local.domain
+    - "*.ing.local.domain"
+  secretName: dev-selfsigned-cert-tls
+  issuerRef:
+    name: selfsigned-issuer
+  keystores:
+    pkcs12:
+      create: true
+      passwordSecretRef:
+        key: password-key
+        name: pkcs12-password-secret
+----
+
+Once created, simply point the SolrCloud deployment at the TLS and keystore password secrets, e.g.
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-password-secret
+      key: password-key
+    pkcs12Secret:
+      name: selfsigned-cert
+      key: keystore.p12
+----
+
+NOTE: when using self-signed certificates, you'll have to configure HTTP client libraries to skip hostname and CA verification.
+
+[#i-already-have-a-tls-certificate]
+=== I already have a TLS Certificate
+
+Users may bring their own cert stored in a `kubernetes.io/tls` secret; for this use case, cert-manager is not required.
+There are many ways to get a certificate, such as from the GKE managed certificate process or from a CA directly.
+Regardless of how you obtain a Certificate, it needs to be stored in a https://kubernetes.io/docs/concepts/configuration/secret/#tls-secrets[Kubernetes TLS secret]
+that contains a `tls.crt` file (x.509 certificate with a public key and info about the issuer) and a `tls.key` file (the private key).
+
+Ideally, the TLS secret will also have a `pkcs12` keystore.
+If the supplied TLS secret does not contain a `keystore.p12` key, then the Solr operator creates an `initContainer` on the StatefulSet to generate the keystore from the TLS secret using the following command:
+
+[source,bash]
+----
+openssl pkcs12 -export -in tls.crt -inkey tls.key -out keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+----
+
+_The `initContainer` uses the main Solr image as it has `openssl` installed._
+
+Configure the SolrCloud deployment to point to the user-provided keystore and TLS secrets:
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-keystore-manual
+      key: password-key
+    pkcs12Secret:
+      name: pkcs12-keystore-manual
+      key: keystore.p12
+----
+
+=== Separate TrustStore
+
+A truststore holds public keys for certificates you trust. By default, Solr pods are configured to use the keystore as the truststore.
+However, you may have a separate truststore you want to use for Solr TLS. As with the keystore, you need to provide a PKCS12 truststore in a secret and then configure your SolrCloud TLS settings as shown below:
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    keyStorePasswordSecret:
+      name: pkcs12-keystore-manual
+      key: password-key
+    pkcs12Secret:
+      name: pkcs12-keystore-manual
+      key: keystore.p12
+    trustStorePasswordSecret:
+      name: pkcs12-truststore
+      key: password-key
+    trustStoreSecret:
+      name: pkcs12-truststore
+      key: truststore.p12
+----
+
+TIP: if your truststore is not in PKCS12 format, use `openssl` to convert it.
+
+=== Mounted TLS Directory
+
+The options discussed to this point require that all Solr pods share the same certificate and truststore. An emerging pattern in the Kubernetes ecosystem is to issue a unique certificate for each pod.
+Typically this operation is performed by an external agent, such as a cert-manager extension, that uses mutating webhooks to mount a unique certificate and supporting files on each pod dynamically.
+How the pod-specific certificates get issued is beyond the scope of the Solr operator. Under this scheme, you can use `spec.solrTLS.mountedTLSDir.path` to specify the path where the TLS files are mounted on the main pod.
+The following example illustrates how to configure a keystore and truststore in PKCS12 format using the `mountedTLSDir` option:
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    clientAuth: Want
+    checkPeerName: true
+    verifyClientHostname: true
+    mountedTLSDir:
+      path: /pod-server-tls
+      keystoreFile: keystore.p12
+      keystorePasswordFile: keystore-password
+      truststoreFile: truststore.p12
+----
+
+When using the mounted TLS directory option, you need to ensure each Solr pod gets restarted before the certificate expires. Solr does not support hot reloading of the keystore or truststore.
+Consequently, we recommend using the `spec.updateStrategy.restartSchedule` to restart pods before the certificate expires.
+Typically, with this scheme, a new certificate is issued whenever a pod is restarted.
+
+=== Client TLS
+
+Solr supports using separate client and server TLS certificates. Solr uses the client certificate in mutual TLS (mTLS) scenarios to make requests to other Solr pods.
+Use the `spec.solrClientTLS` configuration options to configure a separate client certificate.
+As this is an advanced option, the supplied client certificate keystore and truststore must already be in PKCS12 format.
+As with the server certificate loaded from `spec.solrTLS.pkcs12Secret`,
+you can have the operator restart Solr pods after the client TLS secret updates by setting `spec.solrClientTLS.restartOnTLSSecretUpdate` to `true`.
+
+You may need to increase the timeout for the liveness / readiness probes when using mTLS with a separate client certificate, such as:
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  customSolrKubeOptions:
+    podOptions:
+      livenessProbe:
+        timeoutSeconds: 10
+      readinessProbe:
+        timeoutSeconds: 10
+----
+
+You may also use the `spec.solrClientTLS.mountedTLSDir` option to load a pod specific client certificate from a directory mounted by an external agent or CSI driver.
+
+=== Ingress with TLS protected Solr
+
+The Solr operator may create an Ingress for exposing Solr pods externally. When TLS is enabled, the operator adds the following annotation and TLS settings to the Ingress manifest, such as:
+
+[source,yaml]
+----
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+spec:
+  rules:
+    ...
+  tls:
+  - secretName: my-selfsigned-cert-tls
+----
+
+If using the mounted TLS Directory option with an Ingress, you will need to inject the ingress with TLS information as well.
+The <<enable-ingress-tls-termination,Ingress TLS Termination section below>> shows how this can be done when using cert-manager.
+
+=== Certificate Renewal and Rolling Restarts
+
+cert-manager automatically handles certificate renewal. From the docs:
+
+____
+The default duration for all certificates is 90 days and the default renewal windows is 30 days. This means that certificates are considered valid for 3 months and renewal will be attempted within 1 month of expiration.
+         https://docs.cert-manager.io/en/release-0.8/reference/certificates.html
+____
+
+However, this only covers updating the underlying TLS secret and mounted secrets in each Solr pod do get updated on the filesystem, see: https://kubernetes.io/docs/concepts/configuration/secret/#mounted-secrets-are-updated-automatically.
+However, the JVM only reads key and trust stores once during initialization and does not reload them if they change. Thus, we need to recycle the Solr container in each pod to pick up the updated keystore.
+
+The operator tracks the MD5 hash of the `tls.crt` from the TLS secret in an annotation on the StatefulSet pod spec so that when the TLS secret changes, it will trigger a rolling restart of the affected Solr pods.
+The operator guards this behavior with an **opt-in** flag `restartOnTLSSecretUpdate` as some users may not want to restart Solr pods when the TLS secret holding the cert changes and may instead choose to restart the pods during a maintenance window (presumably before the certs expire).
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrTLS:
+    restartOnTLSSecretUpdate: true
+    ...
+
+----
+
+=== Misc Config Settings for TLS Enabled Solr
+
+Although not required, we recommend setting the `commonServicePort` and `nodePortOverride` to `443` instead of the default port `80` under `solrAddressability` to avoid confusion when working with `https`.
+
+[source,yaml]
+----
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    commonServicePort: 443
+    external:
+      nodePortOverride: 443
+
+----
+
+==== Prometheus Exporter
+
+If you're relying on a self-signed certificate (or any certificate that requires importing the CA into the Java trust store) for Solr pods, then the Prometheus Exporter will not be able to make requests for metrics.
+You'll need to duplicate your TLS config from your SolrCloud CRD definition to your Prometheus exporter CRD definition as shown in the example below:
+
+[source,yaml]
+----
+  solrReference:
+    cloud:
+      name: "dev"
+    solrTLS:
+      restartOnTLSSecretUpdate: true
+      keyStorePasswordSecret:
+        name: pkcs12-password-secret
+        key: password-key
+      pkcs12Secret:
+        name: dev-selfsigned-cert-tls
+        key: keystore.p12
+----
+
+_This only applies to the SolrJ client the exporter uses to make requests to your TLS-enabled Solr pods and does not enable HTTPS for the exporter service._
+
+==== Public / Private Domain Names
+
+If your Solr pods use Kubernetes internal domain names, such as `<cloud>-solrcloud-<oridinal>.<ns>` or
+`<cloud>-solrcloud-<oridinal>.<ns>.svc.cluster.local` then you **cannot** request a certificate from a service like LetsEncrypt.
+You'll receive an error like (from the cert-manager controller pod logs):
+
+----
+   Cannot issue for \"*.<ns>.svc.cluster.local\": Domain name does not end with a valid public suffix (TLD)"
+----
+
+This is policy enforced by trusted certificate authorities, see: https://www.digicert.com/kb/advisories/internal-names.htm.
+Intuitively, this makes sense because services like LetsEncrypt cannot determine if you own a private domain because they cannot reach it from the Internet.
+
+Some CA's provide TLS certificates for private domains but that topic is beyond the scope of the Solr operator.
+You may want to use a self-signed certificate for internal traffic and then a public certificate for your Ingress.
+Alternatively, you can choose to expose Solr pods with an external name using SolrCloud `solrAddressability` settings:
+
+[source,yaml]
+----
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    commonServicePort: 443
+    external:
+      nodePortOverride: 443
+      domainName: k8s.solr.cloud
+      method: Ingress
+      useExternalAddress: true
+----
+
+The example settings above will result in your Solr pods getting names like: `<ns>-search-solrcloud-0.k8s.solr.cloud`
+which you can request TLS certificates from LetsEncrypt assuming you own the `k8s.solr.cloud` domain.
+
+==== mTLS
+
+Mutual TLS (mTLS) provides an additional layer of security by ensuring the client applications sending requests to Solr are trusted.
+To enable mTLS, simply set `spec.solrTLS.clientAuth` to either `Want` or `Need`. When mTLS is enabled, the Solr operator needs to
+supply a client certificate that is trusted by Solr; the operator makes API calls to Solr to get cluster status.
+To configure the client certificate for the operator, see xref:getting-started:running-the-operator.adoc#client-auth-for-mtls-enabled-solr-clusters[Running the Operator > mTLS]
+
+When mTLS is enabled, the liveness and readiness probes are configured to execute a local command on each Solr pod instead of the default HTTP Get request.
+Using a command is required so that we can use the correct TLS certificate when making an HTTPs call to the probe endpoints.
+
+To help with debugging the TLS handshake between client and server,
+you can add the `-Djavax.net.debug=SSL,keymanager,trustmanager,ssl:handshake` Java system property to the `spec.solrOpts` for your SolrCloud instance.
+
+To verify mTLS is working for your Solr pods, you can supply the client certificate (and CA cert if needed) via curl after opening a port-forward to one of your Solr pods:
+
+----
+curl "https://localhost:8983/solr/admin/info/system" -v \
+  --key client/private_key.pem \
+  --cert client/client.pem \
+  --cacert root-ca/root-ca.pem
+----
+
+The `--cacert` option supplies the CA's certificate needed to trust the server certificate provided by the Solr pods during TLS handshake.
+
+[#enable-ingress-tls-termination]
+== Enable Ingress TLS Termination
+
+A common approach to securing traffic to your Solr cluster is to perform **TLS termination** at the Ingress and either leave all traffic between Solr pods un-encrypted or use private CAs for inter-pod communication.
+The operator supports this paradigm, to ensure all external traffic is encrypted.
+
+[source,yaml]
+----
+kind: SolrCloud
+metadata:
+  name: search
+spec:
+  ... other SolrCloud CRD settings ...
+
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: my-selfsigned-cert-tls
+----
+
+The only additional settings required here are:
+
+* Making sure that you are not using the external TLS address for Solr to communicate internally via `useExternalAddress: false`.
+This will be ignored, even if it is set to `true`.
+* Adding a TLS secret through `ingressTLSTerminationSecret`, this is passed to the Kubernetes Ingress to handle the TLS termination.
+_This ensures that the only way to communicate with your Solr cluster externally is through the TLS protected common-endpoint._
+
+To generate a TLS secret, follow the <<use-cert-manager-to-issue-the-certificate,instructions above>> and use the templated Hostname: `<namespace>-<name>-solrcloud.<domain>`
+
+If you configure your SolrCloud correctly, cert-manager can auto-inject the TLS secrets for you as well:
+
+[source,yaml]
+----
+kind: SolrCloud
+metadata:
+  name: search
+  namespace: explore
+spec:
+  ... other SolrCloud CRD settings ...
+  customSolrKubeOptions:
+    ingressOptions:
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        cert-manager.io/issuer: "<issuer-name>"
+        cert-manager.io/common-name: explore-search-solrcloud.apple.com
+  solrAddressability:
+    external:
+      domainName: k8s.solr.cloud
+      method: Ingress
+      hideNodes: true
+      useExternalAddress: false
+      ingressTLSTerminationSecret: myingress-cert
+----
+
+For more information on the Ingress TLS Termination options for cert-manager, https://cert-manager.io/docs/usage/ingress/[refer to the documentation].
+
+[#authentication-and-authorization]

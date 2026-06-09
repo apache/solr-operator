@@ -28,7 +28,7 @@ The Solr version can be any supported version of Solr you wish to run, but the _
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
+Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://solr.apache.org/guide/operator/0_4/upgrade-notes/upgrade-notes.html)**.
 There may be breaking changes between the version you are using and the version you want to upgrade to.
 
 ## Using the Helm Chart
@@ -56,7 +56,7 @@ helm upgrade example apache-solr/solr --version 0.4.1-prerelease --reuse-values 
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
-Be sure to select the [update strategy](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
+Be sure to select the [update strategy](https://solr.apache.org/guide/operator/0_4/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
 However, the `Managed` strategy is highly recommended.
 
 ### Uninstalling the Chart
@@ -93,7 +93,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
-| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
+| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://solr.apache.org/guide/operator/0_4/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
@@ -102,7 +102,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 
 ### Data Storage Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/0_4/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -120,7 +120,7 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 
 ### Addressability Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/addressability.html) for more information.
 
 If providing external addressability, then `method` and `domainName` must be provided.
 External addressability is disabled by default.
@@ -181,7 +181,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 
 ### TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Solr TLS is disabled by default. Provide any of the following to enable it.
 
@@ -207,7 +207,7 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 
 #### Client TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Configure Solr to use a separate TLS certificate for client auth.
 
