@@ -1,0 +1,49 @@
+= Addressability
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+
+The SolrCloud CRD provides users the ability to define how it is addressed, through the following options:
+
+Under `SolrCloud.Spec.solrAddressability`:
+
+* **`podPort`** - The port on which the pod is listening. This is also that the port that the Solr Jetty service will listen on. (Defaults to `8983`)
+* **`commonServicePort`** - The port on which the common service is exposed. (Defaults to `80`)
+* **`kubeDomain`** - Specifies an override of the default Kubernetes cluster domain name, `cluster.local`. This option should only be used if the Kubernetes cluster has been setup with a custom domain name.
+* **`external`** - Expose the cloud externally, outside of the kubernetes cluster in which it is running.
+** **`method`** - (Required) The method by which your cloud will be exposed externally.
+Currently available options are https://kubernetes.io/docs/concepts/services-networking/ingress/[`Ingress`] and https://github.com/kubernetes-sigs/external-dns[`ExternalDNS`].
+The goal is to support more methods in the future, such as LoadBalanced Services.
+** **`domainName`** - (Required) The primary domain name to open your cloud endpoints on. If `useExternalAddress` is set to `true`, then this is the domain that will be used in Solr Node names.
+** **`additionalDomainNames`** - You can choose to listen on additional domains for each endpoint, however Solr will not register itself under these names.
+** **`useExternalAddress`** - Use the external address to advertise the SolrNode. If a domain name is required for the chosen external `method`, then the one provided in `domainName` will be used.
+This can not be set to `true` when **`hideNodes`** is set to `true` or **`ingressTLSTermination`** is used.
+** **`hideCommon`** - Do not externally expose the common service (one endpoint for all solr nodes).
+** **`hideNodes`** - Do not externally expose each node. (This cannot be set to `true` if the cloud is running across multiple kubernetes clusters)
+** **`nodePortOverride`** - Make the Node Service(s) override the podPort. This is only available for the `Ingress` external method. If `hideNodes` is set to `true`, then this option is ignored. If provided, this port will be used to advertise the Solr Node.
+If `method: Ingress` and `hideNodes: false`, then this value defaults to `80` since that is the default port that ingress controllers listen on.
+** **`ingressTLSTermination`** - Terminate TLS for the SolrCloud at the `Ingress`, if using the `Ingress` **method**. This will leave the inter-node communication within the cluster to use HTTP.
+This option may not be used with **`useExternalAddress`**. Only one sub-option can be provided.
+*** **`useDefaultTLSSecret`** - Use the default TLS Secret set by your Ingress controller, if your Ingress controller supports this feature. Cannot be used when `tlsSecret` is used.
+For example, using nginx: https://kubernetes.github.io/ingress-nginx/user-guide/tls/#default-ssl-certificate
+*** **`tlsSecret`** - Name a of Kubernetes TLS Secret to terminate TLS when using the `Ingress` method. Cannot be used when `useDefaultTlsSecret` is used.
+
+NOTE: Unless both `external.method=Ingress` and `external.hideNodes=false`, a headless service will be used to make each Solr Node in the statefulSet addressable.
+If both of those criteria are met, then an individual ClusterIP Service will be created for each Solr Node/Pod.
+
+If you are using an `Ingress` for external addressability, you can customize the created `Ingress` through `SolrCloud.spec.customSolrKubeOptions.ingressOptions`.
+Under this property, you can set custom `annotations`, `labels` and an `ingressClassName`.
