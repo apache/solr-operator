@@ -98,9 +98,4 @@ fi
 } > helm/solr/README.md.tmp && mv helm/solr/README.md.tmp helm/solr/README.md
 
 
-# Regenerate the operator Antora component descriptor (docs/antora.yml) from
-# version/version.go. Docs pages reference the version via the {operator-version}
-# attribute defined there, so no per-page version edits are needed.
-./hack/docs/generate_antora_yaml.sh
-
 make manifests

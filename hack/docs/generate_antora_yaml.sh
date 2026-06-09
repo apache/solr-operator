@@ -14,29 +14,43 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Generates docs/antora.yml from docs/antora.template.yml, deriving the Antora
-# component version from version/version.go. This keeps the Antora version in
-# lock-step with the operator version without requiring Gradle (unlike Solr).
+# Generates an Antora component descriptor (antora.yml) for the operator docs
+# from docs/antora.template.yml, deriving the version from version/version.go.
 #
-#   v0.10.0 (suffix "")           -> version '0_10', display_version '0.10'
-#   v0.10.0 (suffix "prerelease") -> version '0_10', display_version '0.10-prerelease', prerelease: -prerelease
+# By default it writes the COMMITTED docs/antora.yml -- the descriptor the
+# published Reference Guide uses for this branch. The release wizard regenerates
+# it (via `make generate-antora-yaml`) at the steps where the published version
+# changes; it is deliberately NOT regenerated on the post-release patch bump, so
+# a release branch stays pinned to its last released version. Local preview
+# builds (`make docs`) pass -o to write a throwaway descriptor into the
+# build/staging directory, so the committed file is never modified during a
+# normal build.
+#
+# Usage: generate_antora_yaml.sh [-o OUTPUT]
+#   -o OUTPUT   output file (default: docs/antora.yml)
+#
+#   version.go v0.9.1                -> version '0_9',  display_version 'v0.9'
+#   version.go v0.10.0 (prerelease)  -> version '0_10', display_version 'v0.10-prerelease', prerelease: -prerelease
 
 set -eu
 set -o pipefail
 
-# Resolve the project root (this script lives in hack/docs/).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-
-VERSION_GO="${PROJECT_DIR}/version/version.go"
 TEMPLATE="${PROJECT_DIR}/docs/antora.template.yml"
 OUTPUT="${PROJECT_DIR}/docs/antora.yml"
 
-# Parse Version (e.g. v0.10.0) and VersionSuffix (e.g. prerelease) from version.go.
+while getopts ":o:" opt; do
+  case "${opt}" in
+    o) OUTPUT="${OPTARG}" ;;
+    *) echo "Usage: $0 [-o OUTPUT]" >&2; exit 2 ;;
+  esac
+done
+
+VERSION_GO="${PROJECT_DIR}/version/version.go"
 RAW_VERSION="$(grep -E 'Version([[:space:]]+)=' "${VERSION_GO}" | head -1 | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/')"
 SUFFIX="$(grep -E 'VersionSuffix([[:space:]]+)=' "${VERSION_GO}" | sed -E 's/.*["'"'"']([^"'"'"']*)["'"'"'].*/\1/')"
 
-# Strip leading 'v' and split into semver parts.
 SEMVER="${RAW_VERSION#v}"
 IFS='.' read -r MAJOR MINOR PATCH <<< "${SEMVER}"
 
@@ -51,6 +65,7 @@ else
   PRERELEASE_LINE=""
 fi
 
+mkdir -p "$(dirname "${OUTPUT}")"
 # Substitute tokens. Use '|' as the sed delimiter; values contain no '|'.
 sed \
   -e "s|@ANTORA_VERSION@|${ANTORA_VERSION}|g" \
