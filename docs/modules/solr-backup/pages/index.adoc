@@ -1,0 +1,221 @@
+= Managing Backups
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+The Solr Operator supports triggering the backup of arbitrary Solr collections.
+
+Triggering these backups involves setting configuration options on both the SolrCloud and SolrBackup CRDs.
+The SolrCloud instance is responsible for defining one or more backup "repositories" (metadata describing where and how the backup data should be stored).
+SolrBackup instances then trigger backups by referencing these repositories by name, listing the Solr collections to back up, and optionally scheduling recurring backups.
+
+For detailed information on how to best configure backups for your use case, please refer to the detailed schema information provided by `kubectl explain solrcloud.spec.backupRepositories` and its child elements, as well as `kubectl explain solrbackup`.
+
+This page outlines how to create and delete a Kubernetes SolrBackup.
+
+* <<creating-an-example-solrbackup,Creation>>
+* <<recurring-backups,Recurring/Scheduled Backups>>
+* <<deleting-an-example-solrbackup,Deletion>>
+* xref:solr-backup:backup-repositories.adoc[Repository Types]
+** xref:solr-backup:backup-repositories.adoc#gcs-backup-repositories[GCS]
+** xref:solr-backup:backup-repositories.adoc#s3-backup-repositories[S3]
+** xref:solr-backup:backup-repositories.adoc#volume-backup-repositories[Volume]
+
+== Creating an example SolrBackup
+
+A prerequisite for taking a backup is having something to take a backup _of_.
+SolrCloud creation generally is covered in more detail xref:solr-cloud:index.adoc[here], so if you don't have one already, create a SolrCloud instance as per those instructions.
+
+Now that you have a Solr cluster to backup data from, you need a place to store the backup data.
+In this example, we'll create a Kubernetes persistent volume to mount on each Solr node.
+
+A volume for this purpose can be created as below:
+
+[source,yaml]
+----
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: collection-backup-pvc
+spec:
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: hostpath
+  volumeMode: Filesystem
+----
+
+Note that this PVC specifies `ReadWriteMany` access, which is required for Solr clusters with more than one node.
+Note also that it uses a `storageClassName` of `hostpath`.
+Not all Kubernetes clusters support this `storageClassName` value - you may need to choose a different `ReadWriteMany`-compatible storage class based on your Kubernetes version and cluster setup.
+
+Next, modify your existing SolrCloud instance by adding a backup repository definition that uses the recently created volume.
+To do this, run `kubectl edit solrcloud example`, adding the following YAML nested under the `spec` property:
+
+[source,yaml]
+----
+spec:
+  backupRepositories:
+    - name: "local-collection-backups-1"
+      volume:
+        source:
+          persistentVolumeClaim:
+            claimName: "collection-backup-pvc"
+----
+
+This defines a backup repository called "local-collection-backups-1" which is setup to store backup data on the volume we've just created.
+The operator will notice this change and create new Solr pods that have the 'collection-backup-pvc' volume mounted.
+
+Now that there's a backup repository available to use, a backup can be triggered anytime by creating a new SolrBackup instance.
+
+[source,yaml]
+----
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+----
+
+This will create a backup of both the 'techproducts' and 'books' collections, storing the data on the 'collection-backup-pvc' volume.
+If you don't specify the collections field, every available SolrCloud collection will be backed up.
+The status of our triggered backup can be checked with the command below.
+
+[source,bash]
+----
+$ kubectl get solrbackups
+NAME   CLOUD     STARTED   FINISHED   SUCCESSFUL   NEXTBACKUP  AGE
+test   example   123m      true       false                     161m
+----
+
+== Recurring Backups
+
+The Solr Operator enables taking recurring updates, at a set interval.
+Note that this feature requires a SolrCloud running Solr >= `8.9.0`, because it relies on `Incremental` backups.
+
+By default the Solr Operator will save a maximum of *5* backups at a time, however users can override this using `SolrBackup.spec.recurrence.maxSaved`.
+When using `recurrence`, users must provide a Cron-style `schedule` for the interval at which backups should be taken.
+Please refer to the https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format[GoLang cron-spec] for more information on allowed syntax.
+
+[source,yaml]
+----
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+  recurrence: # Store one backup daily, and keep a week at a time.
+    schedule: "@daily"
+    maxSaved: 7
+----
+
+If using `kubectl`, the standard `get` command will return the time the backup was last started and when the next backup will occur.
+
+[source,bash]
+----
+$ kubectl get solrbackups
+NAME   CLOUD     STARTED   FINISHED   SUCCESSFUL   NEXTBACKUP             AGE
+test   example   123m      true       true         2021-11-09T00:00:00Z   161m
+----
+
+Much like when not taking a recurring backup, `SolrBackup.status` will contain the information from the latest, or currently running, backup.
+The results of previous backup attempts are stored under `SolrBackup.status.history` (sorted from most recent to oldest).
+
+You are able to *add or remove* `recurrence` to/from an existing `SolrBackup` object, no matter what stage that `SolrBackup` object is in.
+If you add recurrence, then a new backup will be scheduled based on the `startTimestamp` of the last backup.
+If you remove recurrence, then the `nextBackupTime` will be removed.
+However, if the recurrent backup is already underway, it will not be stopped.
+
+=== Backup Scheduling
+
+Backups are scheduled based on the `startTimestamp` of the last backup.
+Therefore, if an interval schedule such as `@every 1h` is used, and a backup starts on `2021-11-09T03:10:00Z` and ends on `2021-11-09T05:30:00Z`, then the next backup will be started at `2021-11-09T04:10:00Z`.
+If the interval is shorter than the time it takes to complete a backup, then the next backup will started directly after the previous backup completes (even though it is delayed from its given schedule).
+And the next backup will be scheduled based on the `startTimestamp` of the delayed backup.
+So there is a possibility of skew overtime if backups take longer than the allotted schedule.
+
+If a guaranteed schedule is important, it is recommended to use intervals that are guaranteed to be longer than the time it takes to complete a backup.
+
+=== Temporarily Disabling Recurring Backups
+
+It is also easy to temporarily disable backups for a time.
+Merely add `disabled: true` under the `recurrence` section of the `SolrBackup` resource.
+And set `disabled: false`, or just remove the property to re-enable backups.
+
+Since backups are scheduled based on the `startTimestamp` of the last backup, a new backup may start immediately after you re-enable the recurrence.
+
+[source,yaml]
+----
+apiVersion: solr.apache.org/v1beta1
+kind: SolrBackup
+metadata:
+  name: local-backup
+  namespace: default
+spec:
+  repositoryName: "local-collection-backups-1"
+  solrCloud: example
+  collections:
+    - techproducts
+    - books
+  recurrence: # Store one backup daily, and keep a week at a time.
+    schedule: "@daily"
+    maxSaved: 7
+    disabled: true
+----
+
+NOTE: This will not stop any backups running at the time that `disabled: true` is set, it will only affect scheduling future backups.
+
+== Deleting an example SolrBackup
+
+Once the operator completes a backup, the SolrBackup instance can be safely deleted.
+
+[source,bash]
+----
+$ kubectl delete solrbackup local-backup
+----
+
+Note that deleting SolrBackup instances doesn't delete the backed up data, which the operator views as already persisted and outside its control.
+In our example this data can still be found on the volume we created earlier
+
+[source,bash]
+----
+$ kubectl exec example-solrcloud-0 -- ls -lh /var/solr/data/backup-restore/local-collection-backups-1/backups/
+total 8K
+drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-books
+drwxr-xr-x 3 solr solr 4.0K Sep 16 11:48 local-backup-techproducts
+----
+
+Volume backup data, as in our example, can always be deleted using standard shell commands if desired:
+
+[source,bash]
+----
+kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore/local-collection-backups-1/backups/local-backup-books
+kubectl exec example-solrcloud-0 -- rm -r /var/solr/data/backup-restore/local-collection-backups-1/backups/local-backup-techproducts
+----

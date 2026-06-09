@@ -1,0 +1,126 @@
+= Zookeeper Reference
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+
+Solr Clouds require an Apache Zookeeper to connect to.
+
+The Solr operator gives a few options.
+
+* Connecting to an already running zookeeper ensemble via <<zk-connection-info,connection strings>>
+* <<provided-instance,Spinning up a provided>> Zookeeper Ensemble in the same namespace via the https://github.com/pravega/zookeeper-operator[Zookeeper Operator]
+
+These options are configured under `spec.zookeeperRef`
+
+[#chroot]
+== Chroot
+
+Both options below come with options to specify a `chroot`, or a ZNode path for solr to use as it's base "directory" in Zookeeper.
+Before the operator creates or updates a StatefulSet with a given `chroot`, it will first ensure that the given ZNode path exists and if it doesn't the operator will create all necessary ZNodes in the path.
+If no chroot is given, a default of `/` will be used, which doesn't require the existence check previously mentioned.
+If a chroot is provided without a prefix of `/`, the operator will add the prefix, as it is required by Zookeeper.
+
+[#zk-connection-info]
+== ZK Connection Info
+
+This is an external/internal connection string as well as an optional chRoot to an already running Zookeeeper ensemble.
+If you provide an external connection string, you do not _have_ to provide an internal one as well.
+
+Under `spec.zookeeperRef`:
+
+* **`connectionInfo`**
+** **`externalConnectionString`** - The ZK connection string to the external Zookeeper cluster, e.g. `zoo1:2181`
+** **`chroot`** - The chroot to use for the cluster
+
+External ZooKeeper clusters are often configured to use ZooKeeper features (e.g. securePort) which require corresponding configuration on the client side.
+To support these use-cases, users may provide arbitrary system properties under `spec.solrZkOpts` which will be passed down to all ZooKeeper clients (Solr, zkcli.sh, etc.) managed by the operator.
+
+[#acls]
+=== ACLs
+
+The Solr Operator allows for users to specify ZK ACL references in their Solr Cloud CRDs.
+The user must specify the name of a secret that resides in the same namespace as the cloud, that contains an ACL username value and an ACL password value.
+This ACL must have admin permissions for the <<chroot,chroot>> given.
+
+The ACL information can be provided through an ADMIN acl and a READ ONLY acl.
+
+* Admin: `SolrCloud.spec.zookeeperRef.connectionInfo.acl`
+* Read Only: `SolrCloud.spec.zookeeperRef.connectionInfo.readOnlyAcl`
+
+All ACL fields are **required** if an ACL is used.
+
+* **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the admin ACL username and password.
+* **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
+* **`passwordKey`** - The name of the key in the provided secret that stores the admin ACL password.
+
+[#provided-instance]
+== Provided Instance
+
+If you do not require the Solr cloud to run cross-kube cluster, and do not want to manage your own Zookeeper ensemble,
+the solr-operator can manage Zookeeper ensemble(s) for you.
+
+Using the https://github.com/pravega/zookeeper-operator[zookeeper-operator], a new Zookeeper ensemble can be spun up for
+each solrCloud that has this option specified.
+
+The startup parameter `zookeeper-operator` must be provided on startup of the solr-operator for this parameter to be available.
+
+To find all Provided zookeeper options, run `kubectl explain solrcloud.spec.zookeeperRef.provided`.
+Zookeeper Conf and PodOptions provided in the linked Zookeeper Operator version should be supported in the SolrCloud CRD.
+However, this is a manual task, so not all options might be available.
+If there is an option available in the ZookeeperCluster CRD that is not exposed via the SolrCloud CRD, please create a Github Issue.
+
+[#zookeeper-storage-options]
+=== Zookeeper Storage Options
+
+The Zookeeper Operator allows for both ephemeral and persistent storage, and the Solr Operator supports both as of `v0.4.0`.
+
+[source,yaml]
+----
+spec:
+  zookeeperRef:
+    provided:
+      ephemeral:
+        emptydirvolumesource: {}
+      persistence:
+        reclaimPolicy: "Retain" # Either Retain or Delete
+        spec: {} # PVC Spec for the Zookeeper volumes
+----
+
+By default, if you do not provide either `ephemeral` or `persistence`, the Solr Operator will default to the type of storage you are using for your Solr pods.
+
+However, if you provide either object above, even if the object is empty, that storage type will be used for the created Zookeeper pods.
+If both `ephemeral` and `persistence` is provided, then `persistence` is preferred.
+
+[#acls-for-provided-ensembles]
+=== ACLs for Provided Ensembles
+
+If you want Solr to set ZK ACLs for znodes it creates in the `provided` ensemble, you can supply ACL credentials for an ADMIN and optionally a READ ONLY user using the following config settings:
+
+* Admin: `SolrCloud.spec.zookeeperRef.provided.acl`
+* Read Only: `SolrCloud.spec.zookeeperRef.provided.readOnlyAcl`
+
+All ACL fields are **required** if an ACL is used.
+
+* **`secret`** - The name of the secret, in the same namespace as the SolrCloud, that contains the ACL username and password.
+* **`usernameKey`** - The name of the key in the provided secret that stores the admin ACL username.
+* **`passwordKey`** - The name of the key in the provided secret that stores the admin ACL password.
+
+WARNING: There is a known issue with the Zookeeper operator where it deploys pods with `skipACL=yes`, see: https://github.com/pravega/zookeeper-operator/issues/316.
+This means that even if Solr sets the ACLs on znodes, they will not be enforced by Zookeeper. If your organization requires Solr to use ZK ACLs, then you'll need to
+deploy Zookeeper to Kubernetes using another approach, such as using a Helm chart.
+
+[#scaling]
