@@ -90,12 +90,12 @@ $ helm repo update
 Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the https://hub.helm.sh/charts/solr-operator/solr-operator[Helm Chart documentation].
 This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
 
-[source,bash]
+[source,bash,subs="verbatim,attributes"]
 ----
 # Install the Solr & Zookeeper CRDs
-$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+$ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
+$ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -125,10 +125,10 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
-[source,bash]
+[source,bash,subs="verbatim,attributes"]
 ----
 # Create a 3-node cluster v9.10.0 with 300m Heap each:
-helm install example-solr apache-solr/solr --version 0.10.0-prerelease \
+helm install example-solr apache-solr/solr --version {operator-version} \
   --set image.tag=9.10.0 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
@@ -218,13 +218,13 @@ By default, the helm chart does not set the `replicas` field, so it is safe to u
 
 So we wish to upgrade to a newer Solr version:
 
-[source,bash]
+[source,bash,subs="verbatim,attributes"]
 ----
 # Take note of the current version
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
-helm upgrade example-solr apache-solr/solr --version 0.10.0-prerelease \
+helm upgrade example-solr apache-solr/solr --version {operator-version} \
   --reuse-values \
   --set image.tag=9.10.0
 

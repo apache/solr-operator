@@ -123,11 +123,11 @@ It is *strongly recommended* to use `kubectl create` or `kubectl replace`, inste
 When upgrading the Solr Operator, you may need to upgrade the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] at the same time.
 If you are using the Solr Helm chart to deploy the Zookeeper operator, then you won't need to do anything besides installing the CRD's with dependencies, and upgrade the Solr Operator helm deployment.
 
-[source,bash]
+[source,bash,subs="verbatim,attributes"]
 ----
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
-kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
+kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml"
+helm upgrade solr-operator apache-solr/solr-operator --version {operator-version}
 ----
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._

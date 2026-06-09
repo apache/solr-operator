@@ -98,24 +98,9 @@ fi
 } > helm/solr/README.md.tmp && mv helm/solr/README.md.tmp helm/solr/README.md
 
 
-# Update Docs (Remove this when docs are generated with versioning info)
-{
-  cat docs/modules/getting-started/pages/local-tutorial.adoc | \
-  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
-  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/modules/getting-started/pages/local-tutorial.adoc.tmp && mv docs/modules/getting-started/pages/local-tutorial.adoc.tmp docs/modules/getting-started/pages/local-tutorial.adoc
-{
-  cat docs/modules/upgrade-notes/pages/upgrade-notes.adoc | \
-  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
-  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/modules/upgrade-notes/pages/upgrade-notes.adoc.tmp && mv docs/modules/upgrade-notes/pages/upgrade-notes.adoc.tmp docs/modules/upgrade-notes/pages/upgrade-notes.adoc
-{
-  cat docs/modules/getting-started/pages/running-the-operator.adoc | \
-  sed -E "s|(kubectl.+/crds/)[^/<]+|\1${VERSION}|g" | \
-  sed -E "s|(helm.+--version )[^ <]+|\1${VERSION#v}|g"
-} > docs/modules/getting-started/pages/running-the-operator.adoc.tmp && mv docs/modules/getting-started/pages/running-the-operator.adoc.tmp docs/modules/getting-started/pages/running-the-operator.adoc
-
-# Regenerate the operator Antora component descriptor (docs/antora.yml) from version/version.go
+# Regenerate the operator Antora component descriptor (docs/antora.yml) from
+# version/version.go. Docs pages reference the version via the {operator-version}
+# attribute defined there, so no per-page version edits are needed.
 ./hack/docs/generate_antora_yaml.sh
 
 make manifests
