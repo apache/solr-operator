@@ -20,7 +20,7 @@
 name: operator
 title: Apache Solr Operator
 version: '0_10'
-display_version: '0.10-prerelease'
+display_version: 'v0.10-prerelease'
 prerelease: -prerelease
 start_page: ROOT:index.adoc
 nav:
