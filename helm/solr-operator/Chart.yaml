@@ -62,6 +62,12 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/338
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/343
+      description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/709
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/712
     - kind: changed
       description: A container PostStart Hook is no longer used to create the ZooKeeper ChRoot, instead the initContainer will manage this
       links:
