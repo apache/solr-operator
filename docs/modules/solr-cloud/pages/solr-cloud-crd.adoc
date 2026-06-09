@@ -1,0 +1,148 @@
+= The SolrCloud CRD
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+The SolrCloud CRD allows users to spin up a Solr cloud in a very configurable way.
+Those configuration options are laid out on this page.
+
+The following topics are covered on their own pages:
+
+* xref:addressability.adoc[Addressability]
+* xref:zookeeper.adoc[Zookeeper Reference]
+* xref:custom-solr-config.adoc[Overriding built-in Solr configuration files]
+* xref:tls.adoc[Enabling TLS between Solr pods]
+* xref:authentication-and-authorization.adoc[Authentication and Authorization]
+
+== Solr Options
+
+The SolrCloud CRD gives users the ability to customize how Solr is run.
+
+Please note that the options described below are shown using the base SolrCloud resource, not the helm chart.
+Most options will have the same name and path, however there are differences such as `customSolrKubeOptions`.
+If using Helm, refer to the https://artifacthub.io/packages/helm/apache-solr/solr#chart-values[Helm Chart documentation] to see the names for the options you are looking to use.
+This document should still be used to see how the SolrCloud options can be used.
+
+=== Solr Modules and Additional Libraries
+
+Solr comes packaged with modules that can be loaded optionally, known as either Solr Modules or Solr Contrib Modules.
+By default they are not included in the classpath of Solr, so they have to be explicitly enabled.
+Use the **`SolrCloud.spec.solrModules`** property to add a list of module names, not paths, and they will automatically be enabled for the solrCloud.
+
+However, users might want to include custom code that is not an official Solr Module.
+In order to facilitate this, the **`SolrCloud.spec.additionalLibs`** property takes a list of paths to folders, containing jars to load in the classpath of the SolrCloud.
+
+== Data Storage
+
+The SolrCloud CRD gives the option for users to use either
+persistent storage, through https://kubernetes.io/docs/concepts/storage/persistent-volumes/[PVCs],
+or ephemeral storage, through https://kubernetes.io/docs/concepts/storage/volumes/#emptydir[emptyDir volumes],
+to store Solr data.
+Ephemeral and persistent storage cannot be used together, if both are provided, the `persistent` options take precedence.
+If neither is provided, ephemeral storage will be used by default.
+
+These options can be found in `SolrCloud.spec.dataStorage`
+
+* **`persistent`**
+** **`reclaimPolicy`** -
+Either `Retain`, the default, or `Delete`.
+This describes the lifecycle of PVCs that are deleted after the SolrCloud is deleted, or the SolrCloud is scaled down and the pods that the PVCs map to no longer exist.
+`Retain` is used by default, as that is the default Kubernetes policy, to leave PVCs in case pods, or StatefulSets are deleted accidentally.
++
+NOTE: If reclaimPolicy is set to `Delete`, PVCs will not be deleted if pods are merely deleted. They will only be deleted once the `SolrCloud.spec.replicas` is scaled down or deleted.
+** **`pvcTemplate`** - The template of the PVC to use for the solr data PVCs. By default the name will be "data".
+Only the `pvcTemplate.spec` field is required, metadata is optional.
++
+NOTE: This template cannot be changed unless the SolrCloud is deleted and recreated.
+This is a https://github.com/kubernetes/enhancements/issues/661[limitation of StatefulSets and PVCs in Kubernetes].
+* **`ephemeral`**
++
+There are two types of ephemeral volumes that can be specified.
+Both are optional, and if none are specified then an empty `emptyDir` volume source is used.
+If both are specified then the `hostPath` volume source will take precedence.
+** **`emptyDir`** - An https://kubernetes.io/docs/concepts/storage/volumes/#emptydir[`emptyDir` volume source] that describes the desired emptyDir volume to use in each SolrCloud pod to store data.
+** **`hostPath`** - A https://kubernetes.io/docs/concepts/storage/volumes/#hostpath[`hostPath` volume source] that describes the desired hostPath volume to use in each SolrCloud pod to store data.
+
+== Update Strategy
+
+The SolrCloud CRD provides users the ability to define how Pod updates should be managed, through `SolrCloud.Spec.updateStrategy`.
+This provides the following options:
+
+Under `SolrCloud.Spec.updateStrategy`:
+
+* **`method`** - The method in which Solr pods should be updated. Enum options are as follows:
+** `Managed` - (Default) The Solr Operator will take control over deleting pods for updates. This process is xref:solr-cloud:managed-updates.adoc[documented here].
+** `StatefulSet` - Use the default StatefulSet rolling update logic, one pod at a time waiting for all pods to be "ready".
+** `Manual` - Neither the StatefulSet or the Solr Operator will delete pods in need of an update. The user will take responsibility over this.
+* **`managed`** - Options for rolling updates managed by the Solr Operator.
+** **`maxPodsUnavailable`** - (Defaults to `"25%"`) The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart.
+More pods may become unavailable during the restart, however the Solr Operator will not kill pods if the limit has already been reached.
+** **`maxShardReplicasUnavailable`** - (Defaults to `1`) The number of replicas for each shard allowed to be unavailable during the restart.
+* **`restartSchedule`** - A https://en.wikipedia.org/wiki/Cron[CRON] schedule for automatically restarting the Solr Cloud.
+https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format[Multiple CRON syntaxes] are supported, such as intervals (e.g. `@every 10h`) or predefined schedules (e.g. `@yearly`, `@weekly`, etc.).
+
+NOTE: Both `maxPodsUnavailable` and `maxShardReplicasUnavailable` are intOrString fields. So either an int or string can be provided for the field.
+
+* **int** - The parameter is treated as an absolute value, unless the value is <= 0 which is interpreted as unlimited.
+* **string** - Only percentage string values (`"0%"` - `"100%"`) are accepted, all other values will be ignored.
+** **`maxPodsUnavailable`** - The `maximumPodsUnavailable` is calculated as the percentage of the total pods configured for that Solr Cloud.
+** **`maxShardReplicasUnavailable`** - The `maxShardReplicasUnavailable` is calculated independently for each shard, as the percentage of the number of replicas for that shard.
+
+=== Pod Disruption Budgets
+
+The Solr Operator can optionally create a https://kubernetes.io/docs/concepts/workloads/pods/disruptions/#pod-disruption-budgets[`PodDisruptionBudget`] to ensure that Kubernetes does not take down more than an acceptable amount of SolrCloud nodes at a time.
+This behavior is controlled by the `.spec.availability.podDisruptionBudget.enabled` setting, which defaults to "true" but can be disabled if desired as in the snippet below:
+
+[source,yaml]
+----
+spec:
+  availability:
+    podDisruptionBudget:
+      enabled: false
+----
+
+When not disabled, the PDB's `maxUnavailable` setting is populated from the `maxPodsUnavailable` setting in `SolrCloud.Spec.updateStrategy.managed`.
+If this option is not set, it will use the default value (`25%`).
+
+Currently, the implementation does not take shard/replica topology into account, like the update strategy does.
+So although Kubernetes might just take down 25% of a Cloud's nodes, that might represent all nodes that host a shard's replicas.
+This is ongoing work, and hopefully something the Solr Operator can protect against in the future.
+See https://github.com/apache/solr-operator/issues/471[this discussion] for more information.
+
+== Backups
+
+Solr Backups are enabled via the Solr Operator.
+Please refer to the xref:solr-backup:index.adoc[SolrBackup documentation] for more information on setting up a SolrCloud with backups enabled.
+
+== Various Runtime Parameters
+
+There are various runtime parameters that allow you to customize the running of your Solr Cloud via the Solr Operator.
+
+=== Time to wait for Solr to be killed gracefully
+
+The Solr Operator manages the Solr StatefulSet in a way that when a Solr pod needs to be stopped, or deleted, Kubernetes and Solr are on the same page for how long to wait for the process to die gracefully.
+
+The default time given is 60 seconds, before Solr or Kubernetes tries to forcefully stop the Solr process.
+You can override this default with the field:
+
+[source,yaml]
+----
+spec:
+  ...
+  customSolrKubeOptions:
+    podOptions:
+      terminationGracePeriodSeconds: 120
+----

@@ -226,8 +226,16 @@ smoke-test: build-release-artifacts ## Run a full smoke test on a set of local r
 .PHONY: check
 check: lint test ## Do all checks, lints and tests for the Solr Operator
 
+# Antora's content aggregation is git-based, so the docs build only works in a
+# git checkout. Include it in `lint` only when .git is present; this skips it
+# for an unpacked release source tarball (e.g. `make check` during smoke tests).
+DOCS_LINT :=
+ifneq ($(wildcard $(PROJECT_DIR)/.git),)
+DOCS_LINT := check-docs
+endif
+
 .PHONY: lint
-lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm ## Lint the codebase to check for formatting and correctness
+lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm $(DOCS_LINT) ## Lint the codebase to check for formatting and correctness
 
 .PHONY: check-format
 check-format: ## Check the codebase to make sure it adheres to golang standards
@@ -327,6 +335,45 @@ helm-dependency-build: ## Build the dependencies for all Helm charts. This will 
 helm-deploy-operator: helm-dependency-build docker-build ## Deploy the current version of the Solr Operator via its helm chart
 	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(IMG) --set image.pullPolicy=Never
 
+
+##@ Documentation
+
+# Antora image used to build the docs site locally. Pinned to the Antora
+# version used by the Apache Solr Reference Guide build (apache/solr). This is
+# for local previewing only; the official site is published as an additional
+# component of the Reference Guide from the apache/solr repo.
+ANTORA_IMAGE ?= antora/antora:3.1.12
+DOCS_STAGING = docs/build/staging
+
+.PHONY: generate-antora-yaml
+# Writes the COMMITTED docs/antora.yml. This descriptor drives the published
+# site for this branch, so it is only run at release time (by the release
+# wizard) to reflect the released version -- NOT on every local build.
+generate-antora-yaml: ## Regenerate the committed docs/antora.yml (release use)
+	./hack/docs/generate_antora_yaml.sh
+
+.PHONY: docs-staging
+# Stages a build dir with the modules and a throwaway antora.yml generated from
+# version/version.go, so local previews show the in-development version without
+# modifying the committed docs/antora.yml.
+docs-staging:
+	rm -rf $(DOCS_STAGING)
+	mkdir -p $(DOCS_STAGING)
+	cp -r docs/modules $(DOCS_STAGING)/modules
+	./hack/docs/generate_antora_yaml.sh -o $(DOCS_STAGING)/antora.yml
+
+.PHONY: docs
+docs: docs-staging ## Build the operator Antora docs site locally for previewing (requires Docker)
+	docker run --rm -v "$(PROJECT_DIR):/antora" -w /antora/docs $(ANTORA_IMAGE) --fetch --to-dir build/site local-playbook.yml
+	@echo "Docs built. Open docs/build/site/index.html in a browser to preview."
+
+.PHONY: docs-clean
+docs-clean: ## Remove the locally-generated documentation site
+	rm -rf docs/build
+
+.PHONY: check-docs
+check-docs: docs-staging ## Validate the operator docs build with no broken references (requires Docker)
+	docker run --rm -v "$(PROJECT_DIR):/antora" -w /antora/docs $(ANTORA_IMAGE) --fetch --log-failure-level=warn --to-dir build/site local-playbook.yml
 
 ##@ Dependencies
 LOCALBIN ?= $(PROJECT_DIR)/bin

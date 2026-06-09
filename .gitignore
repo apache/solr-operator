@@ -53,3 +53,6 @@ generated-check
 # Python for the release wizard
 venv
 __pycache__
+
+# Locally-built Antora documentation site
+docs/build
