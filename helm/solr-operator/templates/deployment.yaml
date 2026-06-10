@@ -38,6 +38,16 @@ spec:
         {{ toYaml .Values.labels | nindent 8 }}
         {{- end }}
     spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        {{- if kindIs "string" . }}
+        - name: {{ . }}
+        {{- else }}
+        - {{ toYaml . | nindent 10 }}
+        {{- end }}
+        {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}

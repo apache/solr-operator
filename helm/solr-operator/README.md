@@ -171,6 +171,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| global.imagePullSecrets | []object/string | `[]` | Secrets for pulling images from private registries. Accepts both Kubernetes-native format (`[{name: "secret"}]`) and plain strings (`["secret"]`). |
 | image.repository | string | `"apache/solr-operator"` | The repository of the Solr Operator image |
 | image.tag | string | `"v0.10.0-prerelease"` | The tag/version of the Solr Operator to run |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
