@@ -386,6 +386,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Value: solrHostName,
 		},
 		{
+			Name:  "SOLR_HOST_ADVERTISE",
+			Value: solrHostName,
+		},
+		{
 			Name:  "SOLR_LOG_LEVEL",
 			Value: solrCloud.Spec.SolrLogLevel,
 		},
@@ -833,25 +837,28 @@ func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort 
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   %s
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+  <str name="sharedLib">${solr.sharedLib:}</str>
+  <str name="modules">${solr.modules:}</str>
+  <str name="allowPaths">${solr.security.allow.paths:}</str>
+  <str name="allowUrls">${solr.security.allow.urls:}</str>
+  <str name="hideStackTrace">${solr.hideStackTrace:false}</str>
   <solrcloud>
-    <str name="host">${host:}</str>
-    <int name="hostPort">${solr.port.advertise:80}</int>
-    <str name="hostContext">${hostContext:solr}</str>
-    <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
+    <str name="host">${solr.host.advertise:}</str>
+    <int name="hostPort">${solr.port.advertise:0}</int>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
     <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
     <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
     <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
     <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
+    <str name="zkCredentialsInjector">${zkCredentialsInjector:org.apache.solr.common.cloud.DefaultZkCredentialsInjector}</str>
+    <int name="minStateByteLenForCompression">${minStateByteLenForCompression:-1}</int>
+    <str name="stateCompressor">${stateCompressor:org.apache.solr.common.util.ZLibCompressor}</str>
   </solrcloud>
-  <shardHandlerFactory name="shardHandlerFactory"
-    class="HttpShardHandlerFactory">
+  <shardHandlerFactory name="shardHandlerFactory" class="HttpShardHandlerFactory">
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
-  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
-  <str name="allowPaths">${solr.allowPaths:}</str>
-  <metrics enabled="${metricsEnabled:true}"/>
   %s
 </solr>
 `
