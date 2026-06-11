@@ -108,19 +108,19 @@ var _ = BeforeSuite(func(ctx context.Context) {
 	Expect((&SolrCloudReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor("solrcloud-controller"),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&SolrPrometheusExporterReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor("solrprometheusexporter-controller"),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&SolrBackupReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
-		Recorder: k8sManager.GetEventRecorderFor("solrbackup-controller"),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	go func() {

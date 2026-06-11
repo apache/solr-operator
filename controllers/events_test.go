@@ -42,7 +42,7 @@ import (
 // so that the "could not patch readiness condition" event path is exercised.
 var errForcedPatchFailure = errors.New("forced patch failure")
 
-// requireEvent asserts that exactly one event was recorded whose type and reason match.
+// requireEvent asserts that one event was recorded whose type and reason match.
 // record.FakeRecorder formats each event as "<eventtype> <reason> <message>".
 func requireEvent(t *testing.T, rec *record.FakeRecorder, wantType, wantReason string) {
 	t.Helper()
