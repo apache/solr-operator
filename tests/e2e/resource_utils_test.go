@@ -54,8 +54,9 @@ func resourceKey(parentResource client.Object, name string) types.NamespacedName
 }
 
 // expectEvent waits until at least one Kubernetes Event of the given type and reason has been
-// recorded against the given object. Events are matched on the involved object's name within the
-// object's namespace, which is unique enough since each event reason is specific to one resource.
+// recorded against the given object. Events are matched on the involved object's UID so that
+// events left over from previous specs (Events are not garbage-collected with the object) cannot
+// cause a false positive.
 func expectEvent(ctx context.Context, parentResource client.Object, eventType string, reason string, additionalOffset ...int) {
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
 		eventList := &corev1.EventList{}
@@ -63,7 +64,7 @@ func expectEvent(ctx context.Context, parentResource client.Object, eventType st
 		matched := false
 		for i := range eventList.Items {
 			e := &eventList.Items[i]
-			if e.InvolvedObject.Name == parentResource.GetName() && e.Type == eventType && e.Reason == reason {
+			if e.InvolvedObject.UID == parentResource.GetUID() && e.Type == eventType && e.Reason == reason {
 				matched = true
 				break
 			}
