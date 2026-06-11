@@ -69,6 +69,7 @@ func UseZkCRD(useCRD bool) {
 
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups="",resources=pods/status,verbs=get;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
@@ -172,7 +173,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if instance.Spec.SolrAddressability.External.UseExternalAddress {
 				if ip == "" {
 					// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
-					// TODO: Make an event here
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "NodeServiceAddressNotReady",
+						"Waiting for the Kubernetes-assigned address (clusterIP) of node service %q before the StatefulSet can be reconciled, since the SolrCloud advertises its external address via host aliases", nodeName)
 					blockReconciliationOfStatefulSet = true
 				} else {
 					hostNameIpMap[instance.AdvertisedNodeHost(nodeName)] = ip
@@ -230,7 +232,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			// if there's a user-provided config, it must have one of the expected keys
 			if !hasLogXml && !hasSolrXml {
-				// TODO: Create event for the CRD.
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+					"User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'", providedConfigMapName)
 				return requeueOrNot, fmt.Errorf("user provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
 					providedConfigMapName)
 			}
@@ -238,6 +241,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if hasSolrXml {
 				// make sure the user-provided solr.xml is valid
 				if !(strings.Contains(solrXml, "${solr.port.advertise:") || strings.Contains(solrXml, "${hostPort:")) {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+						"Custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise' or its deprecated alternative 'hostPort'", providedConfigMapName)
 					return requeueOrNot,
 						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise', or its deprecated alternative 'hostPort', e.g. <int name=\"hostPort\">${solr.port.advertise:80}</int>",
 							providedConfigMapName)
@@ -256,6 +261,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 
 		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+				"Provided ConfigMap %s has no data", providedConfigMapName)
 			return requeueOrNot, fmt.Errorf("provided ConfigMap %s has no data", providedConfigMapName)
 		}
 	}
@@ -349,7 +356,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if nextRestartAnnotation != "" {
 				// Set the new restart time annotation
 				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
-				// TODO: Create event for the CRD.
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "RestartScheduled",
+					"Scheduling next restart of the Solr StatefulSet for %s, as configured by the updateStrategy.restartSchedule", nextRestartAnnotation)
 			} else if existingRestartAnnotation, exists := foundStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
 				// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
 				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
@@ -508,6 +516,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			operationFound = false
 			// This shouldn't happen, but we don't want to be stuck if it does.
 			// Just remove the cluster Op, because the solr operator version running does not support it.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationUnsupported",
+				"Removing cluster operation %q because it is not supported by this version of the Solr Operator", string(clusterOp.Operation))
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
@@ -521,7 +531,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					err = setNextClusterOpLockWithPatch(ctx, r, statefulSet, nextClusterOperation, string(clusterOp.Operation)+" complete", logger)
 				}
 
-				// TODO: Create event for the CRD.
+				if err == nil {
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ClusterOperationComplete",
+						"Completed cluster operation %q on the SolrCloud", string(clusterOp.Operation))
+				}
 			} else if !requestInProgress {
 				// If the cluster operation is in a stoppable place (not currently doing an async operation), and either:
 				//   - the operation hit an error and has taken more than 1 minute
@@ -543,15 +556,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					// If the operation is being queued, first have the operation cleanup after itself
 					switch clusterOp.Operation {
 					case UpdateLock:
-						err = cleanupManagedCloudRollingUpdate(ctx, r, outOfDatePods.ScheduledForDeletion, logger)
+						err = cleanupManagedCloudRollingUpdate(ctx, r, instance, outOfDatePods.ScheduledForDeletion, logger)
 					case ScaleDownLock:
-						err = cleanupManagedCloudScaleDown(ctx, r, podList, logger)
+						err = cleanupManagedCloudScaleDown(ctx, r, instance, podList, logger)
 					}
 					if err == nil {
 						err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
 					}
 
-					// TODO: Create event for the CRD.
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationRetry",
+						"Pausing cluster operation %q because it %s; it has been queued to be retried later", string(clusterOp.Operation), queueForLaterReason)
 				}
 			}
 		}
@@ -612,6 +626,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					logger.Error(err, "Error while patching StatefulSet to start locked clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
 				} else {
 					logger.Info("Started locked clusterOp", "clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ClusterOperationStarted",
+						"Starting cluster operation %q on the SolrCloud", string(clusterOp.Operation))
 				}
 			} else {
 				// No new clusterOperation has been started, retry the next queued clusterOp, if there are any operations in the retry queue.
@@ -787,7 +803,7 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 		if !isOwnedByCurrentStatefulSet {
 			continue
 		}
-		if updatedPod, podError := r.initializePod(ctx, &pod, logger); podError != nil {
+		if updatedPod, podError := r.initializePod(ctx, solrCloud, &pod, logger); podError != nil {
 			err = podError
 		} else if updatedPod != nil {
 			podList = append(podList, *updatedPod)
@@ -797,7 +813,7 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 }
 
 // InitializePod Initialize Status Conditions for a SolrCloud Pod
-func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+func (r *SolrCloudReconciler) initializePod(ctx context.Context, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	shouldPatchPod := false
 
 	updatedPod = pod.DeepCopy()
@@ -815,7 +831,8 @@ func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod
 			// set the pod back to its original state since the patch failed
 			updatedPod = pod
 
-			// TODO: Create event for the CRD.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodReadinessConditionUpdateFailed",
+				"Could not patch readiness condition(s) on pod %s to start traffic: %v", pod.Name, err)
 		}
 	}
 	return
@@ -1342,6 +1359,9 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solrv1beta1.SolrCloud
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = noOpEventRecorder{}
+	}
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrCloud{}).
 		Owns(&corev1.ConfigMap{}).
