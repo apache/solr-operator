@@ -201,22 +201,24 @@ func main() {
 	if err = (&controllers.SolrCloudReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("solrcloud-controller"),
+		Recorder: mgr.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrCloud")
 		os.Exit(1)
 	}
 	if err = (&controllers.SolrPrometheusExporterReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrPrometheusExporter")
 		os.Exit(1)
 	}
 	if err = (&controllers.SolrBackupReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Config: mgr.GetConfig(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Config:   mgr.GetConfig(),
+		Recorder: mgr.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SolrBackup")
 		os.Exit(1)
