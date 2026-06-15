@@ -62,6 +62,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/709
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/712
+    - kind: added
+      description: The Solr Operator now creates events for Solr resources, giving users much more transparency on what is happening behind the scenes.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/120
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/836
     - kind: changed
       description: A container PostStart Hook is no longer used to create the ZooKeeper ChRoot, instead the initContainer will manage this
       links:
