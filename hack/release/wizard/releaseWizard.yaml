@@ -96,7 +96,7 @@ templates:
 
     A summary of important changes is published in the documentation at:
 
-      <https://apache.github.io/solr-operator/docs/upgrade-notes.html>
+      <https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html>
 
     For the most exhaustive list, see the change log on ArtifactHub or view the git history in the solr-operator repo.
 
