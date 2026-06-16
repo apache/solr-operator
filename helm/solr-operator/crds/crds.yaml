@@ -3661,6 +3661,10 @@ spec:
                               More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                             type: object
                         type: object
+                      enableServiceLinks:
+                        description: Should service environment variables be created
+                          on containers
+                        type: boolean
                       envVars:
                         description: Additional environment variables to pass to the
                           default container.
@@ -6058,11 +6062,6 @@ spec:
                       shareProcessNamespace:
                         description: Should process namespace sharing be enabled on
                           created pods
-                        type: boolean
-                      enableServiceLinks: 
-                        description: |-
-                          Should service environment variables be created on containers. 
-                          More info: https://kubernetes.io/docs/tutorials/services/connect-applications-service/#accessing-the-service
                         type: boolean
                       sidecarContainers:
                         description: Sidecar containers to run in the pod. These are
@@ -19178,6 +19177,10 @@ spec:
                               More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                             type: object
                         type: object
+                      enableServiceLinks:
+                        description: Should service environment variables be created
+                          on containers
+                        type: boolean
                       envVars:
                         description: Additional environment variables to pass to the
                           default container.
@@ -21575,11 +21578,6 @@ spec:
                       shareProcessNamespace:
                         description: Should process namespace sharing be enabled on
                           created pods
-                        type: boolean
-                      enableServiceLinks: 
-                        description: |-
-                          Should service environment variables be created on containers. 
-                          More info: https://kubernetes.io/docs/tutorials/services/connect-applications-service/#accessing-the-service
                         type: boolean
                       sidecarContainers:
                         description: Sidecar containers to run in the pod. These are

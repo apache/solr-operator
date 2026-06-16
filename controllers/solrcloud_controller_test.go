@@ -21,6 +21,9 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"strconv"
+	"strings"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,8 +34,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	pointer "k8s.io/utils/pointer"
-	"strconv"
-	"strings"
 )
 
 func newBoolPtr(value bool) *bool {
@@ -229,7 +230,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 							},
 						},
 						ShareProcessNamespace: testShareProcessNamespace,
-						EnableServiceLinks: testEnableServiceLinks,
+						EnableServiceLinks:    &testEnableServiceLinks,
 					},
 					StatefulSetOptions: &solrv1beta1.StatefulSetOptions{
 						Annotations:         testSSAnnotations,
