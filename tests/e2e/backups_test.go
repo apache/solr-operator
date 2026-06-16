@@ -119,6 +119,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 			Expect(foundSolrBackup.Status.History).To(HaveLen(solrBackup.Spec.Recurrence.MaxSaved), "The SolrBackup does not have the correct number of saved backups in its status")
 			Expect(foundSolrBackup.Status.History[len(foundSolrBackup.Status.History)-1].Successful).To(PointTo(BeTrue()), "The latest backup was not successful")
 
+			By("checking that recurring backup events were recorded on the SolrBackup")
+			expectEvent(ctx, solrBackup, corev1.EventTypeNormal, "BackupStarted")
+			expectEvent(ctx, solrBackup, corev1.EventTypeNormal, "BackupRescheduled")
+
 			lastBackupId := 0
 			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
 				g.Expect(backupListResponse.Backups).To(HaveLen(3), "The wrong number of recurring backups have been saved")
@@ -155,6 +159,10 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 			foundSolrBackup := expectSolrBackupWithChecks(ctx, solrBackup, func(g Gomega, backup *solrv1beta1.SolrBackup) {
 				g.Expect(backup.Status.Successful).To(PointTo(BeTrue()), "Backup did not successfully complete")
 			})
+
+			By("checking that backup lifecycle events were recorded on the SolrBackup")
+			expectEvent(ctx, solrBackup, corev1.EventTypeNormal, "BackupStarted")
+			expectEvent(ctx, solrBackup, corev1.EventTypeNormal, "BackupSucceeded")
 
 			checkBackup(ctx, solrCloud, solrBackup, func(g Gomega, collection string, backupListResponse *solr_api.SolrBackupListResponse) {
 				g.Expect(backupListResponse.Backups).To(HaveLen(1), "A non-recurring backupList should have a length of 1")

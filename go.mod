@@ -1,8 +1,6 @@
 module github.com/apache/solr-operator
 
-go 1.22.0
-
-toolchain go1.22.10
+go 1.26
 
 require (
 	github.com/cert-manager/cert-manager v1.15.4
