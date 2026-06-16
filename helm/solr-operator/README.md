@@ -9,7 +9,7 @@ Documentation around using the Solr Operator can be found at it's [official site
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
+Before upgrading your Solr Operator to a newer version, **please refer to the [Upgrade Notes](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html)**.
 There may be breaking changes between the version you are running and the version you want to upgrade to.
 
 ## Using the Helm Chart
@@ -191,6 +191,10 @@ The command removes all the Kubernetes components associated with the chart and 
 | tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr Operator pod |
 | priorityClassName | string | `""` | Give a priorityClassName for the Solr Operator pod |
 | sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr Operator in its pod |
+| logger.level | string |  | Overrides the log level. Can be one of `debug`, `info`, `error`, or any integer value > 0 which corresponds to custom debug levels of increasing verbosity|
+| logger.encoder | string | | Overrides the log format. Use `console` or `json`. |
+| logger.stacktraceLevel | string | | Overrides the level for stackTrace logging. |
+| development | boolean | `false` | Enables development mode. This will change logging to `console` encoder and `debug` level |
 
 ### Configuring the Zookeeper Operator
 

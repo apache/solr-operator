@@ -37,7 +37,7 @@ const (
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
-	DefaultSolrVersion  = "8.11"
+	DefaultSolrVersion  = "9.10.0"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
 	DefaultSolrLogLevel = "INFO"
@@ -149,7 +149,8 @@ type SolrCloudSpec struct {
 	SolrModules []string `json:"solrModules,omitempty"`
 
 	// List of paths in the Solr Docker image to load in the classpath.
-	// Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.
+	// There is no need to include paths for Solr Modules already specified in the "solrModules" property, those paths will be added automatically.
+	// Note that this setting has no effect on solrcloud clusters that rely on a user-provided solr.xml file.
 	//
 	//+optional
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`

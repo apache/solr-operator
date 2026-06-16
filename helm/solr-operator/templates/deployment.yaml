@@ -48,7 +48,7 @@ spec:
       {{- end }}
       containers:
       - name: {{ .Chart.Name }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         {{- if or (index .Values "zookeeper-operator" "install") (index .Values "zookeeper-operator" "use") }}
@@ -78,6 +78,16 @@ spec:
         - "--leader-elect=true"
         {{- else }}
         - "--leader-elect=false"
+        {{- end }}
+        - --zap-devel={{ .Values.development }}
+        {{- if .Values.logger.encoder }}
+        - --zap-encoder={{ .Values.logger.encoder }}
+        {{- end }}
+        {{- if .Values.logger.level }}
+        - --zap-log-level={{ .Values.logger.level }}
+        {{- end }}
+        {{- if .Values.logger.stacktraceLevel }}
+        - --zap-stacktrace-level={{ .Values.logger.stacktraceLevel }}
         {{- end }}
 
         env:
