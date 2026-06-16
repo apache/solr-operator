@@ -100,6 +100,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/717
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/804
+    - kind: added
+      description: Ability to set the `enableServiceLinks` field on pods. 
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/790
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
