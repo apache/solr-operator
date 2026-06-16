@@ -151,7 +151,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.ShareProcessNamespace).Should(PointTo(BeFalse()))
-			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).Should(PointTo(BeTrue()))
+			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).Should(BeNil())
 			Expect(statefulSet.Spec.Template.Spec.ReadinessGates).To(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrIsNotStoppedReadinessCondition}), "All pods should contain the isNotStopped readinessGate.")
 
 			By("testing the Solr Common Service")
