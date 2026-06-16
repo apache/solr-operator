@@ -128,6 +128,7 @@ See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
+| dataStorage.persistent.pvc.volumeAttributesClassName | string | | Specifies `VolumeAttributeClass` name for dynamically configuring storage attributes. More information can be found in the [Kubernetes docs](https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/). |
 
 ### Addressability Options
 
