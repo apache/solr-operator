@@ -55,6 +55,20 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: added
+      description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/709
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/712
+    - kind: added
+      description: The Solr Operator now creates events for Solr resources, giving users much more transparency on what is happening behind the scenes.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/120
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/836
     - kind: changed
       description: A container PostStart Hook is no longer used to create the ZooKeeper ChRoot, instead the initContainer will manage this
       links:
@@ -72,8 +86,22 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/778
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/779
+    - kind: fixed
+      description: Fixed initContainer script that imports security.json
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/798
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/800
+    - kind: fixed
+      description: SOLR_TOOL_OPTS is now set, allowing 'setup-zk' initContainer to obey ZK connection settings
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/717
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/804
     - kind: added
-      description: Abillity to set the `enableServiceLinks` field on pods. 
+      description: Ability to set the `enableServiceLinks` field on pods. 
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/790
@@ -112,7 +140,7 @@ annotations:
                     storage: "20Gi"
         replicas: 3
         solrImage:
-          tag: 8.11
+          tag: 9.10.0
         solrJavaMem: "-Xms4g -Xmx4g"
         customSolrKubeOptions:
           podOptions:
@@ -153,7 +181,7 @@ annotations:
             name: "example"
         numThreads: 4
         image:
-          tag: 8.11
+          tag: 9.10.0
     - apiVersion: solr.apache.org/v1beta1
       kind: SolrBackup
       metadata:

@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
@@ -172,6 +173,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			By("checking that the collections can be queried after the restart")
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
+
+			By("checking that rolling update cluster-operation events were recorded on the SolrCloud")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationStarted")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationComplete")
 		})
 	})
 })
