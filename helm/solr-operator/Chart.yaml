@@ -105,6 +105,11 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/790
+    - kind: fixed
+      description: Correct the placement and syntax of the imagePullSecret in the Solr-Operator Helm chart
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/782
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
