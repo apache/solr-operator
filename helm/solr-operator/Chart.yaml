@@ -110,6 +110,13 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/782
+    - kind: added
+      description: Ability to set a securityContext for the default initContainers
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/797
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/796
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
