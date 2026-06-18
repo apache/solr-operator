@@ -117,6 +117,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/797
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/796
+    - kind: added
+      description: Add option for Pod SecurityContext in the Solr-Operator Helm chart
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/817
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/818
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
