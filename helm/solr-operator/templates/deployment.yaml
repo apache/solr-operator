@@ -38,13 +38,22 @@ spec:
         {{ toYaml .Values.labels | nindent 8 }}
         {{- end }}
     spec:
+      {{- if or .Values.global.imagePullSecrets .Values.image.imagePullSecret }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        {{- if kindIs "string" . }}
+        - name: {{ . }}
+        {{- else }}
+        - name: {{ required "Each entry in global.imagePullSecrets must be a string or an object with a 'name' field" .name }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.image.imagePullSecret }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
-      {{- end }}
-      {{- if .Values.image.imagePullSecret }}
-      imagePullSecrets: 
-      - name: {{ .Values.image.imagePullSecret }}
       {{- end }}
       containers:
       - name: {{ .Chart.Name }}

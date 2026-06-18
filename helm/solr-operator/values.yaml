@@ -19,6 +19,11 @@
 
 replicaCount: 1
 
+global:
+  # List the secrets needed to pull images from a private registry.
+  # Accepts both Kubernetes-native format [{name: "secret"}] and plain strings ["secret"].
+  imagePullSecrets: []
+
 # Development mode configures certain settings for convenient development.
 # When 'true', logging will use: encoder=console, level=debug, stacktrace-level=warn
 development: false
