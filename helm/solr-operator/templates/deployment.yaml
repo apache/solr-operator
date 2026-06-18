@@ -44,7 +44,7 @@ spec:
         {{- if kindIs "string" . }}
         - name: {{ . }}
         {{- else }}
-        - {{ toYaml . | nindent 10 }}
+        - name: {{ required "Each entry in global.imagePullSecrets must be a string or an object with a 'name' field" .name }}
         {{- end }}
         {{- end }}
         {{- with .Values.image.imagePullSecret }}

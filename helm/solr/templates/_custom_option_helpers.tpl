@@ -75,7 +75,7 @@ imagePullSecrets:
 {{- if kindIs "string" . }}
   - name: {{ . }}
 {{- else }}
-  - {{ toYaml . | nindent 4 }}
+  - name: {{ required "Each entry in imagePullSecrets must be a string or an object with a 'name' field" .name }}
 {{- end }}
 {{- end }}
 {{ end }}
