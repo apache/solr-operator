@@ -24,6 +24,9 @@ fullnameOverride: ""
 replicas: null
 
 global:
+  # List the secrets needed to pull images from a private registry.
+  # Accepts both Kubernetes-native format [{name: "secret"}] and plain strings ["secret"].
+  # These are merged with podOptions.imagePullSecrets and applied to the Solr pods.
   imagePullSecrets: []
   clusterDomain: ""
 
@@ -325,6 +328,8 @@ podOptions:
   # Lifecycle for the Solr container
   lifecycle: {}
 
+  # List of image pull secrets to inject into the Solr pod, in addition to global.imagePullSecrets.
+  # Accepts both Kubernetes-native format [{name: "secret"}] and plain strings ["secret"].
   imagePullSecrets: []
 
   resources: {}

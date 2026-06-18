@@ -56,12 +56,6 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
-      description: Support global.imagePullSecrets for pulling images from private registries
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/338
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/343
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
         - name: Github Issue
@@ -130,6 +124,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/817
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/818
+    - kind: added
+          description: Support global.imagePullSecrets for pulling images from private registries
+          links:
+            - name: Github Issue
+              url: https://github.com/apache/solr-operator/issues/338
+            - name: Github PR
+              url: https://github.com/apache/solr-operator/pull/832
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

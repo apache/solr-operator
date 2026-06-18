@@ -71,7 +71,13 @@ containerSecurityContext:
 {{ end }}
 {{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:
-  {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) | nindent 2 }}
+{{- range (concat .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
+{{- if kindIs "string" . }}
+  - name: {{ . }}
+{{- else }}
+  - {{ toYaml . | nindent 4 }}
+{{- end }}
+{{- end }}
 {{ end }}
 {{- if .Values.podOptions.volumes -}}
 volumes:
