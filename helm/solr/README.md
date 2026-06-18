@@ -26,7 +26,7 @@ The Solr version can be any supported version of Solr you wish to run, but the _
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
+Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html)**.
 There may be breaking changes between the version you are using and the version you want to upgrade to.
 
 ## Using the Helm Chart
@@ -54,7 +54,7 @@ helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
-Be sure to select the [update strategy](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
+Be sure to select the [update strategy](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
 However, the `Managed` strategy is highly recommended.
 
 ### Uninstalling the Chart
@@ -72,7 +72,7 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 Please note that there is not a 1-1 mapping from SolrCloud CRD options to Solr Helm options.
 All options should be supported, but they might be slightly renamed in some scenarios, such as `customSolrKubeOptions`.
 Please read below to see what the Helm chart values are for the options you need.
-Descriptions on how to use these options can be found in the [SolrCloud documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html).
+Descriptions on how to use these options can be found in the [SolrCloud documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html).
 
 ### Running Solr
 
@@ -101,7 +101,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
 | solrOptions.security.bootstrapSecurityJson.name | string | | Name of a Secret in the same namespace that stores a user-provided `security.json` to bootstrap the Solr security config |
 | solrOptions.security.bootstrapSecurityJson.key | string | | Key holding the user-provided `security.json` in the bootstrap security Secret |
-| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
+| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
 | updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) |                   | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
@@ -109,13 +109,13 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | availability.podDisruptionBudget.method | string | `"ClusterWide"` | The method by which PodDisruptionBudgets should be created. The only option currently is `ClusterWide`. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
 | serviceAccount.name | string | | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
-| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://solr.apache.org/guide/operator/latest/solr-backup/index.html) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 | scaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
 | scaling.populatePodsOnScaleUp | boolean | `true` | While scaling up the SolrCloud, migrate replicas onto the new Solr Pods after they are created. This uses the Balance Replicas API in Solr that is only available in Solr 9.3+. This option will be ignored if using an unsupported version of Solr.  |
 
 ### Data Storage Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -128,10 +128,11 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
+| dataStorage.persistent.pvc.volumeAttributesClassName | string | | Specifies `VolumeAttributeClass` name for dynamically configuring storage attributes. More information can be found in the [Kubernetes docs](https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/). |
 
 ### Addressability Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/addressability.html) for more information.
 
 If providing external addressability, then `method` and `domainName` must be provided.
 External addressability is disabled by default.
@@ -210,7 +211,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 
 ### TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Solr TLS is disabled by default. Provide any of the following to enable it.
 
@@ -238,7 +239,7 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 
 #### Client TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Configure Solr to use a separate TLS certificate for client auth.
 
@@ -280,12 +281,14 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.resources.requests | map[string]string |  | Provide Resource requests for the Solr container |
 | podOptions.defaultInitContainerResources.limits | map[string]string |  | Provide Resource limits for Solr's default initContainer(s) |
 | podOptions.defaultInitContainerResources.requests | map[string]string |  | Provide Resource requests for Solr's default initContainer(s) |
+| podOptions.defaultInitContainerSecurityContext | object |  | Provide SecurityContext for Solr's default initContainer(s) |
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
 | podOptions.topologySpreadConstraints | []object |  | Specify a list of Kubernetes topologySpreadConstraints for the Solr pod. No need to provide a `labelSelector`, as the Solr Operator will default that for you. More information can be found in [the documentation](https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/). |
 | podOptions.serviceAccountName | string |  | Optional serviceAccount to run the Solr pods under |
 | podOptions.shareProcessNamespace | boolean | false | Whether containers in a pod should share the same process namespace. |
+| podOptions.enableServiceLinks | boolean | true | Whether service environment variables be created containers. |
 | podOptions.priorityClassName | string | | Optional priorityClassName for the Solr pod |
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |

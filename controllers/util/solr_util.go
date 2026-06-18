@@ -89,6 +89,7 @@ var (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	shareProcessNamespace := false
+	var enableServiceLinks *bool
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	defaultFSGroup := int64(DefaultSolrGroup)
 
@@ -130,6 +131,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
 		shareProcessNamespace = customPodOptions.ShareProcessNamespace
+		enableServiceLinks = customPodOptions.EnableServiceLinks
 	}
 	if podAnnotations == nil {
 		podAnnotations = make(map[string]string, 1)
@@ -558,6 +560,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					ShareProcessNamespace:         &shareProcessNamespace,
+					EnableServiceLinks:            enableServiceLinks,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &defaultFSGroup,
 					},
@@ -806,13 +809,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
-	// If the user has provided custom resources for the default init containers, use them
+	// If the user has provided custom resources or security context for the default init containers, use them
 	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
 	if nil != customPodOptions {
 		resources := customPodOptions.DefaultInitContainerResources
-		if resources.Limits != nil || resources.Requests != nil {
+		securityContext := customPodOptions.DefaultInitContainerSecurityContext
+		if resources.Limits != nil || resources.Requests != nil || securityContext != nil {
 			for i := range containers {
-				containers[i].Resources = resources
+				if resources.Limits != nil || resources.Requests != nil {
+					containers[i].Resources = resources
+				}
+				if securityContext != nil {
+					containers[i].SecurityContext = securityContext
+				}
 			}
 		}
 	}

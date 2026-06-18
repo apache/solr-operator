@@ -89,6 +89,7 @@ securityContext:
 envVars: []
 labels: {}
 annotations: {}
+podSecurityContext: {}
 nodeSelector: {}
 affinity: {}
 tolerations: []

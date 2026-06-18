@@ -39,6 +39,9 @@ serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
 {{- if .Values.podOptions.shareProcessNamespace -}}
 shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace }}
 {{ end }}
+{{- if hasKey .Values.podOptions "enableServiceLinks" -}}
+enableServiceLinks: {{ .Values.podOptions.enableServiceLinks }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}
@@ -108,6 +111,10 @@ topologySpreadConstraints:
 {{- if .Values.podOptions.defaultInitContainerResources -}}
 defaultInitContainerResources:
   {{- toYaml .Values.podOptions.defaultInitContainerResources | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.defaultInitContainerSecurityContext -}}
+defaultInitContainerSecurityContext:
+  {{- toYaml .Values.podOptions.defaultInitContainerSecurityContext | nindent 2 }}
 {{ end }}
 {{- end -}}
 
