@@ -18,11 +18,12 @@
 package util
 
 import (
-	policyv1 "k8s.io/api/policy/v1"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -520,6 +521,18 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", basePath+"Spec.ReadinessGates", "from", to.Spec.ReadinessGates, "to", from.Spec.ReadinessGates)
 		to.Spec.ReadinessGates = from.Spec.ReadinessGates
+	}
+
+	if !DeepEqualWithNils(to.Spec.ShareProcessNamespace, from.Spec.ShareProcessNamespace) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.ShareProcessNamespace", "from", to.Spec.ShareProcessNamespace, "to", from.Spec.ShareProcessNamespace)
+		to.Spec.ShareProcessNamespace = from.Spec.ShareProcessNamespace
+	}
+
+	if !DeepEqualWithNils(to.Spec.EnableServiceLinks, from.Spec.EnableServiceLinks) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.EnableServiceLinks", "from", to.Spec.EnableServiceLinks, "to", from.Spec.EnableServiceLinks)
+		to.Spec.EnableServiceLinks = from.Spec.EnableServiceLinks
 	}
 
 	return requireUpdate

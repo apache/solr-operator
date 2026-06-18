@@ -73,7 +73,7 @@ if [[ -z "${OPERATOR_IMAGE:-}" ]]; then
   echo "Specify a Docker image for the Solr Operator through -i, or through the OPERATOR_IMAGE env var" >&2 && exit 1
 fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
-  KUBERNETES_VERSION="v1.26.6"
+  KUBERNETES_VERSION="v1.33.7"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
   SOLR_IMAGE="${SOLR_VERSION:-9.10.0}"
@@ -96,7 +96,8 @@ export RAW_GINKGO
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
-export CERT_MANAGER_VERSION=1.12.3
+export RAWFILE_LOCAL_PV_VERSION=0.13.1
+export CERT_MANAGER_VERSION=1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
 
 function add_image_to_kind_repo_if_local() {
@@ -188,6 +189,11 @@ function setup_cluster() {
 
   printf "Edit the TTL of CoreDNS kubernetes so that statefulSet endpoints are refreshed more often\n"
   kubectl get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl replace -n kube-system -f -
+  echo ""
+
+  printf "Installing Rawfile LocalPV Provisioner\n"
+  helm repo add rawfile-localpv https://openebs.github.io/rawfile-localpv --force-update
+  helm upgrade -i -n openebs --create-namespace  rawfile-localpv rawfile-localpv/rawfile-localpv --version "${RAWFILE_LOCAL_PV_VERSION}" --set analytics.enabled=false
   echo ""
 
   printf "Installing Cert Manager\n"
