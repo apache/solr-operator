@@ -42,13 +42,14 @@ spec:
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
+      {{- if .Values.image.imagePullSecret }}
+      imagePullSecrets: 
+      - name: {{ .Values.image.imagePullSecret }}
+      {{- end }}
       containers:
       - name: {{ .Chart.Name }}
         image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        {{- if .Values.image.imagePullSecret }}
-        imagePullSecret: {{ .Values.image.imagePullSecret }}
-        {{- end }}
         args:
         {{- if or (index .Values "zookeeper-operator" "install") (index .Values "zookeeper-operator" "use") }}
         - -zk-operator=true

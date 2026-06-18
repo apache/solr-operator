@@ -62,6 +62,7 @@ const (
 	// These are to be saved on a statefulSet update
 	ClusterOpsLockAnnotation       = "solr.apache.org/clusterOpsLock"
 	ClusterOpsRetryQueueAnnotation = "solr.apache.org/clusterOpsRetryQueue"
+	StorageMinimumSizeAnnotation   = "solr.apache.org/storageMinimumSize"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
@@ -88,6 +89,7 @@ var (
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	shareProcessNamespace := false
+	var enableServiceLinks *bool
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	defaultFSGroup := int64(DefaultSolrGroup)
 
@@ -129,6 +131,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
 		shareProcessNamespace = customPodOptions.ShareProcessNamespace
+		enableServiceLinks = customPodOptions.EnableServiceLinks
 	}
 	if podAnnotations == nil {
 		podAnnotations = make(map[string]string, 1)
@@ -216,6 +219,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				},
 				Spec: pvc.Spec,
 			},
+		}
+		if pvc.Spec.Resources.Requests.Storage() != nil {
+			annotations[StorageMinimumSizeAnnotation] = pvc.Spec.Resources.Requests.Storage().String()
+			if podAnnotations == nil {
+				podAnnotations = make(map[string]string, 1)
+			}
+			podAnnotations[StorageMinimumSizeAnnotation] = pvc.Spec.Resources.Requests.Storage().String()
 		}
 	} else {
 		ephemeralVolume := corev1.Volume{
@@ -550,6 +560,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					ShareProcessNamespace:         &shareProcessNamespace,
+					EnableServiceLinks:            enableServiceLinks,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &defaultFSGroup,
 					},
@@ -687,6 +698,22 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 			}
 			expected.Annotations[ClusterOpsRetryQueueAnnotation] = queue
 		}
+		if storage, hasStorage := found.Annotations[StorageMinimumSizeAnnotation]; hasStorage {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 1)
+			}
+			expected.Annotations[StorageMinimumSizeAnnotation] = storage
+		}
+	}
+	if found.Spec.Template.Annotations != nil {
+		// Note: the Pod template storage annotation is used to start a rolling restart,
+		// it should always match the StatefulSet's storage annotation
+		if storage, hasStorage := found.Spec.Template.Annotations[StorageMinimumSizeAnnotation]; hasStorage {
+			if expected.Spec.Template.Annotations == nil {
+				expected.Spec.Template.Annotations = make(map[string]string, 1)
+			}
+			expected.Spec.Template.Annotations[StorageMinimumSizeAnnotation] = storage
+		}
 	}
 
 	// Scaling (i.e. changing) the number of replicas in the SolrCloud statefulSet is handled during the clusterOps
@@ -782,13 +809,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
-	// If the user has provided custom resources for the default init containers, use them
+	// If the user has provided custom resources or security context for the default init containers, use them
 	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
 	if nil != customPodOptions {
 		resources := customPodOptions.DefaultInitContainerResources
-		if resources.Limits != nil || resources.Requests != nil {
+		securityContext := customPodOptions.DefaultInitContainerSecurityContext
+		if resources.Limits != nil || resources.Requests != nil || securityContext != nil {
 			for i := range containers {
-				containers[i].Resources = resources
+				if resources.Limits != nil || resources.Requests != nil {
+					containers[i].Resources = resources
+				}
+				if securityContext != nil {
+					containers[i].SecurityContext = securityContext
+				}
 			}
 		}
 	}

@@ -47,7 +47,7 @@ jobs:
 
     strategy:
       matrix:
-        go: [ '1.22' ]
+        go: [ '1.26' ]
 
     steps:
       # Setup
