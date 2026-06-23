@@ -47,7 +47,7 @@ KIND_VERSION=v0.30.0
 YQ_VERSION=v4.33.3
 CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION ?= 1.25.0
+ENVTEST_K8S_VERSION ?= 1.36.0
 
 GO111MODULE ?= on
 
