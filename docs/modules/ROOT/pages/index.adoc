@@ -1,0 +1,39 @@
+= Apache Solr Operator
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+The Apache Solr Operator is a https://kubernetes.io/docs/concepts/extend-kubernetes/operator/[Kubernetes Operator] that makes it easy to deploy, manage, and scale Apache Solr in a cloud-native environment.
+
+== Getting started
+
+* xref:getting-started:local-tutorial.adoc[] -- run Solr on Kubernetes locally, end to end.
+* xref:getting-started:running-the-operator.adoc[] -- install and configure the operator.
+
+== Managing Solr
+
+The operator provides several Kubernetes Custom Resources (CRDs) for running Solr:
+
+* xref:solr-cloud:index.adoc[Solr Clouds] -- run and manage a complete SolrCloud cluster, including ZooKeeper dependencies, autoscaling, and rolling updates.
+* xref:solr-backup:index.adoc[Solr Backups] -- schedule and manage backups of Solr collections.
+* xref:solr-prometheus-exporter:index.adoc[Solr Metrics] -- expose Solr metrics to Prometheus for monitoring.
+
+== Reference
+
+* xref:upgrade-notes:upgrade-notes.adoc[] and xref:upgrade-notes:known-issues.adoc[].
+* xref:development:development.adoc[] -- build, test, and contribute to the operator.
+
+For the broader Apache Solr documentation, see the {solr-ref-guide}[Solr Reference Guide].

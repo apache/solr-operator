@@ -193,7 +193,7 @@ func CopyZookeeperClusterFields(from, to *zkApi.ZookeeperCluster, logger logr.Lo
 				requireUpdate = true
 				to.Spec.Persistence = from.Spec.Persistence
 			} else {
-				requireUpdate = CopyResources(&from.Spec.Persistence.PersistentVolumeClaimSpec.Resources, &to.Spec.Persistence.PersistentVolumeClaimSpec.Resources, "Spec.Persistence.PersistentVolumeClaimSpec.Resources.", logger) || requireUpdate
+				requireUpdate = CopyVolumeResources(&from.Spec.Persistence.PersistentVolumeClaimSpec.Resources, &to.Spec.Persistence.PersistentVolumeClaimSpec.Resources, "Spec.Persistence.PersistentVolumeClaimSpec.Resources.", logger) || requireUpdate
 
 				if !DeepEqualWithNils(to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes) {
 					logger.Info("Update required because field changed", "field", "Spec.Persistence.PersistentVolumeClaimSpec.AccessModes", "from", to.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes, "to", from.Spec.Persistence.PersistentVolumeClaimSpec.AccessModes)

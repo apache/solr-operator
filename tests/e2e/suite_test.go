@@ -19,10 +19,17 @@ package e2e
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/version"
 	certManagerApi "github.com/cert-manager/cert-manager/pkg/api"
@@ -31,7 +38,6 @@ import (
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
-	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,16 +46,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"math/rand"
-	"os"
-	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"strings"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -76,7 +76,7 @@ var (
 	logger       logr.Logger
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
-	defaultSolrImage     = "solr:8.11"
+	defaultSolrImage     = "solr:9.10.0"
 
 	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)
@@ -106,6 +106,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	var err error
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
+	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
@@ -228,7 +229,7 @@ var _ = JustAfterEach(func(ctx context.Context) {
 			getSolrOperatorPodName(ctx, solrOperatorReleaseNamespace),
 			solrOperatorReleaseNamespace,
 			&startTime,
-			fmt.Sprintf("%q: %q", "namespace", testNamespace()),
+			fmt.Sprintf("%q:%q", "namespace", testNamespace()),
 		)
 		// Always save the logs of the Solr Operator for the test
 		writeAllSolrInfoToFiles(
@@ -312,8 +313,23 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	for _, pod := range foundPods.Items {
 		writeAllPodInfoToFiles(
 			ctx,
-			directory+pod.Name,
+			directory+pod.Name+".pod",
 			&pod,
+		)
+	}
+
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPVCs := &corev1.PersistentVolumeClaimList{}
+	Expect(k8sClient.List(ctx, foundPVCs, listOps)).To(Succeed(), "Could not fetch Solr PVCs")
+	Expect(foundPVCs).ToNot(BeNil(), "No Solr PVCs could be found")
+	for _, pvc := range foundPVCs.Items {
+		writeAllPvcInfoToFiles(
+			directory+pvc.Name+".pvc",
+			&pvc,
 		)
 	}
 
@@ -338,12 +354,31 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 	}
 
 	foundServices := &corev1.ServiceList{}
-	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr pods")
+	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr services")
 	Expect(foundServices).ToNot(BeNil(), "No Solr services could be found")
 	for _, service := range foundServices.Items {
 		writeAllServiceInfoToFiles(
 			directory+service.Name+".service",
 			&service,
+		)
+	}
+
+	// Unfortunately the secrets don't have a technology label
+	req, err = labels.NewRequirement("solr-cloud", selection.Exists, make([]string, 0))
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector = labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundSecrets := &corev1.SecretList{}
+	Expect(k8sClient.List(ctx, foundSecrets, listOps)).To(Succeed(), "Could not fetch Solr secrets")
+	for _, secret := range foundSecrets.Items {
+		writeAllSecretInfoToFiles(
+			directory+secret.Name+".secret",
+			&secret,
 		)
 	}
 }
@@ -368,8 +403,8 @@ func writeSolrClusterStatusInfoToFile(ctx context.Context, baseFilename string, 
 func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.StatefulSet) {
 	// Write statefulSet to a file
 	statusFile, err := os.Create(baseFilename + ".status.json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(statefulSet, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -377,8 +412,8 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 
 	// Write events for statefulSet to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
 
 	eventList, err := rawK8sClient.CoreV1().Events(statefulSet.Namespace).Search(scheme.Scheme, statefulSet)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for statefulSet: %s", statefulSet.Name)
@@ -388,17 +423,56 @@ func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.Sta
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet events json to file")
 }
 
+// writeAllPvcInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - PVC Spec/Status
+//   - PVC Events
+func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeClaim) {
+	// Write PVC to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(pvc, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC json to file")
+
+	// Write events for PVC to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(pvc.Namespace).Search(scheme.Scheme, pvc)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for PVC: %s", pvc.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC events json to file")
+}
+
 // writeAllServiceInfoToFiles writes the following each to a separate file with the given base name & directory.
 //   - Service
 func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 	// Write service to a file
 	statusFile, err := os.Create(baseFilename + ".json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(service, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
 	_, writeErr := statusFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
+}
+
+// writeAllSecretInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Service
+func writeAllSecretInfoToFiles(baseFilename string, secret *corev1.Secret) {
+	// Write service to a file
+	statusFile, err := os.Create(baseFilename + ".json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save secret status: %s", baseFilename+".json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(secret, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize secret json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write secret json to file")
 }
 
 // writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.
@@ -408,8 +482,8 @@ func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev1.Pod) {
 	// Write pod to a file
 	statusFile, err := os.Create(baseFilename + ".status.json")
-	defer statusFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
 	jsonBytes, marshErr := json.MarshalIndent(pod, "", "\t")
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod json")
 	_, writeErr := statusFile.Write(jsonBytes)
@@ -417,8 +491,8 @@ func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev
 
 	// Write events for pod to a file
 	eventsFile, err := os.Create(baseFilename + ".events.json")
-	defer eventsFile.Close()
 	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
 
 	eventList, err := rawK8sClient.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
 	Expect(err).ToNot(HaveOccurred(), "Could not find events for pod: %s", pod.Name)
@@ -456,22 +530,18 @@ func writePodLogsToFile(ctx context.Context, filename string, podName string, po
 	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
 	defer podLogs.Close()
 
-	var logReader io.Reader
-	logReader = podLogs
-
 	if filterLinesWithString != "" {
-		filteredWriter := bytes.NewBufferString("")
 		scanner := bufio.NewScanner(podLogs)
 		for scanner.Scan() {
 			line := scanner.Text()
 			if strings.Contains(line, filterLinesWithString) {
-				io.WriteString(filteredWriter, line)
-				io.WriteString(filteredWriter, "\n")
+				_, err = io.WriteString(logFile, line)
+				_, err = io.WriteString(logFile, "\n")
 			}
 		}
-		logReader = filteredWriter
+	} else {
+		_, err = io.Copy(logFile, podLogs)
 	}
 
-	_, err = io.Copy(logFile, logReader)
 	Expect(err).ToNot(HaveOccurred(), "Could not write podLogs to file: %s", filename)
 }

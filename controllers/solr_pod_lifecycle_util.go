@@ -64,7 +64,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 			status:              false,
 		},
 	}
-	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, podStoppedReadinessConditions, logger); e != nil {
+	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, pod, podStoppedReadinessConditions, logger); e != nil {
 		err = e
 		return
 	} else {
@@ -75,7 +75,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	deletePod := false
 	if PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod, inProgTmp := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
+		if evictError, canDeletePod, inProgTmp := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", r.Recorder, logger); evictError != nil {
 			requestInProgress = true
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
@@ -107,15 +107,18 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 		})
 		if err != nil {
 			logger.Error(err, "Error while killing solr pod for update", "pod", pod.Name)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodUpdateError",
+				"Error while deleting pod %s for an update: %v", pod.Name, err)
+		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "PodUpdate",
+				"Deleting pod %s so that it can be recreated with the updated SolrCloud specification", pod.Name)
 		}
-
-		// TODO: Create event for the CRD.
 	}
 
 	return
 }
 
-func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, ensureConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, ensureConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	updatedPod = pod.DeepCopy()
 
 	needsUpdate := false
@@ -137,7 +140,8 @@ func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, p
 			logger.Error(err, "Could not patch readiness condition(s) for pod to stop traffic", "pod", pod.Name)
 			updatedPod = pod
 
-			// TODO: Create event for the CRD.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodReadinessConditionUpdateFailed",
+				"Could not patch readiness condition(s) on pod %s to stop traffic: %v", pod.Name, err)
 		}
 	} else {
 		updatedPod = pod

@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -233,7 +234,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}
 
 	additionalOffset += 1
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -246,7 +247,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}).Within(time.Second*10).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
 	// Only wait 5 seconds when trying to create the asyncCommand
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -271,7 +272,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
 	}).Within(time.Second*40).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -296,7 +297,7 @@ func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, coll
 }
 
 func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
-	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -476,6 +477,20 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		queryParamsString = "?" + queryParamsString
 	}
 
+	toolOpts := ""
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solrv1beta1.Basic {
+		basicAuthSecretName := solrCloud.BasicAuthSecretName()
+		basicAuthSecret := &corev1.Secret{}
+		if err = k8sClient.Get(ctx, resourceKey(solrCloud, basicAuthSecretName), basicAuthSecret); err != nil {
+			return "", err
+		}
+		toolOpts =
+			"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" +
+				string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) +
+				" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+	}
+	GinkgoLogr.Info(toolOpts)
+
 	command := []string{
 		"solr",
 		"api",
@@ -488,6 +503,12 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 			solrCloud.NodePortSuffix(false),
 			apiPath,
 			queryParamsString),
+	}
+	if toolOpts != "" {
+		commandString := fmt.Sprintf("%s %s", toolOpts, strings.Join(command, " "))
+		commandString = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(commandString), " ")
+
+		command = []string{"sh", "-c", fmt.Sprintf("%q", commandString)}
 	}
 	return runExecForContainer(ctx, util.SolrNodeContainer, solrCloud.GetRandomSolrPodName(), solrCloud.Namespace, command)
 }
@@ -579,6 +600,83 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 			},
 		},
 	}
+}
+
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
+func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	securityJsonSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-security-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		StringData: map[string]string{
+			"security.json": `{
+				"authentication": {
+				"blockUnknown": false,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					}
+				]
+				}
+			}`,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	Expect(k8sClient.Create(ctx, securityJsonSecret)).To(Succeed(), "Failed to create secret for security json in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, securityJsonSecret.Name)
+	return
+}
+
+func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	basicAuthSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-basic-auth-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		// Using default creds
+		StringData: map[string]string{
+			"username": "test-oper",
+			"password": "SolrRocks",
+		},
+		Type: corev1.SecretTypeBasicAuth,
+	}
+	Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Failed to create secret for basic auth in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, basicAuthSecret.Name)
+	return
+}
+
+func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud {
+	solrCloud := generateBaseSolrCloud(replicas)
+
+	// Ensure SolrSecurity is initialized
+	if solrCloud.Spec.SolrSecurity == nil {
+		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
+	}
+
+	return solrCloud
 }
 
 func generateBaseSolrCloudWithPlacementPolicy(replicas int, placementPlugin string) *solrv1beta1.SolrCloud {

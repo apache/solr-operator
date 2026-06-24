@@ -96,7 +96,7 @@ echo "Pulling Helm chart from the staged url and uploading to release Helm repo.
     cd "${TMP_DIR}"
 
     # Pull Helm charts from staged location
-    wget -r -np -nH -nd --level=1 -A "*.tgz*" "${RELEASE_URL}/helm-charts"
+    wget -e robots=off -r -np -nH -nd --level=1 -A "*.tgz*" "${RELEASE_URL}/helm-charts"
 
     rm -f robots.txt*
 
