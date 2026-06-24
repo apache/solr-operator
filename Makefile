@@ -372,7 +372,7 @@ docs-staging:
 .PHONY: docs
 docs: docs-staging ## Build the operator Antora docs site locally for previewing (requires Docker)
 	docker run --rm -v "$(PROJECT_DIR):/antora" -w /antora/docs $(ANTORA_IMAGE) --fetch --to-dir build/site local-playbook.yml
-	@echo "Docs built. Open docs/build/site/index.html in a browser to preview."
+	@echo "Docs built. Open file://$(PROJECT_DIR)/docs/build/site/index.html in a browser to preview."
 
 .PHONY: docs-clean
 docs-clean: ## Remove the locally-generated documentation site
