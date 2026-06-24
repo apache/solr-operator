@@ -42,6 +42,12 @@ TEST_PARALLELISM ?= 3
 KUSTOMIZE_VERSION=v4.5.7
 CONTROLLER_GEN_VERSION=v0.21.0
 GO_LICENSES_VERSION=v2.0.1
+# go-licenses only sees packages in the build graph for the current platform.
+# The operator only ever runs in Linux containers, and CI runs on linux/amd64,
+# so pin GOOS/GOARCH to keep the generated/checked license list identical no
+# matter which platform a developer generates it on (e.g. darwin/arm64 would
+# otherwise omit Linux-only deps such as github.com/prometheus/procfs).
+GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.30.0
 YQ_VERSION=v4.53.3
@@ -130,11 +136,11 @@ fmt: ## Run go fmt against code.
 .PHONY: fetch-licenses-list
 # Ignore non-Go code warnings when it is supported natively: https://github.com/google/go-licenses/issues/120
 fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
-	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator > dependency_licenses.csv
 
 .PHONY: fetch-licenses-full
 fetch-licenses-full: go-licenses ## Fetch all licenses
-	$(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
+	$(GO_LICENSES_ENV) $(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
 
 .PHONY: build-release-artifacts
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
@@ -247,9 +253,9 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	$(GO_LICENSES) check . \
+	$(GO_LICENSES_ENV) $(GO_LICENSES) check . \
 		--allowed_licenses=Apache-2.0,Apache-1.1,MIT,BSD-3-Clause,BSD-2-Clause,ISC,ICU,X11,NCSA,W3C,AFL-3.0,MS-PL,CC0-1.0,BSL-1.0,WTFPL,Unicode-DFS-2015,Unicode-DFS-2016,ZPL-2.0,UPL-1.0,Unlicense,MPL-2.0
-	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
 
 .PHONY: check-zk-op-version
 check-zk-op-version: export PATH:=$(LOCALBIN):${PATH}
