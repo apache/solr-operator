@@ -19,7 +19,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.10.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.16.4
+    controller-gen.kubebuilder.io/version: v0.21.0
   name: solrbackups.solr.apache.org
 spec:
   group: solr.apache.org
@@ -277,7 +277,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.10.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.16.4
+    controller-gen.kubebuilder.io/version: v0.21.0
   name: solrclouds.solr.apache.org
 spec:
   group: solr.apache.org
@@ -19006,7 +19006,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.10.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.16.4
+    controller-gen.kubebuilder.io/version: v0.21.0
   name: solrprometheusexporters.solr.apache.org
 spec:
   group: solr.apache.org
