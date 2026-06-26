@@ -32,7 +32,9 @@ import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
@@ -180,8 +182,14 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						Labels:      testDeploymentLabels,
 					},
 					ServiceOptions: &solrv1beta1.ServiceOptions{
-						Annotations: testMetricsServiceAnnotations,
-						Labels:      testMetricsServiceLabels,
+						Annotations:     testMetricsServiceAnnotations,
+						Labels:          testMetricsServiceLabels,
+						SessionAffinity: corev1.ServiceAffinityClientIP,
+						SessionAffinityConfig: &corev1.SessionAffinityConfig{
+							ClientIP: &corev1.ClientIPConfig{
+								TimeoutSeconds: pointer.Int32(3600),
+							},
+						},
 					},
 					ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
 						Annotations: testConfigMapAnnotations,
@@ -303,6 +311,9 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on metrics Service")
 			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on metrics Service should not be nil")
 			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on metrics Service")
+			Expect(service.Spec.SessionAffinity).To(Equal(corev1.ServiceAffinityClientIP), "Incorrect sessionAffinity on metrics Service")
+			Expect(service.Spec.SessionAffinityConfig).To(Not(BeNil()), "Metrics Service should have a sessionAffinityConfig")
+			Expect(service.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds).To(PointTo(Equal(int32(3600))), "Incorrect sessionAffinityConfig timeout on metrics Service")
 		})
 	})
 
