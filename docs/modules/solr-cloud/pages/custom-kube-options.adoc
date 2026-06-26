@@ -67,3 +67,29 @@ spec:
 ----
 
 A complete, runnable example (including the backing `ConfigMap`) is available in https://github.com/apache/solr-operator/blob/main/example/test_solrcloud_additional_volume.yaml[`example/test_solrcloud_additional_volume.yaml`].
+
+== Service Session Affinity
+
+The Services that the operator creates for a SolrCloud (`commonServiceOptions`, `headlessServiceOptions`, and `nodeServiceOptions`) can be configured with https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity[session affinity].
+This is useful when clients connect to Solr through the common Service and you want requests from a given client IP to be routed to the same Solr pod.
+For `headlessServiceOptions` and `nodeServiceOptions`, this option provides no value because each service endpoint maps to a single pod.
+
+Each service option object exposes two fields:
+
+* **`sessionAffinity`** - Either `None` (the default) or `ClientIP`.
+When set to `ClientIP`, connections from the same client IP are directed to the same backing pod.
+* **`sessionAffinityConfig`** - Optional https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/#ServiceSpec[session affinity configuration], only used when `sessionAffinity` is `ClientIP`.
+Most commonly this sets the `clientIP.timeoutSeconds` sticky-session timeout (defaults to `10800`, i.e. 3 hours).
+
+The following example enables client-IP session affinity on the common Service with a one hour timeout:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    commonServiceOptions:
+      sessionAffinity: ClientIP
+      sessionAffinityConfig:
+        clientIP:
+          timeoutSeconds: 3600
+----
