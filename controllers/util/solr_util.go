@@ -939,6 +939,18 @@ func getAppProtocol(solrCloud *solr.SolrCloud) *string {
 	}
 }
 
+// applyCustomServiceOptions applies the ServiceOptions fields that map directly onto the ServiceSpec.
+// Labels and annotations are handled separately on the ObjectMeta.
+func applyCustomServiceOptions(spec *corev1.ServiceSpec, customOptions *solr.ServiceOptions) {
+	if customOptions == nil {
+		return
+	}
+	if customOptions.SessionAffinity != "" {
+		spec.SessionAffinity = customOptions.SessionAffinity
+	}
+	spec.SessionAffinityConfig = customOptions.SessionAffinityConfig
+}
+
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
 // solrCloud: SolrCloud instance
 func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
@@ -987,6 +999,7 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 			Selector: selectorLabels,
 		},
 	}
+	applyCustomServiceOptions(&service.Spec, customOptions)
 	return service
 }
 
@@ -1041,6 +1054,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 			PublishNotReadyAddresses: true,
 		},
 	}
+	applyCustomServiceOptions(&service.Spec, customOptions)
 	return service
 }
 
@@ -1085,6 +1099,7 @@ func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Ser
 			PublishNotReadyAddresses: true,
 		},
 	}
+	applyCustomServiceOptions(&service.Spec, customOptions)
 	return service
 }
 
