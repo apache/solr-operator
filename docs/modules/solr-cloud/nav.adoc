@@ -23,6 +23,7 @@
 ** xref:custom-solr-config.adoc[Custom Solr Configuration]
 ** xref:tls.adoc[]
 ** xref:authentication-and-authorization.adoc[]
+** xref:custom-kube-options.adoc[]
 * xref:cluster-operations.adoc[]
 * xref:managed-updates.adoc[]
 * xref:scaling.adoc[]
