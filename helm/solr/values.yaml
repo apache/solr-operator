@@ -369,10 +369,14 @@ commonServiceOptions:
 headlessServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 nodeServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 ingressOptions:
   annotations: {}
