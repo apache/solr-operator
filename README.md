@@ -23,11 +23,15 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/apache/solr-operator)](https://hub.docker.com/r/apache/solr-operator/)
 [![Slack](https://img.shields.io/badge/slack-join_chat-white.svg?logo=slack&style=social)](https://kubernetes.slack.com/messages/solr-operator)
 
-The __[Solr Operator](https://solr.apache.org/operator/)__ manages Apache Solr Clouds within Kubernetes.
+The __[Solr Operator](https://solr.apache.org/operator/)__ is the official way of managing Apache SolrCloud deployments within Kubernetes.
 It is built on top of the [Kube Builder](https://github.com/kubernetes-sigs/kubebuilder) framework.
 Please visit the [official site](https://solr.apache.org/operator/) for more information.
 
-The project is currently in beta (`v1beta1`), and while we do not anticipate changing the API in backwards-incompatible ways there is no such guarantee yet.
+The project is **Production Ready**, and has been successfully used to manage production SolrClouds for some of the largest users of Solr.
+
+The API Version is still beta (`v1beta1`), and minor versions can have backwards-incompatible API changes.
+However, the Solr Operator will always have upgrade paths that are backwards-compatible.
+Please check the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) for more information.
 
 If you run into issues using the Solr Operator, please:
 - Reference the [version compatibility and upgrade/deprecation notes](#version-compatibility--upgrade-notes) provided below
@@ -49,16 +53,17 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
-- [Local Tutorial](https://apache.github.io/solr-operator/docs/local_tutorial)
+- [Local Tutorial](https://solr.apache.org/guide/operator/latest/getting-started/local-tutorial.html)
 - [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
   - The released helm charts and their instructions should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
-- [Running the Solr Operator](https://apache.github.io/solr-operator/docs/running-the-operator)
+- [Running the Solr Operator](https://solr.apache.org/guide/operator/latest/getting-started/running-the-operator.html)
+- [Known Issues](https://solr.apache.org/guide/operator/latest/upgrade-notes/known-issues.html)
 - Available Solr Resources
-    - [Solr Clouds](https://apache.github.io/solr-operator/docs/solr-cloud)
-    - [Solr Backups](https://apache.github.io/solr-operator/docs/solr-backup)
-    - [Solr Metrics](https://apache.github.io/solr-operator/docs/solr-prometheus-exporter)
-- [Development](https://apache.github.io/solr-operator/docs/development)
+    - [Solr Clouds](https://solr.apache.org/guide/operator/latest/solr-cloud/index.html)
+    - [Solr Backups](https://solr.apache.org/guide/operator/latest/solr-backup/index.html)
+    - [Solr Metrics](https://solr.apache.org/guide/operator/latest/solr-prometheus-exporter/index.html)
+- [Development](https://solr.apache.org/guide/operator/latest/development/development.html)
 
 ### Examples
 
@@ -66,9 +71,9 @@ Example uses of each CRD have been [provided](https://apache.github.io/solr-oper
 
 ## Version Compatibility & Upgrade Notes
 
-Make sure to check the [Solr Operator Upgrade notes](docs/upgrade-notes.md), before upgrading the Solr Operator or CRDs in your Kubernetes cluster.
+Make sure to check the [Solr Operator Upgrade notes](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html), before upgrading the Solr Operator or CRDs in your Kubernetes cluster.
 
-This page also contains [Version Compatibility Matrixes](docs/upgrade-notes.md#version-compatibility-matrixes), which detail the compatible Solr versions and Kubernetes versions for each release of the Solr Operator.
+This page also contains [Version Compatibility Matrixes](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#version-compatibility-matrixes), which detail the compatible Solr versions and Kubernetes versions for each release of the Solr Operator.
 
 ## Contributions
 

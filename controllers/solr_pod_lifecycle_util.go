@@ -46,7 +46,7 @@ const (
 	ScaleDown        PodConditionChangeReason = "ScaleDown"
 )
 
-func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, err error) {
+func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, podHasReplicas bool, logger logr.Logger) (requeueAfterDuration time.Duration, requestInProgress bool, err error) {
 	// Before doing anything to the pod, make sure that users cannot send requests to the pod anymore.
 	ps := PodStarted
 	podStoppedReadinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
@@ -64,7 +64,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 			status:              false,
 		},
 	}
-	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, podStoppedReadinessConditions, logger); e != nil {
+	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, pod, podStoppedReadinessConditions, logger); e != nil {
 		err = e
 		return
 	} else {
@@ -75,10 +75,12 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 	deletePod := false
 	if PodConditionEquals(pod, util.SolrReplicasNotEvictedReadinessCondition, EvictingReplicas) {
 		// Only evict pods that contain replicas in the clusterState
-		if evictError, canDeletePod := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", logger); evictError != nil {
+		if evictError, canDeletePod, inProgTmp := util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "podUpdate", r.Recorder, logger); evictError != nil {
+			requestInProgress = true
 			err = evictError
 			logger.Error(err, "Error while evicting replicas on pod", "pod", pod.Name)
 		} else if canDeletePod {
+			requestInProgress = inProgTmp
 			if podHasReplicas {
 				// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't
 				// have replicas anymore even if the previous evict command was successful.
@@ -88,6 +90,7 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 				deletePod = true
 			}
 		} else {
+			requestInProgress = inProgTmp
 			// Try again in 5 seconds if we cannot delete a pod.
 			requeueAfterDuration = time.Second * 5
 		}
@@ -98,20 +101,24 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 
 	// Delete the pod
 	if deletePod {
+		logger.Info("Deleting solr pod for update", "pod", pod.Name)
 		err = r.Delete(ctx, pod, client.Preconditions{
 			UID: &pod.UID,
 		})
 		if err != nil {
 			logger.Error(err, "Error while killing solr pod for update", "pod", pod.Name)
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodUpdateError",
+				"Error while deleting pod %s for an update: %v", pod.Name, err)
+		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "PodUpdate",
+				"Deleting pod %s so that it can be recreated with the updated SolrCloud specification", pod.Name)
 		}
-
-		// TODO: Create event for the CRD.
 	}
 
 	return
 }
 
-func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, pod *corev1.Pod, ensureConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, ensureConditions map[corev1.PodConditionType]podReadinessConditionChange, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	updatedPod = pod.DeepCopy()
 
 	needsUpdate := false
@@ -133,7 +140,8 @@ func EnsurePodReadinessConditions(ctx context.Context, r *SolrCloudReconciler, p
 			logger.Error(err, "Could not patch readiness condition(s) for pod to stop traffic", "pod", pod.Name)
 			updatedPod = pod
 
-			// TODO: Create event for the CRD.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodReadinessConditionUpdateFailed",
+				"Could not patch readiness condition(s) on pod %s to stop traffic: %v", pod.Name, err)
 		}
 	} else {
 		updatedPod = pod

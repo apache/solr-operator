@@ -18,6 +18,7 @@
 package e2e
 
 import (
+	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
@@ -52,6 +53,26 @@ func resourceKey(parentResource client.Object, name string) types.NamespacedName
 	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
 }
 
+// expectEvent waits until at least one Kubernetes Event of the given type and reason has been
+// recorded against the given object. Events are matched on the involved object's UID so that
+// events left over from previous specs (Events are not garbage-collected with the object) cannot
+// cause a false positive.
+func expectEvent(ctx context.Context, parentResource client.Object, eventType string, reason string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		eventList := &corev1.EventList{}
+		g.Expect(k8sClient.List(ctx, eventList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed())
+		matched := false
+		for i := range eventList.Items {
+			e := &eventList.Items[i]
+			if e.InvolvedObject.UID == parentResource.GetUID() && e.Type == eventType && e.Reason == reason {
+				matched = true
+				break
+			}
+		}
+		g.Expect(matched).To(BeTrue(), "Expected a %q event with reason %q to be recorded on %s/%s", eventType, reason, parentResource.GetNamespace(), parentResource.GetName())
+	}).Should(Succeed())
+}
+
 func deleteAndWait(ctx context.Context, object client.Object, additionalOffset ...int) {
 	key := resourceKey(object, object.GetName())
 	kinds, _, err := k8sClient.Scheme().ObjectKinds(object)
@@ -67,14 +88,14 @@ func deleteAndWait(ctx context.Context, object client.Object, additionalOffset .
 
 func expectSolrCloudToBeReady(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) *solrv1beta1.SolrCloud {
 	return expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-		g.Expect(found.Status.ReadyReplicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		g.Expect(found.Status.ReadyReplicas).To(Equal(*solrCloud.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 		// We have to check the status.replicas, because when a cloud is deleted/recreated, the statefulset can be recreated
 		// before the pods of the previous statefulset are deleted. So those pods will still be matched to the label selector,
 		// but the new statefulset doesn't know about them.
 		// The "Status.ReadyReplicas" value is populated from querying with the label selector
 		// The "Status.Replicas" value is populated from the statefulSet status
 		// So we need both to be equal to the requested number of replicas in order to know the statefulset is ready to go.
-		g.Expect(found.Status.Replicas).To(Equal(*found.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
+		g.Expect(found.Status.Replicas).To(Equal(*solrCloud.Spec.Replicas), "The SolrCloud should have all nodes come up healthy")
 	}, resolveOffset(additionalOffset))
 }
 
@@ -89,7 +110,19 @@ func expectSolrCloudWithChecks(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		if additionalChecks != nil {
 			additionalChecks(g, foundSolrCloud)
 		}
-	}).WithContext(ctx).Should(Succeed())
+	}).WithTimeout(time.Minute * 4).WithContext(ctx).Should(Succeed())
+
+	return foundSolrCloud
+}
+
+func expectSolrCloudWithChecksAndTimeout(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, within time.Duration, checkEvery time.Duration, additionalChecks func(Gomega, *solrv1beta1.SolrCloud), additionalOffset ...int) *solrv1beta1.SolrCloud {
+	foundSolrCloud := &solrv1beta1.SolrCloud{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), foundSolrCloud)).To(Succeed(), "Expected SolrCloud does not exist")
+		if additionalChecks != nil {
+			additionalChecks(g, foundSolrCloud)
+		}
+	}).Within(within).WithPolling(checkEvery).WithContext(ctx).Should(Succeed())
 
 	return foundSolrCloud
 }
@@ -254,6 +287,21 @@ func expectStatefulSetWithChecks(ctx context.Context, parentResource client.Obje
 	return statefulSet
 }
 
+func expectStatefulSetWithChecksAndTimeout(ctx context.Context, parentResource client.Object, statefulSetName string, within time.Duration, checkEvery time.Duration, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Within(within).WithPolling(checkEvery).Should(Succeed())
+	return statefulSet
+}
+
 func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource client.Object, statefulSetName string, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
 	statefulSet := &appsv1.StatefulSet{}
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
@@ -270,16 +318,73 @@ func expectStatefulSetWithConsistentChecks(ctx context.Context, parentResource c
 	return statefulSet
 }
 
+func expectStatefulSetWithConsistentChecksAndDuration(ctx context.Context, parentResource client.Object, statefulSetName string, duration time.Duration, additionalChecks func(Gomega, *appsv1.StatefulSet), additionalOffset ...int) *appsv1.StatefulSet {
+	statefulSet := &appsv1.StatefulSet{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), statefulSet)).To(Succeed(), "Expected StatefulSet does not exist")
+
+		testMapContainsOtherWithGomega(g, "StatefulSet pod template selector", statefulSet.Spec.Template.Labels, statefulSet.Spec.Selector.MatchLabels)
+		g.Expect(len(statefulSet.Spec.Selector.MatchLabels)).To(BeNumerically(">=", 1), "StatefulSet pod template selector must have at least 1 label")
+
+		if additionalChecks != nil {
+			additionalChecks(g, statefulSet)
+		}
+	}).Within(duration).Should(Succeed())
+
+	return statefulSet
+}
+
 func expectNoStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
 	}).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
 }
 
+func expectNoPvc(ctx context.Context, parentResource client.Object, pvcName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, pvcName), &corev1.PersistentVolumeClaim{})
+	}).Should(MatchError("persistentvolumeclaims \""+pvcName+"\" not found"), "Pod exists when it should not")
+}
+
+func expectNoPvcNow(ctx context.Context, parentResource client.Object, pvcName string, additionalOffset ...int) {
+	ExpectWithOffset(
+		resolveOffset(additionalOffset),
+		k8sClient.Get(ctx, resourceKey(parentResource, pvcName), &corev1.PersistentVolumeClaim{}),
+	).To(MatchError("persistentvolumeclaims \""+pvcName+"\" not found"), "Pod exists when it should not")
+}
+
 func expectNoPod(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) {
 	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, podName), &corev1.Pod{})
 	}).Should(MatchError("pods \""+podName+"\" not found"), "Pod exists when it should not")
+}
+
+func expectNoPodNow(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) {
+	ExpectWithOffset(
+		resolveOffset(additionalOffset),
+		k8sClient.Get(ctx, resourceKey(parentResource, podName), &corev1.Pod{}),
+	).To(MatchError("pods \""+podName+"\" not found"), "Pod exists when it should not")
+}
+
+func expectPodNow(ctx context.Context, parentResource client.Object, podName string, additionalOffset ...int) *corev1.Pod {
+	pod := &corev1.Pod{}
+	ExpectWithOffset(
+		resolveOffset(additionalOffset),
+		k8sClient.Get(ctx, resourceKey(parentResource, podName), pod),
+	).To(Succeed(), "Pod should exist", "name", podName, "namespace", parentResource.GetNamespace())
+	return pod
+}
+
+func expectPodWithChecks(ctx context.Context, parentResource client.Object, podName string, additionalChecks func(Gomega, *corev1.Pod), additionalOffset ...int) *corev1.Pod {
+	pod := &corev1.Pod{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, podName), pod)).To(Succeed(), "Expected Pod does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, pod)
+		}
+	}).Should(Succeed())
+	return pod
 }
 
 func expectService(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalOffset ...int) *corev1.Service {
@@ -289,7 +394,7 @@ func expectService(ctx context.Context, parentResource client.Object, serviceNam
 func expectServiceWithChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
 	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -303,27 +408,13 @@ func expectServiceWithChecks(ctx context.Context, parentResource client.Object, 
 			additionalChecks(g, service)
 		}
 	}).Should(Succeed())
-
-	By("recreating the Service after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, service)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &corev1.Service{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, serviceName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(service.UID))), "New Service, with new UID, not created.")
-
 	return service
 }
 
 func expectServiceWithConsistentChecks(ctx context.Context, parentResource client.Object, serviceName string, selectorLables map[string]string, isHeadless bool, additionalChecks func(Gomega, *corev1.Service), additionalOffset ...int) *corev1.Service {
 	service := &corev1.Service{}
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
-		Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), service)).To(Succeed(), "Expected Service does not exist")
 
 		g.Expect(service.Spec.Selector).To(Equal(selectorLables), "Service is not pointing to the correct Pods.")
 
@@ -347,10 +438,23 @@ func expectNoService(ctx context.Context, parentResource client.Object, serviceN
 	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
 }
 
+func eventuallyExpectNoService(ctx context.Context, parentResource client.Object, serviceName string, message string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})
+	}).Should(MatchError("services \""+serviceName+"\" not found"), message, "Service exists when it should not")
+}
+
 func expectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames []string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
 		for _, serviceName := range serviceNames {
-			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message)
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message, "service", serviceName)
+		}
+	}).Should(Succeed())
+}
+func eventuallyExpectNoServices(ctx context.Context, parentResource client.Object, message string, serviceNames []string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		for _, serviceName := range serviceNames {
+			g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, serviceName), &corev1.Service{})).To(MatchError("services \""+serviceName+"\" not found"), message, "service", serviceName)
 		}
 	}).Should(Succeed())
 }
@@ -368,20 +472,6 @@ func expectIngressWithChecks(ctx context.Context, parentResource client.Object, 
 			additionalChecks(g, ingress)
 		}
 	}).Should(Succeed())
-
-	By("recreating the Ingress after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, ingress)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &netv1.Ingress{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, ingressName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(ingress.UID))), "New Ingress, with new UID, not created.")
-
 	return ingress
 }
 
@@ -404,6 +494,12 @@ func expectNoIngress(ctx context.Context, parentResource client.Object, ingressN
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
 }
 
+func eventuallyExpectNoIngress(ctx context.Context, parentResource client.Object, ingressName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, ingressName), &netv1.Ingress{})
+	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
+}
+
 func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalOffset ...int) *policyv1.PodDisruptionBudget {
 	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
 }
@@ -421,20 +517,6 @@ func expectPodDisruptionBudgetWithChecks(ctx context.Context, parentResource cli
 			additionalChecks(g, podDisruptionBudget)
 		}
 	}).Should(Succeed())
-
-	By("recreating the PodDisruptionBudget after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, podDisruptionBudget)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &policyv1.PodDisruptionBudget{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, podDisruptionBudgetName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(podDisruptionBudget.UID))), "New PodDisruptionBudget, with new UID, not created.")
-
 	return podDisruptionBudget
 }
 
@@ -454,20 +536,6 @@ func expectConfigMapWithChecks(ctx context.Context, parentResource client.Object
 			additionalChecks(g, configMap)
 		}
 	}).Should(Succeed())
-
-	By("recreating the ConfigMap after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, configMap)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &corev1.ConfigMap{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, configMapName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(configMap.UID))), "New ConfigMap, with new UID, not created.")
-
 	return configMap
 }
 
@@ -510,20 +578,6 @@ func expectDeploymentWithChecks(ctx context.Context, parentResource client.Objec
 			additionalChecks(g, deployment)
 		}
 	}).Should(Succeed())
-
-	By("recreating the Deployment after it is deleted")
-	ExpectWithOffset(resolveOffset(additionalOffset), k8sClient.Delete(ctx, deployment)).To(Succeed())
-	EventuallyWithOffset(
-		resolveOffset(additionalOffset),
-		func() (types.UID, error) {
-			newResource := &appsv1.Deployment{}
-			err := k8sClient.Get(ctx, resourceKey(parentResource, deploymentName), newResource)
-			if err != nil {
-				return "", err
-			}
-			return newResource.UID, nil
-		}).Should(And(Not(BeEmpty()), Not(Equal(deployment.UID))), "New Deployment, with new UID, not created.")
-
 	return deployment
 }
 
@@ -757,6 +811,8 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 		// Solr Operator CRDs, modify this list whenever CRDs are added/deleted
 		&solrv1beta1.SolrCloud{}, &solrv1beta1.SolrBackup{}, &solrv1beta1.SolrPrometheusExporter{},
 		&zkApi.ZookeeperCluster{},
+
+		&certmanagerv1.Certificate{}, &certmanagerv1.Issuer{},
 
 		// All dependent Kubernetes types, in order of dependence (deployment then replicaSet then pod)
 		&corev1.ConfigMap{}, &netv1.Ingress{},

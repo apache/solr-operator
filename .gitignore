@@ -50,6 +50,12 @@ helm/*/charts
 # Directory to test generated files
 generated-check
 
+# Integration test outputs
+tests/**/output
+
+# Locally-built Antora documentation site
+docs/build
+
 # Python for the release wizard
 venv
 __pycache__

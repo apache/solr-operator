@@ -21,13 +21,14 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -39,6 +40,7 @@ const (
 	TLSCertKey                     = "tls.crt"
 	DefaultTrustStorePath          = "/var/solr/tls-truststore"
 	DefaultClientTrustStorePath    = "/var/solr/client-tls-truststore"
+	InitdbInitContainer            = "generate-init-db"
 	InitdbPath                     = "/docker-entrypoint-initdb.d"
 	DefaultPkcs12KeystoreFile      = "keystore.p12"
 	DefaultPkcs12TruststoreFile    = "truststore.p12"
@@ -145,7 +147,7 @@ func (tls *TLSCerts) enableTLSOnSolrCloudStatefulSet(stateful *appsv1.StatefulSe
 		if tls.ClientConfig != nil && tls.ClientConfig.Options.PKCS12Secret != nil {
 			tls.ClientConfig.mountTLSSecretOnPodTemplate(&stateful.Spec.Template)
 		}
-	} else if serverCert.Options.MountedTLSDir != nil {
+	} else if tls.hasPasswordsInFiles() {
 		// the TLS files come from some auto-mounted directory on the main container
 		mountInitDbIfNeeded(stateful)
 		// use an initContainer to create the wrapper script in the initdb
@@ -168,7 +170,7 @@ func (tls *TLSCerts) enableTLSOnExporterDeployment(deployment *appsv1.Deployment
 	if clientCert.Options.PKCS12Secret != nil || clientCert.Options.TrustStoreSecret != nil {
 		// Cert comes from a secret, so setup the pod template to mount the secret
 		clientCert.mountTLSSecretOnPodTemplate(&deployment.Spec.Template)
-	} else if clientCert.Options.MountedTLSDir != nil {
+	} else if clientCert.Options.MountedTLSDir != nil && clientCert.hasPasswordsInFiles() {
 		// volumes and mounts for TLS when using the mounted dir option
 		clientCert.mountTLSWrapperScriptAndInitContainer(deployment, tls.InitContainerImage)
 	}
@@ -334,6 +336,24 @@ func (tls *TLSConfig) volumesAndMounts() ([]corev1.Volume, []corev1.VolumeMount)
 	return vols, mounts
 }
 
+// Determine whether any passwords for Keystores/Truststores are stored in files
+func (tls *TLSCerts) hasPasswordsInFiles() (hasPasswordsInFiles bool) {
+	return tls != nil && (tls.ServerConfig.hasPasswordsInFiles() || tls.ClientConfig.hasPasswordsInFiles())
+}
+
+// Determine whether any passwords for Keystores/Truststores are stored in files
+func (tls *TLSConfig) hasPasswordsInFiles() (hasPasswordsInFiles bool) {
+	if tls != nil && tls.Options.MountedTLSDir != nil {
+		serverDir := tls.Options.MountedTLSDir
+		hasPasswordsInFiles = serverDir.KeystorePasswordFile != "" || serverDir.KeystorePassword == ""
+
+		if serverDir.TruststorePasswordFile != "" {
+			hasPasswordsInFiles = true
+		}
+	}
+	return
+}
+
 // Get the SOLR_SSL_* env vars for enabling TLS on Solr pods
 func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 	opts := tls.Options
@@ -376,7 +396,26 @@ func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 	if opts.MountedTLSDir != nil {
 		// TLS files are mounted by some external agent
 		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_KEY_STORE", Value: mountedTLSKeystorePath(opts.MountedTLSDir)})
-		envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE", Value: mountedTLSTruststorePath(opts.MountedTLSDir)})
+		keyStorePassword := ""
+		if opts.MountedTLSDir.KeystorePassword != "" && opts.MountedTLSDir.KeystorePasswordFile == "" {
+			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_KEY_STORE_PASSWORD", Value: opts.MountedTLSDir.KeystorePassword})
+			keyStorePassword = opts.MountedTLSDir.KeystorePassword
+		}
+		if opts.MountedTLSDir.TruststoreFile != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE", Value: mountedTLSTruststorePath(opts.MountedTLSDir)})
+			trustStorePassword := opts.MountedTLSDir.TruststorePassword
+			if trustStorePassword == "" && keyStorePassword != "" {
+				trustStorePassword = keyStorePassword
+			}
+			if trustStorePassword != "" && opts.MountedTLSDir.TruststorePasswordFile == "" {
+				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE_PASSWORD", Value: trustStorePassword})
+			}
+		} else {
+			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE", Value: mountedTLSKeystorePath(opts.MountedTLSDir)})
+			if keyStorePassword != "" {
+				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_TRUST_STORE_PASSWORD", Value: keyStorePassword})
+			}
+		}
 	} else {
 		// keystore / truststore + passwords come from a secret
 		envVars = append(envVars, tls.keystoreEnvVars("SOLR_SSL_KEY_STORE")...)
@@ -390,14 +429,29 @@ func (tls *TLSConfig) serverEnvVars() []corev1.EnvVar {
 func (tls *TLSConfig) clientEnvVars() []corev1.EnvVar {
 	opts := tls.Options
 
-	envVars := []corev1.EnvVar{}
+	var envVars []corev1.EnvVar
 	if opts.MountedTLSDir != nil {
-		// passwords get exported from files in the TLS dir using an initdb wrapper script
+		// passwords get exported from files in the TLS dir using an initdb wrapper script if they come from files
+		keyStorePassword := ""
 		if opts.MountedTLSDir.KeystoreFile != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_KEY_STORE", Value: mountedTLSKeystorePath(opts.MountedTLSDir)})
+			if opts.MountedTLSDir.KeystorePassword != "" && opts.MountedTLSDir.KeystorePasswordFile == "" {
+				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", Value: opts.MountedTLSDir.KeystorePassword})
+				keyStorePassword = opts.MountedTLSDir.KeystorePassword
+			}
 		}
 		if opts.MountedTLSDir.TruststoreFile != "" {
 			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE", Value: mountedTLSTruststorePath(opts.MountedTLSDir)})
+			trustStorePassword := opts.MountedTLSDir.TruststorePassword
+			if trustStorePassword == "" && keyStorePassword != "" {
+				trustStorePassword = keyStorePassword
+			}
+			if trustStorePassword != "" && opts.MountedTLSDir.TruststorePasswordFile == "" {
+				envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", Value: trustStorePassword})
+			}
+		} else if opts.MountedTLSDir.KeystoreFile != "" {
+			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE", Value: "$(SOLR_SSL_CLIENT_KEY_STORE)"})
+			envVars = append(envVars, corev1.EnvVar{Name: "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", Value: keyStorePassword})
 		}
 	}
 
@@ -505,19 +559,27 @@ func (tls *TLSConfig) mountTLSWrapperScriptAndInitContainer(deployment *appsv1.D
 	kspJavaSysProp := ""
 	catKsp := ""
 	if opts.MountedTLSDir.KeystoreFile != "" {
-		catKsp = fmt.Sprintf("ksp=\\$(cat %s)", mountedTLSKeystorePasswordPath(opts.MountedTLSDir))
-		kspJavaSysProp = " -Djavax.net.ssl.keyStorePassword=\\${ksp}"
+		if opts.MountedTLSDir.KeystorePasswordFile != "" || opts.MountedTLSDir.KeystorePassword == "" {
+			catKsp = fmt.Sprintf("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD=\\$(cat %s)", mountedTLSKeystorePasswordPath(opts.MountedTLSDir))
+			kspJavaSysProp = " -Djavax.net.ssl.keyStorePassword=\\${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+		}
 	}
 
-	catTsp := fmt.Sprintf("tsp=\\$(cat %s)", mountedTLSTruststorePasswordPath(opts.MountedTLSDir))
-	tspJavaSysProp := " -Djavax.net.ssl.trustStorePassword=\\${tsp}"
+	tspJavaSysProp := ""
+	catTsp := ""
+	if opts.MountedTLSDir.TruststorePasswordFile != "" || opts.MountedTLSDir.TruststorePassword == "" {
+		catTsp = fmt.Sprintf("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD=\\$(cat %s)", mountedTLSTruststorePasswordPath(opts.MountedTLSDir))
+		tspJavaSysProp = " -Djavax.net.ssl.trustStorePassword=\\${SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD}"
+	} else if catKsp != "" {
+		tspJavaSysProp = " -Djavax.net.ssl.trustStorePassword=\\${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+	}
 
 	/*
 		  Create a wrapper script like:
 
 			#!/bin/bash
 			ksp=$(cat $MOUNTED_TLS_DIR/keystore-password)
-			tsp=$(cat $MOUNTED_TLS_DIR/truststore-password)s
+			tsp=$(cat $MOUNTED_TLS_DIR/truststore-password)
 			JAVA_OPTS="${JAVA_OPTS} -Djavax.net.ssl.keyStorePassword=${ksp} -Djavax.net.ssl.trustStorePassword=${tsp}"
 			/opt/solr/contrib/prometheus-exporter/bin/solr-exporter $@
 
@@ -541,21 +603,41 @@ func (tls *TLSConfig) mountTLSWrapperScriptAndInitContainer(deployment *appsv1.D
 // Create an initContainer that generates the initdb script that exports the keystore / truststore passwords stored in
 // a directory to the environment; this is only needed when using the mountedTLSDir approach
 func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
-	// Might have a client cert too ...
-	exportClientPasswords := ""
-	if tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
-		mountedDir := tls.ClientConfig.Options.MountedTLSDir
-		if mountedDir.KeystorePasswordFile != "" {
-			exportClientPasswords += exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(mountedDir))
+
+	exportServerKeystorePassword, exportServerTruststorePassword := "", ""
+	if tls.ServerConfig.Options.MountedTLSDir != nil {
+		mountedDir := tls.ServerConfig.Options.MountedTLSDir
+		if mountedDir.KeystorePasswordFile != "" || mountedDir.KeystorePassword == "" {
+			exportServerKeystorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
+			exportServerTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_TRUST_STORE_PASSWORD", "${SOLR_SSL_KEY_STORE_PASSWORD}")
 		}
-		exportClientPasswords += exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(mountedDir))
+		if mountedDir.TruststorePasswordFile != "" {
+			exportServerTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
+		} else if mountedDir.TruststorePassword != "" {
+			exportServerTruststorePassword = ""
+		}
 	}
 
-	exportServerKeystorePassword := exportVarFromFileInInitdbWrapperScript("SOLR_SSL_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
-	exportServerTruststorePassword := exportVarFromFileInInitdbWrapperScript("SOLR_SSL_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(tls.ServerConfig.Options.MountedTLSDir))
+	// Might have a client cert too ...
+	exportClientKeystorePassword, exportClientTruststorePassword := "", ""
+	if tls.ClientConfig != nil && tls.ClientConfig.Options.MountedTLSDir != nil {
+		mountedDir := tls.ClientConfig.Options.MountedTLSDir
+		if mountedDir.KeystorePasswordFile != "" || mountedDir.KeystorePassword == "" {
+			exportClientKeystorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", mountedTLSKeystorePasswordPath(mountedDir))
+			exportClientTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", "${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}")
+		}
+		if mountedDir.TruststorePasswordFile != "" {
+			exportClientTruststorePassword = exportVarFromFileInInitdbWrapperScript("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", mountedTLSTruststorePasswordPath(mountedDir))
+		} else if mountedDir.TruststorePassword != "" {
+			exportClientTruststorePassword = ""
+		}
+	} else {
+		exportClientKeystorePassword = exportServerKeystorePassword
+		exportClientKeystorePassword = exportServerTruststorePassword
+	}
 
-	shCmd := fmt.Sprintf("echo -e \"#!/bin/bash\\n%s%s%s\"",
-		exportServerKeystorePassword, exportServerTruststorePassword, exportClientPasswords)
+	shCmd := fmt.Sprintf("echo -e \"#!/bin/bash\\n%s%s%s%s\"",
+		exportServerKeystorePassword, exportServerTruststorePassword, exportClientKeystorePassword, exportClientTruststorePassword)
 	shCmd += " > /docker-entrypoint-initdb.d/export-tls-vars.sh"
 	/*
 	   Init container creates a script like:
@@ -570,7 +652,7 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 	*/
 
 	return corev1.Container{
-		Name:            "export-tls-password",
+		Name:            InitdbInitContainer,
 		Image:           tls.InitContainerImage.ToImageName(),
 		ImagePullPolicy: tls.InitContainerImage.PullPolicy,
 		Command:         []string{"sh", "-c", shCmd},
@@ -580,7 +662,13 @@ func (tls *TLSCerts) generateTLSInitdbScriptInitContainer() corev1.Container {
 
 // Helper function for writing a line to the initdb wrapper script that exports an env var sourced from a file
 func exportVarFromFileInInitdbWrapperScript(varName string, varValue string) string {
-	return fmt.Sprintf("\\nexport %s=\\`cat %s\\`\\n", varName, varValue)
+	if strings.HasPrefix(varValue, "${") {
+		// This is a pass-through variable
+		return fmt.Sprintf("\\nexport %s=%q\\n", varName, varValue)
+	} else {
+		// This is a file to "cat"
+		return fmt.Sprintf("\\nexport %s=\"$(cat %q)\"\\n", varName, varValue)
+	}
 }
 
 // Returns an array of Java system properties to configure the TLS certificate used by client applications to call mTLS enabled Solr pods
@@ -593,20 +681,18 @@ func (tls *TLSConfig) clientJavaOpts() []string {
 		"-Djavax.net.ssl.trustStoreType=PKCS12",
 	}
 
-	if tls.Options.VerifyClientHostname {
-		javaOpts = append(javaOpts, "-Dsolr.jetty.ssl.verifyClientHostName=HTTPS")
-	}
-
 	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystoreFile != "") {
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStore=$(SOLR_SSL_CLIENT_KEY_STORE)")
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStoreType=PKCS12")
 	}
 
-	if tls.Options.PKCS12Secret != nil {
+	hasKeyStorePassword := false
+	if tls.Options.PKCS12Secret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.KeystorePasswordFile == "" && tls.Options.MountedTLSDir.KeystorePassword != "") {
+		hasKeyStorePassword = true
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.keyStorePassword=$(SOLR_SSL_CLIENT_KEY_STORE_PASSWORD)")
 	} // else for mounted dir option, the password comes from the wrapper script
 
-	if tls.Options.PKCS12Secret != nil || tls.Options.TrustStoreSecret != nil {
+	if tls.Options.PKCS12Secret != nil || tls.Options.TrustStoreSecret != nil || (tls.Options.MountedTLSDir != nil && tls.Options.MountedTLSDir.TruststorePasswordFile == "" && (tls.Options.MountedTLSDir.TruststorePassword != "" || hasKeyStorePassword)) {
 		javaOpts = append(javaOpts, "-Djavax.net.ssl.trustStorePassword=$(SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD)")
 	} // else for mounted dir option, the password comes from the wrapper script
 
@@ -622,8 +708,11 @@ func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPol
 		},
 	}
 
-	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " -in " + DefaultKeyStorePath +
-		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
+	caCrtFileName := DefaultKeyStorePath + "/ca.crt"
+
+	cmd := "OPTIONAL_CACRT=\"$(test -e " + caCrtFileName + " && echo ' -certfile " + caCrtFileName + "')\"; " +
+		"openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " $OPTIONAL_CACRT " +
+		"-inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
 		"/pkcs12/" + DefaultPkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 
 	return corev1.Container{
@@ -636,59 +725,6 @@ func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPol
 		VolumeMounts:             mounts,
 		Env:                      envVars,
 	}
-}
-
-// Get TLS properties for JAVA_TOOL_OPTIONS and Java system props for configuring the secured probe command; used when
-// we call a local command on the Solr pod for the probes instead of using HTTP/HTTPS
-func secureProbeTLSJavaToolOpts(solrCloud *solr.SolrCloud) (tlsJavaToolOpts string, tlsJavaSysProps string) {
-	if solrCloud.Spec.SolrTLS != nil {
-		// prefer the mounted client cert for probes if provided
-		if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
-			// The keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
-			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=$(cat " + mountedTLSKeystorePasswordPath(solrCloud.Spec.SolrClientTLS.MountedTLSDir) + ")"
-			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=$(cat " + mountedTLSTruststorePasswordPath(solrCloud.Spec.SolrClientTLS.MountedTLSDir) + ")"
-		} else if solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
-			// If the keystore passwords are in a file, then we need to cat the file(s) into JAVA_TOOL_OPTIONS
-			tlsJavaToolOpts += " -Djavax.net.ssl.keyStorePassword=$(cat " + mountedTLSKeystorePasswordPath(solrCloud.Spec.SolrTLS.MountedTLSDir) + ")"
-			tlsJavaToolOpts += " -Djavax.net.ssl.trustStorePassword=$(cat " + mountedTLSTruststorePasswordPath(solrCloud.Spec.SolrTLS.MountedTLSDir) + ")"
-		}
-		tlsJavaSysProps = secureProbeTLSJavaSysProps(solrCloud)
-	}
-	return tlsJavaToolOpts, tlsJavaSysProps
-}
-
-// Get the Java system properties needed to connect to a Solr pod over https
-// The values vary depending on whether there is a client cert or just a server cert
-// When using the mountedTLSDir option, the keystore / truststore passwords will come from a file instead of env vars
-func secureProbeTLSJavaSysProps(solrCloud *solr.SolrCloud) string {
-	// probe command sends request to "localhost" so skip hostname checking during TLS handshake
-	tlsJavaSysProps := "-Dsolr.ssl.checkPeerName=false"
-
-	// prefer the client cert for probes if available
-	if solrCloud.Spec.SolrClientTLS != nil {
-		tlsJavaSysProps += " -Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE"
-		if solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
-			// may not always have a keystore with mountedTLSDir
-			if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystoreFile != "" {
-				tlsJavaSysProps += " -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
-			}
-		} else {
-			tlsJavaSysProps += " -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
-			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_CLIENT_KEY_STORE_PASSWORD"
-			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD"
-		}
-	} else {
-		// use the server cert, either from the mounted dir or from envVars sourced from a secret
-		tlsJavaSysProps += " -Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE"
-		tlsJavaSysProps += " -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE"
-
-		if solrCloud.Spec.SolrTLS.MountedTLSDir == nil {
-			tlsJavaSysProps += " -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD"
-			tlsJavaSysProps += " -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
-		} // else passwords come through JAVA_TOOL_OPTIONS via cat'ing the mounted files
-	}
-
-	return tlsJavaSysProps
 }
 
 func mountedTLSKeystorePath(tlsDir *solr.MountedTLSDirectory) string {
@@ -707,7 +743,7 @@ func mountedTLSTruststorePasswordPath(tlsDir *solr.MountedTLSDirectory) string {
 	path := ""
 	if tlsDir.TruststorePasswordFile != "" {
 		path = mountedTLSPath(tlsDir, tlsDir.TruststorePasswordFile, "")
-	} else {
+	} else if tlsDir.TruststorePassword == "" {
 		path = mountedTLSKeystorePasswordPath(tlsDir)
 	}
 	return path

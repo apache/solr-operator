@@ -35,14 +35,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
-	BeforeEach(func() {
-		ctx = context.Background()
-
+	BeforeEach(func(ctx context.Context) {
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -54,7 +50,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		cleanupTest(ctx, solrCloud)
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -64,7 +60,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -89,7 +85,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the ZK information in the SolrCloud status")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal("host:7271"), "Wrong internal zkConnectionString in status")
@@ -108,11 +104,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -152,7 +149,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the ZK information in the SolrCloud status")
 			expectSolrCloudStatusWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloudStatus) {
 				g.Expect(found.ZookeeperConnectionInfo.InternalConnectionString).To(Equal(connectionString), "Wrong internal zkConnectionString in status")
@@ -173,11 +170,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/a-ch/root",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             "host:7271/a-ch/root",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -242,7 +240,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -257,11 +255,11 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
-			Expect(len(statefulSet.Spec.Template.Spec.Containers)).To(Equal(1), "Solr StatefulSet requires a container.")
+			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedZKHost := expectedZkConnStr + "/a-ch/root"
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":   expectedZKHost,
-				"SOLR_HOST": "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST": "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"ZK_SERVER": expectedZkConnStr,
 				"ZK_CHROOT": "/a-ch/root",
 				"SOLR_PORT": "8983",
@@ -270,8 +268,10 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testSSAnnotations, expectedStatefulSetAnnotations)), "Wrong statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart.Exec.Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"}), "Incorrect post-start command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(2), "Solr StatefulSet requires 2 init containers, one for the solr.xml and one for ZK.")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "}), "Wrong command for the ZK init container")
 
 			// Check the update strategy
 			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType), "Incorrect statefulset update strategy")
@@ -350,7 +350,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-1.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-2.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181,foo-solrcloud-zookeeper-3.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -369,7 +369,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			expectedZKHost := expectedZkConnStr + "/"
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":   expectedZKHost,
-				"SOLR_HOST": "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_HOST": "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
 				"ZK_SERVER": expectedZkConnStr,
 				"SOLR_PORT": "8983",
 				"GC_TUNE":   "",
@@ -429,7 +429,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -453,12 +453,13 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			// Env Variable Tests
 			expectedZKHost := expectedZkConnStr + "/a-ch/root"
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        expectedZKHost,
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"ZK_CHROOT":      "/a-ch/root",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             expectedZKHost,
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"ZK_CHROOT":           "/a-ch/root",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -503,7 +504,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				SolrOpts: "-Dextra -Dopts",
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectedZkConnStr := "foo-solrcloud-zookeeper-0.foo-solrcloud-zookeeper-headless.default.svc.cluster.local:2181"
 
 			By("testing the ZK information in the SolrCloud status")
@@ -529,11 +530,12 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			// Env Variable Tests
 			expectedZKHost := expectedZkConnStr + "/"
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        expectedZKHost,
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"ZK_HOST":             expectedZKHost,
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -564,25 +566,26 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/test",
-				"SOLR_HOST":      "$(POD_HOSTNAME).foo-solrcloud-headless.default",
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_ZK_OPTS":   testSolrZKOpts,
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
-				"SOLR_STOP_WAIT": strconv.FormatInt(60-5, 10),
+				"ZK_HOST":             "host:7271/test",
+				"SOLR_HOST":           "$(POD_NAME).foo-solrcloud-headless.default",
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_ZK_OPTS":        testSolrZKOpts,
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_STOP_WAIT":      strconv.FormatInt(60-5, 10),
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 			expectedInitContainerEnvVars := map[string]string{
-				"SOLR_ZK_OPTS":    testSolrZKOpts,
-				"SOLR_OPTS":       "$(SOLR_ZK_OPTS) " + testSolrOpts,
-				"ZKCLI_JVM_FLAGS": "-Dsolr.zk.opts=this",
+				"SOLR_ZK_OPTS":   testSolrZKOpts,
+				"SOLR_OPTS":      "$(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_TOOL_OPTS": "$(SOLR_ZK_OPTS) " + testSolrOpts,
 			}
 			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[1].Env)
 		})

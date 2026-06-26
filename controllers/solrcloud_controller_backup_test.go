@@ -32,14 +32,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "foo",
@@ -49,7 +45,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -59,7 +55,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -89,7 +85,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr ConfigMap")
 			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
 
@@ -102,15 +98,17 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			Expect(statefulSet.Spec.Template.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testPodAnnotations, map[string]string{
 				"solr.apache.org/solrXmlMd5":          solrXmlMd5,
 				util.SolrBackupRepositoriesAnnotation: "test-repo",
+				util.ServiceTypeAnnotation:            util.HeadlessServiceType,
 			})), "Incorrect pod annotations")
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "8983",
-				"SOLR_NODE_PORT": "8983",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "8983",
+				"SOLR_NODE_PORT":      "8983",
+				"SOLR_PORT_ADVERTISE": "8983",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 
@@ -122,9 +120,9 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+2), "Pod has wrong number of volumes")
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-			Expect(statefulSet.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 
 			By("adding credentials to the S3 repository (envVars)")
 			s3Credentials := &solrv1beta1.S3Credentials{
@@ -154,12 +152,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -185,9 +184,9 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+2), "Pod has wrong number of volumes")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			})
 
 			By("adding credentials to the S3 repository (envVars & credentials file)")
@@ -208,12 +207,13 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Env Variable Tests
 				expectedEnvVars := map[string]string{
-					"ZK_HOST":        "host:7271/",
-					"SOLR_HOST":      "$(POD_HOSTNAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
-					"SOLR_PORT":      "8983",
-					"SOLR_NODE_PORT": "8983",
-					"SOLR_LOG_LEVEL": "INFO",
-					"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+					"ZK_HOST":             "host:7271/",
+					"SOLR_HOST":           "$(POD_NAME)." + foundSolrCloud.HeadlessServiceName() + "." + foundSolrCloud.Namespace,
+					"SOLR_PORT":           "8983",
+					"SOLR_NODE_PORT":      "8983",
+					"SOLR_PORT_ADVERTISE": "8983",
+					"SOLR_LOG_LEVEL":      "INFO",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -246,15 +246,15 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].MountPath).To(Equal("/var/solr/data/backup-restore/test-repo/s3credential"), "S3Credentials file volumeMount has wrong mount path.")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].ReadOnly).To(BeTrue(), "S3Credentials file volumeMount must be read-only.")
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volume has wrong name.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret).To(Not(BeNil()), "S3Credentials file has to be loaded via a secret volume.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.SecretName).To(Equal(s3Credentials.CredentialsFileSecret.Name), "S3Credentials file is loaded into the pod using the wrong secret name.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.Items).To(Equal(
+				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+4), "Pod has wrong number of volumes")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volume has wrong name.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret).To(Not(BeNil()), "S3Credentials file has to be loaded via a secret volume.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.SecretName).To(Equal(s3Credentials.CredentialsFileSecret.Name), "S3Credentials file is loaded into the pod using the wrong secret name.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.Items).To(Equal(
 					[]corev1.KeyToPath{{Key: s3Credentials.CredentialsFileSecret.Key, Path: util.S3CredentialFileName}}), "S3Credentials file pod volume has the wrong items.")
-				g.Expect(found.Spec.Template.Spec.Volumes[2].VolumeSource.Secret.DefaultMode).To(BeEquivalentTo(&util.SecretReadOnlyPermissions), "S3Credentials file pod volume has the wrong default mode.")
-				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
-				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret.DefaultMode).To(BeEquivalentTo(&util.SecretReadOnlyPermissions), "S3Credentials file pod volume has the wrong default mode.")
+				g.Expect(found.Spec.Template.Spec.Volumes[4].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
+				g.Expect(found.Spec.Template.Spec.Volumes[4].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			})
 
 			By("adding extra options to the S3 repository")
@@ -310,7 +310,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				},
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr ConfigMap")
 			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLStringForCloud(solrCloud)})
 
@@ -322,6 +322,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			Expect(statefulSet.Spec.Template.Annotations).To(Equal(map[string]string{
 				"solr.apache.org/solrXmlMd5":          fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data["solr.xml"]))),
 				util.SolrBackupRepositoriesAnnotation: "another,test-repo",
+				util.ServiceTypeAnnotation:            util.HeadlessServiceType,
 			}), "Incorrect pod annotations")
 		})
 	})

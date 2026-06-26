@@ -29,14 +29,10 @@ import (
 
 var _ = FDescribe("SolrCloud controller - External DNS", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		replicas := int32(2)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -64,7 +60,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
@@ -74,7 +70,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -90,7 +86,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -101,11 +97,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "3000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "3000",
+				"SOLR_PORT_ADVERTISE": "3000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -120,8 +117,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 			Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(4000)), "Wrong port on common Service")
 			Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 			Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
-			Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
-			Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on common Service")
+			Expect(commonService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on common Service should be nil when not running with TLS")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
@@ -133,8 +129,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 			Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(3000)), "Wrong port on headless Service")
 			Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 			Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
-			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
-			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("http"), "Wrong appProtocol on headless Service")
+			Expect(headlessService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on headless Service should be nil when not running with TLS")
 
 			By("making sure no individual Solr Node Services exist")
 			expectNoServices(ctx, solrCloud, "Node service shouldn't exist, but it does.", solrCloud.GetAllSolrPodNames())
@@ -164,7 +159,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 5000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -181,11 +176,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "2000",
-				"SOLR_NODE_PORT": "2000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "2000",
+				"SOLR_NODE_PORT":      "2000",
+				"SOLR_PORT_ADVERTISE": "2000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
@@ -235,7 +231,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 2000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -252,11 +248,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "3000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "3000",
+				"SOLR_PORT_ADVERTISE": "3000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -305,7 +302,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -322,11 +319,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "3000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "3000",
+				"SOLR_PORT_ADVERTISE": "3000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -379,7 +377,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				CommonServicePort: 4000,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -390,11 +388,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
-				"SOLR_PORT":      "3000",
-				"SOLR_NODE_PORT": "3000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":           "3000",
+				"SOLR_NODE_PORT":      "3000",
+				"SOLR_PORT_ADVERTISE": "3000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -453,7 +452,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("ensuring the SolrCloud resource is updated with correct specs")
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External).To(Not(BeNil()), "Solr External addressability settings should not be nullified while setting defaults")
@@ -470,11 +469,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
-				"SOLR_PORT":      "2000",
-				"SOLR_NODE_PORT": "2000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.HeadlessServiceName() + "." + solrCloud.Namespace + ".svc." + testKubeDomain,
+				"SOLR_PORT":           "2000",
+				"SOLR_NODE_PORT":      "2000",
+				"SOLR_PORT_ADVERTISE": "2000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
@@ -524,7 +524,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				KubeDomain:        testKubeDomain,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
@@ -535,11 +535,12 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 
 			// Env Variable Tests
 			expectedEnvVars := map[string]string{
-				"ZK_HOST":        "host:7271/",
-				"SOLR_HOST":      "$(POD_HOSTNAME)." + solrCloud.Namespace + "." + testDomain,
-				"SOLR_PORT":      "2000",
-				"SOLR_NODE_PORT": "2000",
-				"SOLR_OPTS":      "-DhostPort=$(SOLR_NODE_PORT)",
+				"ZK_HOST":             "host:7271/",
+				"SOLR_HOST":           "$(POD_NAME)." + solrCloud.Namespace + "." + testDomain,
+				"SOLR_PORT":           "2000",
+				"SOLR_NODE_PORT":      "2000",
+				"SOLR_PORT_ADVERTISE": "2000",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")

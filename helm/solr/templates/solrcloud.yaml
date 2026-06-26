@@ -114,9 +114,10 @@ spec:
       {{- toYaml .Values.availability.podDisruptionBudget | nindent 6 }}
   {{- end }}
 
-  {{- if .Values.autoscaling }}
-  autoscaling:
-    vacatePodsOnScaleDown: {{ .Values.autoscaling.vacatePodsOnScaleDown }}
+  {{- if .Values.scaling }}
+  scaling:
+    vacatePodsOnScaleDown: {{ .Values.scaling.vacatePodsOnScaleDown }}
+    populatePodsOnScaleUp: {{ .Values.scaling.populatePodsOnScaleUp }}
   {{- end }}
 
   {{- if .Values.dataStorage }}
@@ -144,6 +145,9 @@ spec:
           {{- end }}
           {{- if .Values.dataStorage.persistent.pvc.storageClassName }}
           storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName | quote }}
+          {{- end }}
+          {{- if .Values.dataStorage.persistent.pvc.volumeAttributesClassName }}
+          volumeAttributesClassName: {{ .Values.dataStorage.persistent.pvc.volumeAttributesClassName | quote }}
           {{- end }}
         {{- end }}
     {{- else }}

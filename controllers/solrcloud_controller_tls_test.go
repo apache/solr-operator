@@ -22,6 +22,8 @@ import (
 	"crypto/md5"
 	b64 "encoding/base64"
 	"fmt"
+	"strings"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,19 +33,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 var _ = FDescribe("SolrCloud controller - TLS", func() {
 	var (
-		ctx context.Context
-
 		solrCloud *solrv1beta1.SolrCloud
 	)
 
 	BeforeEach(func() {
-		ctx = context.Background()
-
 		replicas := int32(1)
 		solrCloud = &solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{
@@ -69,17 +66,17 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		}
 	})
 
-	JustBeforeEach(func() {
+	JustBeforeEach(func(ctx context.Context) {
 		By("creating the SolrCloud")
 		Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
 
 		By("defaulting the missing SolrCloud values")
-		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+		solrCloud = expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 			g.Expect(found.WithDefaults(logger)).To(BeFalse(), "The SolrCloud spec should not need to be defaulted eventually")
 		})
 	})
 
-	AfterEach(func() {
+	AfterEach(func(ctx context.Context) {
 		cleanupTest(ctx, solrCloud)
 	})
 
@@ -90,7 +87,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic} // with basic-auth too
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				g.Expect(found.Spec.SolrAddressability.External.NodePortOverride).To(Equal(443), "Node port override wrong after Spec defaulting")
 			})
@@ -128,7 +125,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 					ProbeHandler: corev1.ProbeHandler{
 						HTTPGet: &corev1.HTTPGetAction{
 							Scheme: corev1.URISchemeHTTPS,
-							Path:   "/solr/admin/info/health",
+							Path:   "/solr/admin/customreadiness",
 							Port:   intstr.FromInt(8983),
 						},
 					},
@@ -137,8 +134,8 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 		})
-		FIt("has the correct resources", func() {
-			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/info/health"), "Utility Probe paths command gives wrong result")
+		FIt("has the correct resources", func(ctx context.Context) {
+			Expect(util.GetCustomProbePaths(solrCloud)).To(ConsistOf("/solr/admin/customreadiness"), "Utility Probe paths command gives wrong result")
 
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
@@ -161,7 +158,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				VerifyClientHostname: true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the Mounted TLS Config is correct in the generated StatefulSet")
 			expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
 		})
@@ -169,11 +166,11 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 
 	FContext("Mounted TLS - Non-default file names", func() {
 		mountedDir := &solrv1beta1.MountedTLSDirectory{
-			Path:                   "/mounted-non-default",
-			KeystoreFile:           "ks.p12",
-			TruststoreFile:         "ts.p12",
-			KeystorePasswordFile:   "ks-password",
-			TruststorePasswordFile: "ts-password",
+			Path:                 "/mounted-non-default",
+			KeystoreFile:         "ks.p12",
+			TruststoreFile:       "ts.p12",
+			KeystorePasswordFile: "ks-password",
+			TruststorePassword:   "ts-password",
 		}
 		BeforeEach(func() {
 			solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
@@ -183,7 +180,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				VerifyClientHostname: true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the Mounted TLS Config is correct in the generated StatefulSet")
 			expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
 
@@ -207,7 +204,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			}
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the Mounted TLS Config is correct in the generated StatefulSet")
 			expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
 			By("checking that the BasicAuth works as expected when using TLS")
@@ -231,7 +228,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			}
 			solrCloud.Spec.SolrAddressability.External.HideNodes = true
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the Mounted TLS Config is correct in the generated StatefulSet")
 			foundStatefulSet := expectStatefulSetMountedTLSDirConfig(ctx, solrCloud)
 
@@ -258,7 +255,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			}
 			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Need // require client auth too (mTLS between the pods)
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, false)
@@ -277,7 +274,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, false)
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, true, false)
@@ -294,7 +291,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 			solrCloud.Spec.SolrTLS = createTLSOptions(tlsSecretName, keystorePassKey, true)
 			solrCloud.Spec.SolrTLS.ClientAuth = solrv1beta1.Need
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			verifyUserSuppliedTLSConfig(solrCloud.Spec.SolrTLS, tlsSecretName, keystorePassKey, tlsSecretName)
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, true)
@@ -328,7 +325,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				RestartOnTLSSecretUpdate: true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the User supplied TLS Config is correct in the generated StatefulSet")
 			verifyReconcileUserSuppliedTLS(ctx, solrCloud, false, true)
 
@@ -343,7 +340,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{AuthenticationType: solrv1beta1.Basic}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("checking that the BasicAuth works as expected when using TLS")
 			expectStatefulSetBasicAuthConfig(ctx, solrCloud, true)
 
@@ -386,7 +383,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				TLSSecret: tlsSecretName,
 			}
 		})
-		FIt("has the correct resources - Explicit Secret", func() {
+		FIt("has the correct resources - Explicit Secret", func(ctx context.Context) {
 			By("Checking that the Ingress will terminate TLS")
 			expectTerminateIngressTLSConfig(ctx, solrCloud, tlsSecretName, false)
 
@@ -411,7 +408,7 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 				UseDefaultTLSSecret: true,
 			}
 		})
-		FIt("has the correct resources", func() {
+		FIt("has the correct resources", func(ctx context.Context) {
 			By("Checking that the Ingress will terminate TLS")
 			expectTerminateIngressTLSConfig(ctx, solrCloud, "", false)
 
@@ -431,12 +428,12 @@ var _ = FDescribe("SolrCloud controller - TLS", func() {
 })
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
-func expectTLSConfigOnPodTemplate(tls *solrv1beta1.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) *corev1.Container {
-	return expectTLSConfigOnPodTemplateWithGomega(Default, tls, podTemplate, needsPkcs12InitContainer, clientOnly, clientTLS)
+func expectTLSConfigOnPodTemplate(solrCloud *solrv1beta1.SolrCloud, tls *solrv1beta1.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) *corev1.Container {
+	return expectTLSConfigOnPodTemplateWithGomega(Default, solrCloud, tls, podTemplate, needsPkcs12InitContainer, clientOnly, clientTLS)
 }
 
 // Ensures all the TLS env vars, volume mounts and initContainers are setup for the PodTemplateSpec
-func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) *corev1.Container {
+func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, tls *solrv1beta1.SolrTLSOptions, podTemplate *corev1.PodTemplateSpec, needsPkcs12InitContainer bool, clientOnly bool, clientTLS *solrv1beta1.SolrTLSOptions) *corev1.Container {
 	g.Expect(podTemplate.Spec.Volumes).To(Not(BeNil()), "Solr Pod Volumes should not be nil when using TLS")
 
 	if tls.PKCS12Secret != nil {
@@ -526,72 +523,131 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, tls *solrv1beta1.SolrTLSOp
 				break
 			}
 		}
-		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		expCmd := "OPTIONAL_CACRT=\"$(test -e /var/solr/tls/ca.crt && echo ' -certfile /var/solr/tls/ca.crt')\"; openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
 		g.Expect(expInitContainer.Command[2]).To(Equal(expCmd), "Wrong TLS initContainer command")
 	}
 
-	if tls.ClientAuth == solrv1beta1.Need {
-		// verify the probes use a command with SSL opts
-		tlsProps := ""
-		if clientTLS != nil {
-			tlsProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE" +
-				" -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_CLIENT_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD"
-		} else {
-			tlsProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE" +
-				" -Djavax.net.ssl.keyStorePassword=$SOLR_SSL_KEY_STORE_PASSWORD -Djavax.net.ssl.trustStorePassword=$SOLR_SSL_TRUST_STORE_PASSWORD"
-		}
+	if tls.MountedTLSDir != nil {
+		expectMountedTLSDirConfigOnPodTemplateWithGomega(g, podTemplate, solrCloud)
+	}
+
+	if solrCloud != nil && (solrCloud.Spec.SolrTLS.ClientAuth == solrv1beta1.Need || solrCloud.Spec.SolrTLS.VerifyClientHostname) {
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
-		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
+		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
+		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.LivenessProbe.Exec.Command).To(HaveLen(3), "liveness probe command has wrong number of args")
-		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(tlsProps), "liveness probe should invoke java with SSL opts")
+		path := "/solr" + util.DefaultLivenessProbePath
+		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
+			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
+		}
+		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "liveness probe should invoke solr api -get to contact Solr securely")
 		g.Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
-		g.Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when auth is enabled")
+		g.Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.ReadinessProbe.Exec.Command).To(HaveLen(3), "readiness probe command has wrong number of args")
-		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(tlsProps), "readiness probe should invoke java with SSL opts")
+		path = "/solr" + util.DefaultReadinessProbePath
+		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe != nil {
+			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe.HTTPGet.Path
+		}
+		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "readiness probe should invoke solr api -get to contact Solr securely")
+		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
+			g.Expect(mainContainer.StartupProbe).To(Not(BeNil()), "main container should have a startup probe defined")
+			g.Expect(mainContainer.StartupProbe.Exec).To(Not(BeNil()), "startup probe should have an exec when auth is enabled")
+			g.Expect(mainContainer.StartupProbe.Exec.Command).To(HaveLen(3), "startup probe command has wrong number of args")
+			path = "/solr" + util.DefaultStartupProbePath
+			if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
+				path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe.HTTPGet.Path
+			}
+			g.Expect(mainContainer.StartupProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "startup probe should invoke solr api -get to contact Solr securely")
+		}
+	} else if solrCloud != nil {
+		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
+		g.Expect(mainContainer.LivenessProbe.HTTPGet).To(Not(BeNil()), "liveness probe should have an http get when client auth is not needed")
+		g.Expect(mainContainer.LivenessProbe.HTTPGet.HTTPHeaders).To(HaveLen(1), "liveness probe http get should have host header")
+		g.Expect(mainContainer.LivenessProbe.HTTPGet.HTTPHeaders[0].Name).To(Equal("Host"), "liveness probe http get should have host header")
+		g.Expect(mainContainer.LivenessProbe.HTTPGet.HTTPHeaders[0].Value).To(Equal(solrCloud.InternalCommonUrl(false)), "liveness probe http get should have a correct host header")
+		g.Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
+		g.Expect(mainContainer.ReadinessProbe.HTTPGet).To(Not(BeNil()), "readiness probe should have an http get when client auth is not needed")
+		g.Expect(mainContainer.ReadinessProbe.HTTPGet.HTTPHeaders).To(HaveLen(1), "readiness probe http get should have host header")
+		g.Expect(mainContainer.ReadinessProbe.HTTPGet.HTTPHeaders[0].Name).To(Equal("Host"), "readiness probe http get should have host header")
+		g.Expect(mainContainer.ReadinessProbe.HTTPGet.HTTPHeaders[0].Value).To(Equal(solrCloud.InternalCommonUrl(false)), "readiness probe http get should have a correct host header")
+		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
+			g.Expect(mainContainer.StartupProbe).To(Not(BeNil()), "main container should have a startup probe defined")
+			g.Expect(mainContainer.StartupProbe.HTTPGet).To(Not(BeNil()), "startup probe should have an http get when client auth is not needed")
+			g.Expect(mainContainer.StartupProbe.HTTPGet.HTTPHeaders).To(HaveLen(1), "startup probe http get should have host header")
+			g.Expect(mainContainer.StartupProbe.HTTPGet.HTTPHeaders[0].Name).To(Equal("Host"), "startup probe http get should have host header")
+			g.Expect(mainContainer.StartupProbe.HTTPGet.HTTPHeaders[0].Value).To(Equal(solrCloud.InternalCommonUrl(false)), "startup probe http get should have a correct host header")
+		}
 	}
 
 	return &mainContainer // return as a convenience in case tests want to do more checking on the main container
 }
 
-func expectMountedTLSDirEnvVars(envVars []corev1.EnvVar, solrCloud *solrv1beta1.SolrCloud) {
-	Expect(envVars).To(Not(BeNil()), "Solr Pod must have env vars when using Mounted TLS Dir")
+func expectMountedTLSDirEnvVars(g Gomega, envVars []corev1.EnvVar, solrCloud *solrv1beta1.SolrCloud) {
+	g.Expect(envVars).To(Not(BeNil()), "Solr Pod must have env vars when using Mounted TLS Dir")
 	envVars = filterVarsByName(envVars, func(n string) bool {
 		return strings.HasPrefix(n, "SOLR_SSL_")
 	})
 
+	expectedTLSVarsCount := 8
+
 	if solrCloud.Spec.SolrClientTLS != nil {
-		Expect(len(envVars)).To(Equal(8), "expected SOLR_SSL and SOLR_SSL_CLIENT related env vars not found")
-	} else {
-		Expect(len(envVars)).To(Equal(6), "expected SOLR_SSL related env vars not found")
+		expectedTLSVarsCount += 4
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
+			expectedTLSVarsCount -= 2
+			if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile == "" && solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword != "" {
+				expectedTLSVarsCount += 1
+			}
+			if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile == "" && solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword != "" {
+				expectedTLSVarsCount += 1
+			}
+		}
 	}
+
+	if !solrCloud.Spec.SolrTLS.VerifyClientHostname {
+		expectedTLSVarsCount += 1
+	}
+	if solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
+		expectedTLSVarsCount -= 2
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile == "" && solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword != "" {
+			expectedTLSVarsCount += 1
+		}
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile == "" && solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword != "" {
+			expectedTLSVarsCount += 1
+		}
+	}
+	g.Expect(envVars).To(HaveLen(expectedTLSVarsCount), "expected SOLR_SSL (and maybe SOLR_SSL_CLIENT) related env vars not found")
 
 	expectedKeystorePath := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystoreFile
 	expectedTruststorePath := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.TruststoreFile
 
 	for _, envVar := range envVars {
 		if envVar.Name == "SOLR_SSL_ENABLED" {
-			Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
 		}
 
 		if envVar.Name == "SOLR_SSL_KEY_STORE" {
-			Expect(envVar.Value).To(Equal(expectedKeystorePath), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal(expectedKeystorePath), "Wrong envVar value for %s", envVar.Name)
 		}
 
 		if envVar.Name == "SOLR_SSL_TRUST_STORE" {
-			Expect(envVar.Value).To(Equal(expectedTruststorePath), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal(expectedTruststorePath), "Wrong envVar value for %s", envVar.Name)
 		}
 
 		if envVar.Name == "SOLR_SSL_WANT_CLIENT_AUTH" {
-			Expect(envVar.Value).To(Equal("false"), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal("false"), "Wrong envVar value for %s", envVar.Name)
 		}
 
 		if envVar.Name == "SOLR_SSL_NEED_CLIENT_AUTH" {
-			Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
 		}
 
 		if envVar.Name == "SOLR_SSL_CHECK_PEER_NAME" {
-			Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
+			g.Expect(envVar.Value).To(Equal("true"), "Wrong envVar value for %s", envVar.Name)
+		}
+
+		if envVar.Name == "SOLR_SSL_CLIENT_HOSTNAME_VERIFICATION" {
+			g.Expect(envVar.Value).To(Equal("false"), "Wrong envVar value for %s", envVar.Name)
 		}
 	}
 
@@ -599,14 +655,21 @@ func expectMountedTLSDirEnvVars(envVars []corev1.EnvVar, solrCloud *solrv1beta1.
 		for _, envVar := range envVars {
 			if envVar.Name == "SOLR_SSL_CLIENT_KEY_STORE" {
 				expectedKeystorePath = solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystoreFile
-				Expect(envVar.Value).To(Equal(expectedKeystorePath), "Wrong envVar value for %s", envVar.Name)
+				g.Expect(envVar.Value).To(Equal(expectedKeystorePath), "Wrong envVar value for %s", envVar.Name)
 			}
 
 			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE" {
 				expectedTruststorePath = solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststoreFile
-				Expect(envVar.Value).To(Equal(expectedTruststorePath), "Wrong envVar value for %s", envVar.Name)
+				g.Expect(envVar.Value).To(Equal(expectedTruststorePath), "Wrong envVar value for %s", envVar.Name)
 			}
 
+			if envVar.Name == "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD" {
+				g.Expect(envVar.Value).To(Equal(solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword), "Wrong envVar value for %s", envVar.Name)
+			}
+
+			if envVar.Name == "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD" {
+				g.Expect(envVar.Value).To(Equal(solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword), "Wrong envVar value for %s", envVar.Name)
+			}
 		}
 	}
 }
@@ -737,7 +800,7 @@ func createMockTLSSecret(ctx context.Context, parentObject client.Object, secret
 func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) *appsv1.StatefulSet {
 	statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 	podTemplate := &statefulSet.Spec.Template
-	expectMountedTLSDirConfigOnPodTemplate(podTemplate, solrCloud)
+	expectTLSConfigOnPodTemplateWithGomega(Default, solrCloud, solrCloud.Spec.SolrTLS, podTemplate, false, false, solrCloud.Spec.SolrClientTLS)
 
 	// Check HTTPS cluster prop setup container
 	Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "Init containers cannot be empty when using Mounted TLS")
@@ -745,71 +808,95 @@ func expectStatefulSetMountedTLSDirConfig(ctx context.Context, solrCloud *solrv1
 
 	// should have a mount for the initdb on main container
 	expectInitdbVolumeMount(podTemplate)
-
-	// verify initContainer to create initdb solrCloudript to export the keystore & truststore passwords before launching the main container
-	name := "export-tls-password"
-	expInitContainer := expectInitContainer(podTemplate, name, "initdb", util.InitdbPath)
-	Expect(len(expInitContainer.Command)).To(Equal(3), "Wrong command length for %s init container command", name)
-	Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-	Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-
-	if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
-		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-		Expect(expInitContainer.Command[2]).To(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD"), "Wrong shell command for init container: %s", name)
-	} else {
-		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_KEY_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
-		Expect(expInitContainer.Command[2]).To(Not(ContainSubstring("SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD")), "Wrong shell command for init container: %s", name)
-	}
 	return statefulSet
 }
 
-func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec, solrCloud *solrv1beta1.SolrCloud) {
-	Expect(podTemplate.Spec.Containers).To(Not(BeEmpty()), "Solr Pod must have containers")
-	mainContainer := podTemplate.Spec.Containers[0]
-	Expect(mainContainer).To(Not(BeNil()), "Didn't find the main solrcloud-node container in the sts!")
-	Expect(mainContainer.Env).To(Not(BeEmpty()), "No Env vars for main solrcloud-node container in the sts!")
-	expectMountedTLSDirEnvVars(mainContainer.Env, solrCloud)
-
+func expectInitDBGeneratingInitContainer(g Gomega, podTemplate *corev1.PodTemplateSpec, solrCloud *solrv1beta1.SolrCloud) {
 	// verify the probes use a command with SSL opts
-	tlsJavaToolOpts, tlsJavaSysProps := "", ""
+	expectedServerKeystorePasswordSource := ""
+	expectedServerTruststorePasswordSource := ""
+	expectedClientKeystorePasswordSource := ""
+	expectedClientTruststorePasswordSource := ""
+	needsInitContainer := false
 	// if there's a client cert, then the probe should use that, else uses the server cert
-	if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
-		expectedKeystorePasswordFile := solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile
-		expectedTruststorePasswordFile := solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/"
-		if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile != "" {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile
-		} else {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile
+	if solrCloud.Spec.SolrTLS != nil && solrCloud.Spec.SolrTLS.MountedTLSDir != nil {
+		if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile != "" {
+			expectedServerKeystorePasswordSource = solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
+			needsInitContainer = true
+		} else if solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePassword == "" {
+			expectedServerKeystorePasswordSource = solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/keystore-password"
+			needsInitContainer = true
 		}
-
-		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat " + expectedKeystorePasswordFile + ") " +
-			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
-		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_CLIENT_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_CLIENT_KEY_STORE"
-	} else {
-		expectedKeystorePasswordFile := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
-		expectedTruststorePasswordFile := solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/"
 		if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile != "" {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile
-		} else {
-			expectedTruststorePasswordFile += solrCloud.Spec.SolrTLS.MountedTLSDir.KeystorePasswordFile
+			expectedServerTruststorePasswordSource = solrCloud.Spec.SolrTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePasswordFile
+			needsInitContainer = true
+		} else if solrCloud.Spec.SolrTLS.MountedTLSDir.TruststorePassword == "" {
+			expectedServerTruststorePasswordSource = "${SOLR_SSL_KEY_STORE_PASSWORD}"
+			needsInitContainer = true
 		}
-
-		tlsJavaToolOpts = "-Djavax.net.ssl.keyStorePassword=$(cat " + expectedKeystorePasswordFile + ") " +
-			"-Djavax.net.ssl.trustStorePassword=$(cat " + expectedTruststorePasswordFile + ")"
-		tlsJavaSysProps = "-Djavax.net.ssl.trustStore=$SOLR_SSL_TRUST_STORE -Djavax.net.ssl.keyStore=$SOLR_SSL_KEY_STORE"
+	}
+	if solrCloud.Spec.SolrClientTLS != nil && solrCloud.Spec.SolrClientTLS.MountedTLSDir != nil {
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile != "" {
+			expectedClientKeystorePasswordSource = solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePasswordFile
+			needsInitContainer = true
+		} else if solrCloud.Spec.SolrClientTLS.MountedTLSDir.KeystorePassword == "" {
+			expectedClientKeystorePasswordSource = solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/keystore-password"
+			needsInitContainer = true
+		}
+		if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile != "" {
+			expectedClientTruststorePasswordSource = solrCloud.Spec.SolrClientTLS.MountedTLSDir.Path + "/" + solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePasswordFile
+			needsInitContainer = true
+		} else if solrCloud.Spec.SolrClientTLS.MountedTLSDir.TruststorePassword == "" {
+			expectedClientTruststorePasswordSource = "${SOLR_SSL_CLIENT_KEY_STORE_PASSWORD}"
+			needsInitContainer = true
+		}
 	}
 
-	Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
-	Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
-	Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeNil()), "liveness probe should have an exec when mTLS is enabled")
-	Expect(mainContainer.LivenessProbe.Exec.Command).To(Not(BeEmpty()), "liveness probe command cannot be empty")
-	Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(tlsJavaToolOpts), "liveness probe should invoke java with SSL opts")
-	Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(tlsJavaSysProps), "liveness probe should invoke java with SSL opts")
-	Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
-	Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when mTLS is enabled")
-	Expect(mainContainer.ReadinessProbe.Exec.Command).To(Not(BeEmpty()), "readiness probe command cannot be empty")
-	Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(tlsJavaToolOpts), "readiness probe should invoke java with SSL opts")
-	Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(tlsJavaSysProps), "readiness probe should invoke java with SSL opts")
+	var initDBInitContainer *corev1.Container
+	for _, container := range podTemplate.Spec.InitContainers {
+		if container.Name == util.InitdbInitContainer {
+			initDBInitContainer = &container
+		}
+	}
+	if needsInitContainer {
+		g.Expect(initDBInitContainer).ToNot(BeNil(), "Did not find an initDB generating init container when TLS passwords/Basic Auth are stored in files")
+
+		expectExportedVariable(g, initDBInitContainer.Command[2], "SOLR_SSL_KEY_STORE_PASSWORD", expectedServerKeystorePasswordSource)
+		expectExportedVariable(g, initDBInitContainer.Command[2], "SOLR_SSL_TRUST_STORE_PASSWORD", expectedServerTruststorePasswordSource)
+		expectExportedVariable(g, initDBInitContainer.Command[2], "SOLR_SSL_CLIENT_KEY_STORE_PASSWORD", expectedClientKeystorePasswordSource)
+		expectExportedVariable(g, initDBInitContainer.Command[2], "SOLR_SSL_CLIENT_TRUST_STORE_PASSWORD", expectedClientTruststorePasswordSource)
+	} else {
+		g.Expect(initDBInitContainer).To(BeNil(), "Found an initDB generating init container when TLS passwords/Basic Auth are NOT stored in files")
+	}
+}
+
+func expectExportedVariable(g Gomega, command string, varName string, valueSource string) {
+	if valueSource != "" {
+		if strings.HasPrefix(valueSource, "${") {
+			// This is a passed-through variable
+			g.ExpectWithOffset(1, command).To(ContainSubstring(varName+"=\""+valueSource+"\""), "Exported variable not found in initDB script")
+		} else {
+			// This is a file path
+			g.ExpectWithOffset(1, command).To(ContainSubstring(varName+"=\"$(cat \""+valueSource+"\")\""), "Exported variable not found in initDB script")
+		}
+	} else {
+		g.ExpectWithOffset(1, command).ToNot(ContainSubstring(varName), "Exported variable found in initDB script that should not be there")
+	}
+}
+
+func expectMountedTLSDirConfigOnPodTemplate(podTemplate *corev1.PodTemplateSpec, solrCloud *solrv1beta1.SolrCloud) {
+	expectMountedTLSDirConfigOnPodTemplateWithGomega(Default, podTemplate, solrCloud)
+}
+
+func expectMountedTLSDirConfigOnPodTemplateWithGomega(g Gomega, podTemplate *corev1.PodTemplateSpec, solrCloud *solrv1beta1.SolrCloud) {
+	g.Expect(podTemplate.Spec.Containers).To(Not(BeEmpty()), "Solr Pod must have containers")
+	mainContainer := podTemplate.Spec.Containers[0]
+	g.Expect(mainContainer).To(Not(BeNil()), "Didn't find the main solrcloud-node container in the sts!")
+	g.Expect(mainContainer.Env).To(Not(BeEmpty()), "No Env vars for main solrcloud-node container in the sts!")
+
+	expectMountedTLSDirEnvVars(g, mainContainer.Env, solrCloud)
+
+	expectInitDBGeneratingInitContainer(g, podTemplate, solrCloud)
 }
 
 // ensures the TLS settings are applied correctly to the STS
@@ -819,7 +906,7 @@ func expectStatefulSetTLSConfig(solrCloud *solrv1beta1.SolrCloud, statefulSet *a
 
 func expectStatefulSetTLSConfigWithGomega(g Gomega, solrCloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, needsPkcs12InitContainer bool) {
 	podTemplate := &statefulSet.Spec.Template
-	expectTLSConfigOnPodTemplateWithGomega(g, solrCloud.Spec.SolrTLS, podTemplate, needsPkcs12InitContainer, false, solrCloud.Spec.SolrClientTLS)
+	expectTLSConfigOnPodTemplateWithGomega(g, solrCloud, solrCloud.Spec.SolrTLS, podTemplate, needsPkcs12InitContainer, false, solrCloud.Spec.SolrClientTLS)
 
 	// Check HTTPS cluster prop setup container
 	g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "Solr Pods with TLS require init containers")
@@ -860,11 +947,9 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 }
 
 func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, selectorLables map[string]string, podsHaveTLSEnabled bool) {
-	appProtocol := "http"
 	podPort := 8983
 	servicePort := 80
 	if podsHaveTLSEnabled {
-		appProtocol = "https"
 		servicePort = 443
 	}
 	By("testing the Solr Common Service")
@@ -873,8 +958,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 	Expect(commonService.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on common Service")
 	Expect(commonService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on common Service")
 	Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
-	Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
-	Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on common Service")
+	if podsHaveTLSEnabled {
+		Expect(commonService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on common Service should not be nil")
+		Expect(*commonService.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on common Service")
+	} else {
+		Expect(commonService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on common Service should be nil when not running with TLS")
+	}
 
 	if solrCloud.Spec.SolrAddressability.External.UsesIndividualNodeServices() {
 		nodeNames := solrCloud.GetAllSolrPodNames()
@@ -885,8 +974,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 			Expect(service.Spec.Ports[0].Port).To(Equal(int32(servicePort)), "Wrong port on node Service")
 			Expect(service.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on node Service")
 			Expect(service.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on node Service")
-			Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on node Service should not be nil")
-			Expect(*service.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on node Service")
+			if podsHaveTLSEnabled {
+				Expect(service.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on node Service should not be nil")
+				Expect(*service.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on node Service")
+			} else {
+				Expect(service.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on node Service should be nil when not running with TLS")
+			}
 		}
 	} else {
 		By("testing the Solr Headless Service")
@@ -895,8 +988,12 @@ func expectTLSService(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, sel
 		Expect(headlessService.Spec.Ports[0].Port).To(Equal(int32(podPort)), "Wrong port on headless Service")
 		Expect(headlessService.Spec.Ports[0].TargetPort.StrVal).To(Equal("solr-client"), "Wrong podPort name on headless Service")
 		Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
-		Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
-		Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal(appProtocol), "Wrong appProtocol on headless Service")
+		if podsHaveTLSEnabled {
+			Expect(headlessService.Spec.Ports[0].AppProtocol).ToNot(BeNil(), "AppProtocol on headless Service should not be nil")
+			Expect(*headlessService.Spec.Ports[0].AppProtocol).To(Equal("https"), "Wrong appProtocol on headless Service")
+		} else {
+			Expect(headlessService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on headless Service should be nil when not running with TLS")
+		}
 	}
 }
 

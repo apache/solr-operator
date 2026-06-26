@@ -1,10 +1,8 @@
 Apache Solr
 =============
 
-Apache Solr is the popular, blazing-fast, open source enterprise search platform built on Apache Lucene™.
-
-Solr is highly reliable, scalable and fault tolerant, providing distributed indexing, replication and load-balanced querying, automated failover and recovery, centralized configuration and more.
-Solr powers the search and navigation features of many of the world's largest internet sites.
+Solr is the blazing-fast, open source, multi-modal search platform built on Apache Lucene. It powers full-text, vector, analytics, and geospatial search at many of the world's largest organizations.
+Other major features include: Kubernetes and docker integration; streaming; and highlighting, faceting, and spellchecking.
 
 Documentation around using Apache Solr can be found on it's [official site](https://solr.apache.org).
 
@@ -28,7 +26,7 @@ The Solr version can be any supported version of Solr you wish to run, but the _
 
 ## Upgrade Notes
 
-Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://apache.github.io/solr-operator/docs/upgrade-notes.html)**.
+Before upgrading your Solr Operator and Solr Helm chart version, **please refer to the [Upgrade Notes](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html)**.
 There may be breaking changes between the version you are using and the version you want to upgrade to.
 
 ## Using the Helm Chart
@@ -38,7 +36,7 @@ There may be breaking changes between the version you are using and the version 
 To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
 
 ```bash
-helm install example apache-solr/solr --version 0.8.0-prerelease --set image.tag=8.8
+helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.10.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -52,11 +50,11 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
 ```bash
-helm upgrade example apache-solr/solr --version 0.8.0-prerelease --reuse-values --set image.tag=8.11
+helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.10.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
-Be sure to select the [update strategy](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
+Be sure to select the [update strategy](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#update-strategy) that best fits your use case.
 However, the `Managed` strategy is highly recommended.
 
 ### Uninstalling the Chart
@@ -74,50 +72,50 @@ The command removes the SolrCloud resource, and then Kubernetes will garbage col
 Please note that there is not a 1-1 mapping from SolrCloud CRD options to Solr Helm options.
 All options should be supported, but they might be slightly renamed in some scenarios, such as `customSolrKubeOptions`.
 Please read below to see what the Helm chart values are for the options you need.
-Descriptions on how to use these options can be found in the [SolrCloud documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html).
+Descriptions on how to use these options can be found in the [SolrCloud documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html).
 
 ### Running Solr
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| Key | Type | Default           | Description |
+|-----|------|-------------------|-------------|
 | fullnameOverride | string | `""` | A custom name for the Solr Operator Deployment |
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"solr"` | The repository of the Solr image |
-| image.tag | string | `"8.11"` | The tag/version of Solr to run |
-| image.pullPolicy | string |  | PullPolicy for the Solr image, defaults to the empty Pod behavior |
-| image.imagePullSecret | string |  | PullSecret for the Solr image |
+| image.tag | string | `"9.10.0"` | The tag/version of Solr to run |
+| image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
+| image.imagePullSecret | string | | PullSecret for the Solr image |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
 | busyBoxImage.tag | string | `"1.28.0-glibc"` | The tag/version of BusyBox to run |
-| busyBoxImage.pullPolicy | string |  | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
-| busyBoxImage.imagePullSecret | string |  | PullSecret for the BusyBox image |
+| busyBoxImage.pullPolicy | string | | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
+| busyBoxImage.imagePullSecret | string | | PullSecret for the BusyBox image |
 | solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | Java memory parameters |
 | solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line.  ZooKeeper-connection related properties should be reserved for `solrOptions.zkJavaOpts` (see below). |
 | solrOptions.zkJavaOpts | string | `""` | Additional java arguments required to connect to ZooKeeper to pass via the command line |
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
 | solrOptions.solrModules | []string | | List of packaged Solr Modules to load when running Solr. Note: There is no need to specify solr modules necessary for other parts of the Spec (i.e. `backupRepositories[].gcs`), those will be added automatically. |
-| solrOptions.additionalLibs | []string | | List of paths in the Solr Image to add to the classPath when running Solr. Note: There is no need to include paths for solrModules here if already listed in `solrModules`, those paths will be added automatically. |
+| solrOptions.additionalLibs | []string | | List of paths in the Solr Image to add to the classPath when running Solr. (There is no need to include paths for solrModules here if already listed in `solrModules`, those paths will be added automatically.) Note that this setting has no effect on solrcloud clusters that rely on a user-provided `solr.xml` file. |
 | solrOptions.security.authenticationType | string | `""` | Type of authentication to use for Solr |
 | solrOptions.security.basicAuthSecret | string | `""` | Name of Secret in the same namespace that stores the basicAuth information for the Solr user |
 | solrOptions.security.probesRequireAuth | boolean | | Whether the probes for the SolrCloud pod require auth |
 | solrOptions.security.bootstrapSecurityJson.name | string | | Name of a Secret in the same namespace that stores a user-provided `security.json` to bootstrap the Solr security config |
 | solrOptions.security.bootstrapSecurityJson.key | string | | Key holding the user-provided `security.json` in the bootstrap security Secret |
-| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
+| updateStrategy.method | string | `"Managed"` | The method for conducting updates of Solr pods. Either `Managed`, `StatefulSet` or `Manual`. See the [docs](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#update-strategy) for more information |
 | updateStrategy.managedUpdate.maxPodsUnavailable | int-or-string | `"25%"` | The number of Solr pods in a Solr Cloud that are allowed to be unavailable during the rolling restart. Either a static number, or a percentage representing the percentage of total pods requested for the statefulSet. |
 | updateStrategy.managedUpdate.maxShardReplicasUnavailable | int-or-string | `1` | The number of replicas for each shard allowed to be unavailable during the restart. Either a static number, or a percentage representing the percentage of the number of replicas for a shard. |
-| updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) | | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
+| updateStrategy.restartSchedule | [string (CRON)](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) |                   | A CRON schedule for automatically restarting the Solr Cloud. [Refer here](https://pkg.go.dev/github.com/robfig/cron/v3?utm_source=godoc#hdr-CRON_Expression_Format) for all possible CRON syntaxes accepted. |
 | availability.podDisruptionBudget.enabled | boolean | `true` | Create [PodDisruptionBudget(s)](https://kubernetes.io/docs/tasks/run-application/configure-pdb/) to ensure the availability of SolrNodes. |
 | availability.podDisruptionBudget.method | string | `"ClusterWide"` | The method by which PodDisruptionBudgets should be created. The only option currently is `ClusterWide`. |
 | serviceAccount.create | boolean | `false` | Create a serviceAccount to be used for all pods being deployed (Solr & ZK). If `serviceAccount.name` is not specified, the full name of the deployment will be used. |
-| serviceAccount.name | string |  | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
-| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://apache.github.io/solr-operator/docs/solr-backup) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
-| autoscaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
-
+| serviceAccount.name | string | | The optional default service account used for Solr and ZK unless overridden below. If `serviceAccount.create` is set to `false`, this serviceAccount must exist in the target namespace. |
+| backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://solr.apache.org/guide/operator/latest/solr-backup/index.html) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
+| scaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
+| scaling.populatePodsOnScaleUp | boolean | `true` | While scaling up the SolrCloud, migrate replicas onto the new Solr Pods after they are created. This uses the Balance Replicas API in Solr that is only available in Solr 9.3+. This option will be ignored if using an unsupported version of Solr.  |
 
 ### Data Storage Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#data-storage) for more information.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -130,10 +128,11 @@ See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/s
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |
 | dataStorage.persistent.pvc.storageClassName | string | | Override the default storageClass for your Solr data PVCs |
+| dataStorage.persistent.pvc.volumeAttributesClassName | string | | Specifies `VolumeAttributeClass` name for dynamically configuring storage attributes. More information can be found in the [Kubernetes docs](https://kubernetes.io/docs/concepts/storage/volume-attributes-classes/). |
 
 ### Addressability Options
 
-See the [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability) for more information.
+See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/addressability.html) for more information.
 
 If providing external addressability, then `method` and `domainName` must be provided.
 External addressability is disabled by default.
@@ -212,7 +211,7 @@ Currently the Zookeeper Operator does not support ACLs, so do not use the provid
 
 ### TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Solr TLS is disabled by default. Provide any of the following to enable it.
 
@@ -233,12 +232,14 @@ Solr TLS is disabled by default. Provide any of the following to enable it.
 | solrTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
 | solrTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
 | solrTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrTLS.mountedTLSDir.keystorePassword | string | | Manually set the keystore password, in plaintext; will be ignored if `keystorePasswordFile` is provided. Useful when using the Cert Manager CSI Driver. |
 | solrTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
 | solrTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+| solrTLS.mountedTLSDir.truststorePassword | string | | Manually set the truststore password, in plaintext; will be ignored if `truststorePasswordFile` is provided. Defaults to `keystorePassword`, if it is provided. |
 
 #### Client TLS Options
 
-See [documentation](https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods) for more information.
+See [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods) for more information.
 
 Configure Solr to use a separate TLS certificate for client auth.
 
@@ -255,14 +256,16 @@ Configure Solr to use a separate TLS certificate for client auth.
 | solrClientTLS.mountedTLSDir.path | string | | The path on the main Solr container where the TLS files are mounted by some external agent or CSI Driver |
 | solrClientTLS.mountedTLSDir.keystoreFile | string | | Name of the keystore file in the mounted directory |
 | solrClientTLS.mountedTLSDir.keystorePasswordFile | string | | Override the name of the keystore password file; defaults to keystore-password |
+| solrClientTLS.mountedTLSDir.keystorePassword | string | | Manually set the keystore password, in plaintext; will be ignored if `keystorePasswordFile` is provided. Useful when using the Cert Manager CSI Driver. |
 | solrClientTLS.mountedTLSDir.truststoreFile | string | | Name of the truststore file in the mounted directory |
 | solrClientTLS.mountedTLSDir.truststorePasswordFile | string | | Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile |
+| solrClientTLS.mountedTLSDir.truststorePassword | string | | Manually set the truststore password, in plaintext; will be ignored if `truststorePasswordFile` is provided. Defaults to `keystorePassword`, if it is provided. |
 
 ### Global Options
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| global.imagePullSecrets | []object |  | The list of imagePullSecrets to include in pods |
+| global.imagePullSecrets | []object/string | | The list of imagePullSecrets to include in all pods (Solr and ZK). Accepts both Kubernetes-native format (`[{name: "secret"}]`) and plain strings (`["secret"]`). |
 | global.clusterDomain | string |  | The cluster domain the Kubernetes is addressed under. |
 
 ### Custom Kubernetes Options
@@ -278,22 +281,26 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.resources.requests | map[string]string |  | Provide Resource requests for the Solr container |
 | podOptions.defaultInitContainerResources.limits | map[string]string |  | Provide Resource limits for Solr's default initContainer(s) |
 | podOptions.defaultInitContainerResources.requests | map[string]string |  | Provide Resource requests for Solr's default initContainer(s) |
+| podOptions.defaultInitContainerSecurityContext | object |  | Provide SecurityContext for Solr's default initContainer(s) |
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
 | podOptions.topologySpreadConstraints | []object |  | Specify a list of Kubernetes topologySpreadConstraints for the Solr pod. No need to provide a `labelSelector`, as the Solr Operator will default that for you. More information can be found in [the documentation](https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/). |
 | podOptions.serviceAccountName | string |  | Optional serviceAccount to run the Solr pods under |
+| podOptions.shareProcessNamespace | boolean | false | Whether containers in a pod should share the same process namespace. |
+| podOptions.enableServiceLinks | boolean | true | Whether service environment variables be created containers. |
 | podOptions.priorityClassName | string | | Optional priorityClassName for the Solr pod |
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |
 | podOptions.podSecurityContext | object |  | Security context for the Solr pod |
+| podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |
 | podOptions.startupProbe | object |  | Custom startup probe for the Solr container |
 | podOptions.lifecycle | object |  | Custom lifecycle for the Solr container |
-| podOptions.imagePullSecrets | []object |  | List of image pull secrets to inject into the Solr pod, in addition to `global.imagePullSecrets` |
+| podOptions.imagePullSecrets | []object/string | | List of image pull secrets to inject into the Solr pod, in addition to `global.imagePullSecrets`. Accepts both Kubernetes-native format (`[{name: "secret"}]`) and plain strings (`["secret"]`). |
 | podOptions.volumes | []object |  | List of additional volumes to attach to the Solr pod, and optionally how to mount them to the Solr container |
 | statefulSetOptions.annotations | map[string]string |  | Custom annotations to add to the Solr statefulSet |
 | statefulSetOptions.labels | map[string]string |  | Custom labels to add to the Solr statefulSet |

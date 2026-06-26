@@ -18,23 +18,38 @@
 package e2e
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/version"
+	certManagerApi "github.com/cert-manager/cert-manager/pkg/api"
 	"github.com/go-logr/logr"
 	"github.com/onsi/ginkgo/v2/types"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"math/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-	"testing"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -44,6 +59,7 @@ const (
 	// Available environment variables to customize tests
 	operatorImageEnv = "OPERATOR_IMAGE"
 	solrImageEnv     = "SOLR_IMAGE"
+	kubeVersionEnv   = "KUBERNETES_VERSION"
 
 	backupDirHostPath = "/tmp/backup"
 
@@ -60,10 +76,13 @@ var (
 	logger       logr.Logger
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
-	defaultSolrImage     = "solr:8.11"
+	defaultSolrImage     = "solr:9.10.0"
 
 	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)
+	kubeVersion   = getEnvWithDefault(kubeVersionEnv, defaultSolrImage)
+
+	outputDir = "output"
 )
 
 // Run e2e tests using the Ginkgo runner.
@@ -81,10 +100,15 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	logger = zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true))
 	logf.SetLogger(logger)
 
+	Expect(os.RemoveAll(outputDir+"/")).To(Succeed(), "Could not delete existing output directory before tests start: %s", outputDir)
+	Expect(os.Mkdir(outputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", outputDir)
+
 	var err error
 	k8sConfig, err = config.GetConfig()
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
+	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
@@ -93,6 +117,10 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	// The zookeeper will not be healthy until after the zookeeper operator is released with the solr operator
 	By("creating a shared zookeeper cluster")
 	zookeeper := runSharedZookeeperCluster(ctx)
+
+	// Set up a shared Bootstrap issuer for creating CAs for Solr
+	By("creating a boostrap cert issuer")
+	installBootstrapIssuer(ctx)
 
 	// Run this once before all tests, not per-test-process
 	By("starting the test solr operator")
@@ -125,6 +153,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	By("setting up the k8s clients")
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
@@ -139,6 +168,7 @@ type RetryCommand struct {
 	randomSeed    int64
 	operatorImage string
 	solrImage     string
+	kubeVersion   string
 }
 
 // ColorableString for ReportEntry to use
@@ -149,18 +179,20 @@ func (rc RetryCommand) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (rc RetryCommand) String() string {
 	return fmt.Sprintf(
-		"make e2e-tests TEST_FILES=%q TEST_FILTER=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q",
+		"make e2e-tests TEST_FILES=%q TEST_FILTER=%q TEST_SEED=%d TEST_PARALLELISM=%d %s=%q %s=%q %s=%q",
 		rc.report.FileName(),
 		rc.report.FullText(),
 		rc.randomSeed,
 		rc.parallelism,
 		solrImageEnv, rc.solrImage,
 		operatorImageEnv, rc.operatorImage,
+		kubeVersionEnv, rc.kubeVersion,
 	)
 }
 
 type FailureInformation struct {
-	namespace string
+	namespace       string
+	outputDirectory string
 }
 
 // ColorableString for ReportEntry to use
@@ -171,18 +203,53 @@ func (fi FailureInformation) ColorableString() string {
 // non-colorable String() is used by go's string formatting support but ignored by ReportEntry
 func (fi FailureInformation) String() string {
 	return fmt.Sprintf(
-		"Namespace: %s\n",
+		"Namespace: %s\nLogs Directory: %s\n",
 		fi.namespace,
+		fi.outputDirectory,
 	)
 }
+
+func outputDirForTest(testText string) string {
+	testName := cases.Title(language.AmericanEnglish, cases.NoLower).String(testText)
+	return outputDir + "/" + strings.ReplaceAll(strings.ReplaceAll(testName, "  ", "-"), " ", "")
+}
+
+var _ = JustAfterEach(func(ctx context.Context) {
+	testOutputDir := outputDirForTest(CurrentSpecReport().FullText())
+
+	// We count "ran" as "passed" or "failed"
+	if CurrentSpecReport().State.Is(types.SpecStatePassed | types.SpecStateFailureStates) {
+		Expect(os.Mkdir(testOutputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", testOutputDir)
+		testOutputDir += "/"
+		// Always save the logs of the Solr Operator for the test
+		startTime := CurrentSpecReport().StartTime
+		writePodLogsToFile(
+			ctx,
+			testOutputDir+"solr-operator.log",
+			getSolrOperatorPodName(ctx, solrOperatorReleaseNamespace),
+			solrOperatorReleaseNamespace,
+			&startTime,
+			fmt.Sprintf("%q:%q", "namespace", testNamespace()),
+		)
+		// Always save the logs of the Solr Operator for the test
+		writeAllSolrInfoToFiles(
+			ctx,
+			testOutputDir,
+			testNamespace(),
+		)
+	}
+})
 
 var _ = ReportAfterEach(func(report SpecReport) {
 	if report.Failed() {
 		ginkgoConfig, _ := GinkgoConfiguration()
+		testOutputDir, _ := filepath.Abs(outputDirForTest(report.FullText()))
 		AddReportEntry(
 			"Failure Information",
+			types.CodeLocation{},
 			FailureInformation{
-				namespace: testNamespace(),
+				namespace:       testNamespace(),
+				outputDirectory: testOutputDir,
 			},
 		)
 		AddReportEntry(
@@ -194,7 +261,287 @@ var _ = ReportAfterEach(func(report SpecReport) {
 				randomSeed:    GinkgoRandomSeed(),
 				operatorImage: operatorImage,
 				solrImage:     solrImage,
+				kubeVersion:   kubeVersion,
 			},
 		)
 	}
 })
+
+func getSolrOperatorPodName(ctx context.Context, namespace string) string {
+	labelSelector := labels.SelectorFromSet(map[string]string{"control-plane": "solr-operator"})
+	listOps := &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+		Limit:         int64(1),
+	}
+
+	foundPods := &corev1.PodList{}
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr Operator pod")
+	Expect(foundPods).ToNot(BeNil(), "No Solr Operator pods could be found")
+	Expect(foundPods.Items).ToNot(BeEmpty(), "No Solr Operator pods could be found")
+	return foundPods.Items[0].Name
+}
+
+func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace string) {
+	req, err := labels.NewRequirement("technology", selection.In, []string{solrv1beta1.SolrTechnologyLabel, solrv1beta1.SolrPrometheusExporterTechnologyLabel})
+	Expect(err).ToNot(HaveOccurred())
+
+	listOps := &client.ListOptions{
+		Namespace: namespace,
+	}
+
+	foundSolrs := &solrv1beta1.SolrCloudList{}
+	Expect(k8sClient.List(ctx, foundSolrs, listOps)).To(Succeed(), "Could not fetch SolrClouds")
+	Expect(foundSolrs).ToNot(BeNil(), "No SolrClouds could be found")
+	for _, solrCloud := range foundSolrs.Items {
+		writeSolrClusterStatusInfoToFile(
+			ctx,
+			directory+solrCloud.Name,
+			&solrCloud,
+		)
+	}
+
+	labelSelector := labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPods := &corev1.PodList{}
+	Expect(k8sClient.List(ctx, foundPods, listOps)).To(Succeed(), "Could not fetch Solr pods")
+	Expect(foundPods).ToNot(BeNil(), "No Solr pods could be found")
+	for _, pod := range foundPods.Items {
+		writeAllPodInfoToFiles(
+			ctx,
+			directory+pod.Name+".pod",
+			&pod,
+		)
+	}
+
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundPVCs := &corev1.PersistentVolumeClaimList{}
+	Expect(k8sClient.List(ctx, foundPVCs, listOps)).To(Succeed(), "Could not fetch Solr PVCs")
+	Expect(foundPVCs).ToNot(BeNil(), "No Solr PVCs could be found")
+	for _, pvc := range foundPVCs.Items {
+		writeAllPvcInfoToFiles(
+			directory+pvc.Name+".pvc",
+			&pvc,
+		)
+	}
+
+	foundStatefulSets := &appsv1.StatefulSetList{}
+	Expect(k8sClient.List(ctx, foundStatefulSets, listOps)).To(Succeed(), "Could not fetch Solr statefulSets")
+	Expect(foundStatefulSets).ToNot(BeNil(), "No Solr statefulSet could be found")
+	for _, statefulSet := range foundStatefulSets.Items {
+		writeAllStatefulSetInfoToFiles(
+			directory+statefulSet.Name+".statefulSet",
+			&statefulSet,
+		)
+	}
+
+	// Unfortunately the services don't have the technology label
+	req, err = labels.NewRequirement("solr-cloud", selection.Exists, make([]string, 0))
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector = labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundServices := &corev1.ServiceList{}
+	Expect(k8sClient.List(ctx, foundServices, listOps)).To(Succeed(), "Could not fetch Solr services")
+	Expect(foundServices).ToNot(BeNil(), "No Solr services could be found")
+	for _, service := range foundServices.Items {
+		writeAllServiceInfoToFiles(
+			directory+service.Name+".service",
+			&service,
+		)
+	}
+
+	// Unfortunately the secrets don't have a technology label
+	req, err = labels.NewRequirement("solr-cloud", selection.Exists, make([]string, 0))
+	Expect(err).ToNot(HaveOccurred())
+
+	labelSelector = labels.Everything().Add(*req)
+	listOps = &client.ListOptions{
+		Namespace:     namespace,
+		LabelSelector: labelSelector,
+	}
+
+	foundSecrets := &corev1.SecretList{}
+	Expect(k8sClient.List(ctx, foundSecrets, listOps)).To(Succeed(), "Could not fetch Solr secrets")
+	for _, secret := range foundSecrets.Items {
+		writeAllSecretInfoToFiles(
+			directory+secret.Name+".secret",
+			&secret,
+		)
+	}
+}
+
+// writeSolrClusterStatusInfoToFile writes the following each to a separate file with the given base name & directory.
+//   - SolrCloud's Cluster Status from the Collections API
+func writeSolrClusterStatusInfoToFile(ctx context.Context, baseFilename string, solrCloud *solrv1beta1.SolrCloud) {
+	clusterStatus := fetchClusterStatusWithErrorHandling(ctx, solrCloud, false)
+	if clusterStatus != "" {
+		// Write cluster status to a file
+		statusFile, err := os.Create(baseFilename + ".cluster-state.json")
+		defer statusFile.Close()
+		Expect(err).ToNot(HaveOccurred(), "Could not open file to save cluster status: %s", baseFilename+".cluster-state.json")
+		_, writeErr := statusFile.Write([]byte(clusterStatus))
+		Expect(writeErr).ToNot(HaveOccurred(), "Could not write cluster status json to file")
+	}
+}
+
+// writeAllStatefulSetInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - StatefulSet Spec/Status
+//   - StatefulSet Events
+func writeAllStatefulSetInfoToFiles(baseFilename string, statefulSet *appsv1.StatefulSet) {
+	// Write statefulSet to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(statefulSet, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet json to file")
+
+	// Write events for statefulSet to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save statefulSet events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(statefulSet.Namespace).Search(scheme.Scheme, statefulSet)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for statefulSet: %s", statefulSet.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize statefulSet events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write statefulSet events json to file")
+}
+
+// writeAllPvcInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - PVC Spec/Status
+//   - PVC Events
+func writeAllPvcInfoToFiles(baseFilename string, pvc *corev1.PersistentVolumeClaim) {
+	// Write PVC to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(pvc, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC json to file")
+
+	// Write events for PVC to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save PVC events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(pvc.Namespace).Search(scheme.Scheme, pvc)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for PVC: %s", pvc.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize PVC events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write PVC events json to file")
+}
+
+// writeAllServiceInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Service
+func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
+	// Write service to a file
+	statusFile, err := os.Create(baseFilename + ".json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save service status: %s", baseFilename+".json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(service, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
+}
+
+// writeAllSecretInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Service
+func writeAllSecretInfoToFiles(baseFilename string, secret *corev1.Secret) {
+	// Write service to a file
+	statusFile, err := os.Create(baseFilename + ".json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save secret status: %s", baseFilename+".json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(secret, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize secret json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write secret json to file")
+}
+
+// writeAllPodInfoToFile writes the following each to a separate file with the given base name & directory.
+//   - Pod Spec/Status
+//   - Pod Events
+//   - Pod logs
+func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev1.Pod) {
+	// Write pod to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(pod, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write pod json to file")
+
+	// Write events for pod to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save pod events: %s", baseFilename+".events.yaml")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(pod.Namespace).Search(scheme.Scheme, pod)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for pod: %s", pod.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize pod events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write pod events json to file")
+
+	// Write pod logs to a file
+	if len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Started != nil && *pod.Status.ContainerStatuses[0].Started {
+		writePodLogsToFile(
+			ctx,
+			baseFilename+".log",
+			pod.Name,
+			pod.Namespace,
+			nil,
+			"",
+		)
+	}
+}
+
+func writePodLogsToFile(ctx context.Context, filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
+	logFile, err := os.Create(filename)
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
+	defer logFile.Close()
+
+	podLogOpts := corev1.PodLogOptions{}
+	if startTimeRaw != nil {
+		startTime := metav1.NewTime(*startTimeRaw)
+		podLogOpts.SinceTime = &startTime
+	}
+
+	req := rawK8sClient.CoreV1().Pods(podNamespace).GetLogs(podName, &podLogOpts)
+	podLogs, logsErr := req.Stream(ctx)
+	Expect(logsErr).ToNot(HaveOccurred(), "Could not open stream to fetch pod logs. namespace: %s, pod: %s", podNamespace, podName)
+	defer podLogs.Close()
+
+	if filterLinesWithString != "" {
+		scanner := bufio.NewScanner(podLogs)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, filterLinesWithString) {
+				_, err = io.WriteString(logFile, line)
+				_, err = io.WriteString(logFile, "\n")
+			}
+		}
+	} else {
+		_, err = io.Copy(logFile, podLogs)
+	}
+
+	Expect(err).ToNot(HaveOccurred(), "Could not write podLogs to file: %s", filename)
+}

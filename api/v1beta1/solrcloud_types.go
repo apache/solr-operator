@@ -37,7 +37,7 @@ const (
 
 	DefaultSolrReplicas = int32(3)
 	DefaultSolrRepo     = "library/solr"
-	DefaultSolrVersion  = "8.11"
+	DefaultSolrVersion  = "9.10.0"
 	DefaultSolrJavaMem  = "-Xms1g -Xmx2g"
 	DefaultSolrOpts     = ""
 	DefaultSolrLogLevel = "INFO"
@@ -96,9 +96,9 @@ type SolrCloudSpec struct {
 	// +optional
 	Availability SolrAvailabilityOptions `json:"availability,omitempty"`
 
-	// Define how Solr nodes should be autoscaled.
+	// Configure how Solr nodes should be scaled.
 	// +optional
-	Autoscaling SolrAutoscalingOptions `json:"autoscaling,omitempty"`
+	Scaling SolrScalingOptions `json:"scaling,omitempty"`
 
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
@@ -149,7 +149,8 @@ type SolrCloudSpec struct {
 	SolrModules []string `json:"solrModules,omitempty"`
 
 	// List of paths in the Solr Docker image to load in the classpath.
-	// Note: Solr Modules will be auto-loaded if specified in the "solrModules" property. There is no need to specify them here as well.
+	// There is no need to include paths for Solr Modules already specified in the "solrModules" property, those paths will be added automatically.
+	// Note that this setting has no effect on solrcloud clusters that rely on a user-provided solr.xml file.
 	//
 	//+optional
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
@@ -726,11 +727,23 @@ const (
 	ClusterWidePDB SolrPodDisruptionBudgetMethod = "ClusterWide"
 )
 
-type SolrAutoscalingOptions struct {
+type SolrScalingOptions struct {
 	// VacatePodsOnScaleDown determines whether Solr replicas are moved off of a Pod before the Pod is
 	// deleted due to the SolrCloud scaling down.
+	//
 	// +kubebuilder:default=true
+	// +optional
 	VacatePodsOnScaleDown *bool `json:"vacatePodsOnScaleDown,omitempty"`
+
+	// PopulatePodsOnScaleUp determines whether Solr replicas should be moved to newly-created Pods that have been
+	// created due to the SolrCloud scaling up.
+	//
+	// This feature is only available to users using Solr 9.3 or newer.
+	// If this is set to "true" for a cloud that is running an unsupported version of Solr, the replicas will not be moved.
+	//
+	// +kubebuilder:default=true
+	// +optional
+	PopulatePodsOnScaleUp *bool `json:"populatePodsOnScaleUp,omitempty"`
 }
 
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
@@ -1103,7 +1116,7 @@ type SolrCloudStatus struct {
 	//+listMapKey:=name
 	SolrNodes []SolrNodeStatus `json:"solrNodes"`
 
-	// Replicas is the number of desired replicas in the cluster
+	// Replicas is the number of pods created by the StatefulSet
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	Replicas int32 `json:"replicas"`
@@ -1111,7 +1124,7 @@ type SolrCloudStatus struct {
 	// PodSelector for SolrCloud pods, required by the HPA
 	PodSelector string `json:"podSelector"`
 
-	// ReadyReplicas is the number of ready replicas in the cluster
+	// ReadyReplicas is the number of ready pods in the cluster
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	ReadyReplicas int32 `json:"readyReplicas"`
@@ -1215,6 +1228,13 @@ func (sc *SolrCloud) GetAllSolrPodNames() []string {
 	if sc.Spec.Replicas != nil {
 		replicas = int(*sc.Spec.Replicas)
 	}
+	if int(sc.Status.Replicas) > replicas {
+		replicas = int(sc.Status.Replicas)
+	}
+	return sc.GetSolrPodNames(replicas)
+}
+
+func (sc *SolrCloud) GetSolrPodNames(replicas int) []string {
 	podNames := make([]string, replicas)
 	statefulSetName := sc.StatefulSetName()
 	for i := range podNames {
@@ -1528,18 +1548,26 @@ type MountedTLSDirectory struct {
 	// +optional
 	KeystoreFile string `json:"keystoreFile,omitempty"`
 
-	// Override the name of the keystore password file; defaults to keystore-password
+	// Override the name of the keystore password file; defaults to keystore-password, if "keystorePassword" is not provided.
 	// +optional
 	KeystorePasswordFile string `json:"keystorePasswordFile,omitempty"`
+
+	// Set the password of the keystore explicitly. Cannot be used with "keystorePasswordFile"
+	// +optional
+	KeystorePassword string `json:"keystorePassword,omitempty"`
 
 	// Override the name of the truststore file; no default, if you don't supply this setting, then the corresponding
 	// env vars and Java system properties will not be configured for the pod template
 	// +optional
 	TruststoreFile string `json:"truststoreFile,omitempty"`
 
-	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile
+	// Override the name of the truststore password file; defaults to the same value as the KeystorePasswordFile, if "truststorePassword" is not provided.
 	// +optional
 	TruststorePasswordFile string `json:"truststorePasswordFile,omitempty"`
+
+	// Set the password of the truststore explicitly. If "keystorePassword" is provided, and "truststorePasswordFile" is not, this will be defaulted to "keystorePassword".
+	// +optional
+	TruststorePassword string `json:"truststorePassword,omitempty"`
 }
 
 type SolrTLSOptions struct {

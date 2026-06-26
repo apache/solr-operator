@@ -17,7 +17,7 @@ PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
 LOCALBIN = $(PROJECT_DIR)/bin
 
 GO_VERSION = $(shell go version | sed -r 's/^.*([0-9]+\.[0-9]+\.[0-9]+).*$$/\1/g')
-REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | sed -r 's/^go ([0-9]+\.[0-9]+)$$/\1/g')
+REQUIRED_GO_VERSION = $(shell cat go.mod | grep -E 'go [1-9]\.[0-9]+' | head -1 | sed -r 's/^go ([0-9]+\.[0-9]+).*$$/\1/g')
 
 ifeq (,$(findstring $(REQUIRED_GO_VERSION),$(GO_VERSION)))
 $(error Unsupported go version found $(GO_VERSION), please install go $(REQUIRED_GO_VERSION))
@@ -39,14 +39,21 @@ ARCH = $(shell go env GOARCH)
 # Default some of the testing options
 TEST_PARALLELISM ?= 3
 
-KUSTOMIZE_VERSION=v4.5.2
-CONTROLLER_GEN_VERSION=v0.10.0
-GO_LICENSES_VERSION=v1.5.0
+KUSTOMIZE_VERSION=v4.5.7
+CONTROLLER_GEN_VERSION=v0.21.0
+GO_LICENSES_VERSION=v2.0.1
+# go-licenses only sees packages in the build graph for the current platform.
+# The operator only ever runs in Linux containers, and CI runs on linux/amd64,
+# so pin GOOS/GOARCH to keep the generated/checked license list identical no
+# matter which platform a developer generates it on (e.g. darwin/arm64 would
+# otherwise omit Linux-only deps such as github.com/prometheus/procfs).
+GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
-KIND_VERSION=v0.17.0
-YQ_VERSION=v4.33.3
+KIND_VERSION=v0.30.0
+YQ_VERSION=v4.53.3
+CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION ?= 1.25.0
+ENVTEST_K8S_VERSION ?= 1.36.0
 
 GO111MODULE ?= on
 
@@ -129,11 +136,11 @@ fmt: ## Run go fmt against code.
 .PHONY: fetch-licenses-list
 # Ignore non-Go code warnings when it is supported natively: https://github.com/google/go-licenses/issues/120
 fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
-	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator | sort > dependency_licenses.csv
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator > dependency_licenses.csv
 
 .PHONY: fetch-licenses-full
 fetch-licenses-full: go-licenses ## Fetch all licenses
-	$(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
+	$(GO_LICENSES_ENV) $(GO_LICENSES) save . --ignore github.com/apache/solr-operator --save_path licenses --force
 
 .PHONY: build-release-artifacts
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
@@ -226,8 +233,16 @@ smoke-test: build-release-artifacts ## Run a full smoke test on a set of local r
 .PHONY: check
 check: lint test ## Do all checks, lints and tests for the Solr Operator
 
+# Antora's content aggregation is git-based, so the docs build only works in a
+# git checkout. Include it in `lint` only when .git is present; this skips it
+# for an unpacked release source tarball (e.g. `make check` during smoke tests).
+DOCS_LINT :=
+ifneq ($(wildcard $(PROJECT_DIR)/.git),)
+DOCS_LINT := check-docs
+endif
+
 .PHONY: lint
-lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm ## Lint the codebase to check for formatting and correctness
+lint: check-zk-op-version check-mod vet check-format check-licenses check-manifests check-generated check-helm $(DOCS_LINT) ## Lint the codebase to check for formatting and correctness
 
 .PHONY: check-format
 check-format: ## Check the codebase to make sure it adheres to golang standards
@@ -238,9 +253,9 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	@echo "Check license headers on necessary files"
 	./hack/check_license.sh
 	@echo "Check list of dependency licenses"
-	$(GO_LICENSES) check . \
+	$(GO_LICENSES_ENV) $(GO_LICENSES) check . \
 		--allowed_licenses=Apache-2.0,Apache-1.1,MIT,BSD-3-Clause,BSD-2-Clause,ISC,ICU,X11,NCSA,W3C,AFL-3.0,MS-PL,CC0-1.0,BSL-1.0,WTFPL,Unicode-DFS-2015,Unicode-DFS-2016,ZPL-2.0,UPL-1.0,Unlicense,MPL-2.0
-	$(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
 
 .PHONY: check-zk-op-version
 check-zk-op-version: export PATH:=$(LOCALBIN):${PATH}
@@ -328,6 +343,45 @@ helm-deploy-operator: helm-dependency-build docker-build ## Deploy the current v
 	helm install solr-operator helm/solr-operator --set image.version=$(TAG) --set image.repository=$(IMG) --set image.pullPolicy=Never
 
 
+##@ Documentation
+
+# Antora image used to build the docs site locally. Pinned to the Antora
+# version used by the Apache Solr Reference Guide build (apache/solr). This is
+# for local previewing only; the official site is published as an additional
+# component of the Reference Guide from the apache/solr repo.
+ANTORA_IMAGE ?= antora/antora:3.1.12
+DOCS_STAGING = docs/build/staging
+
+.PHONY: generate-antora-yaml
+# Writes the COMMITTED docs/antora.yml. This descriptor drives the published
+# site for this branch, so it is only run at release time (by the release
+# wizard) to reflect the released version -- NOT on every local build.
+generate-antora-yaml: ## Regenerate the committed docs/antora.yml (release use)
+	./hack/docs/generate_antora_yaml.sh
+
+.PHONY: docs-staging
+# Stages a build dir with the modules and a throwaway antora.yml generated from
+# version/version.go, so local previews show the in-development version without
+# modifying the committed docs/antora.yml.
+docs-staging:
+	rm -rf $(DOCS_STAGING)
+	mkdir -p $(DOCS_STAGING)
+	cp -r docs/modules $(DOCS_STAGING)/modules
+	./hack/docs/generate_antora_yaml.sh -o $(DOCS_STAGING)/antora.yml
+
+.PHONY: docs
+docs: docs-staging ## Build the operator Antora docs site locally for previewing (requires Docker)
+	docker run --rm -v "$(PROJECT_DIR):/antora" -w /antora/docs $(ANTORA_IMAGE) --fetch --to-dir build/site local-playbook.yml
+	@echo "Docs built. Open file://$(PROJECT_DIR)/docs/build/site/index.html in a browser to preview."
+
+.PHONY: docs-clean
+docs-clean: ## Remove the locally-generated documentation site
+	rm -rf docs/build
+
+.PHONY: check-docs
+check-docs: docs-staging ## Validate the operator docs build with no broken references (requires Docker)
+	docker run --rm -v "$(PROJECT_DIR):/antora" -w /antora/docs $(ANTORA_IMAGE) --fetch --log-failure-level=warn --to-dir build/site local-playbook.yml
+
 ##@ Dependencies
 LOCALBIN ?= $(PROJECT_DIR)/bin
 $(LOCALBIN):
@@ -351,7 +405,7 @@ GO_LICENSES = $(LOCALBIN)/go-licenses
 .PHONY: go-licenses
 go-licenses: $(GO_LICENSES) ## Download go-licenses locally if necessary.
 $(GO_LICENSES): $(LOCALBIN)
-	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses@$(GO_LICENSES_VERSION))
+	$(call go-get-tool,$(GO_LICENSES),github.com/google/go-licenses/v2@$(GO_LICENSES_VERSION))
 
 GINKGO = $(LOCALBIN)/ginkgo
 .PHONY: ginkgo
@@ -375,7 +429,7 @@ SETUP_ENVTEST = $(LOCALBIN)/setup-envtest
 .PHONY: setup-envtest
 setup-envtest: $(SETUP_ENVTEST) ## Download setup-envtest locally if necessary.
 $(SETUP_ENVTEST): $(LOCALBIN)
-	$(call go-get-tool,$(SETUP_ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@latest)
+	$(call go-get-tool,$(SETUP_ENVTEST),sigs.k8s.io/controller-runtime/tools/setup-envtest@release-$(CONTROLLER_RUNTIME_VERSION))
 
 # go-get-tool will 'go get' any package $2 and install it to $1.
 define go-get-tool

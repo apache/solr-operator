@@ -16,19 +16,26 @@
 # https://cwiki.apache.org/confluence/display/INFRA/.asf.yaml+features+for+git+repositories
 
 github:
-  description: "Kubernetes Operator for Apache Solr"
+  description: "Official Kubernetes operator for Apache Solr"
   homepage: https://solr.apache.org/operator
   labels:
     - solr
+    - kubernetes
+    - lucene
     - search
     - nosql
     - golang
     - search-engine
     - information-retrieval
-    - kubernetes
     - operator
     - controller
     - crd
+    - aws
+    - eks
+    - gcp
+    - gke
+    - azure
+    - aks
 
   features:
     # Enable issue management

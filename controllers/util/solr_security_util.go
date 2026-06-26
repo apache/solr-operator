@@ -39,9 +39,11 @@ import (
 )
 
 const (
-	SecurityJsonFile       = "security.json"
-	BasicAuthMd5Annotation = "solr.apache.org/basicAuthMd5"
-	DefaultProbePath       = "/admin/info/system"
+	SecurityJsonFile          = "security.json"
+	BasicAuthMd5Annotation    = "solr.apache.org/basicAuthMd5"
+	DefaultStartupProbePath   = "/admin/info/system"
+	DefaultLivenessProbePath  = DefaultStartupProbePath
+	DefaultReadinessProbePath = "/admin/info/health"
 )
 
 // Utility struct holding security related config and objects resolved at runtime needed during reconciliation,
@@ -115,6 +117,9 @@ func reconcileForBasicAuthWithBootstrappedSecurityJson(ctx context.Context, clie
 
 		// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
 		security.SecurityJson = string(bootstrapSecret.Data[SecurityJsonFile])
+		security.SecurityJsonSrc = &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: bootstrapSecret.Name}, Key: SecurityJsonFile}}
 		basicAuthSecret = authSecret
 	}
 
@@ -205,11 +210,50 @@ func enableSecureProbesOnSolrCloudStatefulSet(solrCloud *solr.SolrCloud, statefu
 	}
 }
 
+func setHostHeaderForProbesOnSolrCloudStatefulSet(solrCloud *solr.SolrCloud, stateful *appsv1.StatefulSet) {
+	mainContainer := &stateful.Spec.Template.Spec.Containers[0]
+
+	expectedHost := solrCloud.InternalCommonUrl(false)
+	// update the probes if they are using HTTPGet to use send a HOST header matching the host Solr is listening on
+	if mainContainer.LivenessProbe.HTTPGet != nil {
+		addHostHeaderToProbe(mainContainer.LivenessProbe.HTTPGet, expectedHost)
+	}
+	if mainContainer.ReadinessProbe.HTTPGet != nil {
+		addHostHeaderToProbe(mainContainer.ReadinessProbe.HTTPGet, expectedHost)
+	}
+	if mainContainer.StartupProbe != nil && mainContainer.StartupProbe.HTTPGet != nil {
+		addHostHeaderToProbe(mainContainer.StartupProbe.HTTPGet, expectedHost)
+	}
+}
+
+func addHostHeaderToProbe(httpGet *corev1.HTTPGetAction, host string) {
+	for _, header := range httpGet.HTTPHeaders {
+		if header.Name == "Host" {
+			// Do not add a Host header if it already exists
+			return
+		}
+	}
+	httpGet.HTTPHeaders = append(httpGet.HTTPHeaders, corev1.HTTPHeader{
+		Name:  "Host",
+		Value: host,
+	})
+}
+
 func cmdToPutSecurityJsonInZk() string {
-	scriptsDir := "/opt/solr/server/scripts/cloud-scripts"
-	cmd := " ZK_SECURITY_JSON=$(%s/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json); "
-	cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then echo $SECURITY_JSON > /tmp/security.json; %s/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-	return fmt.Sprintf(cmd, scriptsDir, scriptsDir)
+	cmd := " solr zk cp zk:/security.json /tmp/current_security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
+		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ; then " + // File doesn't exist, is empty, or is just '{}'
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; " +
+		"fi; " + // TODO: Consider checking a diff and still applying over the top
+		"elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " + // JSON doesn't exist, but not other error types
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'No security.json found. Put new security.json in ZK'; " +
+		"fi"
+	return cmd
 }
 
 // Add auth data to the supplied Context using secrets already resolved (stored in the SecurityConfig)
@@ -352,7 +396,9 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
           { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "read", "role":["admin","users"] },
+          { "name": "k8s-replica-balancing", "role":"k8s", "collection": null, "path":"/____v2/cluster/replicas/balance" },
+          { "name": "collection-admin-edit", "role":"k8s" },
+          { "name": "read", "role":["admin","users","k8s"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": ["admin"] },
           { "name": "security-edit", "role": ["admin"] },
@@ -404,7 +450,8 @@ func solrPasswordHash(passBytes []byte) string {
 
 // Gets a list of probe paths we need to setup authz for
 func getProbePaths(solrCloud *solr.SolrCloud) []string {
-	probePaths := []string{DefaultProbePath}
+	// Current startup and liveness probes use the same API, so liveness needn't be explicitly specified here
+	probePaths := []string{DefaultStartupProbePath, DefaultReadinessProbePath}
 	probePaths = append(probePaths, GetCustomProbePaths(solrCloud)...)
 	return uniqueProbePaths(probePaths)
 }
@@ -450,28 +497,30 @@ func BasicAuthEnvVars(secretName string) []corev1.EnvVar {
 func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath string) {
 	// mount the secret in a file so it gets updated; env vars do not see:
 	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-	basicAuthOption := ""
-	enableBasicAuth := ""
+	javaToolOptions := make([]string, 0)
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		basicAuthOption = fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile)
-		enableBasicAuth = " -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory "
+		javaToolOptions = append(javaToolOptions,
+			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+		)
 	}
 
-	// Is TLS enabled? If so we need some additional SSL related props
-	tlsJavaToolOpts, tlsJavaSysProps := secureProbeTLSJavaToolOpts(solrCloud)
-	javaToolOptions := strings.TrimSpace(basicAuthOption + " " + tlsJavaToolOpts)
-
 	// construct the probe command to invoke the SolrCLI "api" action
-	//
-	// and yes, this is ugly, but bin/solr doesn't expose the "api" action (as of 8.8.0) so we have to invoke java directly
-	// taking some liberties on the /opt/solr path based on the official Docker image as there is no ENV var set for that path
-	probeCommand := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"%s\" java %s %s "+
-		"-Dsolr.install.dir=\"/opt/solr\" -Dlog4j.configurationFile=\"/opt/solr/server/resources/log4j2-console.xml\" "+
-		"-classpath \"/opt/solr/server/solr-webapp/webapp/WEB-INF/lib/*:/opt/solr/server/lib/ext/*:/opt/solr/server/lib/*\" "+
-		"org.apache.solr.util.SolrCLI api -get %s://localhost:%d%s",
-		javaToolOptions, tlsJavaSysProps, enableBasicAuth, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
+
+	// Future work - SOLR_TOOL_OPTIONS is only in 9.4.0, use JAVA_TOOL_OPTIONS until that is the minimum supported version
+	var javaToolOptionsStr string
+	var javaToolOptionsOutputFilter string
+	if len(javaToolOptions) > 0 {
+		javaToolOptionsStr = fmt.Sprintf("JAVA_TOOL_OPTIONS=%q ", strings.Join(javaToolOptions, " "))
+		javaToolOptionsOutputFilter = " 2>&1 | grep -v JAVA_TOOL_OPTIONS"
+	} else {
+		javaToolOptionsStr = ""
+		javaToolOptionsOutputFilter = ""
+	}
+
+	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

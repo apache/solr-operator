@@ -57,7 +57,7 @@ func TestAPIs(t *testing.T) {
 	RunSpecs(t, "Controller Suite")
 }
 
-var _ = BeforeSuite(func() {
+var _ = BeforeSuite(func(ctx context.Context) {
 	// Define testing timeouts/durations and intervals.
 	const (
 		timeout  = time.Second * 5
@@ -106,18 +106,21 @@ var _ = BeforeSuite(func() {
 	// Start up Reconcilers
 	By("starting the reconcilers")
 	Expect((&SolrCloudReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&SolrPrometheusExporterReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&SolrBackupReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: k8sManager.GetScheme(),
+		Client:   k8sManager.GetClient(),
+		Scheme:   k8sManager.GetScheme(),
+		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	go func() {
@@ -131,6 +134,5 @@ var _ = BeforeSuite(func() {
 var _ = AfterSuite(func() {
 	cancel()
 	By("tearing down the test environment")
-	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(testEnv.Stop()).To(Succeed())
 })

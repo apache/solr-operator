@@ -19,6 +19,10 @@ package util
 
 import (
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -26,9 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"sort"
-	"strconv"
-	"strings"
+	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 )
 
 const (
@@ -50,21 +53,25 @@ const (
 	SolrXmlFile                      = "solr.xml"
 	LogXmlMd5Annotation              = "solr.apache.org/logXmlMd5"
 	LogXmlFile                       = "log4j2.xml"
+	ServiceTypeAnnotation            = "service-type" // "solr.apache.org/serviceType"
+	HeadlessServiceType              = "headless"
+	PerNodeServiceType               = "external"
+	CommonServiceType                = "common"
 
 	// Protected StatefulSet annotations
 	// These are to be saved on a statefulSet update
-	ClusterOpsLockAnnotation     = "solr.apache.org/clusterOpsLock"
-	ScaleLock                    = "scaling"
-	UpdateLock                   = "rollingUpdate"
-	ClusterOpsMetadataAnnotation = "solr.apache.org/clusterOpsMetadata"
+	ClusterOpsLockAnnotation       = "solr.apache.org/clusterOpsLock"
+	ClusterOpsRetryQueueAnnotation = "solr.apache.org/clusterOpsRetryQueue"
+	StorageMinimumSizeAnnotation   = "solr.apache.org/storageMinimumSize"
 
 	SolrIsNotStoppedReadinessCondition       = "solr.apache.org/isNotStopped"
 	SolrReplicasNotEvictedReadinessCondition = "solr.apache.org/replicasNotEvicted"
 
 	DefaultStatefulSetPodManagementPolicy = appsv1.ParallelPodManagement
 
-	DistLibs    = "/opt/solr/dist"
-	ContribLibs = "/opt/solr/contrib/%s/lib"
+	DistLibs              = "/opt/solr/dist"
+	ContribLibs           = "/opt/solr/contrib/%s/lib"
+	SysPropLibPlaceholder = "${solr.sharedLib:}"
 )
 
 var (
@@ -81,6 +88,8 @@ var (
 // zkConnectionString: the connectionString of the ZK instance to connect to
 func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
+	shareProcessNamespace := false
+	var enableServiceLinks *bool
 	solrPodPort := solrCloud.Spec.SolrAddressability.PodPort
 	defaultFSGroup := int64(DefaultSolrGroup)
 
@@ -90,13 +99,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	defaultProbeTimeout := int32(1)
-	defaultHandler := corev1.ProbeHandler{
-		HTTPGet: &corev1.HTTPGetAction{
-			Scheme: probeScheme,
-			Path:   "/solr" + DefaultProbePath,
-			Port:   intstr.FromInt(solrPodPort),
-		},
-	}
+	defaultStartupProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultStartupProbePath)
+	defaultLivenessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultLivenessProbePath)
+	defaultReadinessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultReadinessProbePath)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
 	selectorLabels := solrCloud.SharedLabels()
@@ -125,7 +130,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		if customPodOptions.TerminationGracePeriodSeconds != nil {
 			terminationGracePeriod = *customPodOptions.TerminationGracePeriodSeconds
 		}
+		shareProcessNamespace = customPodOptions.ShareProcessNamespace
+		enableServiceLinks = customPodOptions.EnableServiceLinks
 	}
+	if podAnnotations == nil {
+		podAnnotations = make(map[string]string, 1)
+	}
+	var serviceType string
+	if solrCloud.UsesHeadlessService() {
+		serviceType = HeadlessServiceType
+	} else if solrCloud.UsesIndividualNodeServices() {
+		serviceType = PerNodeServiceType
+	}
+	podAnnotations[ServiceTypeAnnotation] = serviceType
 
 	// The isNotStopped readiness gate will always be used for managedUpdates
 	podReadinessGates := []corev1.PodReadinessGate{
@@ -155,6 +172,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					},
 					DefaultMode: &PublicReadOnlyPermissions,
 				},
+			},
+		},
+		{
+			Name: "tmp",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
 			},
 		},
 	}
@@ -196,6 +219,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				},
 				Spec: pvc.Spec,
 			},
+		}
+		if pvc.Spec.Resources.Requests.Storage() != nil {
+			annotations[StorageMinimumSizeAnnotation] = pvc.Spec.Resources.Requests.Storage().String()
+			if podAnnotations == nil {
+				podAnnotations = make(map[string]string, 1)
+			}
+			podAnnotations[StorageMinimumSizeAnnotation] = pvc.Spec.Resources.Requests.Storage().String()
 		}
 	} else {
 		ephemeralVolume := corev1.Volume{
@@ -281,7 +311,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		}
 	}
 
-	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_HOSTNAME)")
+	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_NAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
 	// Solr can take longer than SOLR_STOP_WAIT to run solr stop, give it a few extra seconds before forcefully killing the pod.
@@ -307,14 +337,48 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 		{
 			// This is the port that the Solr Node will advertise itself as listening on in live_nodes
+			// TODO Remove in 0.9.0 once users have had a chance to switch any custom solr.xml files over to using the `solr.port.advertise` placeholder
 			Name:  "SOLR_NODE_PORT",
 			Value: strconv.Itoa(solrAdressingPort),
 		},
+		{
+			// Supercedes SOLR_NODE_PORT above.  'bin/solr' converts to 'solr.port.advertise' sysprop automatically.
+			Name:  "SOLR_PORT_ADVERTISE",
+			Value: strconv.Itoa(solrAdressingPort),
+		},
+		// POD_HOSTNAME is deprecated and will be removed in a future version. Use POD_NAME instead
 		{
 			Name: "POD_HOSTNAME",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_NAME",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "metadata.name",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_IP",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "status.podIP",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			Name: "POD_NAMESPACE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "metadata.namespace",
 					APIVersion: "v1",
 				},
 			},
@@ -338,7 +402,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Add all necessary information for connection to Zookeeper
-	zkEnvVars, zkSolrOpt, hasChroot := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
+	zkEnvVars, zkSolrOpt, _ := createZkConnectionEnvVars(solrCloud, solrCloudStatus)
 	if zkSolrOpt != "" {
 		allSolrOpts = append(allSolrOpts, zkSolrOpt)
 	}
@@ -347,16 +411,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Add envVars for backupRepos if any are needed
 	if len(backupEnvVars) > 0 {
 		envVars = append(envVars, backupEnvVars...)
-	}
-
-	// Only have a postStart command to create the chRoot, if it is not '/' (which does not need to be created)
-	var postStart *corev1.LifecycleHandler
-	if hasChroot {
-		postStart = &corev1.LifecycleHandler{
-			Exec: &corev1.ExecAction{
-				Command: []string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}"},
-			},
-		}
 	}
 
 	// Default preStop hook
@@ -374,9 +428,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Did the user provide a custom log config?
 	if reconcileConfigInfo[LogXmlFile] != "" {
 		if reconcileConfigInfo[LogXmlMd5Annotation] != "" {
-			if podAnnotations == nil {
-				podAnnotations = make(map[string]string, 1)
-			}
 			podAnnotations[LogXmlMd5Annotation] = reconcileConfigInfo[LogXmlMd5Annotation]
 		}
 
@@ -393,9 +444,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// track the MD5 of the custom solr.xml in the pod spec annotations,
 	// so we get a rolling restart when the configMap changes
 	if reconcileConfigInfo[SolrXmlMd5Annotation] != "" {
-		if podAnnotations == nil {
-			podAnnotations = make(map[string]string, 1)
-		}
 		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
 	}
 
@@ -414,6 +462,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
 		initContainers = append(initContainers, customPodOptions.InitContainers...)
+	}
+
+	var containerSecurityContext *corev1.SecurityContext
+	if customPodOptions != nil {
+		containerSecurityContext = customPodOptions.ContainerSecurityContext
 	}
 
 	containers := []corev1.Container{
@@ -435,7 +488,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold:    1,
 				FailureThreshold:    10,
 				PeriodSeconds:       5,
-				ProbeHandler:        defaultHandler,
+				ProbeHandler:        defaultStartupProbe,
 			},
 			// Kill Solr if it is unavailable for any 60-second period
 			LivenessProbe: &corev1.Probe{
@@ -443,7 +496,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 				PeriodSeconds:    20,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultLivenessProbe,
 			},
 			// Do not route requests to solr if it is not available for any 20-second period
 			ReadinessProbe: &corev1.Probe{
@@ -451,14 +504,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				SuccessThreshold: 1,
 				FailureThreshold: 2,
 				PeriodSeconds:    10,
-				ProbeHandler:     defaultHandler,
+				ProbeHandler:     defaultReadinessProbe,
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
 			Lifecycle: &corev1.Lifecycle{
-				PostStart: postStart,
-				PreStop:   preStop,
+				PreStop: preStop,
 			},
+			SecurityContext: containerSecurityContext,
 		},
 	}
 
@@ -506,6 +559,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
+					ShareProcessNamespace:         &shareProcessNamespace,
+					EnableServiceLinks:            enableServiceLinks,
 					SecurityContext: &corev1.PodSecurityContext{
 						FSGroup: &defaultFSGroup,
 					},
@@ -518,6 +573,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeClaimTemplates: pvcs,
 		},
+	}
+	if solrCloud.UsesHeadlessService() {
+		stateful.Spec.Template.Spec.Subdomain = solrCloud.HeadlessServiceName()
 	}
 
 	var imagePullSecrets []corev1.LocalObjectReference
@@ -610,6 +668,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// If probes require auth is set OR tls is configured to want / need client auth, then reconfigure the probes to use an exec
 	if (solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth) || (tls != nil && tls.ServerConfig != nil && tls.ServerConfig.Options.ClientAuth != solr.None) {
 		enableSecureProbesOnSolrCloudStatefulSet(solrCloud, stateful)
+	} else {
+		// If we are not using secure probes, but still using TLS, then make sure that the HOST header is correct when sending liveness and readiness checks.
+		// Otherwise it is likely that the SNI checks will fail for newer versions of Solr (9.2+)
+		setHostHeaderForProbesOnSolrCloudStatefulSet(solrCloud, stateful)
 	}
 
 	return stateful
@@ -623,8 +685,36 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 	// Cluster Operations are saved in the annotations of the SolrCloud StatefulSet.
 	// ClusterOps information is saved to the statefulSet independently of the general StatefulSet update.
 	// These annotations can also not be overridden set by the user.
-	expected.Annotations[ClusterOpsLockAnnotation] = found.Annotations[ClusterOpsLockAnnotation]
-	expected.Annotations[ClusterOpsMetadataAnnotation] = found.Annotations[ClusterOpsMetadataAnnotation]
+	if found.Annotations != nil {
+		if lock, hasLock := found.Annotations[ClusterOpsLockAnnotation]; hasLock {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 1)
+			}
+			expected.Annotations[ClusterOpsLockAnnotation] = lock
+		}
+		if queue, hasQueue := found.Annotations[ClusterOpsRetryQueueAnnotation]; hasQueue {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 1)
+			}
+			expected.Annotations[ClusterOpsRetryQueueAnnotation] = queue
+		}
+		if storage, hasStorage := found.Annotations[StorageMinimumSizeAnnotation]; hasStorage {
+			if expected.Annotations == nil {
+				expected.Annotations = make(map[string]string, 1)
+			}
+			expected.Annotations[StorageMinimumSizeAnnotation] = storage
+		}
+	}
+	if found.Spec.Template.Annotations != nil {
+		// Note: the Pod template storage annotation is used to start a rolling restart,
+		// it should always match the StatefulSet's storage annotation
+		if storage, hasStorage := found.Spec.Template.Annotations[StorageMinimumSizeAnnotation]; hasStorage {
+			if expected.Spec.Template.Annotations == nil {
+				expected.Spec.Template.Annotations = make(map[string]string, 1)
+			}
+			expected.Spec.Template.Annotations[StorageMinimumSizeAnnotation] = storage
+		}
+	}
 
 	// Scaling (i.e. changing) the number of replicas in the SolrCloud statefulSet is handled during the clusterOps
 	// section of the SolrCloud reconcile loop
@@ -719,13 +809,19 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
-	// If the user has provided custom resources for the default init containers, use them
+	// If the user has provided custom resources or security context for the default init containers, use them
 	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
 	if nil != customPodOptions {
 		resources := customPodOptions.DefaultInitContainerResources
-		if resources.Limits != nil || resources.Requests != nil {
+		securityContext := customPodOptions.DefaultInitContainerSecurityContext
+		if resources.Limits != nil || resources.Requests != nil || securityContext != nil {
 			for i := range containers {
-				containers[i].Resources = resources
+				if resources.Limits != nil || resources.Requests != nil {
+					containers[i].Resources = resources
+				}
+				if securityContext != nil {
+					containers[i].SecurityContext = securityContext
+				}
 			}
 		}
 	}
@@ -733,12 +829,22 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
+func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort int, path string) corev1.ProbeHandler {
+	return corev1.ProbeHandler{
+		HTTPGet: &corev1.HTTPGetAction{
+			Scheme: probeScheme,
+			Path:   "/solr" + path,
+			Port:   intstr.FromInt(solrPodPort),
+		},
+	}
+}
+
 const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
   %s
   <solrcloud>
     <str name="host">${host:}</str>
-    <int name="hostPort">${hostPort:80}</int>
+    <int name="hostPort">${solr.port.advertise:80}</int>
     <str name="hostContext">${hostContext:solr}</str>
     <bool name="genericCoreNodeNames">${genericCoreNodeNames:true}</bool>
     <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
@@ -752,6 +858,9 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+  <str name="allowPaths">${solr.allowPaths:}</str>
+  <metrics enabled="${metricsEnabled:true}"/>
   %s
 </solr>
 `
@@ -797,6 +906,9 @@ func GenerateSolrXMLString(backupSection string, solrModules []string, additiona
 func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
 	libs := make(map[string]bool, 0)
 
+	// Placeholder for users to specify libs via sysprop
+	libs[SysPropLibPlaceholder] = true
+
 	// Add all module library locations
 	if len(solrModules) > 0 {
 		libs[DistLibs] = true
@@ -810,31 +922,28 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string)
 		libs[libPath] = true
 	}
 
-	libXml := ""
-	if len(libs) > 0 {
-		libList := make([]string, 0)
-		for lib := range libs {
-			libList = append(libList, lib)
-		}
-		sort.Strings(libList)
-		libXml = fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
+	libList := make([]string, 0)
+	for lib := range libs {
+		libList = append(libList, lib)
 	}
-	return libXml
+	sort.Strings(libList)
+	return fmt.Sprintf("<str name=\"sharedLib\">%s</str>", strings.Join(libList, ","))
 }
 
 func getAppProtocol(solrCloud *solr.SolrCloud) *string {
-	appProtocol := "http"
+	// Only use https, because for non-tls we need to support both http & http2 for Solr
 	if solrCloud.Spec.SolrTLS != nil {
-		appProtocol = "https"
+		return pointer.String("https")
+	} else {
+		return nil
 	}
-	return &appProtocol
 }
 
 // GenerateCommonService returns a new corev1.Service pointer generated for the entire SolrCloud instance
 // solrCloud: SolrCloud instance
 func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "common"
+	labels[ServiceTypeAnnotation] = CommonServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -886,7 +995,7 @@ func GenerateCommonService(solrCloud *solr.SolrCloud) *corev1.Service {
 // solrCloud: SolrCloud instance
 func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "headless"
+	labels[ServiceTypeAnnotation] = HeadlessServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -941,7 +1050,7 @@ func GenerateHeadlessService(solrCloud *solr.SolrCloud) *corev1.Service {
 // nodeName: string node
 func GenerateNodeService(solrCloud *solr.SolrCloud, nodeName string) *corev1.Service {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	labels["service-type"] = "external"
+	labels[ServiceTypeAnnotation] = PerNodeServiceType
 
 	selectorLabels := solrCloud.SharedLabels()
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
@@ -1143,7 +1252,6 @@ func CreateNodeIngressRule(solrCloud *solr.SolrCloud, nodeName string, domainNam
 	return ingressRule
 }
 
-// TODO: Have this replace the postStart hook for creating the chroot
 func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, security *SecurityConfig) (bool, corev1.Container) {
 	allSolrOpts := make([]string, 0)
 
@@ -1162,6 +1270,9 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "SOLR_OPTS",
 			Value: strings.Join(allSolrOpts, " "),
+		}, corev1.EnvVar{
+			Name:  "SOLR_TOOL_OPTS",
+			Value: strings.Join(allSolrOpts, " "),
 		})
 	}
 
@@ -1177,9 +1288,6 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 
 	if security != nil && security.SecurityJson != "" {
 		envVars = append(envVars, corev1.EnvVar{Name: "SECURITY_JSON", ValueFrom: security.SecurityJsonSrc})
-		if solrCloud.Spec.SolrZkOpts != "" {
-			envVars = append(envVars, corev1.EnvVar{Name: "ZKCLI_JVM_FLAGS", Value: solrCloud.Spec.SolrZkOpts})
-		}
 		cmd += cmdToPutSecurityJsonInZk()
 	}
 
@@ -1188,6 +1296,12 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 		corev1.ResourceMemory: *DefaultSolrZKPrepInitContainerMemory,
 	}
 	if cmd != "" {
+		volumeMounts := []corev1.VolumeMount{
+			{
+				Name:      "tmp",
+				MountPath: "/tmp",
+			},
+		}
 		return true, corev1.Container{
 			Name:                     "setup-zk",
 			Image:                    solrCloud.Spec.SolrImage.ToImageName(),
@@ -1200,6 +1314,10 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 				Requests: zkSetupResources,
 				Limits:   zkSetupResources,
 			},
+			SecurityContext: &corev1.SecurityContext{
+				ReadOnlyRootFilesystem: ptr.To(true),
+			},
+			VolumeMounts: volumeMounts,
 		}
 	}
 

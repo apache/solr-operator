@@ -19,15 +19,17 @@ package solr_api
 
 import "fmt"
 
-func CheckForCollectionsApiError(action string, header SolrResponseHeader) (hasError bool, err error) {
-	if header.Status > 0 {
-		hasError = true
+func CheckForCollectionsApiError(action string, header SolrResponseHeader, errorBody *SolrErrorResponse) (apiUnsupported bool, err error) {
+	if errorBody != nil {
+		err = *errorBody
+		apiUnsupported = IsNotSupportedApiError(errorBody)
+	} else if header.Status > 0 {
 		err = APIError{
 			Detail: fmt.Sprintf("Error occurred while calling the Collections api for action=%s", action),
 			Status: header.Status,
 		}
 	}
-	return hasError, err
+	return
 }
 
 func CollectionsAPIError(action string, responseStatus int) error {
@@ -47,4 +49,22 @@ func (e APIError) Error() string {
 		return e.Detail
 	}
 	return fmt.Sprintf("Solr response status: %d. %s", e.Status, e.Detail)
+}
+
+type SolrErrorResponse struct {
+	Metadata SolrErrorMetadata `json:"metadata,omitempty"`
+
+	Message string `json:"msg,omitempty"`
+
+	Code int `json:"code,omitempty"`
+}
+
+type SolrErrorMetadata struct {
+	ErrorClass string `json:"error-class,omitempty"`
+
+	RootErrorClass string `json:"root-error-class,omitempty"`
+}
+
+func (e SolrErrorResponse) Error() string {
+	return fmt.Sprintf("Error returned from Solr API: %d. %s", e.Code, e.Message)
 }

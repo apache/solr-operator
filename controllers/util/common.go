@@ -18,11 +18,12 @@
 package util
 
 import (
-	policyv1 "k8s.io/api/policy/v1"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -431,9 +432,35 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 	requireUpdate = CopyPodVolumes(&from.Spec.Volumes, &to.Spec.Volumes, basePath+"Spec.Volumes", logger) || requireUpdate
 
 	if !DeepEqualWithNils(to.Spec.HostAliases, from.Spec.HostAliases) {
-		requireUpdate = true
-		to.Spec.HostAliases = from.Spec.HostAliases
-		logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
+		hostAliasUpdate := false
+		if to.Spec.HostAliases == nil {
+			hostAliasUpdate = true
+			to.Spec.HostAliases = from.Spec.HostAliases
+		} else {
+			// Do not remove aliases that are no longer used.
+			// This is in case Solr is scaling down and we want to keep the old addresses for future use.
+			for _, fromAlias := range from.Spec.HostAliases {
+				found := false
+				for i, toAlias := range to.Spec.HostAliases {
+					if fromAlias.Hostnames[0] == toAlias.Hostnames[0] {
+						found = true
+						if !DeepEqualWithNils(toAlias, fromAlias) {
+							hostAliasUpdate = true
+							to.Spec.HostAliases[i] = fromAlias
+							break
+						}
+					}
+				}
+				if !found {
+					hostAliasUpdate = true
+					to.Spec.HostAliases = append(to.Spec.HostAliases, fromAlias)
+				}
+			}
+		}
+		if hostAliasUpdate {
+			requireUpdate = true
+			logger.Info("Update required because field changed", "field", basePath+"Spec.HostAliases", "from", to.Spec.HostAliases, "to", from.Spec.HostAliases)
+		}
 	}
 
 	if !DeepEqualWithNils(to.Spec.ImagePullSecrets, from.Spec.ImagePullSecrets) {
@@ -488,6 +515,24 @@ func CopyPodTemplates(from, to *corev1.PodTemplateSpec, basePath string, logger 
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", basePath+"Spec.TopologySpreadConstraints", "from", to.Spec.TopologySpreadConstraints, "to", from.Spec.TopologySpreadConstraints)
 		to.Spec.TopologySpreadConstraints = from.Spec.TopologySpreadConstraints
+	}
+
+	if !DeepEqualWithNils(to.Spec.ReadinessGates, from.Spec.ReadinessGates) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.ReadinessGates", "from", to.Spec.ReadinessGates, "to", from.Spec.ReadinessGates)
+		to.Spec.ReadinessGates = from.Spec.ReadinessGates
+	}
+
+	if !DeepEqualWithNils(to.Spec.ShareProcessNamespace, from.Spec.ShareProcessNamespace) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.ShareProcessNamespace", "from", to.Spec.ShareProcessNamespace, "to", from.Spec.ShareProcessNamespace)
+		to.Spec.ShareProcessNamespace = from.Spec.ShareProcessNamespace
+	}
+
+	if !DeepEqualWithNils(to.Spec.EnableServiceLinks, from.Spec.EnableServiceLinks) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", basePath+"Spec.EnableServiceLinks", "from", to.Spec.EnableServiceLinks, "to", from.Spec.EnableServiceLinks)
+		to.Spec.EnableServiceLinks = from.Spec.EnableServiceLinks
 	}
 
 	return requireUpdate
@@ -596,6 +641,12 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				logger.Info("Update required because field changed", "field", containerBasePath+"TerminationMessagePolicy", "from", to[i].TerminationMessagePolicy, "to", from[i].TerminationMessagePolicy)
 				to[i].TerminationMessagePolicy = from[i].TerminationMessagePolicy
 			}
+
+			if !DeepEqualWithNils(to[i].SecurityContext, from[i].SecurityContext) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"SecurityContext", "from", to[i].SecurityContext, "to", from[i].SecurityContext)
+				to[i].SecurityContext = from[i].SecurityContext
+			}
 		}
 	}
 	return requireUpdate
@@ -628,6 +679,15 @@ func CopyPodVolumes(fromPtr, toPtr *[]corev1.Volume, basePath string, logger log
 }
 
 func CopyResources(from, to *corev1.ResourceRequirements, basePath string, logger logr.Logger) (requireUpdate bool) {
+
+	requireUpdate = CopyContainerResourceList(&from.Requests, &to.Requests, basePath+"Requests", logger) || requireUpdate
+
+	requireUpdate = CopyContainerResourceList(&from.Limits, &to.Limits, basePath+"Limits", logger) || requireUpdate
+
+	return requireUpdate
+}
+
+func CopyVolumeResources(from, to *corev1.VolumeResourceRequirements, basePath string, logger logr.Logger) (requireUpdate bool) {
 
 	requireUpdate = CopyContainerResourceList(&from.Requests, &to.Requests, basePath+"Requests", logger) || requireUpdate
 

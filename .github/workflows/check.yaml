@@ -29,13 +29,13 @@ jobs:
 
     strategy:
       matrix:
-        go: [ '1.19' ]
+        go: [ '1.26' ]
 
     steps:
       # Setup
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
@@ -43,7 +43,7 @@ jobs:
       - run: make clean
       - run: make install-dependencies
 
-      - uses: actions/cache@v2
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
