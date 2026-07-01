@@ -244,12 +244,19 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 					},
 					CommonServiceOptions: &solrv1beta1.ServiceOptions{
-						Annotations: testCommonServiceAnnotations,
-						Labels:      testCommonServiceLabels,
+						Annotations:     testCommonServiceAnnotations,
+						Labels:          testCommonServiceLabels,
+						SessionAffinity: corev1.ServiceAffinityClientIP,
+						SessionAffinityConfig: &corev1.SessionAffinityConfig{
+							ClientIP: &corev1.ClientIPConfig{
+								TimeoutSeconds: pointer.Int32(3600),
+							},
+						},
 					},
 					HeadlessServiceOptions: &solrv1beta1.ServiceOptions{
-						Annotations: testHeadlessServiceAnnotations,
-						Labels:      testHeadlessServiceLabels,
+						Annotations:     testHeadlessServiceAnnotations,
+						Labels:          testHeadlessServiceLabels,
+						SessionAffinity: corev1.ServiceAffinityClientIP,
 					},
 					ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
 						Annotations: testConfigMapAnnotations,
@@ -340,6 +347,9 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(commonService.Annotations).To(Equal(testCommonServiceAnnotations), "Incorrect common service annotations")
 			Expect(commonService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on common Service")
 			Expect(commonService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on common Service should be nil when not running with TLS")
+			Expect(commonService.Spec.SessionAffinity).To(Equal(corev1.ServiceAffinityClientIP), "Incorrect sessionAffinity on common Service")
+			Expect(commonService.Spec.SessionAffinityConfig).To(Not(BeNil()), "Common Service should have a sessionAffinityConfig")
+			Expect(commonService.Spec.SessionAffinityConfig.ClientIP.TimeoutSeconds).To(PointTo(Equal(int32(3600))), "Incorrect sessionAffinityConfig timeout on common Service")
 
 			By("testing the Solr Headless Service")
 			headlessService := expectService(ctx, solrCloud, solrCloud.HeadlessServiceName(), statefulSet.Spec.Selector.MatchLabels, true)
@@ -348,6 +358,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(headlessService.Annotations).To(Equal(testHeadlessServiceAnnotations), "Incorrect headless service annotations")
 			Expect(headlessService.Spec.Ports[0].Protocol).To(Equal(corev1.ProtocolTCP), "Wrong protocol on headless Service")
 			Expect(headlessService.Spec.Ports[0].AppProtocol).To(BeNil(), "AppProtocol on headless Service should be nil when not running with TLS")
+			Expect(headlessService.Spec.SessionAffinity).To(Equal(corev1.ServiceAffinityClientIP), "Incorrect sessionAffinity on headless Service")
 
 			By("testing the PodDisruptionBudget")
 			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())

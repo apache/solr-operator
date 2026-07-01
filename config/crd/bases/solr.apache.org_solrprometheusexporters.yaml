@@ -8018,6 +8018,33 @@ spec:
                           type: string
                         description: Labels to be added for the Service.
                         type: object
+                      sessionAffinity:
+                        default: None
+                        description: |-
+                          SessionAffinity is used to maintain session affinity for the Service.
+                          Enables client IP based session affinity when set to "ClientIP". Must be "ClientIP" or "None". Defaults to "None".
+                        enum:
+                        - None
+                        - ClientIP
+                        type: string
+                      sessionAffinityConfig:
+                        description: |-
+                          SessionAffinityConfig contains the configuration of the Service's session affinity.
+                          Only used when SessionAffinity is set to "ClientIP".
+                        properties:
+                          clientIP:
+                            description: clientIP contains the configurations of Client
+                              IP based session affinity.
+                            properties:
+                              timeoutSeconds:
+                                description: |-
+                                  timeoutSeconds specifies the seconds of ClientIP type session sticky time.
+                                  The value must be >0 && <=86400(for 1 day) if ServiceAffinity == "ClientIP".
+                                  Default value is 10800(for 3 hours).
+                                format: int32
+                                type: integer
+                            type: object
+                        type: object
                     type: object
                 type: object
               exporterEntrypoint:

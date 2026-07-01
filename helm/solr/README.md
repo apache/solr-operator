@@ -307,10 +307,16 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | statefulSetOptions.podManagementPolicy | string | `"Parallel"` | Policy for how Solr pods should be managed in the statefulSet, ["OrderedReady" or "Parallel"](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#pod-management-policies) |
 | commonServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr common service |
 | commonServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr common service |
+| commonServiceOptions.sessionAffinity | string | `"None"` | Choose session affinity to setup for the common service. Available options are "None" and "ClientIP". |
+| commonServiceOptions.sessionAffinityConfig | object |  | Sets configuration of session affinity |
 | headlessServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr headless service |
 | headlessServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr headless service |
+| headlessServiceOptions.sessionAffinity | string | `"None"` | Choose session affinity to setup for the headless service. Available options are "None" and "ClientIP". |
+| headlessServiceOptions.sessionAffinityConfig | object |  | Sets configuration of session affinity |
 | nodeServiceOptions.annotations | map[string]string |  | Custom annotations to add to the Solr node service(s) |
 | nodeServiceOptions.labels | map[string]string |  | Custom labels to add to the Solr node service(s) |
+| nodeServiceOptions.sessionAffinity | string | `"None"` | Choose session affinity to setup for the node service(s). Available options are "None" and "ClientIP". |
+| nodeServiceOptions.sessionAffinityConfig | object |  | Sets configuration of session affinity |
 | ingressOptions.annotations | map[string]string |  | Custom annotations to add to the Solr ingress, if an Ingress is created/used |
 | ingressOptions.labels | map[string]string |  | Custom labels to add to the Solr ingress, if an Ingress is created/used |
 | ingressOptions.ingressClassName | string |  | Set the name of the IngressClass to use, if an Ingress is created/used |
