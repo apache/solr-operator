@@ -23,6 +23,7 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
@@ -106,9 +107,17 @@ func DeletePodForUpdate(ctx context.Context, r *SolrCloudReconciler, instance *s
 			UID: &pod.UID,
 		})
 		if err != nil {
-			logger.Error(err, "Error while killing solr pod for update", "pod", pod.Name)
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodUpdateError",
-				"Error while deleting pod %s for an update: %v", pod.Name, err)
+			// A NotFound error means the pod is already gone, which is the
+			// desired postcondition for this update path. Treat it as success
+			// rather than reporting a spurious PodUpdateError.
+			if apierrors.IsNotFound(err) {
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "PodUpdate",
+					"Pod %s already deleted; it will be recreated with the updated SolrCloud specification", pod.Name)
+			} else {
+				logger.Error(err, "Error while killing solr pod for update", "pod", pod.Name)
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodUpdateError",
+					"Error while deleting pod %s for an update: %v", pod.Name, err)
+			}
 		} else {
 			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "PodUpdate",
 				"Deleting pod %s so that it can be recreated with the updated SolrCloud specification", pod.Name)

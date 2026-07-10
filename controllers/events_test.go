@@ -28,9 +28,11 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -253,7 +255,87 @@ func TestHandlePvcExpansionEmitsEventOnBadMetadata(t *testing.T) {
 	requireEvent(t, rec, corev1.EventTypeWarning, "PVCExpansionError")
 }
 
-// TestReconcileSolrCloudBackupEmitsCloudNotReadyEvent verifies a BackupCloudNotReady warning is
+// TestDeletePodForUpdateTreatsNotFoundAsSuccess verifies that when the target
+// pod is already gone, DeletePodForUpdate does not report a PodUpdateError
+// warning. A NotFound from the delete is the desired postcondition (the pod is
+// absent and will be recreated), so it should surface a normal PodUpdate event.
+func TestDeletePodForUpdateTreatsNotFoundAsSuccess(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("could not add client-go types to scheme: %v", err)
+	}
+	if err := solrv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("could not add solr types to scheme: %v", err)
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test",
+			UID:       "test-uid",
+		},
+	}
+
+	// Force the fake client's Delete to return NotFound, simulating a pod that
+	// was already removed by a prior reconcile.
+	notFoundClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+				return apierrors.NewNotFound(schema.GroupResource{Resource: "pods"}, "test-pod")
+			},
+		}).
+		Build()
+
+	rec := record.NewFakeRecorder(8)
+	r := &SolrCloudReconciler{Client: notFoundClient, Recorder: rec}
+	instance := &solrv1beta1.SolrCloud{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test"}}
+
+	if _, _, err := DeletePodForUpdate(context.Background(), r, instance, pod, false, logr.Discard()); err == nil {
+		t.Error("expected DeletePodForUpdate to return the NotFound delete error, got nil")
+	}
+	// A NotFound delete must surface a normal PodUpdate event, never a PodUpdateError warning.
+	requireEvent(t, rec, corev1.EventTypeNormal, "PodUpdate")
+}
+
+// TestDeletePodForUpdateReportsRealDeleteError verifies that a non-NotFound
+// delete failure is still surfaced as a PodUpdateError warning.
+func TestDeletePodForUpdateReportsRealDeleteError(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := clientgoscheme.AddToScheme(scheme); err != nil {
+		t.Fatalf("could not add client-go types to scheme: %v", err)
+	}
+	if err := solrv1beta1.AddToScheme(scheme); err != nil {
+		t.Fatalf("could not add solr types to scheme: %v", err)
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test",
+			UID:       "test-uid",
+		},
+	}
+
+	realErrClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Delete: func(_ context.Context, _ client.WithWatch, _ client.Object, _ ...client.DeleteOption) error {
+				return errors.New("boom")
+			},
+		}).
+		Build()
+
+	rec := record.NewFakeRecorder(8)
+	r := &SolrCloudReconciler{Client: realErrClient, Recorder: rec}
+	instance := &solrv1beta1.SolrCloud{ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "test"}}
+
+	if _, _, err := DeletePodForUpdate(context.Background(), r, instance, pod, false, logr.Discard()); err == nil {
+		t.Error("expected DeletePodForUpdate to return the delete error, got nil")
+	}
+	requireEvent(t, rec, corev1.EventTypeWarning, "PodUpdateError")
+}
+
 // emitted when a backup is attempted against a repository that the SolrCloud has not yet marked
 // available. A GCS repository is used so that EnsureDirectoryForBackup is a no-op (no pod exec).
 func TestReconcileSolrCloudBackupEmitsCloudNotReadyEvent(t *testing.T) {
