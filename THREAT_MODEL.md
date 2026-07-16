@@ -31,10 +31,11 @@
 - **Author:** ASF Security team, via the threat-model-producer rubric
   (Scovetta rubric), as a starting point for the Solr PMC.
 - **Status:** **v0 DRAFT** — produced by the ASF Security team *for the Solr
-  PMC to review, correct, own, and ratify*. **Not yet reviewed by any
-  maintainer; not ratified.** Almost every claim below is *(inferred)* and
-  routed to a §14 open question. Do not treat any statement here as a
-  maintainer position until the PMC has confirmed it.
+  PMC to review, correct, own, and ratify*. **Reviewed by Houston Putman
+  (Solr PMC) on 2026-07-15; his corrections are folded in.** Not yet
+  ratified/merged. Remaining unconfirmed claims below are *(inferred)* and
+  routed to a §14 open question; do not treat those as a maintainer position
+  until the PMC has confirmed them.
 - **Version binding:** once ratified, versioned alongside the operator. A
   report against operator version *N* is triaged against the model as it stood
   at *N*, not at HEAD.
@@ -51,7 +52,8 @@
   §14 confirms.
 - **Provenance legend:** *(documented)* = stated in the repo's code, CRD field
   docs, or the operator user guide (cited); *(maintainer)* = confirmed by a
-  Solr PMC member in response to this draft (**none yet**); *(inferred)* =
+  Solr PMC member in response to this draft (**Houston Putman, 2026-07-15**);
+  *(inferred)* =
   reasoned from code/CRD/RBAC structure, not yet confirmed — each has a
   matching §14 open question.
 - **Draft confidence:** ~14 documented / 0 maintainer / 27 inferred. This is a
@@ -69,7 +71,8 @@ HTTP calls into the Solr pods it manages. The defining security fact is that
 the operator is a **privileged intermediary**: it turns a namespaced,
 relatively low-privilege action (creating a CR) into high-privilege cluster
 mutations (creating Secrets, exec-ing into pods, managing StatefulSets),
-across every namespace it watches (all namespaces by default).
+across the namespaces it watches (all namespaces by default, though it can
+equally be installed namespace-scoped, watching only specific namespaces).
 
 ## §2 Scope and intended use
 
@@ -82,10 +85,12 @@ and not a user-facing service. Roles:
   most**: they author the *desired state* but do not themselves hold the
   operator's cluster privileges. This is the primary adversary of interest
   (§7). *(inferred — Q-tenant.)*
-- **Cluster operator / admin** — installs the operator, grants its
-  `ClusterRole`, chooses watched namespaces, controls the Helm values.
-  **Fully trusted** — owns the operator's blast radius. *(inferred —
-  Q-admin.)*
+- **Cluster operator / admin** — installs the operator, grants its RBAC
+  (a cluster-wide `ClusterRole`, or namespace-scoped `Role`s when the operator
+  watches specific namespaces), chooses watched namespaces, controls the Helm
+  values. **Fully trusted** — owns the operator's blast radius.
+  *(maintainer — ClusterRole/Role distinction confirmed by HoustonPutman
+  2026-07-15.)*
 - **The managed Solr (search server) and its clients** — out of scope here;
   modelled by `apache/solr`'s `THREAT_MODEL.md`. The operator is a *client* of
   Solr (it makes authenticated admin API calls), not the thing serving
@@ -97,7 +102,7 @@ and not a user-facing service. Roles:
 | --- | --- | --- | --- |
 | **CRD field handling** (`api/v1beta1`) | `SolrCloud`/`SolrBackup`/`SolrPrometheusExporter` spec | tenant-authored desired state consumed by a privileged controller | **Yes (primary)** |
 | **Reconciliation controllers** (`controllers/`) | watch → reconcile loop | acts with the operator ServiceAccount's cluster RBAC | **Yes (primary)** |
-| **Operator cluster RBAC** (`config/rbac/role.yaml`) | the `ClusterRole` bound to the operator SA | secrets/pods-exec/statefulsets cluster-wide | **Yes (blast radius)** |
+| **Operator RBAC** (`config/rbac/role.yaml`) | the `ClusterRole` (or namespace-scoped `Role`s) bound to the operator SA | secrets/pods-exec/statefulsets across watched namespaces | **Yes (blast radius)** |
 | **Secret provisioning** (`controllers/util/solr_security_util.go`) | bootstrap basic-auth + `security.json` secrets | generates & stores Solr admin credentials | **Yes** |
 | **TLS handling** (`solr_tls_util.go`, `main.go` client cert) | mounted/provisioned certs; operator→Solr mTLS client | trust of Solr server certs | **Yes** |
 | **Backup subsystem** (`SolrBackup`, `solr_backup_repo_util.go`) | repo config + cloud credentials (S3/GCS/volume) | reads backup-repo credential secrets | **Yes** |
@@ -134,6 +139,12 @@ and not a user-facing service. Roles:
 - **Code shipped for development/testing** — `tests/`, `hack/`, `example/`,
   `dev-docs/`, and `*_test.go`. Unsupported for production; threat-model
   separately if ever promoted. *(inferred — Q-scope.)*
+- **Pass-through Kubernetes options on dependent resources.** Custom
+  Kubernetes options a tenant sets that the operator copies verbatim onto the
+  dependent objects it creates (StatefulSet, Service, Pod, etc.) are native
+  Kubernetes fields passed straight through, so their behaviour and security
+  semantics are Kubernetes's, not the operator's. *(maintainer — confirmed by
+  HoustonPutman 2026-07-15.)*
 
 ## §4 Trust boundaries and data flow
 
