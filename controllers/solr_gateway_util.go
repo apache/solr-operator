@@ -132,37 +132,36 @@ func (r *SolrCloudReconciler) reconcileGatewayHTTPRoutes(ctx context.Context, cl
 		Namespace:     cloud.Namespace,
 		LabelSelector: labels.SelectorFromSet(cloud.SharedLabels()),
 	}
-	err := r.List(ctx, httpRouteList, listOps)
-	if err == nil {
-		for _, httpRoute := range httpRouteList.Items {
-			// Skip the common HTTPRoute
-			if httpRoute.Name == cloud.CommonHTTPRouteName() {
-				continue
-			}
+	if err := r.List(ctx, httpRouteList, listOps); err != nil {
+		return err
+	}
+	for _, httpRoute := range httpRouteList.Items {
+		// Skip the common HTTPRoute
+		if httpRoute.Name == cloud.CommonHTTPRouteName() {
+			continue
+		}
 
-			// Delete if hideNodes is true, or if this node no longer exists (scale-down)
-			shouldDelete := extAddressabilityOpts.HideNodes
-			if !shouldDelete {
-				nodeExists := false
-				for _, nodeName := range solrNodeNames {
-					if httpRoute.Name == cloud.NodeHTTPRouteName(nodeName) {
-						nodeExists = true
-						break
-					}
+		// Delete if hideNodes is true, or if this node no longer exists (scale-down)
+		shouldDelete := extAddressabilityOpts.HideNodes
+		if !shouldDelete {
+			nodeExists := false
+			for _, nodeName := range solrNodeNames {
+				if httpRoute.Name == cloud.NodeHTTPRouteName(nodeName) {
+					nodeExists = true
+					break
 				}
-				shouldDelete = !nodeExists
 			}
+			shouldDelete = !nodeExists
+		}
 
-			if shouldDelete {
-				if extAddressabilityOpts.HideNodes {
-					logger.Info("Deleting node HTTPRoute (hideNodes=true)", "httproute", httpRoute.Name)
-				} else {
-					logger.Info("Deleting orphaned node HTTPRoute", "httproute", httpRoute.Name)
-				}
-				err = r.Delete(ctx, &httpRoute)
-				if err != nil && !errors.IsNotFound(err) {
-					return err
-				}
+		if shouldDelete {
+			if extAddressabilityOpts.HideNodes {
+				logger.Info("Deleting node HTTPRoute (hideNodes=true)", "httproute", httpRoute.Name)
+			} else {
+				logger.Info("Deleting orphaned node HTTPRoute", "httproute", httpRoute.Name)
+			}
+			if err := r.Delete(ctx, &httpRoute); err != nil && !errors.IsNotFound(err) {
+				return err
 			}
 		}
 	}
@@ -179,12 +178,13 @@ func (r *SolrCloudReconciler) reconcileGatewayBackendTLSPolicies(ctx context.Con
 	// If BackendTLSPolicy is not configured, clean up any existing BackendTLSPolicy resources
 	if !extAddressabilityOpts.HasBackendTLSPolicy() {
 		backendTLSPolicyList := &gatewayv1.BackendTLSPolicyList{}
-		err := r.List(ctx, backendTLSPolicyList, listOps)
-		if err == nil && len(backendTLSPolicyList.Items) > 0 {
+		if err := r.List(ctx, backendTLSPolicyList, listOps); err != nil {
+			return err
+		}
+		if len(backendTLSPolicyList.Items) > 0 {
 			logger.Info("Cleaning up BackendTLSPolicy resources (BackendTLSPolicy disabled)")
 			for _, policy := range backendTLSPolicyList.Items {
-				err = r.Delete(ctx, &policy)
-				if err != nil && !errors.IsNotFound(err) {
+				if err := r.Delete(ctx, &policy); err != nil && !errors.IsNotFound(err) {
 					return err
 				}
 			}
@@ -199,20 +199,18 @@ func (r *SolrCloudReconciler) reconcileGatewayBackendTLSPolicies(ctx context.Con
 			commonPolicyLogger := logger.WithValues("backendtlspolicy", commonPolicy.Name)
 			foundCommonPolicy := &gatewayv1.BackendTLSPolicy{}
 			err := r.Get(ctx, types.NamespacedName{Name: commonPolicy.Name, Namespace: commonPolicy.Namespace}, foundCommonPolicy)
-
 			if err != nil && errors.IsNotFound(err) {
-				commonPolicyLogger.Info("Creating BackendTLSPolicy")
+				commonPolicyLogger.Info("Creating common BackendTLSPolicy")
 				if err = controllerutil.SetControllerReference(cloud, commonPolicy, r.Scheme); err == nil {
 					err = r.Create(ctx, commonPolicy)
 				}
 			} else if err == nil {
 				var needsUpdate bool
 				needsUpdate, err = util.OvertakeControllerRef(cloud, foundCommonPolicy, r.Scheme)
-				if err == nil && util.CopyBackendTLSPolicyFields(commonPolicy, foundCommonPolicy, commonPolicyLogger) {
-					needsUpdate = true
-				}
-				if needsUpdate {
-					commonPolicyLogger.Info("Updating BackendTLSPolicy")
+				needsUpdate = util.CopyBackendTLSPolicyFields(commonPolicy, foundCommonPolicy, commonPolicyLogger) || needsUpdate
+
+				if needsUpdate && err == nil {
+					commonPolicyLogger.Info("Updating common BackendTLSPolicy")
 					err = r.Update(ctx, foundCommonPolicy)
 				}
 			}
@@ -241,24 +239,21 @@ func (r *SolrCloudReconciler) reconcileGatewayBackendTLSPolicies(ctx context.Con
 				nodePolicyLogger := logger.WithValues("backendtlspolicy", nodePolicy.Name)
 				foundNodePolicy := &gatewayv1.BackendTLSPolicy{}
 				err := r.Get(ctx, types.NamespacedName{Name: nodePolicy.Name, Namespace: nodePolicy.Namespace}, foundNodePolicy)
-
 				if err != nil && errors.IsNotFound(err) {
-					nodePolicyLogger.Info("Creating BackendTLSPolicy")
+					nodePolicyLogger.Info("Creating node BackendTLSPolicy")
 					if err = controllerutil.SetControllerReference(cloud, nodePolicy, r.Scheme); err == nil {
 						err = r.Create(ctx, nodePolicy)
 					}
 				} else if err == nil {
 					var needsUpdate bool
 					needsUpdate, err = util.OvertakeControllerRef(cloud, foundNodePolicy, r.Scheme)
-					if err == nil && util.CopyBackendTLSPolicyFields(nodePolicy, foundNodePolicy, nodePolicyLogger) {
-						needsUpdate = true
-					}
-					if needsUpdate {
-						nodePolicyLogger.Info("Updating BackendTLSPolicy")
+					needsUpdate = util.CopyBackendTLSPolicyFields(nodePolicy, foundNodePolicy, nodePolicyLogger) || needsUpdate
+
+					if needsUpdate && err == nil {
+						nodePolicyLogger.Info("Updating node BackendTLSPolicy")
 						err = r.Update(ctx, foundNodePolicy)
 					}
 				}
-
 				if err != nil {
 					return err
 				}
@@ -268,38 +263,37 @@ func (r *SolrCloudReconciler) reconcileGatewayBackendTLSPolicies(ctx context.Con
 
 	// Cleanup node BackendTLSPolicies (when hideNodes is true or when scaling down)
 	backendTLSPolicyList := &gatewayv1.BackendTLSPolicyList{}
-	err := r.List(ctx, backendTLSPolicyList, listOps)
-	if err == nil {
-		for _, policy := range backendTLSPolicyList.Items {
-			// Skip the common BackendTLSPolicy
-			if policy.Name == cloud.CommonBackendTLSPolicyName() {
-				continue
-			}
+	if err := r.List(ctx, backendTLSPolicyList, listOps); err != nil {
+		return err
+	}
+	for _, policy := range backendTLSPolicyList.Items {
+		// Skip the common BackendTLSPolicy
+		if policy.Name == cloud.CommonBackendTLSPolicyName() {
+			continue
+		}
 
-			// Delete if hideNodes is true, or if this node no longer exists (scale-down)
-			shouldDelete := extAddressabilityOpts.HideNodes
-			if !shouldDelete {
-				// Check if this node still exists
-				nodeExists := false
-				for _, nodeName := range solrNodeNames {
-					if policy.Name == cloud.NodeBackendTLSPolicyName(nodeName) {
-						nodeExists = true
-						break
-					}
+		// Delete if hideNodes is true, or if this node no longer exists (scale-down)
+		shouldDelete := extAddressabilityOpts.HideNodes
+		if !shouldDelete {
+			// Check if this node still exists
+			nodeExists := false
+			for _, nodeName := range solrNodeNames {
+				if policy.Name == cloud.NodeBackendTLSPolicyName(nodeName) {
+					nodeExists = true
+					break
 				}
-				shouldDelete = !nodeExists
 			}
+			shouldDelete = !nodeExists
+		}
 
-			if shouldDelete {
-				if extAddressabilityOpts.HideNodes {
-					logger.Info("Deleting node BackendTLSPolicy (hideNodes=true)", "backendtlspolicy", policy.Name)
-				} else {
-					logger.Info("Deleting orphaned node BackendTLSPolicy", "backendtlspolicy", policy.Name)
-				}
-				err = r.Delete(ctx, &policy)
-				if err != nil && !errors.IsNotFound(err) {
-					return err
-				}
+		if shouldDelete {
+			if extAddressabilityOpts.HideNodes {
+				logger.Info("Deleting node BackendTLSPolicy (hideNodes=true)", "backendtlspolicy", policy.Name)
+			} else {
+				logger.Info("Deleting orphaned node BackendTLSPolicy", "backendtlspolicy", policy.Name)
+			}
+			if err := r.Delete(ctx, &policy); err != nil && !errors.IsNotFound(err) {
+				return err
 			}
 		}
 	}
@@ -315,12 +309,13 @@ func (r *SolrCloudReconciler) cleanupGatewayResources(ctx context.Context, cloud
 
 	// Clean up HTTPRoutes
 	httpRouteList := &gatewayv1.HTTPRouteList{}
-	err := r.List(ctx, httpRouteList, listOps)
-	if err == nil && len(httpRouteList.Items) > 0 {
+	if err := r.List(ctx, httpRouteList, listOps); err != nil {
+		return err
+	}
+	if len(httpRouteList.Items) > 0 {
 		logger.Info("Cleaning up HTTPRoutes (method changed from Gateway)")
 		for _, httpRoute := range httpRouteList.Items {
-			err = r.Delete(ctx, &httpRoute)
-			if err != nil && !errors.IsNotFound(err) {
+			if err := r.Delete(ctx, &httpRoute); err != nil && !errors.IsNotFound(err) {
 				return err
 			}
 		}
@@ -328,12 +323,13 @@ func (r *SolrCloudReconciler) cleanupGatewayResources(ctx context.Context, cloud
 
 	// Clean up BackendTLSPolicy resources
 	backendTLSPolicyList := &gatewayv1.BackendTLSPolicyList{}
-	err = r.List(ctx, backendTLSPolicyList, listOps)
-	if err == nil && len(backendTLSPolicyList.Items) > 0 {
+	if err := r.List(ctx, backendTLSPolicyList, listOps); err != nil {
+		return err
+	}
+	if len(backendTLSPolicyList.Items) > 0 {
 		logger.Info("Cleaning up BackendTLSPolicy resources (method changed from Gateway)")
 		for _, policy := range backendTLSPolicyList.Items {
-			err = r.Delete(ctx, &policy)
-			if err != nil && !errors.IsNotFound(err) {
+			if err := r.Delete(ctx, &policy); err != nil && !errors.IsNotFound(err) {
 				return err
 			}
 		}
