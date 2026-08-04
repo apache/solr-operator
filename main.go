@@ -22,24 +22,26 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"github.com/apache/solr-operator/controllers/util/solr_api"
-	"github.com/apache/solr-operator/version"
-	"github.com/fsnotify/fsnotify"
-	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+
+	"github.com/apache/solr-operator/controllers/util/solr_api"
+	"github.com/apache/solr-operator/version"
+	"github.com/fsnotify/fsnotify"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
-	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"k8s.io/apimachinery/pkg/api/meta"
 	k8sRuntime "k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -64,7 +66,6 @@ var (
 
 	// External Operator dependencies
 	useZookeeperCRD bool
-	useGatewayAPI   bool
 
 	// mTLS information
 	clientSkipVerify  bool
@@ -93,7 +94,6 @@ func init() {
 	//+kubebuilder:scaffold:scheme
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
-	flag.BoolVar(&useGatewayAPI, "gateway-api", true, "The operator will not use the Gateway API CRDs when this flag is set to false.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 
 	flag.BoolVar(&clientSkipVerify, "tls-skip-verify-server", true, "Controls whether a client verifies the server's certificate chain and host name. If true (insecure), TLS accepts any certificate presented by the server and any host name in that certificate.")
@@ -185,6 +185,15 @@ func main() {
 	}
 
 	controllers.UseZkCRD(useZookeeperCRD)
+
+	// Detect whether the Gateway API CRDs are installed in the cluster. Both the HTTPRoute
+	// and BackendTLSPolicy types must be present for the operator to manage Gateway resources.
+	useGatewayAPI := gatewayAPIInstalled(mgr.GetRESTMapper())
+	if useGatewayAPI {
+		setupLog.Info("Gateway API CRDs detected; enabling Gateway support")
+	} else {
+		setupLog.Info("Gateway API CRDs not detected; Gateway support disabled")
+	}
 	controllers.UseGatewayAPI(useGatewayAPI)
 
 	// watch TLS files for update
@@ -353,4 +362,19 @@ func buildTLSTransport() (*http.Transport, error) {
 
 func getClientCertificate(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 	return clientCertificate, nil
+}
+
+// gatewayAPIInstalled reports whether the Gateway API CRDs required by the operator
+// (both HTTPRoute and BackendTLSPolicy) are registered with the API server.
+func gatewayAPIInstalled(mapper meta.RESTMapper) bool {
+	for _, kind := range []string{"HTTPRoute", "BackendTLSPolicy"} {
+		gvk := gatewayv1.SchemeGroupVersion.WithKind(kind)
+		if _, err := mapper.RESTMapping(gvk.GroupKind(), gvk.Version); err != nil {
+			if !meta.IsNoMatchError(err) {
+				setupLog.Error(err, "Error checking for Gateway API CRD; disabling Gateway support", "kind", kind)
+			}
+			return false
+		}
+	}
+	return true
 }

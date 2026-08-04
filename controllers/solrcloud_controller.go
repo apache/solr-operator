@@ -63,6 +63,9 @@ type SolrCloudReconciler struct {
 }
 
 var useZkCRD bool
+
+// useGatewayAPI is set when the Gateway API CRDs (both HTTPRoute and BackendTLSPolicy)
+// are installed in the cluster. This is detected at startup rather than configured via a flag.
 var useGatewayAPI bool
 
 func UseZkCRD(useCRD bool) {

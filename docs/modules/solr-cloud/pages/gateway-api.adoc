@@ -64,6 +64,15 @@ The Gateway mode assumes the following resources already exist in your cluster:
 The Solr Operator does **not** create or manage Gateway or GatewayClass resources - these are infrastructure-level resources
 typically managed by platform administrators and are specific to the Gateway implementation deployed in your cluster (e.g., NGINX Gateway Fabric, Istio, Envoy Gateway).
 
+=== CRD Detection
+
+Gateway support is enabled automatically; there is no flag to turn it on or off.
+At startup, the operator queries the Kubernetes API server to determine whether the Gateway API CRDs are installed.
+Gateway support is enabled only when **both** the `HTTPRoute` and `BackendTLSPolicy` types (API group `gateway.networking.k8s.io/v1`) are registered.
+If either is missing, the operator logs that Gateway support is disabled, does not watch these types, and ignores `method: Gateway` configurations.
+
+IMPORTANT: Detection happens only once, when the operator starts. If you install (or remove) the Gateway API CRDs while the operator is running, you must restart the operator pod for the change to take effect.
+
 == Configuration
 
 Configure Gateway mode in your SolrCloud spec:
