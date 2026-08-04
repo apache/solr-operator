@@ -1409,7 +1409,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if useGatewayAPI {
-		ctrlBuilder = ctrlBuilder.Owns(&gatewayv1.HTTPRoute{})
+		ctrlBuilder = ctrlBuilder.Owns(&gatewayv1.HTTPRoute{}).Owns(&gatewayv1.BackendTLSPolicy{})
 	}
 
 	return ctrlBuilder.Complete(r)
