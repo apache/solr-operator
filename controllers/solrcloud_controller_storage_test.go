@@ -85,6 +85,13 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 							Name:   "other-data-1",
 							Labels: map[string]string{"base": "here"},
 						},
+						Spec: corev1.PersistentVolumeClaimSpec{
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
 					},
 				},
 			}
@@ -120,6 +127,13 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 						ObjectMeta: solrv1beta1.TemplateMeta{
 							Name:   "other-data-2",
 							Labels: map[string]string{"base": "here"},
+						},
+						Spec: corev1.PersistentVolumeClaimSpec{
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("5Gi"),
+								},
+							},
 						},
 					},
 				},

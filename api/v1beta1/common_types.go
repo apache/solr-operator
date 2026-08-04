@@ -180,6 +180,18 @@ type ServiceOptions struct {
 	// Labels to be added for the Service.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// SessionAffinity is used to maintain session affinity for the Service.
+	// Enables client IP based session affinity when set to "ClientIP". Must be "ClientIP" or "None". Defaults to "None".
+	// +optional
+	// +kubebuilder:validation:Enum=None;ClientIP
+	// +kubebuilder:default=None
+	SessionAffinity corev1.ServiceAffinity `json:"sessionAffinity,omitempty"`
+
+	// SessionAffinityConfig contains the configuration of the Service's session affinity.
+	// Only used when SessionAffinity is set to "ClientIP".
+	// +optional
+	SessionAffinityConfig *corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
 }
 
 // IngressOptions defines custom options for ingresses

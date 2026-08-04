@@ -1,0 +1,95 @@
+= Customizing Resources
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+The Solr Operator creates a number of Kubernetes resources to run a SolrCloud (StatefulSet, Services, ConfigMap, etc.).
+Most aspects of these resources can be customized through `SolrCloud.spec.customSolrKubeOptions`, which exposes per-resource option objects such as `podOptions`, `statefulSetOptions`, `commonServiceOptions`, and others.
+This allows you to add labels, annotations, environment variables, affinity rules, resource requests, extra containers, and more, without the operator needing explicit support for every option.
+
+== Mounting Additional Volumes
+
+Arbitrary additional volumes can be mounted into the Solr pods (and their init/sidecar containers) via `SolrCloud.spec.customSolrKubeOptions.podOptions.volumes`.
+This is separate from the xref:solr-cloud-crd.adoc#data-storage[data storage] used for Solr's index data.
+Some example scenarios where this is useful:
+
+* Custom Solr plugins that rely on certain data being present on disk.
+* Bootstrapping additional configuration for Solr via a `ConfigMap`.
+* A dedicated volume to support backups.
+
+Each entry under `volumes` has the following fields:
+
+* **`name`** - The name of the volume, used to reference it from container `volumeMounts`.
+* **`source`** - A standard Kubernetes https://kubernetes.io/docs/concepts/storage/volumes/#volume-types[volume source] (e.g. `configMap`, `persistentVolumeClaim`, `secret`, `emptyDir`).
+The required fields depend on the source type chosen (for example, a `configMap` source requires `name`, while a `persistentVolumeClaim` source requires `claimName`).
+* **`defaultContainerMount`** - An optional https://kubernetes.io/docs/concepts/storage/volumes/#using-subpath[`volumeMount`] describing where the volume should be mounted in the main Solr container.
+Init containers and sidecar containers can mount the same volume by referencing it by `name` in their own `volumeMounts`.
+
+The following example mounts a `ConfigMap` into the Solr container and a sidecar container:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      volumes:
+        - source:
+            configMap:
+              name: configset
+              defaultMode: 0777
+          name: configset
+          defaultContainerMount:
+            mountPath: /configset
+            name: configset
+      sidecarContainers:
+        - name: config-loader
+          image: alpine/curl:latest
+          command:
+            - "sh"
+            - "-c"
+            - "ls -la /configset"
+          volumeMounts:
+            - name: configset
+              mountPath: /configset
+----
+
+A complete, runnable example (including the backing `ConfigMap`) is available in https://github.com/apache/solr-operator/blob/main/example/test_solrcloud_additional_volume.yaml[`example/test_solrcloud_additional_volume.yaml`].
+
+== Service Session Affinity
+
+The Services that the operator creates for a SolrCloud (`commonServiceOptions`, `headlessServiceOptions`, and `nodeServiceOptions`) can be configured with https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity[session affinity].
+This is useful when clients connect to Solr through the common Service and you want requests from a given client IP to be routed to the same Solr pod.
+For `headlessServiceOptions` and `nodeServiceOptions`, this option provides no value because each service endpoint maps to a single pod.
+
+Each service option object exposes two fields:
+
+* **`sessionAffinity`** - Either `None` (the default) or `ClientIP`.
+When set to `ClientIP`, connections from the same client IP are directed to the same backing pod.
+* **`sessionAffinityConfig`** - Optional https://kubernetes.io/docs/reference/kubernetes-api/service-resources/service-v1/#ServiceSpec[session affinity configuration], only used when `sessionAffinity` is `ClientIP`.
+Most commonly this sets the `clientIP.timeoutSeconds` sticky-session timeout (defaults to `10800`, i.e. 3 hours).
+
+The following example enables client-IP session affinity on the common Service with a one hour timeout:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    commonServiceOptions:
+      sessionAffinity: ClientIP
+      sessionAffinityConfig:
+        clientIP:
+          timeoutSeconds: 3600
+----

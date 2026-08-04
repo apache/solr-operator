@@ -25,6 +25,7 @@ The following topics are covered on their own pages:
 * xref:custom-solr-config.adoc[Overriding built-in Solr configuration files]
 * xref:tls.adoc[Enabling TLS between Solr pods]
 * xref:authentication-and-authorization.adoc[Authentication and Authorization]
+* xref:custom-kube-options.adoc[Customizing Kubernetes resources]
 
 == Solr Options
 

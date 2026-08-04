@@ -187,6 +187,13 @@ labels:
 annotations:
   {{- toYaml .Values.commonServiceOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.commonServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.commonServiceOptions.sessionAffinityConfig | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*
@@ -201,6 +208,13 @@ labels:
 annotations:
   {{- toYaml .Values.headlessServiceOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.headlessServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.headlessServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.headlessServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.headlessServiceOptions.sessionAffinityConfig | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*
@@ -214,6 +228,13 @@ labels:
 {{- if .Values.nodeServiceOptions.annotations -}}
 annotations:
   {{- toYaml .Values.nodeServiceOptions.annotations | nindent 2 }}
+{{ end }}
+{{- if .Values.nodeServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.nodeServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.nodeServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.nodeServiceOptions.sessionAffinityConfig | nindent 2 }}
 {{ end }}
 {{- end -}}
 

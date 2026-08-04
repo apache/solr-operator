@@ -468,6 +468,7 @@ func GenerateSolrMetricsService(solrPrometheusExporter *solr.SolrPrometheusExpor
 			Selector: selectorLabels,
 		},
 	}
+	applyCustomServiceOptions(&service.Spec, customOptions)
 	return service
 }
 

@@ -230,6 +230,21 @@ func CopyServiceFields(from, to *corev1.Service, logger logr.Logger) bool {
 	}
 	to.Spec.PublishNotReadyAddresses = from.Spec.PublishNotReadyAddresses
 
+	// Only reconcile SessionAffinity when a value is explicitly desired. Kubernetes defaults the live
+	// Service's SessionAffinity to "None" (and populates SessionAffinityConfig when "ClientIP" is used),
+	// so copying an unset value would fight the API server's defaulting and cause perpetual updates.
+	if from.Spec.SessionAffinity != "" && !DeepEqualWithNils(to.Spec.SessionAffinity, from.Spec.SessionAffinity) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.SessionAffinity", "from", to.Spec.SessionAffinity, "to", from.Spec.SessionAffinity)
+		to.Spec.SessionAffinity = from.Spec.SessionAffinity
+	}
+
+	if !DeepEqualWithNils(to.Spec.SessionAffinityConfig, from.Spec.SessionAffinityConfig) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.SessionAffinityConfig", "from", to.Spec.SessionAffinityConfig, "to", from.Spec.SessionAffinityConfig)
+		to.Spec.SessionAffinityConfig = from.Spec.SessionAffinityConfig
+	}
+
 	return requireUpdate
 }
 
