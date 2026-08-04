@@ -107,10 +107,8 @@ func GenerateNodeHTTPRoute(solrCloud *solr.SolrCloud, nodeName string) *gatewayv
 	var annotations map[string]string
 
 	gatewayOpts := solrCloud.Spec.SolrAddressability.External.Gateway
-	if gatewayOpts != nil {
-		labels = MergeLabelsOrAnnotations(labels, gatewayOpts.Labels)
-		annotations = MergeLabelsOrAnnotations(annotations, gatewayOpts.Annotations)
-	}
+	labels = MergeLabelsOrAnnotations(labels, gatewayOpts.Labels)
+	annotations = MergeLabelsOrAnnotations(annotations, gatewayOpts.Annotations)
 
 	extOpts := solrCloud.Spec.SolrAddressability.External
 

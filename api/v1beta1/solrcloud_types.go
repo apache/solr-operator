@@ -19,11 +19,12 @@ package v1beta1
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"math/rand"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -699,6 +700,7 @@ type GatewayParentReference struct {
 // via the HasBackendTLSPolicy() function before creating BackendTLSPolicy resources.
 //
 // +kubebuilder:validation:MaxProperties=1
+// +kubebuilder:validation:MinProperties=1
 type SolrBackendTLSPolicy struct {
 	// CACertificateRefs contains one or more references to Kubernetes objects that contain
 	// TLS certificates of the Certificate Authorities that can be used as a trust anchor
