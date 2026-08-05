@@ -83,7 +83,9 @@ if [[ "${SOLR_IMAGE}" != *":"* ]]; then
 fi
 IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 
-CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
+CLUSTER_NAME_PREFIX="solr-op-e2e"
+CLUSTER_NAME="$(echo "${CLUSTER_NAME_PREFIX}-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
+export CLUSTER_NAME_PREFIX
 export CLUSTER_NAME
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
 export KUBERNETES_VERSION
@@ -99,6 +101,9 @@ export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" #
 export RAWFILE_LOCAL_PV_VERSION=0.13.1
 export CERT_MANAGER_VERSION=1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
+# Keep in sync with the sigs.k8s.io/gateway-api version in go.mod. The standard channel is used, which includes
+# the GA resources the operator manages (HTTPRoute and BackendTLSPolicy).
+export GATEWAY_API_VERSION=1.6.1
 
 function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
@@ -117,7 +122,28 @@ function add_image_to_kind_repo_if_local() {
   fi
 }
 
-# These gingko params are customized via the following envVars
+function start_cloud_provider_kind() {
+  # cloud-provider-kind is a host-level daemon (LoadBalancer + Gateway API support) shared by every KinD
+  # cluster on the host, so only one instance is needed. Skip if it is already running.
+  if pgrep -f "cloud-provider-kind" >/dev/null 2>&1; then
+    printf "cloud-provider-kind is already running.\n\n"
+    return
+  fi
+  printf "Starting cloud-provider-kind\n\n"
+  # nohup + disown so the daemon outlives this script invocation (e.g. the create-cluster action)
+  nohup cloud-provider-kind >"${TMPDIR:-/tmp}/cloud-provider-kind.log" 2>&1 &
+  disown
+}
+
+function stop_cloud_provider_kind_if_unused() {
+  # The daemon is shared by every KinD cluster on the host, so only stop it once none of the integration-test
+  # clusters (named with the "solr-op-e2e" prefix) remain. This leaves it running for unrelated KinD clusters
+  # and for other concurrent test runs.
+  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME_PREFIX}"; then
+    pkill -f "cloud-provider-kind" 2>/dev/null || true
+  fi
+}
+
 GINKGO_PARAM_NAMES=(--seed    --procs          --focus-file --label-filter --focus      --skip)
 GINKGO_PARAM_ENVS=( TEST_SEED TEST_PARALLELISM TEST_FILES   TEST_LABELS    TEST_FILTER TEST_SKIP)
 function run_tests() {
@@ -152,6 +178,7 @@ function export_kubeconfig() {
 
 function delete_cluster() {
   kind delete clusters "${CLUSTER_NAME}"
+  stop_cloud_provider_kind_if_unused
 }
 
 function start_cluster() {
@@ -200,6 +227,15 @@ function setup_cluster() {
   helm repo add cert-manager https://charts.jetstack.io --force-update
   helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set installCRDs=true
   helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
+  echo ""
+
+  printf "Setup KinD Network Provider\n"
+  kubectl label node "${CLUSTER_NAME}-control-plane" node.kubernetes.io/exclude-from-external-load-balancers-
+  start_cloud_provider_kind
+
+  printf "Installing Gateway API CRDs\n"
+  # Server-side apply is required: the Gateway API CRDs exceed the client-side apply annotation size limit.
+  kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/standard-install.yaml"
   echo ""
 }
 
