@@ -25,7 +25,7 @@ Under `SolrCloud.Spec.solrAddressability`:
 * **`kubeDomain`** - Specifies an override of the default Kubernetes cluster domain name, `cluster.local`. This option should only be used if the Kubernetes cluster has been setup with a custom domain name.
 * **`external`** - Expose the cloud externally, outside of the kubernetes cluster in which it is running.
 ** **`method`** - (Required) The method by which your cloud will be exposed externally.
-Currently available options are https://kubernetes.io/docs/concepts/services-networking/ingress/[`Ingress`] and https://github.com/kubernetes-sigs/external-dns[`ExternalDNS`].
+Currently available options are https://kubernetes.io/docs/concepts/services-networking/ingress/[`Ingress`], the xref:gateway-api.adoc[`Gateway`] API, and https://github.com/kubernetes-sigs/external-dns[`ExternalDNS`].
 The goal is to support more methods in the future, such as LoadBalanced Services.
 ** **`domainName`** - (Required) The primary domain name to open your cloud endpoints on. If `useExternalAddress` is set to `true`, then this is the domain that will be used in Solr Node names.
 ** **`additionalDomainNames`** - You can choose to listen on additional domains for each endpoint, however Solr will not register itself under these names.
