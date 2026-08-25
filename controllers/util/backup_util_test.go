@@ -18,12 +18,26 @@
 package util
 
 import (
+	"context"
+	"crypto/tls"
+	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util/solr_api"
+	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	"io"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net/http"
+	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return f(request)
+}
 
 func TestSolrBackupApiParamsForVolumeRepositoryBackup(t *testing.T) {
 	volumeRepository := &solr.SolrBackupRepository{
@@ -412,4 +426,52 @@ func TestRepositoryLookupFailsIfNoNameProvidedAndMultipleRepositoriesDefined(t *
 	found := GetBackupRepositoryByName(repos, "")
 
 	assert.Nil(t, found, "Expected GetBackupRepositoryByName to report no match")
+}
+
+// A backup whose async status Solr no longer holds must be terminal, otherwise it is checked
+// forever. It is unsuccessful because success cannot be shown, not because failure is known.
+func TestCheckBackupForCollectionOutcome(t *testing.T) {
+	tests := map[string]struct {
+		finished bool
+		success  bool
+	}{
+		"completed": {finished: true, success: true},
+		"failed":    {finished: true, success: false},
+		"notfound":  {finished: true, success: false},
+		"running":   {finished: false, success: false},
+		"submitted": {finished: false, success: false},
+	}
+
+	defer func() {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		solr_api.SetNoVerifyTLSHttpClient(&http.Client{Transport: transport})
+	}()
+
+	for asyncStatus, expected := range tests {
+		solr_api.SetNoVerifyTLSHttpClient(&http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			assert.Equal(t, "REQUESTSTATUS", request.URL.Query().Get("action"))
+			assert.Equal(t, "backup-collection", request.URL.Query().Get("requestid"))
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(fmt.Sprintf(
+					`{"responseHeader":{"status":0},"status":{"state":%q}}`, asyncStatus,
+				))),
+			}, nil
+		})})
+
+		finished, success, actualStatus, err := CheckBackupForCollection(
+			context.Background(),
+			&solr.SolrCloud{ObjectMeta: metav1.ObjectMeta{Name: "cloud", Namespace: "namespace"}},
+			"collection",
+			"backup",
+			logr.Discard(),
+		)
+
+		assert.NoError(t, err)
+		assert.Equal(t, asyncStatus, actualStatus)
+		assert.Equal(t, expected.finished, finished, "Wrong finished for async status %q", asyncStatus)
+		assert.Equal(t, expected.success, success, "Wrong success for async status %q", asyncStatus)
+	}
 }
