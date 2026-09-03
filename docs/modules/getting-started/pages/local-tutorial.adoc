@@ -79,15 +79,10 @@ You can follow along here, or follow the instructions in the https://artifacthub
 
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
-Now add the Solr Operator Helm repository. (You should only need to do this once)
+The Helm charts are published to the GitHub Container Registry as OCI artifacts, so there is
+no Helm repository to add and no credentials to configure.
 
-[source,bash]
-----
-$ helm repo add apache-solr https://solr.apache.org/charts
-$ helm repo update
-----
-
-Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the https://hub.helm.sh/charts/solr-operator/solr-operator[Helm Chart documentation].
+Install the Solr Operator chart with the commands below.
 This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
 
 [source,bash,subs="verbatim,attributes"]
@@ -95,8 +90,15 @@ This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Op
 # Install the Solr & Zookeeper CRDs
 $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
 # Install the Solr operator and Zookeeper Operator
-$ helm install solr-operator apache-solr/solr-operator --version {operator-version}
+$ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
 ----
+
+[NOTE]
+====
+The charts are also still served from the HTTPS Helm repository at `https://solr.apache.org/charts`,
+which is deprecated. Charts are published to both locations throughout the 0.x releases.
+Starting with `v1.0.0`, charts will be published to the OCI registry only.
+====
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
@@ -128,7 +130,7 @@ To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Ope
 [source,bash,subs="verbatim,attributes"]
 ----
 # Create a 3-node cluster v9.10.0 with 300m Heap each:
-helm install example-solr apache-solr/solr --version {operator-version} \
+helm install example-solr oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version} \
   --set image.tag=9.10.0 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
   --set addressability.external.method=Ingress \
@@ -224,7 +226,7 @@ So we wish to upgrade to a newer Solr version:
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
 
 # Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
-helm upgrade example-solr apache-solr/solr --version {operator-version} \
+helm upgrade example-solr oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version} \
   --reuse-values \
   --set image.tag=9.10.0
 

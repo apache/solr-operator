@@ -26,22 +26,32 @@ The helm chart provides abstractions over the Input Arguments described below, a
 
 The official documentation for installing the Solr Operator Helm chart can be found on https://artifacthub.io/packages/helm/apache-solr/solr-operator[Artifact Hub].
 
-The first step is to add the Solr Operator helm repository.
+The chart is published to the GitHub Container Registry as an OCI artifact.
+Nothing needs to be added or configured first, and no credentials are required.
 
-[source,bash]
-----
-$ helm repo add apache-solr https://solr.apache.org/charts
-$ helm repo update
-----
-
-Next, install the Solr Operator chart. Note this is using Helm v3, use the official Helm chart documentation linked to above.
+Install the Solr Operator chart with the command below.
 This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
 
 [source,bash,subs="verbatim,attributes"]
 ----
 $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
+$ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
+----
+
+[NOTE]
+====
+The chart is also still served from the HTTPS Helm repository at `https://solr.apache.org/charts`, which is deprecated:
+
+[source,bash,subs="verbatim,attributes"]
+----
+$ helm repo add apache-solr https://solr.apache.org/charts
+$ helm repo update
 $ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
+
+Charts are published to both locations throughout the 0.x releases.
+Starting with `v1.0.0`, charts will be published to the OCI registry only.
+====
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
@@ -75,7 +85,7 @@ This can be done with the `--skip-crds` helm option.
 
 [source,bash]
 ----
-helm install solr-operator apache-solr/solr-operator --skip-crds --namespace solr
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --skip-crds --namespace solr
 ----
 
 *Helm will not upgrade CRDs once they have been installed.

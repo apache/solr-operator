@@ -97,6 +97,30 @@ It is always encouraged to upgrade to the latest patch version of the minor and 
 There is no need to upgrade one patch version at a time (e.g. `v0.2.5` -> `v0.2.6` -> `v0.2.7` -> `v0.2.8`),
 instead you can leap to the latest patch version (e.g. `v0.2.5` -> `v0.2.8`).
 
+== Where the Helm charts are published
+
+The Solr Operator and Solr Helm charts are published as OCI artifacts to the GitHub Container Registry:
+
+[source,bash,subs="verbatim,attributes"]
+----
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
+helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version}
+----
+
+Installing from an OCI registry requires no `helm repo add`, and no credentials.
+
+[WARNING]
+====
+The HTTPS Helm repository at `https://solr.apache.org/charts` is *deprecated*.
+
+Charts are published to both the OCI registry and the HTTPS repository throughout the 0.x releases,
+so there is no rush to migrate. Starting with `v1.0.0`, charts will be published to the OCI registry
+only, and the HTTPS repository will receive no further releases.
+
+If you install or upgrade the charts through automation, update it to use the `oci://` URLs above
+before upgrading to `v1.0.0`.
+====
+
 == Installing the Solr Operator vs Solr CRDs
 
 Installing the Solr Operator, especially via the https://artifacthub.io/packages/helm/apache-solr/solr-operator[Helm Chart],
@@ -127,7 +151,7 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 ----
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
 kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version {operator-version}
+helm upgrade solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
 ----
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -135,6 +159,13 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 == Upgrade Warnings and Notes
 
 === v0.10.0
+
+* *Helm charts are now published to an OCI registry*
++
+The charts are published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`, alongside the
+existing HTTPS Helm repository. The HTTPS repository at `https://solr.apache.org/charts` is deprecated
+and will receive no further releases starting with `v1.0.0`.
+See <<Where the Helm charts are published>>.
 
 * *Logging now defaults to JSON format*
 +
