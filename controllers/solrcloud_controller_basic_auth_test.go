@@ -289,12 +289,10 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount).To(Not(BeNil()), "No Basic Auth volume mount used in Solr container")
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
-		expLivenessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
-			solrCloud.Name, solrCloud.Name, expLivenessProbePath)
-		expReadinessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
-			solrCloud.Name, solrCloud.Name, expReadinessProbePath)
+		expProbeCmdFormat := "probe_output=$(JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" " +
+			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1); probe_status=$?; echo \"$probe_output\" | grep -v JAVA_TOOL_OPTIONS; exit $probe_status"
+		expLivenessProbeCmd := fmt.Sprintf(expProbeCmdFormat, solrCloud.Name, solrCloud.Name, expLivenessProbePath)
+		expReadinessProbeCmd := fmt.Sprintf(expProbeCmdFormat, solrCloud.Name, solrCloud.Name, expReadinessProbePath)
 
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
 		g.Expect(mainContainer.LivenessProbe.Exec).To(Not(BeNil()), "liveness probe should have an exec when auth is enabled")
