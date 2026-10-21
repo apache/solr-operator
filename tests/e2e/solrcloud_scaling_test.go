@@ -137,6 +137,12 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
+
+			By("checking that managed scale-down events were recorded on the SolrCloud")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationStarted")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ReplicaMigrationStarted")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ReplicaMigrationComplete")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationComplete")
 		})
 	})
 
@@ -306,6 +312,9 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 
 			expectNoPod(ctx, solrCloud, solrCloud.GetSolrPodName(1))
 			queryCollectionWithNoReplicaAvailable(ctx, solrCloud, solrCollection1)
+
+			By("checking that an unmanaged scaling event was recorded on the SolrCloud")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ScalingUnmanaged")
 		})
 	})
 })
@@ -388,6 +397,10 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
+
+			By("checking that managed scale-up events were recorded on the SolrCloud")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationStarted")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationComplete")
 		})
 	})
 

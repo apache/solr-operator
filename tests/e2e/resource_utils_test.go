@@ -53,6 +53,26 @@ func resourceKey(parentResource client.Object, name string) types.NamespacedName
 	return types.NamespacedName{Name: name, Namespace: parentResource.GetNamespace()}
 }
 
+// expectEvent waits until at least one Kubernetes Event of the given type and reason has been
+// recorded against the given object. Events are matched on the involved object's UID so that
+// events left over from previous specs (Events are not garbage-collected with the object) cannot
+// cause a false positive.
+func expectEvent(ctx context.Context, parentResource client.Object, eventType string, reason string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		eventList := &corev1.EventList{}
+		g.Expect(k8sClient.List(ctx, eventList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed())
+		matched := false
+		for i := range eventList.Items {
+			e := &eventList.Items[i]
+			if e.InvolvedObject.UID == parentResource.GetUID() && e.Type == eventType && e.Reason == reason {
+				matched = true
+				break
+			}
+		}
+		g.Expect(matched).To(BeTrue(), "Expected a %q event with reason %q to be recorded on %s/%s", eventType, reason, parentResource.GetNamespace(), parentResource.GetName())
+	}).Should(Succeed())
+}
+
 func deleteAndWait(ctx context.Context, object client.Object, additionalOffset ...int) {
 	key := resourceKey(object, object.GetName())
 	kinds, _, err := k8sClient.Scheme().ObjectKinds(object)

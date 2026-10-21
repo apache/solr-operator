@@ -891,7 +891,7 @@ var (
 			Effect:   "NoSchedule",
 			Key:      "node-restriction.kubernetes.io/dedicated",
 			Value:    "solrclouds",
-			Operator: "Exists",
+			Operator: "Equal",
 		},
 	}
 	testTolerationsPromExporter = []corev1.Toleration{

@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,7 +44,8 @@ import (
 // SolrPrometheusExporterReconciler reconciles a SolrPrometheusExporter object
 type SolrPrometheusExporterReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 //+kubebuilder:rbac:groups=,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -104,10 +106,14 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 			if ok {
 				configXmlMd5 = fmt.Sprintf("%x", md5.Sum([]byte(configXml)))
 			} else {
+				r.Recorder.Eventf(prometheusExporter, corev1.EventTypeWarning, "InvalidConfigMap",
+					"Provided ConfigMap %s must contain the required %q key", prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap, configMapKey)
 				return requeueOrNot, fmt.Errorf("required '%s' key not found in provided ConfigMap %s",
 					configMapKey, prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 			}
 		} else {
+			r.Recorder.Eventf(prometheusExporter, corev1.EventTypeWarning, "InvalidConfigMap",
+				"Provided ConfigMap %s has no data", prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 			return requeueOrNot, fmt.Errorf("provided ConfigMap %s has no data",
 				prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap)
 		}
@@ -224,7 +230,8 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 			}
 			// Set the new restart time annotation
 			deploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
-			// TODO: Create event for the CRD.
+			r.Recorder.Eventf(prometheusExporter, corev1.EventTypeNormal, "RestartScheduled",
+				"Scheduling next restart of the Prometheus Exporter Deployment for %s, as configured by the restartSchedule", nextRestartAnnotation)
 		} else if existingRestartAnnotation, exists := foundDeploy.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
 			if deploy.Spec.Template.Annotations == nil {
 				deploy.Spec.Template.Annotations = make(map[string]string, 1)
@@ -341,6 +348,9 @@ func (r *SolrPrometheusExporterReconciler) reconcileTLSConfig(prometheusExporter
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = noOpEventRecorder{}
+	}
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrPrometheusExporter{}).
 		Owns(&corev1.ConfigMap{}).

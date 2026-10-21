@@ -145,6 +145,10 @@ type PodOptions struct {
 	// +optional
 	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
 
+	// Should service environment variables be created on containers
+	// +optional
+	EnableServiceLinks *bool `json:"enableServiceLinks,omitempty"`
+
 	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
 	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
 	//
@@ -161,6 +165,10 @@ type PodOptions struct {
 	// DefaultInitContainerResources are the resource requirements for the default init container(s) created by the Solr Operator, if any are created.
 	// +optional
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
+
+	// DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+	// +optional
+	DefaultInitContainerSecurityContext *corev1.SecurityContext `json:"defaultInitContainerSecurityContext,omitempty"`
 }
 
 // ServiceOptions defines custom options for services
@@ -172,6 +180,18 @@ type ServiceOptions struct {
 	// Labels to be added for the Service.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// SessionAffinity is used to maintain session affinity for the Service.
+	// Enables client IP based session affinity when set to "ClientIP". Must be "ClientIP" or "None". Defaults to "None".
+	// +optional
+	// +kubebuilder:validation:Enum=None;ClientIP
+	// +kubebuilder:default=None
+	SessionAffinity corev1.ServiceAffinity `json:"sessionAffinity,omitempty"`
+
+	// SessionAffinityConfig contains the configuration of the Service's session affinity.
+	// Only used when SessionAffinity is set to "ClientIP".
+	// +optional
+	SessionAffinityConfig *corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
 }
 
 // IngressOptions defines custom options for ingresses

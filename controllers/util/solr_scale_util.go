@@ -35,7 +35,7 @@ import (
 func BalanceReplicasForCluster(ctx context.Context, solrCloud *solr.SolrCloud, statefulSet *appsv1.StatefulSet, balanceReason string, balanceCmdUniqueId string, logger logr.Logger) (balanceComplete bool, requestInProgress bool, retryLaterDuration time.Duration, err error) {
 	logger = logger.WithValues("balanceReason", balanceReason)
 	// If the Cloud has 1 or zero pods, there is no reason to balance replicas.
-	if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas < 1 {
+	if statefulSet.Spec.Replicas == nil || *statefulSet.Spec.Replicas <= 1 {
 		balanceComplete = true
 	} else {
 		requestId := "balance-replicas-" + balanceCmdUniqueId

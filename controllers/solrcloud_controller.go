@@ -21,12 +21,14 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -35,11 +37,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,7 +57,8 @@ import (
 // SolrCloudReconciler reconciles a SolrCloud object
 type SolrCloudReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
 var useZkCRD bool
@@ -64,6 +69,7 @@ func UseZkCRD(useCRD bool) {
 
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups="",resources=pods/status,verbs=get;patch
+//+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
@@ -72,7 +78,8 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
-//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;delete
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update;patch;delete
+//+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get
@@ -166,7 +173,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if instance.Spec.SolrAddressability.External.UseExternalAddress {
 				if ip == "" {
 					// If we are using this IP in the hostAliases of the statefulSet, it needs to be set for every service before trying to update the statefulSet
-					// TODO: Make an event here
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "NodeServiceAddressNotReady",
+						"Waiting for the Kubernetes-assigned address (clusterIP) of node service %q before the StatefulSet can be reconciled, since the SolrCloud advertises its external address via host aliases", nodeName)
 					blockReconciliationOfStatefulSet = true
 				} else {
 					hostNameIpMap[instance.AdvertisedNodeHost(nodeName)] = ip
@@ -224,7 +232,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			// if there's a user-provided config, it must have one of the expected keys
 			if !hasLogXml && !hasSolrXml {
-				// TODO: Create event for the CRD.
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+					"User provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'", providedConfigMapName)
 				return requeueOrNot, fmt.Errorf("user provided ConfigMap %s must have one of 'solr.xml' and/or 'log4j2.xml'",
 					providedConfigMapName)
 			}
@@ -232,6 +241,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if hasSolrXml {
 				// make sure the user-provided solr.xml is valid
 				if !(strings.Contains(solrXml, "${solr.port.advertise:") || strings.Contains(solrXml, "${hostPort:")) {
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+						"Custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise' or its deprecated alternative 'hostPort'", providedConfigMapName)
 					return requeueOrNot,
 						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise', or its deprecated alternative 'hostPort', e.g. <int name=\"hostPort\">${solr.port.advertise:80}</int>",
 							providedConfigMapName)
@@ -250,6 +261,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 
 		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+				"Provided ConfigMap %s has no data", providedConfigMapName)
 			return requeueOrNot, fmt.Errorf("provided ConfigMap %s has no data", providedConfigMapName)
 		}
 	}
@@ -343,7 +356,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if nextRestartAnnotation != "" {
 				// Set the new restart time annotation
 				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = nextRestartAnnotation
-				// TODO: Create event for the CRD.
+				r.Recorder.Eventf(instance, corev1.EventTypeNormal, "RestartScheduled",
+					"Scheduling next restart of the Solr StatefulSet for %s, as configured by the updateStrategy.restartSchedule", nextRestartAnnotation)
 			} else if existingRestartAnnotation, exists := foundStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation]; exists {
 				// Keep the existing nextRestart annotation if it exists and we aren't setting a new one.
 				expectedStatefulSet.Spec.Template.Annotations[util.SolrScheduledRestartAnnotation] = existingRestartAnnotation
@@ -493,10 +507,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			operationComplete, nextClusterOperation, err = handleManagedCloudScaleUp(ctx, r, instance, statefulSet, clusterOp, podList, logger)
 		case BalanceReplicasLock:
 			operationComplete, requestInProgress, retryLaterDuration, err = util.BalanceReplicasForCluster(ctx, instance, statefulSet, clusterOp.Metadata, clusterOp.Metadata, logger)
+		case PvcExpansionLock:
+			operationComplete, retryLaterDuration, err = handlePvcExpansion(ctx, r, instance, statefulSet, clusterOp, logger)
+			// PVC expansion (the controller-side volume resize) can take a long time on some provisioners,
+			// so it should use the long requeue timeout rather than being preempted after a minute.
+			shortTimeoutForRequeue = false
 		default:
 			operationFound = false
 			// This shouldn't happen, but we don't want to be stuck if it does.
 			// Just remove the cluster Op, because the solr operator version running does not support it.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationUnsupported",
+				"Removing cluster operation %q because it is not supported by this version of the Solr Operator", string(clusterOp.Operation))
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
@@ -510,7 +531,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					err = setNextClusterOpLockWithPatch(ctx, r, statefulSet, nextClusterOperation, string(clusterOp.Operation)+" complete", logger)
 				}
 
-				// TODO: Create event for the CRD.
+				if err == nil {
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ClusterOperationComplete",
+						"Completed cluster operation %q on the SolrCloud", string(clusterOp.Operation))
+				}
 			} else if !requestInProgress {
 				// If the cluster operation is in a stoppable place (not currently doing an async operation), and either:
 				//   - the operation hit an error and has taken more than 1 minute
@@ -532,15 +556,16 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					// If the operation is being queued, first have the operation cleanup after itself
 					switch clusterOp.Operation {
 					case UpdateLock:
-						err = cleanupManagedCloudRollingUpdate(ctx, r, outOfDatePods.ScheduledForDeletion, logger)
+						err = cleanupManagedCloudRollingUpdate(ctx, r, instance, outOfDatePods.ScheduledForDeletion, logger)
 					case ScaleDownLock:
-						err = cleanupManagedCloudScaleDown(ctx, r, podList, logger)
+						err = cleanupManagedCloudScaleDown(ctx, r, instance, podList, logger)
 					}
 					if err == nil {
 						err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
 					}
 
-					// TODO: Create event for the CRD.
+					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationRetry",
+						"Pausing cluster operation %q because it %s; it has been queued to be retried later", string(clusterOp.Operation), queueForLaterReason)
 				}
 			}
 		}
@@ -559,6 +584,15 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			if queueIdx, opIsQueued := queuedRetryOps[UpdateLock]; clusterOp != nil && opIsQueued {
 				clusterOpQueue[queueIdx] = *clusterOp
 				clusterOp = nil
+			}
+
+			if clusterOp == nil {
+				clusterOp, retryLaterDuration, err = determinePvcExpansionClusterOpLockIfNecessary(ctx, r, instance, statefulSet, logger)
+				// If the new clusterOperation is an update to a queued PVC expansion clusterOp, just change the operation that is already queued
+				if queueIdx, opIsQueued := queuedRetryOps[PvcExpansionLock]; clusterOp != nil && opIsQueued {
+					clusterOpQueue[queueIdx] = *clusterOp
+					clusterOp = nil
+				}
 			}
 
 			// If a non-managed scale needs to take place, this method will update the StatefulSet without starting
@@ -592,6 +626,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					logger.Error(err, "Error while patching StatefulSet to start locked clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
 				} else {
 					logger.Info("Started locked clusterOp", "clusterOp", clusterOp.Operation, "clusterOpMetadata", clusterOp.Metadata)
+					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ClusterOperationStarted",
+						"Starting cluster operation %q on the SolrCloud", string(clusterOp.Operation))
 				}
 			} else {
 				// No new clusterOperation has been started, retry the next queued clusterOp, if there are any operations in the retry queue.
@@ -680,7 +716,7 @@ func (r *SolrCloudReconciler) cleanupUnconfiguredServices(ctx context.Context, s
 		return
 	}
 	for _, pod := range podList {
-		if pod.Annotations == nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
+		if pod.Annotations != nil && pod.Annotations[util.ServiceTypeAnnotation] != "" {
 			if onlyServiceTypeInUse != pod.Annotations[util.ServiceTypeAnnotation] {
 				// Only remove services if all pods are using the same, and configured, type of service.
 				// Otherwise, we are in transition between service types and need to wait to delete anything.
@@ -767,7 +803,7 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 		if !isOwnedByCurrentStatefulSet {
 			continue
 		}
-		if updatedPod, podError := r.initializePod(ctx, &pod, logger); podError != nil {
+		if updatedPod, podError := r.initializePod(ctx, solrCloud, &pod, logger); podError != nil {
 			err = podError
 		} else if updatedPod != nil {
 			podList = append(podList, *updatedPod)
@@ -777,7 +813,7 @@ func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *sol
 }
 
 // InitializePod Initialize Status Conditions for a SolrCloud Pod
-func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
+func (r *SolrCloudReconciler) initializePod(ctx context.Context, instance *solrv1beta1.SolrCloud, pod *corev1.Pod, logger logr.Logger) (updatedPod *corev1.Pod, err error) {
 	shouldPatchPod := false
 
 	updatedPod = pod.DeepCopy()
@@ -795,7 +831,8 @@ func (r *SolrCloudReconciler) initializePod(ctx context.Context, pod *corev1.Pod
 			// set the pod back to its original state since the patch failed
 			updatedPod = pod
 
-			// TODO: Create event for the CRD.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodReadinessConditionUpdateFailed",
+				"Could not patch readiness condition(s) on pod %s to start traffic: %v", pod.Name, err)
 		}
 	}
 	return
@@ -1018,6 +1055,144 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 	return nil
 }
 
+func (r *SolrCloudReconciler) expandPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, resizeInfeasible bool, err error) {
+	var pvcList corev1.PersistentVolumeClaimList
+	pvcList, err = r.getPVCList(ctx, cloud, pvcLabelSelector)
+	if err != nil {
+		return
+	}
+	expansionCompleteCount := 0
+	for _, pvcItem := range pvcList.Items {
+		if pvcExpansionComplete, pvcInfeasible, e := r.expandPVC(ctx, &pvcItem, newSize, logger); e != nil {
+			err = e
+		} else {
+			if pvcExpansionComplete {
+				expansionCompleteCount += 1
+			}
+			if pvcInfeasible {
+				resizeInfeasible = true
+			}
+		}
+	}
+	// If all PVCs have completed their controller-side expansion, then we are done
+	expansionComplete = err == nil && expansionCompleteCount == len(pvcList.Items)
+	return
+}
+
+// expandPVC requests (and detects the completion of) the controller-side expansion of a single PVC.
+//
+// "Complete" here means the controller-side volume expansion has finished, so the cluster operation
+// can hand off to a rolling restart that will carry out any remaining node-side filesystem resize.
+// This intentionally does NOT wait for the filesystem resize itself, because some provisioners only
+// resize the filesystem "offline" (when the volume is remounted during the restart). Waiting for
+// status.capacity in that case would deadlock: capacity can't update until the pod restarts, but the
+// operator wouldn't restart until capacity updated.
+func (r *SolrCloudReconciler) expandPVC(ctx context.Context, pvc *corev1.PersistentVolumeClaim, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, resizeInfeasible bool, err error) {
+	// If the current capacity is >= the new size, then there is nothing to do, expansion is complete.
+	// Treat missing capacity as zero.
+	capacityQty, hasCapacity := pvc.Status.Capacity[corev1.ResourceStorage]
+	if !hasCapacity {
+		capacityQty = resource.Quantity{}
+	}
+	if capacityQty.Cmp(newSize) >= 0 || pvcControllerExpansionComplete(pvc) {
+		// Either the volume has already been fully expanded (online resize), or the controller-side
+		// expansion is done and only a node/filesystem resize remains (offline resize), which the
+		// subsequent rolling restart will complete on remount.
+		expansionComplete = true
+		return
+	}
+	// Surface (best-effort) a backend that has declared the requested size infeasible, so it can be
+	// reported instead of being silently retried forever. allocatedResourceStatuses is populated on
+	// Kubernetes clusters with the RecoverVolumeExpansionFailure feature (GA in 1.34); on older
+	// clusters this is simply never true and behavior is unchanged.
+	resizeInfeasible = pvcResizeInfeasible(pvc)
+
+	// Determine if the current request already matches the desired size.
+	requestQty, hasRequest := pvc.Spec.Resources.Requests[corev1.ResourceStorage]
+	sameRequest := hasRequest && requestQty.Equal(newSize)
+	if !sameRequest {
+		// Update the pvc if the capacity request is different.
+		// The newSize might be smaller than the current size, but this is supported as the last size might have been too
+		// big for the storage quota, so it was lowered.
+		// As long as the PVCs current capacity is lower than the new size, we are still good to update the PVC.
+		originalPvc := pvc.DeepCopy()
+		if pvc.Spec.Resources.Requests == nil {
+			pvc.Spec.Resources.Requests = corev1.ResourceList{}
+		}
+		pvc.Spec.Resources.Requests[corev1.ResourceStorage] = newSize
+		if err = r.Patch(ctx, pvc, client.StrategicMergeFrom(originalPvc)); err != nil {
+			logger.Error(err, "Error while expanding PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+		} else {
+			logger.Info("Expanded PersistentVolumeClaim size", "persistentVolumeClaim", pvc.Name, "size", newSize)
+		}
+	}
+	return
+}
+
+// pvcControllerExpansionComplete reports whether the controller-side expansion of the PVC has
+// finished and only a node-side filesystem resize remains. This is the signal that it is safe (and,
+// for offline provisioners, necessary) to proceed to a rolling restart to apply the resize.
+//
+// It checks the FileSystemResizePending condition (available on all supported Kubernetes versions)
+// as the primary signal, and falls back to allocatedResourceStatuses (best-effort, populated on
+// clusters with RecoverVolumeExpansionFailure / Kubernetes >= 1.34).
+func pvcControllerExpansionComplete(pvc *corev1.PersistentVolumeClaim) bool {
+	for _, cond := range pvc.Status.Conditions {
+		if cond.Type == corev1.PersistentVolumeClaimFileSystemResizePending && cond.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	if status, hasStatus := pvc.Status.AllocatedResourceStatuses[corev1.ResourceStorage]; hasStatus {
+		if status == corev1.PersistentVolumeClaimNodeResizePending || status == corev1.PersistentVolumeClaimNodeResizeInProgress {
+			return true
+		}
+	}
+	return false
+}
+
+// pvcResizeInfeasible reports (best-effort) whether the storage backend has declared the requested
+// expansion infeasible (e.g. the size exceeds backend/quota limits). This relies on
+// allocatedResourceStatuses, which is populated on Kubernetes clusters with the
+// RecoverVolumeExpansionFailure feature (GA in 1.34); on older clusters it is never true.
+func pvcResizeInfeasible(pvc *corev1.PersistentVolumeClaim) bool {
+	if status, hasStatus := pvc.Status.AllocatedResourceStatuses[corev1.ResourceStorage]; hasStatus {
+		return status == corev1.PersistentVolumeClaimControllerResizeInfeasible || status == corev1.PersistentVolumeClaimNodeResizeInfeasible
+	}
+	return false
+}
+
+// storageClassAllowsExpansion reports whether the storage class backing the SolrCloud's data PVCs
+// allows volume expansion. The storage class name is resolved from the actual provisioned PVCs
+// (whose StorageClassName is always populated, even when the SolrCloud relies on the cluster
+// default). When the class cannot be determined, this returns allowed=true so the expansion is still
+// attempted (the PVC patch itself will surface a hard rejection).
+func (r *SolrCloudReconciler) storageClassAllowsExpansion(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (allowed bool, className string, err error) {
+	pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
+	if err != nil {
+		return false, "", err
+	}
+	for i := range pvcList.Items {
+		if scn := pvcList.Items[i].Spec.StorageClassName; scn != nil && *scn != "" {
+			className = *scn
+			break
+		}
+	}
+	if className == "" {
+		// Could not determine the storage class; allow the attempt.
+		return true, "", nil
+	}
+	storageClass := &storagev1.StorageClass{}
+	if err = r.Get(ctx, types.NamespacedName{Name: className}, storageClass); err != nil {
+		if errors.IsNotFound(err) {
+			// Could not find the storage class; allow the attempt and let the PVC patch surface any error.
+			return true, className, nil
+		}
+		return false, className, err
+	}
+	allowed = storageClass.AllowVolumeExpansion != nil && *storageClass.AllowVolumeExpansion
+	return allowed, className, nil
+}
+
 // Logic derived from:
 // - https://book.kubebuilder.io/reference/using-finalizers.html
 // - https://github.com/pravega/zookeeper-operator/blob/v0.2.9/pkg/controller/zookeepercluster/zookeepercluster_controller.go#L629
@@ -1064,16 +1239,15 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 	return nil
 }
 
-func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (pvcCount int, err error) {
+func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (int, error) {
 	pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 	if err != nil {
 		return -1, err
 	}
-	pvcCount = len(pvcList.Items)
-	return pvcCount, nil
+	return len(pvcList.Items), nil
 }
 
-func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, pvcLabelSelector map[string]string, logger logr.Logger) error {
 	// this check should make sure we do not delete the PVCs before the STS has scaled down
 	if cloud.Status.ReadyReplicas == cloud.Status.Replicas {
 		pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
@@ -1093,24 +1267,25 @@ func (r *SolrCloudReconciler) cleanupOrphanPVCs(ctx context.Context, cloud *solr
 				}
 			}
 		}
+		return err
 	}
 	return nil
 }
 
-func (r *SolrCloudReconciler) getPVCList(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (pvList corev1.PersistentVolumeClaimList, err error) {
+func (r *SolrCloudReconciler) getPVCList(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (corev1.PersistentVolumeClaimList, error) {
 	selector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 		MatchLabels: pvcLabelSelector,
 	})
-	pvclistOps := &client.ListOptions{
+	pvcListOps := &client.ListOptions{
 		Namespace:     cloud.Namespace,
 		LabelSelector: selector,
 	}
 	pvcList := &corev1.PersistentVolumeClaimList{}
-	err = r.Client.List(ctx, pvcList, pvclistOps)
+	err = r.Client.List(ctx, pvcList, pvcListOps)
 	return *pvcList, err
 }
 
-func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) (err error) {
+func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, logger logr.Logger) error {
 	pvcList, err := r.getPVCList(ctx, cloud, pvcLabelSelector)
 	if err != nil {
 		return err
@@ -1118,7 +1293,7 @@ func (r *SolrCloudReconciler) cleanUpAllPVCs(ctx context.Context, cloud *solrv1b
 	for _, pvcItem := range pvcList.Items {
 		r.deletePVC(ctx, pvcItem, logger)
 	}
-	return nil
+	return err
 }
 
 func (r *SolrCloudReconciler) deletePVC(ctx context.Context, pvcItem corev1.PersistentVolumeClaim, logger logr.Logger) {
@@ -1184,6 +1359,9 @@ func (r *SolrCloudReconciler) reconcileTLSConfig(instance *solrv1beta1.SolrCloud
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Recorder == nil {
+		r.Recorder = noOpEventRecorder{}
+	}
 	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		For(&solrv1beta1.SolrCloud{}).
 		Owns(&corev1.ConfigMap{}).

@@ -21,18 +21,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"strconv"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	"net/url"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"time"
 )
 
 // SolrClusterOp contains metadata for cluster operations performed on SolrClouds.
@@ -53,6 +55,7 @@ const (
 	ScaleUpLock         SolrClusterOperationType = "ScalingUp"
 	UpdateLock          SolrClusterOperationType = "RollingUpdate"
 	BalanceReplicasLock SolrClusterOperationType = "BalanceReplicas"
+	PvcExpansionLock    SolrClusterOperationType = "PVCExpansion"
 )
 
 // RollingUpdateMetadata contains metadata for rolling update cluster operations.
@@ -150,6 +153,95 @@ func retryNextQueuedClusterOpWithQueue(statefulSet *appsv1.StatefulSet, clusterO
 	return hasOp, err
 }
 
+func determinePvcExpansionClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
+	if instance.Spec.StorageOptions.PersistentStorage == nil ||
+		instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage() == nil {
+		return
+	}
+	newSize := instance.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.Spec.Resources.Requests.Storage()
+	// If there is no old size to update, the StatefulSet can just be set to use the new PVC size without any issue.
+	// Only do a cluster operation if we are expanding from an existing size to a new size.
+	oldSizeStr, hasOldSize := statefulSet.Annotations[util.StorageMinimumSizeAnnotation]
+	if !hasOldSize || newSize.String() == oldSizeStr {
+		return
+	}
+	oldSize, e := resource.ParseQuantity(oldSizeStr)
+	if e != nil {
+		err = e
+		logger.Error(err, "Could not parse the existing minimum PVC size from the StatefulSet annotation", "annotation", util.StorageMinimumSizeAnnotation, "value", oldSizeStr)
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionError",
+			"Could not parse the existing minimum data PVC size %q recorded on the StatefulSet: %v", oldSizeStr, e)
+		return
+	}
+	// PVCs cannot be shrunk, so only proceed if the new size is strictly bigger than the recorded size.
+	if newSize.Cmp(oldSize) <= 0 {
+		logger.Info("Cannot shrink existing data PVCs; ignoring the decreased storage request", "currentSize", oldSize.String(), "requestedSize", newSize.String())
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionForbidden",
+			"Cannot shrink data PersistentVolumeClaims from %s to %s; PersistentVolumeClaims can only be expanded.", oldSize.String(), newSize.String())
+		return
+	}
+	// Pre-flight: make sure the storage class backing the data PVCs allows volume expansion. If it
+	// explicitly does not, there is no point acquiring a cluster operation lock that can never
+	// complete; surface it as an event instead.
+	if allowed, className, scErr := r.storageClassAllowsExpansion(ctx, instance, statefulSet.Spec.Selector.MatchLabels); scErr != nil {
+		// Could not determine; proceed best-effort and let the PVC patch surface any hard rejection.
+		logger.Error(scErr, "Could not verify whether the storage class allows volume expansion; proceeding with the expansion attempt")
+	} else if !allowed {
+		logger.Info("Storage class does not allow volume expansion; ignoring the increased storage request", "storageClass", className, "currentSize", oldSize.String(), "requestedSize", newSize.String())
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionForbidden",
+			"Storage class %q does not allow volume expansion (allowVolumeExpansion); cannot expand data PersistentVolumeClaims from %s to %s.", className, oldSize.String(), newSize.String())
+		return
+	}
+	clusterOp = &SolrClusterOp{
+		Operation: PvcExpansionLock,
+		Metadata:  newSize.String(),
+	}
+	return
+}
+
+// handlePvcExpansion handles the logic of a persistent volume claim expansion operation.
+func handlePvcExpansion(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, logger logr.Logger) (operationComplete bool, retryLaterDuration time.Duration, err error) {
+	var newSize resource.Quantity
+	newSize, err = resource.ParseQuantity(clusterOp.Metadata)
+	if err != nil {
+		logger.Error(err, "Could not convert PvcExpansion metadata to a resource.Quantity, as it represents the new size of PVCs", "metadata", clusterOp.Metadata)
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionError",
+			"Could not parse the target PVC size %q from the cluster operation metadata: %v", clusterOp.Metadata, err)
+		return
+	}
+	var resizeInfeasible bool
+	operationComplete, resizeInfeasible, err = r.expandPVCs(ctx, instance, statefulSet.Spec.Selector.MatchLabels, newSize, logger)
+	if err == nil && operationComplete {
+		originalStatefulSet := statefulSet.DeepCopy()
+		statefulSet.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
+		if statefulSet.Spec.Template.Annotations == nil {
+			statefulSet.Spec.Template.Annotations = make(map[string]string, 1)
+		}
+		statefulSet.Spec.Template.Annotations[util.StorageMinimumSizeAnnotation] = newSize.String()
+		if err = r.Patch(ctx, statefulSet, client.StrategicMergeFrom(originalStatefulSet)); err != nil {
+			logger.Error(err, "Error while patching StatefulSet to set the new minimum PVC size after PVCs the completion of PVC resizing", "newSize", newSize)
+			operationComplete = false
+		} else {
+			logger.Info("All PersistentVolumeClaims have been expanded, now issuing a rolling restart", "statefulSet", statefulSet.Name)
+		}
+		// Return and wait for the StatefulSet to be updated which will call the reconcile to start the rolling restart
+		retryLaterDuration = 0
+	} else if err == nil {
+		if resizeInfeasible {
+			// The storage backend has declared the requested size infeasible. There is nothing the
+			// operator can do until the user lowers the requested size, so surface it as an event and
+			// back off significantly instead of retrying tightly.
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PVCExpansionInfeasible",
+				"The storage backend reported that expanding the data PersistentVolumeClaims to %s is infeasible (e.g. it exceeds backend or quota limits). Reduce the requested storage size to a feasible value to recover.",
+				newSize.String())
+			retryLaterDuration = time.Minute
+		} else {
+			retryLaterDuration = time.Second * 5
+		}
+	}
+	return
+}
+
 func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, scaleDownOpIsQueued bool, podList []corev1.Pod, blockReconciliationOfStatefulSet bool, logger logr.Logger) (clusterOp *SolrClusterOp, retryLaterDuration time.Duration, err error) {
 	desiredPods := int(*instance.Spec.Replicas)
 	configuredPods := int(*statefulSet.Spec.Replicas)
@@ -194,6 +286,8 @@ func determineScaleClusterOpLockIfNecessary(ctx context.Context, r *SolrCloudRec
 				Metadata:  strconv.Itoa(desiredPods),
 			}
 		} else {
+			r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ScalingUnmanaged",
+				"Scaling SolrCloud from %d to %d pods without managed replica migration", configuredPods, desiredPods)
 			err = scaleCloudUnmanaged(ctx, r, statefulSet, desiredPods, logger)
 		}
 	} else if scaleDownOpIsQueued {
@@ -214,8 +308,9 @@ func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, in
 	var scaleDownTo int
 	if scaleDownTo, err = strconv.Atoi(clusterOp.Metadata); err != nil {
 		logger.Error(err, "Could not convert ScaleDown metadata to int, as it represents the number of nodes to scale to", "metadata", clusterOp.Metadata)
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationError",
+			"Could not parse the scale-down target %q from the cluster operation metadata: %v", clusterOp.Metadata, err)
 		return
-		// TODO: Create event for the CRD.
 	}
 
 	if len(podList) <= scaleDownTo {
@@ -267,7 +362,7 @@ func handleManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, in
 
 // cleanupManagedCloudScaleDown does the logic of cleaning-up an incomplete scale down operation.
 // This will remove any bad readinessConditions that the scaleDown might have set when trying to scaleDown pods.
-func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, podList []corev1.Pod, logger logr.Logger) (err error) {
+func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, logger logr.Logger) (err error) {
 	// First though, the scaleDown op might have set some pods to be "unready" before deletion. Undo that.
 	// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
 	readinessConditions := map[corev1.PodConditionType]podReadinessConditionChange{
@@ -278,7 +373,7 @@ func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, p
 		},
 	}
 	for _, pod := range podList {
-		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, &pod, readinessConditions, logger); e != nil {
 			err = e
 			return
 		} else {
@@ -291,9 +386,12 @@ func cleanupManagedCloudScaleDown(ctx context.Context, r *SolrCloudReconciler, p
 // handleManagedCloudScaleUp does the logic of a managed and "locked" cloud scale up operation.
 // This will likely take many reconcile loops to complete, as it is moving replicas to the pods that have recently been scaled up.
 func handleManagedCloudScaleUp(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, clusterOp *SolrClusterOp, podList []corev1.Pod, logger logr.Logger) (operationComplete bool, nextClusterOperation *SolrClusterOp, err error) {
-	desiredPods, err := strconv.Atoi(clusterOp.Metadata)
+	desiredPods := 0
+	desiredPods, err = strconv.Atoi(clusterOp.Metadata)
 	if err != nil {
 		logger.Error(err, "Could not convert ScaleUp metadata to int, as it represents the number of nodes to scale to", "metadata", clusterOp.Metadata)
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationError",
+			"Could not parse the scale-up target %q from the cluster operation metadata: %v", clusterOp.Metadata, err)
 		return
 	}
 	configuredPods := int(*statefulSet.Spec.Replicas)
@@ -388,6 +486,8 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 		// a restart to get a working pod config.
 		state, retryLater, apiError := util.GetNodeReplicaState(ctx, instance, statefulSet, hasReadyPod, logger)
 		if apiError != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterStateError",
+				"Could not fetch the Solr cluster state needed to safely perform a rolling update: %v", apiError)
 			return false, true, 0, nil, apiError
 		} else if !retryLater {
 			// If the cluster status has been successfully fetched, then add the pods scheduled for deletion
@@ -427,7 +527,7 @@ func handleManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler
 
 // cleanupManagedCloudRollingUpdate does the logic of cleaning-up an incomplete rolling update operation.
 // This will remove any bad readinessConditions that the rollingUpdate might have set when trying to restart pods.
-func cleanupManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, podList []corev1.Pod, logger logr.Logger) (err error) {
+func cleanupManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconciler, instance *solrv1beta1.SolrCloud, podList []corev1.Pod, logger logr.Logger) (err error) {
 	// First though, the scaleDown op might have set some pods to be "unready" before deletion. Undo that.
 	// Before doing anything to the pod, make sure that the pods do not have a stopped readiness condition
 	er := EvictingReplicas
@@ -447,7 +547,7 @@ func cleanupManagedCloudRollingUpdate(ctx context.Context, r *SolrCloudReconcile
 		},
 	}
 	for _, pod := range podList {
-		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, &pod, readinessConditions, logger); e != nil {
 			err = e
 			return
 		} else {
@@ -536,7 +636,7 @@ func evictAllPods(ctx context.Context, r *SolrCloudReconciler, instance *solrv1b
 	}
 
 	for i, pod := range podList {
-		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, &pod, readinessConditions, logger); e != nil {
+		if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, &pod, readinessConditions, logger); e != nil {
 			err = e
 			return
 		} else {
@@ -577,7 +677,7 @@ func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv
 		return !podHasReplicas, false, errors.New("Could not find pod " + podName + " when trying to migrate replicas to scale down pod.")
 	}
 
-	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, pod, readinessConditions, logger); e != nil {
+	if updatedPod, e := EnsurePodReadinessConditions(ctx, r, instance, pod, readinessConditions, logger); e != nil {
 		err = e
 		return
 	} else {
@@ -586,7 +686,7 @@ func evictSinglePod(ctx context.Context, r *SolrCloudReconciler, instance *solrv
 
 	// Only evict from the pod if it contains replicas in the clusterState
 	var canDeletePod bool
-	if err, canDeletePod, requestInProgress = util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "scaleDown", logger); err != nil {
+	if err, canDeletePod, requestInProgress = util.EvictReplicasForPodIfNecessary(ctx, instance, pod, podHasReplicas, "scaleDown", r.Recorder, logger); err != nil {
 		logger.Error(err, "Error while evicting replicas on Pod, when scaling down SolrCloud", "pod", pod.Name)
 	} else if canDeletePod {
 		// The pod previously had replicas, so loop back in the next reconcile to make sure that the pod doesn't

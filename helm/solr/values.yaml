@@ -24,6 +24,9 @@ fullnameOverride: ""
 replicas: null
 
 global:
+  # List the secrets needed to pull images from a private registry.
+  # Accepts both Kubernetes-native format [{name: "secret"}] and plain strings ["secret"].
+  # These are merged with podOptions.imagePullSecrets and applied to the Solr pods.
   imagePullSecrets: []
   clusterDomain: ""
 
@@ -68,7 +71,7 @@ solrOptions:
 
   # Enable authentication for the Solr Cloud
   # More information can be found at:
-  # https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#authentication-and-authorization
+  # https://solr.apache.org/guide/operator/latest/solr-cloud/authentication-and-authorization.html
   security: {}
     # authenticationType: Basic
     # basicAuthSecret: secret-name
@@ -79,7 +82,7 @@ solrOptions:
 
 
 # Specify how the SolrCloud should be addressable
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#addressability
+# https://solr.apache.org/guide/operator/latest/solr-cloud/addressability.html
 addressability:
   podPort: 8983
   commonServicePort: null
@@ -99,7 +102,7 @@ addressability:
     #   useDefaultTLSSecret: false
 
 # Specify how rolling updates should be managed for the Solr StatefulSet
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#update-strategy
+# https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#update-strategy
 updateStrategy:
   method: "Managed"
   # Options for the managed update method
@@ -118,7 +121,7 @@ updateStrategy:
   restartSchedule: ""
 
 # More information can be found at:
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#data-storage
+# https://solr.apache.org/guide/operator/latest/solr-cloud/solr-cloud-crd.html#data-storage
 dataStorage:
   # Either persistent or ephemeral
   type: "ephemeral"
@@ -140,6 +143,7 @@ dataStorage:
       labels: {}
       annotations: {}
       storageClassName: ""
+      volumeAttributesClassName: ""
 
 # How to control availability for Solr Nodes
 availability:
@@ -155,7 +159,7 @@ scaling:
 
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
-# - https://apache.github.io/solr-operator/docs/solr-backup
+# - https://solr.apache.org/guide/operator/latest/solr-backup/index.html
 # - kubectl explain solrcloud.spec.backupRepositories
 backupRepositories: []
   # - name: example-repo # Required
@@ -239,7 +243,7 @@ zk:
 
 # Enable TLS between your SolrCloud nodes
 # More information can be found at:
-# https://apache.github.io/solr-operator/docs/solr-cloud/solr-cloud-crd.html#enable-tls-between-solr-pods
+# https://solr.apache.org/guide/operator/latest/solr-cloud/tls.html#enable-tls-between-solr-pods
 solrTLS: {}
   # pkcs12Secret:
   #   name: secret-name
@@ -308,6 +312,8 @@ podOptions:
 
   shareProcessNamespace: false
 
+  enableServiceLinks: true
+
   # Manage where the Solr pods are scheduled
   affinity: {}
   tolerations: []
@@ -327,6 +333,8 @@ podOptions:
   # Lifecycle for the Solr container
   lifecycle: {}
 
+  # List of image pull secrets to inject into the Solr pod, in addition to global.imagePullSecrets.
+  # Accepts both Kubernetes-native format [{name: "secret"}] and plain strings ["secret"].
   imagePullSecrets: []
 
   resources: {}
@@ -339,6 +347,9 @@ podOptions:
 
   # Resources for the init containers created by the Solr Operator
   defaultInitContainerResources: {}
+
+  # Security context for the init containers created by the Solr Operator
+  defaultInitContainerSecurityContext: {}
 
   volumes: []
     # - name:
@@ -357,14 +368,20 @@ statefulSetOptions:
 commonServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 headlessServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 nodeServiceOptions:
   annotations: {}
   labels: {}
+  sessionAffinity: ""
+  sessionAffinityConfig: {}
 
 ingressOptions:
   annotations: {}

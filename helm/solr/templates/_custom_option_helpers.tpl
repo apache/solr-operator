@@ -39,6 +39,9 @@ serviceAccountName: {{ include "solr.serviceAccountName.solr" . }}
 {{- if .Values.podOptions.shareProcessNamespace -}}
 shareProcessNamespace: {{ .Values.podOptions.shareProcessNamespace }}
 {{ end }}
+{{- if hasKey .Values.podOptions "enableServiceLinks" -}}
+enableServiceLinks: {{ .Values.podOptions.enableServiceLinks }}
+{{ end }}
 {{- if .Values.podOptions.priorityClassName -}}
 priorityClassName: {{ .Values.podOptions.priorityClassName }}
 {{ end }}
@@ -68,7 +71,13 @@ containerSecurityContext:
 {{ end }}
 {{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:
-  {{- toYaml (append .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) | nindent 2 }}
+{{- range (concat .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}
+{{- if kindIs "string" . }}
+  - name: {{ . }}
+{{- else }}
+  - name: {{ required "Each entry in imagePullSecrets must be a string or an object with a 'name' field" .name }}
+{{- end }}
+{{- end }}
 {{ end }}
 {{- if .Values.podOptions.volumes -}}
 volumes:
@@ -108,6 +117,10 @@ topologySpreadConstraints:
 {{- if .Values.podOptions.defaultInitContainerResources -}}
 defaultInitContainerResources:
   {{- toYaml .Values.podOptions.defaultInitContainerResources | nindent 2 }}
+{{ end }}
+{{- if .Values.podOptions.defaultInitContainerSecurityContext -}}
+defaultInitContainerSecurityContext:
+  {{- toYaml .Values.podOptions.defaultInitContainerSecurityContext | nindent 2 }}
 {{ end }}
 {{- end -}}
 
@@ -174,6 +187,13 @@ labels:
 annotations:
   {{- toYaml .Values.commonServiceOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.commonServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.commonServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.commonServiceOptions.sessionAffinityConfig | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*
@@ -188,6 +208,13 @@ labels:
 annotations:
   {{- toYaml .Values.headlessServiceOptions.annotations | nindent 2 }}
 {{ end }}
+{{- if .Values.headlessServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.headlessServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.headlessServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.headlessServiceOptions.sessionAffinityConfig | nindent 2 }}
+{{ end }}
 {{- end -}}
 
 {{/*
@@ -201,6 +228,13 @@ labels:
 {{- if .Values.nodeServiceOptions.annotations -}}
 annotations:
   {{- toYaml .Values.nodeServiceOptions.annotations | nindent 2 }}
+{{ end }}
+{{- if .Values.nodeServiceOptions.sessionAffinity -}}
+sessionAffinity: {{ .Values.nodeServiceOptions.sessionAffinity }}
+{{ end }}
+{{- if .Values.nodeServiceOptions.sessionAffinityConfig -}}
+sessionAffinityConfig:
+  {{- toYaml .Values.nodeServiceOptions.sessionAffinityConfig | nindent 2 }}
 {{ end }}
 {{- end -}}
 
