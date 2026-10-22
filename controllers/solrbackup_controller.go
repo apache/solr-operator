@@ -311,7 +311,12 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 			if collectionBackupStatus.Successful == nil {
 				collectionBackupStatus.Successful = &successful
 			}
-			collectionBackupStatus.AsyncBackupStatus = ""
+			// Keep "notfound" so the status keeps saying why the backup could not be confirmed.
+			if asyncStatus == "notfound" {
+				collectionBackupStatus.AsyncBackupStatus = asyncStatus
+			} else {
+				collectionBackupStatus.AsyncBackupStatus = ""
+			}
 			if collectionBackupStatus.FinishTime == nil {
 				collectionBackupStatus.FinishTime = &now
 			}
