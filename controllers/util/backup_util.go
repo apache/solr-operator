@@ -146,10 +146,14 @@ func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.
 	// Directory creation only required/possible for volume (i.e. local) backups
 	if IsRepoVolume(backupRepository) {
 		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
+		// Exec mkdir directly (argv form) rather than through "/bin/bash -c".
+		// backupPath is derived from the user-controlled SolrBackup.spec.location;
+		// passing it through a shell allowed command injection. As a discrete argv
+		// element it is treated as a literal path and shell metacharacters are inert.
 		return RunExecForPod(
 			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
-			[]string{"/bin/bash", "-c", "mkdir -p " + backupPath},
+			[]string{"mkdir", "-p", backupPath},
 			config,
 		)
 	}
