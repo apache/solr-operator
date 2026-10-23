@@ -1,0 +1,92 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Dependabot cannot run "make fetch-licenses-list", so every Go dependency bump
+# it opens fails "make check-licenses" until a human regenerates
+# dependency_licenses.csv. This workflow does that step for Dependabot PRs:
+#
+#   1. Regenerate dependency_licenses.csv (and tidy go.mod/go.sum).
+#   2. If anything changed, commit it to the PR branch.
+#   3. Re-dispatch the regular PR checks on the new commit. A push made with
+#      GITHUB_TOKEN never starts pull_request workflows on its own (this is
+#      GitHub's loop protection), but workflow_dispatch events always do, and
+#      their check runs attach to the PR's new head commit.
+#
+# Dependabot branches live in this repository and only Dependabot (or a
+# committer) can push to them, so running "make" on the PR contents is no more
+# dangerous than the regular PR checks.
+
+name: Dependabot license list
+
+on:
+  pull_request:
+    branches:
+      - 'main'
+      - 'release-*'
+    paths:
+      - 'go.mod'
+      - 'go.sum'
+
+jobs:
+  update-license-list:
+    name: Regenerate dependency_licenses.csv
+    if: github.actor == 'dependabot[bot]' && github.repository == 'apache/solr-operator'
+    runs-on: ubuntu-latest
+    # Dependabot-triggered workflows get a read-only GITHUB_TOKEN unless the
+    # permissions are raised explicitly.
+    permissions:
+      contents: write
+      actions: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Regenerate the dependency license list
+        run: make fetch-licenses-list
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if git diff --quiet -- dependency_licenses.csv go.mod go.sum; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git --no-pager diff -- dependency_licenses.csv go.mod go.sum
+          fi
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dependency_licenses.csv go.mod go.sum
+          git commit -m "Regenerate dependency_licenses.csv for Dependabot update"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+
+      - name: Re-run PR checks on the new commit
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          gh workflow run check.yaml --ref "$BRANCH"
+          gh workflow run smoke-tests.yaml --ref "$BRANCH"
