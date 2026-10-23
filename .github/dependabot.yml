@@ -20,12 +20,14 @@
 #   - Everything runs on a monthly cadence.
 #   - Updates are grouped, so one PR covers many bumps.
 #   - A cooldown keeps brand-new releases out until they have had a week to
-#     settle (and to be patched, if needed).
+#     settle (and to be patched, if needed). Cooldown applies to version
+#     updates only; security updates are never delayed by it.
 #
 # The companion workflow .github/workflows/dependabot-licenses.yaml regenerates
 # dependency_licenses.csv on Dependabot PRs so that "make check-licenses" passes.
 #
 # Reference: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+# Cooldown:  https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
 
 version: 2
 updates:
