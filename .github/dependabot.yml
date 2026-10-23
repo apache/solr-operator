@@ -1,0 +1,105 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Dependabot configuration for the Solr Operator.
+#
+# Goals: keep the number of dependency PRs low and make each one mergeable
+# with little human effort.
+#   - Everything runs on a monthly cadence.
+#   - Updates are grouped, so one PR covers many bumps.
+#   - A cooldown keeps brand-new releases out until they have had a week to
+#     settle (and to be patched, if needed). Cooldown applies to version
+#     updates only; security updates are never delayed by it.
+#
+# The companion workflow .github/workflows/dependabot-licenses.yaml regenerates
+# dependency_licenses.csv on Dependabot PRs so that "make check-licenses" passes.
+#
+# Reference: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+# Cooldown:  https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
+
+version: 2
+updates:
+
+  # GitHub Actions used in .github/workflows/*
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Go modules (go.mod / go.sum)
+  #
+  # Only direct dependencies are updated by Dependabot version updates (the
+  # default), which keeps the indirect tree under control of "go mod tidy".
+  # Security updates still cover indirect dependencies.
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "deps"
+    ignore:
+      # The zookeeper-operator version is pinned across the Makefile, Helm chart
+      # and docs and is bumped deliberately as part of a release. "make
+      # check-zk-op-version" would fail on an isolated go.mod bump.
+      - dependency-name: "github.com/pravega/zookeeper-operator"
+    groups:
+      # A dependency lands in the FIRST group whose pattern matches, so order matters.
+
+      # The Kubernetes libraries, controller-runtime and Helm all move in lockstep
+      # with Kubernetes minor releases, so they must be bumped together.
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+          - "helm.sh/*"
+      cert-manager:
+        patterns:
+          - "github.com/cert-manager/*"
+      # Test-only frameworks; safe to merge on green CI.
+      testing:
+        patterns:
+          - "github.com/onsi/*"
+          - "github.com/stretchr/*"
+      # Google-maintained Go libraries, released together and usually trivial.
+      golang-x:
+        patterns:
+          - "golang.org/x/*"
+          - "google.golang.org/*"
+      # Catch-all for the remaining direct dependencies (logr, fsnotify, cron, ...).
+      go-misc:
+        patterns:
+          - "*"
+      # Also bundle security updates into one PR instead of one per advisory.
+      go-security:
+        applies-to: "security-updates"
+        patterns:
+          - "*"

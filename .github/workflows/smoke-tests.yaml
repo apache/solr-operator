@@ -16,6 +16,8 @@
 name: Build Artifacts and Smoke Test
 
 on:
+  # Dispatched by dependabot-licenses.yaml after it pushes a fix-up commit
+  workflow_dispatch:
   pull_request:
     branches:
       - 'main'
