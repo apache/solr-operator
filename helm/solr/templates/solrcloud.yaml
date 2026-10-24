@@ -24,6 +24,7 @@ spec:
   {{- if (quote .Values.replicas) }}
   replicas: {{ .Values.replicas }}
   {{- end }}
+  solrMajorVersion: {{ required "solrMajorVersion is required (8, 9, or 10) and must match image.tag's major version" .Values.solrMajorVersion }}
   {{- if .Values.image }}
   solrImage:
     {{- if .Values.image.repository }}

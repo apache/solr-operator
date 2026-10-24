@@ -520,7 +520,11 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsOutputFilter = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
+	apiUrlFlag := "-get"
+	if solrCloud.IsSolr10OrLater() {
+		apiUrlFlag = "--solr-url"
+	}
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET
