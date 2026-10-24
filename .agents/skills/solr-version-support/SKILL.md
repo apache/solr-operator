@@ -1,6 +1,6 @@
 ---
 name: solr-version-support
-description: Adopt a new Apache Solr release in the Solr Operator - bump the default Solr version everywhere it is duplicated, decide whether the release needs operator work, extend the Solr compatibility matrix, and record the change in both Helm charts' artifacthub.io/changes changelog. Covers a new Solr major version too, where support is gated on the major rather than carried by a version string. Nothing in CI checks any of this.
+description: Adopt a new Apache Solr release in the Solr Operator - bump the default Solr version everywhere it is duplicated, decide whether the release needs operator work, extend the Solr compatibility matrix, and record the change in both Helm charts' artifacthub.io/changes changelog. Covers a new Solr major version too, where support is gated on the major rather than carried by a version string. Sizes each piece of work and stops, filing issues instead of a PR, when a release needs more than one pass. Nothing in CI checks any of this.
 when_to_use: The user asks to support, adopt, test against or default to a new Solr version or a new Solr major version, or to bump DefaultSolrVersion or the solr chart's appVersion. Also when a new Solr release is out and the operator should follow it.
 ---
 
@@ -96,6 +96,40 @@ tests/scripts/manage_e2e_tests.sh run-tests -s <version> -i <operator image>
 
 Say in the PR that you ran it, and on which Kubernetes version.
 
+## Size the work before editing anything
+
+Size every operator change the release implies, separately. The release's size is the largest of
+them.
+
+| Size | Shape |
+|---|---|
+| XS | Version strings only, no operator change — the routine patch release |
+| S | A default, env var or flag the operator already sets; one or two files, no CRD change |
+| M | One new CRD field end to end: the `add-crd-field` path, ~12-15 files including both charts, docs and tests |
+| L | Behaviour gated across several subsystems, or a removal the operator must work around — Solr 10's `solr.xml`, env vars, CLI and probes together |
+| XL | A removed feature with no in-place replacement, or anything needing new API design or a migration path for running clusters — `solr-exporter` dropped in Solr 10 (#820) |
+
+**Attempt XS, S and M. Stop at L.** State the size and the reasoning for each item before you start
+editing, so the cut line is visible rather than implied.
+
+### A minor release with an L or XL item
+
+Take the minor anyway. Do the XS/S/M work, land the version bump, and file one issue per L/XL item
+for what is not natively supported. Say in the PR which features are unsupported and link the
+issues — otherwise the matrix and the changelog imply more than the operator delivers.
+
+### A major release with an L or XL item
+
+Halt. Do not open a PR, do not part-gate the major. The outcome is one issue per item, each
+solvable on its own; the skill is re-run once they are closed. A half-gated major is worse than an
+unstarted one, because the operator then claims support it does not have.
+
+### Filing those issues
+
+Never file without approval. Present each draft one at a time — title, the Solr change, the
+operator touchpoints, the size and why — and wait for an explicit go. Search for an existing open
+issue first; a duplicate is worse than a missing one.
+
 ## A new Solr major version
 
 Supporting a new major is **not** the same decision as making it the default, and the two should
@@ -120,9 +154,10 @@ Consequences worth knowing:
 - A major can remove a feature outright — Solr 10 dropped `solr-exporter`, so the Prometheus
   exporter has no Solr 10 support (#820). Say so rather than quietly leaving it broken.
 
-For each removal or rename in the Solr upgrade notes, find the operator touchpoint, gate it on the
-major, and unit-test **both** majors. Run e2e against both. Add a matrix column, write upgrade
-notes, and give the major its own PR.
+For each removal or rename in the Solr upgrade notes, find the operator touchpoint and size it. If
+everything comes in at M or below: gate each on the major, unit-test **both** majors, run e2e
+against both, add a matrix column, write upgrade notes, and give the major its own PR. If anything
+is L or XL — which a major usually has — halt and file issues instead.
 
 ## The compatibility matrix
 
