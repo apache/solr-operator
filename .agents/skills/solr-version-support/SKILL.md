@@ -12,7 +12,7 @@ most often skipped. Read `AGENTS.md` first — where it and this skill disagree,
 
 ## Invocation
 
-`/solr-version-support 9.11.0`, or prose ("adopt Solr 9.11"). The target version is the only input.
+`/solr-version-support <version>`, or prose ("adopt Solr 9.11"). The version is the only input.
 
 If it is omitted, do not ask blankly. List what is newer than the current default and offer those:
 
@@ -42,59 +42,19 @@ git switch -c solr-<version> <remote>/main
 The remote is `upstream` in some clones, `apache` or `origin` in others; if the first command
 prints nothing, ask. Branch from `<remote>/main`, never local `main`.
 
-## The 14 files
+## Do the work
 
-`DefaultSolrVersion` in `api/v1beta1/solrcloud_types.go` is the operator-side default. Every other
-site repeats the same string with nothing enforcing agreement:
+1. Validate the target version. A major takes the other path — see "A new Solr major version".
+2. Size every change the release implies. **Stop at L**, and follow the halt rules below.
+3. Edit the 15 version sites.
+4. Do any operator work sized M or below.
+5. `make test`, and repair fixtures.
+6. `make e2e-tests` against the new default; CI's e2e is disabled, so this is the only evidence.
+7. Extend the compatibility matrix.
+8. Add the changelog entries to both charts.
+9. `make lint`, re-grep the previous version, and verify.
 
-| File | What |
-|---|---|
-| `api/v1beta1/solrcloud_types.go` | `DefaultSolrVersion` — the real default |
-| `helm/solr/Chart.yaml` | `appVersion`, and the `artifacthub.io/images` example |
-| `helm/solr/README.md` | 3 sites, including the values table default |
-| `helm/solr-operator/Chart.yaml` | `crdsExamples`, for SolrCloud and SolrPrometheusExporter |
-| `example/test_solrcloud.yaml` and 4 more `example/*.yaml` | one `tag:` each |
-| `tests/scripts/manage_e2e_tests.sh` | the `-s` default and its help text |
-| `hack/release/smoke_test/test_cluster.sh` | the same pair |
-| `tests/e2e/suite_test.go` | the e2e default |
-| `docs/modules/getting-started/pages/local-tutorial.adoc` | 3 sites in tutorial commands |
-| `dev-docs/e2e-testing.md` | 1 example |
-
-`appVersion` means different things in the two charts: in `helm/solr` it is the **Solr** version and
-is yours; in `helm/solr-operator` it is the **operator** version and belongs to the release process.
-Never touch the latter here.
-
-After editing, `git grep -n '<previous version>'` must return only deliberate historical references
-— upgrade notes, and older `artifacthub.io/changes` entries. Review every remaining hit; there is no
-check target to catch one you missed.
-
-## Does the release need operator work?
-
-The mechanical bump is not the deliverable. Read the Solr release notes for the span crossed and
-check whether anything the operator depends on moved:
-
-- **The admin APIs it calls.** `admin/info/system`, `admin/info/health`, `admin/collections` and the
-  v2 `/api/cluster/replicas/balance`, in `controllers/util/solr_api/` and `controllers/util/`.
-- **Startup and probes** — `solr_util.go`.
-- **security.json handling** — `solr_security_util.go`.
-- **TLS** — `solr_tls_util.go`.
-- **Rolling updates and scaling**, which read cluster state — `solr_update_util.go`,
-  `solr_scale_util.go`.
-- New config knobs worth exposing as CRD fields. That is a separate change; see the
-  `add-crd-field` skill rather than folding it in here.
-
-Within a major, differences are usually additive and need no gating. Across a major, they do — see
-below.
-
-Then run the e2e suite against the new image, because **the e2e workflow is permanently disabled in
-CI** and proves nothing:
-
-```bash
-make e2e-tests                                   # uses the new default
-tests/scripts/manage_e2e_tests.sh run-tests -s <version> -i <operator image>
-```
-
-Say in the PR that you ran it, and on which Kubernetes version.
+The sections below are reference for each step, not an order to read them in.
 
 ## Size the work before editing anything
 
@@ -105,7 +65,7 @@ them.
 |---|---|
 | XS | Version strings only, no operator change — the routine patch release |
 | S | A default, env var or flag the operator already sets; one or two files, no CRD change |
-| M | One new CRD field end to end: the `add-crd-field` path, ~12-15 files including both charts, docs and tests |
+| M | One new CRD field end to end — ~12-15 files including both charts, docs and tests |
 | L | Behaviour gated across several subsystems, or a removal the operator must work around — Solr 10's `solr.xml`, env vars, CLI and probes together |
 | XL | A removed feature with no in-place replacement, or anything needing new API design or a migration path for running clusters — `solr-exporter` dropped in Solr 10 (#820) |
 
@@ -130,6 +90,64 @@ Never file without approval. Present each draft one at a time — title, the Sol
 operator touchpoints, the size and why — and wait for an explicit go. Search for an existing open
 issue first; a duplicate is worse than a missing one.
 
+## The 15 version sites
+
+`DefaultSolrVersion` in `api/v1beta1/solrcloud_types.go` is the operator-side default. Every other
+site repeats it with nothing enforcing agreement. Eleven rows, fifteen files:
+
+| File | What |
+|---|---|
+| `api/v1beta1/solrcloud_types.go` | `DefaultSolrVersion` — the real default |
+| `helm/solr/Chart.yaml` | `appVersion`, and the `artifacthub.io/images` example |
+| `helm/solr/README.md` | 3 sites, including the values table default |
+| `helm/solr-operator/Chart.yaml` | `crdsExamples`, for SolrCloud and SolrPrometheusExporter |
+| `example/test_solrcloud.yaml` and 4 more `example/*.yaml` | one `tag:` each |
+| `tests/scripts/manage_e2e_tests.sh` | the `-s` default and its help text |
+| `hack/release/smoke_test/test_cluster.sh` | the same pair |
+| `tests/e2e/suite_test.go` | the e2e default |
+| `docs/modules/getting-started/pages/local-tutorial.adoc` | 3 sites in tutorial commands |
+| `dev-docs/e2e-testing.md` | 1 example |
+| `.github/workflows/e2e-tests.yaml` | the `solr-version` matrix — **major only** (`'9'`), so the grep below cannot see it |
+
+`appVersion` means different things in the two charts: in `helm/solr` it is the **Solr** version and
+is yours; in `helm/solr-operator` it is the **operator** version and belongs to the release process.
+Never touch the latter here.
+
+After editing, `git grep -n '<previous version>'` must return only deliberate historical references
+— upgrade notes, and older `artifacthub.io/changes` entries. Review every remaining hit; there is no
+check target to catch one you missed. The grep is not sufficient on its own: the e2e workflow pins
+the major alone, so check that file by hand every time.
+
+## Does the release need operator work?
+
+The mechanical bump is not the deliverable. Read the Solr release notes for the span crossed and
+check whether anything the operator depends on moved:
+
+- **The admin APIs it calls.** `admin/info/system`, `admin/info/health`, `admin/collections` and the
+  v2 `/api/cluster/replicas/balance`, in `controllers/util/solr_api/` and `controllers/util/`.
+- **Startup and probes** — `solr_util.go`.
+- **security.json handling** — `solr_security_util.go`.
+- **TLS** — `solr_tls_util.go`.
+- **Rolling updates and scaling**, which read cluster state — `solr_update_util.go`,
+  `solr_scale_util.go`.
+- New config knobs worth exposing as CRD fields. In scope at size M — deliver the field end to
+  end. (A dedicated `add-crd-field` skill is proposed in #867 but does not exist yet; until it
+  does, follow an existing field such as `enableServiceLinks` in #790 for the file set.)
+
+Within a major, differences are usually additive and need no gating. Across a major, they do — see
+below.
+
+Then run the e2e suite against the new image, because **the e2e workflow is permanently disabled in
+CI** and proves nothing:
+
+```bash
+make e2e-tests                                             # after the bump: picks up the new default
+tests/scripts/manage_e2e_tests.sh run-tests -s <version>   # before it: pins the version explicitly
+```
+
+The script's Kubernetes default has drifted from the smoke test's, so state which you used; `-k`
+overrides it. Say in the PR that you ran it, and on which Kubernetes version.
+
 ## A new Solr major version
 
 Supporting a new major is **not** the same decision as making it the default, and the two should
@@ -145,8 +163,10 @@ was written.
 
 Consequences worth knowing:
 
-- **The image tag must start with the Solr version.** `10.0.0`, `9.10.0-slim`, `10.0.0@sha256:…`
-  all work; `latest` or a date-based tag does not, and stops reconciliation.
+- **The image tag must start with the Solr version**, and only its first number is read, so a
+  bare major works: `10`, `10.0.0`, `<x>.<y>.<z>-slim` and `10.0.0@sha256:…` are all fine. This is
+  why `.github/workflows/e2e-tests.yaml` can pin `solr:9`. `latest`, or a date-based tag like
+  `2026.10.1`, is not, and stops reconciliation.
 - Where differences land, from the Solr 10 work: `solr.xml` (`DefaultSolrXMLForSolr10`), env var
   names (`SOLR_PORT_LISTEN`, `SOLR_HOST_ADVERTISE`), module paths under `sharedLib`, CLI commands
   (`solr cluster --property` replacing the removed `zkcli.sh`), and probe invocation
@@ -177,8 +197,8 @@ that did not pin its own image follows `DefaultSolrVersion`. **Bumping the defau
 version those users get on their next operator upgrade.** Say so explicitly.
 
 Add a `fixed` or `security` entry as well if the Solr release addresses a CVE that reaches
-operator-managed deployments, and flip `artifacthub.io/containsSecurityUpdates` to `"true"` in that
-chart.
+operator-managed deployments. Flip `artifacthub.io/containsSecurityUpdates` to `"true"` in whichever
+chart carries that entry — both have the annotation, and each is set independently.
 
 ## Verify before you commit
 
@@ -192,8 +212,14 @@ chart.
 
 One commit. Imperative subject under ~70 characters, at most a sentence of body.
 
-The fork is the remote whose URL is not `apache/solr-operator`
-(`git remote -v | grep -v apache/solr-operator`). **Never push without the user agreeing in this
+The fork is the remote whose URL is not `apache/solr-operator`:
+
+```bash
+git remote -v | grep -v apache/solr-operator | awk '{print $1}' | sort -u
+```
+
+Clones often hold other contributors' forks too, so more than one result — or none — means ask
+which to use rather than taking the first. **Never push without the user agreeing in this
 conversation**, and never push to the apache remote.
 
 PR description, well under a screenful: the version adopted; whether the release needed operator
@@ -206,6 +232,5 @@ work and what; what the matrix now says; the changelog entries; and what you ran
   PR, timed to a release, with upgrade notes.
 - **Making a new major the default** in the same change that adds support for it. Two decisions,
   two PRs.
-- **New CRD fields** for new Solr config. Use the `add-crd-field` skill.
 - **`appVersion` in `helm/solr-operator/Chart.yaml`** and the operator image tag — release process,
   via `hack/release/version/propagate_version.sh`.
