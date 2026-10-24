@@ -138,6 +138,18 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/535
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/571
+    - kind: added
+      description: The Helm charts are now also published as OCI artifacts to oci://ghcr.io/apache/solr-operator/helm, which needs no `helm repo add` and no credentials
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/813
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/814
+    - kind: deprecated
+      description: The HTTPS Helm repository at https://solr.apache.org/charts is deprecated. Charts are published to both it and the OCI registry throughout the 0.x releases, but starting with v1.0.0 they will be published to the OCI registry only
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/813
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

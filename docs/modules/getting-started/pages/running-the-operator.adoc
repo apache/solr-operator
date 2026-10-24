@@ -18,13 +18,14 @@
 
 == Using the Solr Operator Helm Chart
 
-The easiest way to run the Solr Operator is via the https://artifacthub.io/packages/helm/apache-solr/solr-operator[provided Helm Chart].
+The easiest way to run the Solr Operator is via the provided Helm Chart.
 
 The helm chart provides abstractions over the Input Arguments described below, and should work with any official images in docker hub.
 
 === How to install via Helm
 
-The official documentation for installing the Solr Operator Helm chart can be found on https://artifacthub.io/packages/helm/apache-solr/solr-operator[Artifact Hub].
+The chart's values and changelog are listed on https://artifacthub.io/packages/helm/apache-solr/solr-operator[Artifact Hub],
+though the install command shown there still uses the deprecated HTTPS Helm repository.
 
 The chart is published to the GitHub Container Registry as an OCI artifact.
 Nothing needs to be added or configured first, and no credentials are required.
