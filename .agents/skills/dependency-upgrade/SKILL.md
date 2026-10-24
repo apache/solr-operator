@@ -174,9 +174,12 @@ independently and is not covered by the check script.
 
 ## Tier C: the pins nothing watches
 
-`make list-upgrades` prints these at the end because it cannot check them for you. They are image
-tags and version strings scattered through the Makefile, the test scripts and the docs. Walk the
-list during a sweep and bump what is clearly stale; none of them is required to move every time.
+`make list-upgrades` prints these at the end because it cannot check them against anything upstream.
+They are image tags and version strings scattered through the Makefile, the test scripts and the
+docs. It does locate them for you, by pattern rather than by line number, and prints each current
+value — so if it reports `PATTERN NOT FOUND` or `MISSING FILE`, a pin has moved or been renamed and
+the table in the script needs updating. Walk the list during a sweep and bump what is clearly stale;
+none of them has to move every time.
 
 Two that need care rather than a bump:
 

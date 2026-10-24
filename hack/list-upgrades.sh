@@ -201,23 +201,57 @@ else
     "ENVTEST_K8S_VERSION" "${ENVTEST_PINNED}"
 fi
 
+printf '\n=== Not detectable automatically - check these by hand ===\n\n'
+
+# Image tags and version strings that no tool watches. Located by pattern at
+# run time rather than by line number, so an edit above them cannot silently
+# make this list point at the wrong line. A pattern that stops matching is
+# reported, because that means the pin moved or the file was renamed and this
+# table needs updating.
+#
+# Format: description|file|extended regex
+while IFS='|' read -r pin_desc pin_file pin_re; do
+  [[ -z "${pin_desc}" ]] && continue
+  if [[ ! -f "${pin_file}" ]]; then
+    printf '  %-46s %s\n' "MISSING FILE - update this list" "${pin_file}"
+    continue
+  fi
+  pin_match="$(grep -nE "${pin_re}" "${pin_file}" 2>/dev/null | head -1 || true)"
+  if [[ -z "${pin_match}" ]]; then
+    printf '  %-46s %s\n' "PATTERN NOT FOUND - update this list" "${pin_file}"
+    continue
+  fi
+  pin_line="${pin_match%%:*}"
+  # Strip the line number, then leading and trailing whitespace.
+  pin_text="${pin_match#*:}"
+  pin_text="$(printf '%s' "${pin_text}" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+  # Some matches are whole command lines; keep the column readable.
+  if ((${#pin_text} > 72)); then
+    pin_text="${pin_text:0:69}..."
+  fi
+  printf '  %-46s %s\n' "${pin_file}:${pin_line}" "${pin_text}"
+  printf '  %-46s %s\n' "" "${pin_desc}"
+done <<'PINS'
+must move together with go.mod and the CI matrix|build/Dockerfile|^FROM golang:
+a floating tag, no digest|build/Dockerfile|^FROM gcr.io/distroless
+the docs toolchain|Makefile|^ANTORA_IMAGE
+untagged, so "make lint" pulls :latest|Makefile|artifacthub/ah
+the Zookeeper server image|tests/scripts/manage_e2e_tests.sh|pravega/zookeeper:
+Kubernetes for the e2e kind cluster|tests/scripts/manage_e2e_tests.sh|KUBERNETES_VERSION="v[0-9]
+Kubernetes for the smoke-test kind cluster|hack/release/smoke_test/test_cluster.sh|KUBERNETES_VERSION="v[0-9]
+a second kind pin, independent of the Makefile|hack/release/smoke_test/test_cluster.sh|sigs.k8s.io/kind@
+left over from kubebuilder scaffolding|config/default/manager_auth_proxy_patch.yaml|kube-rbac-proxy:
+PINS
+
+for pin_file in hack/release/wizard/requirements.txt docs/modules/upgrade-notes/pages/upgrade-notes.adoc; do
+  if [[ -f "${pin_file}" ]]; then
+    printf '  %-46s %s\n' "${pin_file}" "several pins, read the file"
+  else
+    printf '  %-46s %s\n' "MISSING FILE - update this list" "${pin_file}"
+  fi
+done
+
 cat <<'EOF'
-
-=== Not detectable - check these by hand ===
-
-  No tool watches these. Walk the list during a sweep.
-
-  build/Dockerfile:14                             golang builder image, must match go.mod and the CI matrix
-  build/Dockerfile:59                             gcr.io/distroless/static, a floating tag
-  Makefile:352                                    ANTORA_IMAGE, the docs toolchain
-  Makefile:301                                    artifacthub/ah, untagged so "make lint" pulls :latest
-  tests/scripts/manage_e2e_tests.sh:43            Zookeeper server image
-  tests/scripts/manage_e2e_tests.sh:76            KUBERNETES_VERSION for the e2e kind cluster
-  hack/release/smoke_test/test_cluster.sh:82      KUBERNETES_VERSION for the smoke-test kind cluster
-  hack/release/smoke_test/test_cluster.sh:134     a second kind pin, independent of the Makefile
-  config/default/manager_auth_proxy_patch.yaml:28 kube-rbac-proxy, left over from kubebuilder scaffolding
-  hack/release/wizard/requirements.txt            Python dependencies of the release wizard
-  docs/.../upgrade-notes.adoc:29-62               hand-maintained Kubernetes and Solr compatibility matrices
 
   GitHub Actions are Dependabot's, not this script's. See .github/dependabot.yml.
   The Solr and operator image versions belong to the release process, not to a
