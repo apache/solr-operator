@@ -14,6 +14,38 @@ fixture repairs, and one changelog entry, instead of repeating all of that per b
 changes RBAC, the minimum Kubernetes version, or the bundled Zookeeper Operator is user-visible and
 must say so. This is the step most often forgotten, and the main reason this skill exists.
 
+Read `AGENTS.md` at the repo root, and whatever it links, before you start. Where it and this skill
+disagree, the repository wins.
+
+## Step 0: branch off the latest upstream main
+
+Do this before the environment checks below, and before editing anything. A sweep touches generated
+files across the whole tree, so rebasing one afterwards is far more painful than starting from the
+right base.
+
+1. **Find the upstream remote by URL, not by name.** It is `upstream` in some clones, `apache` or
+   `origin` in others:
+
+   ```bash
+   git remote -v | awk '/apache\/solr-operator(\.git)? \(fetch\)/ {print $1}'
+   ```
+
+   If that prints nothing, ask which remote tracks `apache/solr-operator` rather than guessing.
+
+2. **Confirm the working tree is clean.** `git status --short`. The sweep's own diff is large
+   enough that unrelated edits become unreviewable. Untracked scratch files are usually fine;
+   uncommitted changes to tracked files are not, so stop and ask.
+
+3. **Fetch, and branch from the fetched ref — never from local `main`:**
+
+   ```bash
+   git fetch <remote> main
+   git switch -c dependency-upgrade-<yyyy-mm> <remote>/main
+   ```
+
+   Branching from `<remote>/main` means a stale or diverged local `main` cannot leak in. Do not
+   `git pull`, and do not commit to `main`.
+
 ## Before you touch anything
 
 Work through all five. Each one silently ruins the run if skipped.
@@ -44,9 +76,18 @@ Work through all five. Each one silently ruins the run if skipped.
 
 ## Decide the scope
 
-Read `go.mod` first. Separate direct dependencies from indirect ones, and treat these as linked sets
-that must move together, because bumping one alone produces a tidy that resolves but a build that
-fails:
+Read `go.mod` first, then `go list -m -u all` to see what has moved. Be aware that `go list -u` only
+reports updates *within* each module's current major version: under semantic import versioning a new
+major lives at a different module path (`/v2` → `/v3`), so it can never appear there. Look for one
+explicitly on the direct dependencies, with `go list -m -versions <path>/v<next>` or from the
+project's releases page.
+
+**Take every patch and minor bump without asking.** Wanting them is what asking for the sweep meant.
+Do not interview the user about them, do not present them for approval one by one, and do not hold
+one back because its release notes are long.
+
+Separate direct dependencies from indirect ones, and treat these as linked sets that must move
+together, because bumping one alone produces a tidy that resolves but a build that fails:
 
 - **The Kubernetes set.** `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, and the
   `k8s.io/*` indirect entries (`apiextensions-apiserver`, `apiserver`, `cli-runtime`,
@@ -57,9 +98,38 @@ fails:
 - **`github.com/onsi/ginkgo/v2`**, which the Makefile derives the installed ginkgo version from.
 - **`github.com/pravega/zookeeper-operator`**, which is special — see the next section.
 
-For each candidate, read its release notes for the span you are crossing. Major-version bumps
-(`/v2` → `/v3`) change the module path and are a separate, deliberate change; do not fold one into a
-routine sweep.
+For each candidate, read its release notes for the span you are crossing.
+
+### A new major version is the user's call
+
+Never fold a major-version bump into the sweep on your own, and never take the minor silently
+either — an available major that nobody mentions is how a project drifts years behind. Instead cost
+it out quickly, then put the choice to the user.
+
+Spend a few minutes per module, not an hour:
+
+1. Read the migration or breaking-changes notes **for the major boundary only**, not every release
+   in the span.
+2. Count the blast radius: `grep -rln '<module path>' --include='*.go' .` — a module used behind one
+   adapter is a different proposition from one threaded through the controllers.
+3. Check what it drags with it. A `controller-runtime` major usually forces the Kubernetes set, and
+   `helm.sh/helm` pulls `k8s.io/*`, so one major can turn into four.
+4. Check whether it is user-visible — CRD schema, generated RBAC, minimum Kubernetes version — which
+   means upgrade notes and a changelog entry beyond the routine one.
+5. Check whether the old major is still maintained. If it is EOL, staying put is itself the risk.
+
+Then present, in a few lines per module: current version → available major, which breaking changes
+actually touch this codebase, roughly how many files, what else the bump forces, and a
+recommendation. Ask whether to take the major now, take the minor and leave the major for a
+dedicated PR, or hold the module where it is.
+
+When it is a genuine toss-up, recommend the minor now and a separate PR for the major: a module-path
+change is hard to review and harder to revert when it is buried in thousands of lines of regenerated
+CRDs. Recommend doing it now when the migration is small and mechanical, when the old major is
+unmaintained, or when a bump the user already wants requires it anyway. Say which of those applies.
+
+If a major is taken, give it its own commit within the branch and its own paragraph in the PR
+description.
 
 ## The Zookeeper Operator is pinned in a dozen places
 
@@ -193,12 +263,40 @@ the license CSV and `helm/`. **The e2e workflow is permanently disabled** and re
 it is not evidence of anything — if the change could plausibly affect runtime behaviour, run
 `make e2e-tests` locally and say in the PR that you did.
 
-## Opening the PR
+## Commit, then ask before pushing
 
-One commit, or a small number of logically separate ones. Keep generated output in the same commit as
-the change that generated it, so a reviewer can regenerate and compare.
+**Commit.** One commit, or a small number of logically separate ones, keeping generated output in
+the same commit as the change that generated it so a reviewer can regenerate and compare. Keep the
+message to a line or two: an imperative subject of about 70 characters or less, in the style of the
+existing log (`Upgrade almost all operator dependencies`), and at most a sentence of body if
+something genuinely needs explaining. The detail belongs in the PR description, not the commit.
 
-In the description, state: which dependency sets moved and why; any major-version bump and what it
-required; which test fixtures changed and whether each was a stale fixture or a real behaviour change;
-and what the changelog entries say. Reviewers cannot meaningfully read thousands of lines of
-regenerated CRDs, so tell them explicitly what to check instead of asking them to read the diff.
+**Identify the user's fork, and ask before pushing.** The fork is the remote whose URL is
+`<user>/solr-operator` rather than `apache/solr-operator`:
+
+```bash
+git remote -v | grep -v apache/solr-operator
+```
+
+Several candidates, or none, means ask which to use. **Never push without the user agreeing in this
+conversation**, and never push to the apache remote at all. After pushing, propose the PR
+description below and let the user open the PR unless they ask you to.
+
+### What the PR description should say
+
+Short and concise. A reviewer cannot meaningfully read thousands of lines of regenerated CRDs, so
+the description's job is to say what to check instead of the diff. Aim for well under a screenful:
+
+- One sentence of summary: which dependency sets moved, and why now — routine sweep, pre-release, or
+  a CVE.
+- A short bullet list of the sets and the version spans crossed (the Kubernetes set,
+  controller-runtime, Helm, Zookeeper Operator), not one bullet per module.
+- Everything that is not mechanical: any major-version bump and what it required; each test fixture
+  that changed, and whether it was a stale fixture or a real behaviour change; any RBAC, minimum
+  Kubernetes version, or default that moved.
+- One line naming the changelog entries added, so they can be checked without hunting for them.
+- What you ran: `make lint`, `make test`, and `make e2e-tests` if you ran it — CI's e2e workflow is
+  disabled, so say so explicitly.
+
+Leave out anything visible from the file list, and do not paste regenerated diffs. Write each
+paragraph and bullet as a single unwrapped line; GitHub reflows them to the reader's width.
