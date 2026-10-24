@@ -6,362 +6,264 @@ when_to_use: The user asks to upgrade dependencies, bump Go modules, update k8s/
 
 # Sweeping dependency upgrade
 
-Upgrade all dependencies in one reviewed pass, rather than merging a stream of single-dependency
-PRs. One pass means one round of CRD regeneration, one license-list regeneration, one set of test
-fixture repairs, and one changelog entry, instead of repeating all of that per bump.
-
-**Do not skip the changelog.** Users read `artifacthub.io/changes` on Artifact Hub. An upgrade that
-changes RBAC, the minimum Kubernetes version, or the bundled Zookeeper Operator is user-visible and
-must say so. This is the step most often forgotten, and the main reason this skill exists.
-
-Read `AGENTS.md` at the repo root, and whatever it links, before you start. Where it and this skill
-disagree, the repository wins.
+Upgrade everything in one reviewed pass: one CRD regeneration, one license-list regeneration, one
+set of fixture repairs, one changelog entry. The changelog is the step most often forgotten and the
+main reason this skill exists. Read `AGENTS.md` first — where it and this skill disagree, the repo
+wins.
 
 ## Who owns what
 
-Not every pinned version in this repo is yours to move. Three populations, three owners:
-
 | Tier | What | Owner |
 |---|---|---|
-| A | GitHub Actions | **Dependabot** (`.github/dependabot.yml`). Not yours. Leave its PRs alone and do not bump `uses:` SHAs during a sweep. |
-| B | Go modules, the Makefile's pinned tools, the envtest assets | **This skill.** `make list-upgrades` detects them. |
-| C | Base images, kind/Kubernetes versions in the test scripts, the Zookeeper server image, the docs matrices | **This skill**, but no tool sees them. Walk the checklist `make list-upgrades` prints at the end. |
+| A | GitHub Actions | Dependabot (`.github/dependabot.yml`). Not yours: leave its PRs alone, never bump a `uses:` SHA during a sweep. |
+| B | Go modules, Makefile tool pins, envtest assets | This skill. `make list-upgrades` detects them. |
+| C | Base images, kind/Kubernetes versions in the test scripts, the Zookeeper server image, docs matrices | This skill, but nothing upstream to check against. `make list-upgrades` locates them by pattern and prints current values; bump what is clearly stale. `PATTERN NOT FOUND` or `MISSING FILE` means the table in the script needs updating. |
 
-Out of scope entirely: `DefaultSolrVersion`, chart `appVersion`, and the operator's own image tag. Those
-belong to the release process (`hack/release/version/propagate_version.sh`), not to a dependency sweep.
-So is the declared minimum Kubernetes version — see below; it is a support promise, not a dependency.
+Out of scope: `DefaultSolrVersion`, chart `appVersion`, the operator's image tag — all release
+process (`hack/release/version/propagate_version.sh`). Also the declared minimum Kubernetes
+version, below.
 
-## Step 0: branch off the latest upstream main
+## Step 0: branch from upstream main
 
-Do this before the environment checks below, and before editing anything. A sweep touches generated
-files across the whole tree, so rebasing one afterwards is far more painful than starting from the
-right base.
+```bash
+git remote -v | awk '/apache\/solr-operator(\.git)? \(fetch\)/ {print $1}'
+git status --short
+git fetch <remote> main
+git switch -c dependency-upgrade-<yyyy-mm> <remote>/main
+```
 
-1. **Find the upstream remote by URL, not by name.** It is `upstream` in some clones, `apache` or
-   `origin` in others:
+The remote is `upstream` in some clones, `apache` or `origin` in others; if the first command prints
+nothing, ask rather than guess. Stop and ask if tracked files are modified (untracked scratch files
+are fine). Branch from `<remote>/main`, never local `main`. Do not `git pull`. Do not commit to
+`main`.
 
-   ```bash
-   git remote -v | awk '/apache\/solr-operator(\.git)? \(fetch\)/ {print $1}'
-   ```
+## Preflight
 
-   If that prints nothing, ask which remote tracks `apache/solr-operator` rather than guessing.
+All five. Each one silently ruins the run.
 
-2. **Confirm the working tree is clean.** `git status --short`. The sweep's own diff is large
-   enough that unrelated edits become unreviewable. Untracked scratch files are usually fine;
-   uncommitted changes to tracked files are not, so stop and ask.
-
-3. **Fetch, and branch from the fetched ref — never from local `main`:**
-
-   ```bash
-   git fetch <remote> main
-   git switch -c dependency-upgrade-<yyyy-mm> <remote>/main
-   ```
-
-   Branching from `<remote>/main` means a stale or diverged local `main` cannot leak in. Do not
-   `git pull`, and do not commit to `main`.
-
-## Before you touch anything
-
-Work through all five. Each one silently ruins the run if skipped.
-
-1. **Delete `vendor/` if it exists.** The project is not vendored and `vendor/` is not in
-   `.gitignore`, so a stale copy lingers in many working trees. It breaks three things at once: Go
-   silently switches to `-mod=vendor` and fails with `inconsistent vendoring`; `hack/check_license.sh`
-   has no `vendor/` exclusion so `make lint` reports thousands of third-party files as missing the
-   ASF header and exits 255; and `make check-git` only inspects tracked files, so CI stays green and
-   gives you no warning. Confirm with `git status --short` that `vendor/` is gone, and check
-   `go env GOFLAGS` for a stray `-mod=vendor`.
-
-2. **Match the Go toolchain to `go.mod`.** `Makefile` fails at parse time, blocking *every* target
-   including `make help`, unless the `major.minor` from the `go` directive in `go.mod` is a substring
-   of `go version`. The gate is two-sided: a *newer* toolchain fails exactly as hard as an older one.
-   Either install the matching toolchain, or set `GOTOOLCHAIN=go1.<minor>.0` for the session.
-
-3. **Run `make clean`.** Tool installation uses a bare file-existence check, so anything already in
-   `bin/` is kept no matter which version the Makefile now pins. Without a clean you will regenerate
-   CRDs with the *old* `controller-gen` and produce a diff that CI cannot reproduce.
-
-4. **Confirm Docker is running and you have network.** `make lint` needs Docker for `check-helm` and
-   `check-docs`; `make test` downloads envtest assets on first run; `mod-tidy` and
-   `fetch-licenses-list` both reach the network.
-
-5. **Check `helm` and `yq` are on `PATH`.** `make install-dependencies` does *not* install either,
-   but `check-helm`, `check-zk-op-version` and the version scripts need them.
+1. **Delete `vendor/`.** Not vendored, not gitignored, so stale copies linger. Breaks three things:
+   Go switches to `-mod=vendor` (`inconsistent vendoring`); `hack/check_license.sh` has no `vendor/`
+   exclusion so `make lint` exits 255 on thousands of third-party files; `make check-git` sees only
+   tracked files, so CI stays green and warns you of nothing. Also check `go env GOFLAGS`.
+2. **Match the Go toolchain to `go.mod`.** The Makefile fails at parse time, blocking *every*
+   target including `make help`, unless `major.minor` from the `go` directive is a substring of
+   `go version`. Newer fails as hard as older. Install it, or set `GOTOOLCHAIN=go1.<minor>.0`.
+3. **`make clean`.** Tool installation is a bare file-existence check, so stale binaries in `bin/`
+   survive a version bump and regenerate CRDs with the old `controller-gen`.
+4. **Docker running, network available.** `make lint` needs Docker (`check-helm`, `check-docs`),
+   `make test` downloads envtest assets, `mod-tidy` and `fetch-licenses-list` reach the network.
+5. **`helm` and `yq` on `PATH`.** `make install-dependencies` installs neither.
 
 ## Decide the scope
 
-Run `make list-upgrades` first. It reports, from the Go module proxy, the direct dependencies with a
-newer version in the same major, the ones with a whole new major available, the Makefile's pinned
-tool versions, and the envtest assets — then prints the Tier C pins it cannot see.
+Run `make list-upgrades`, or `./hack/list-upgrades.sh` when the Go-version gate blocks make. It
+writes nothing, exits 0, and prints every section even when one of them fails.
 
-Run it as `./hack/list-upgrades.sh` when the Makefile's Go-version gate is in your way, which it will
-be whenever your toolchain does not already match `go.mod`. The script sets `-mod=readonly` itself,
-so it works before you have dealt with a stale `vendor/` and cannot rewrite `go.mod` or `go.sum` as
-a side effect. It writes nothing, always exits 0, and prints every section even when one of them
-fails — so a half-edited `go.mod` gets you a real error message for that section and the hand-check
-list for the rest, rather than silence.
+**Take every patch and minor bump without asking.** No interview, no per-module approval, and never
+hold one back because its release notes are long.
 
-It is worth knowing why the detector needs its own major-version probe: `go list -u`, which is the
-obvious thing to reach for, only reports updates *within* each module's current major. Under semantic
-import versioning a new major is a different module path (`/v2` → `/v3`), so it is not an update to
-the current one and can never appear there. Nothing about a stale major shows up until you go looking
-for the successor path.
+These move as linked sets — bumping one alone produces a tidy that resolves and a build that fails:
 
-**Take every patch and minor bump without asking.** Wanting them is what asking for the sweep meant.
-Do not interview the user about them, do not present them for approval one by one, and do not hold
-one back because its release notes are long.
+- **The Kubernetes set:** `k8s.io/api`, `apimachinery`, `client-go`, plus the indirect `k8s.io/*`
+  entries (`apiextensions-apiserver`, `apiserver`, `cli-runtime`, `component-base`, `kubectl`) — all
+  on one version. `helm.sh/helm/v3` pulls several, so Helm moves in lockstep.
+- **`sigs.k8s.io/controller-runtime`** — also decides the `setup-envtest` release branch.
+- **`github.com/onsi/ginkgo/v2`** — the Makefile derives the installed ginkgo version from it.
+- **`github.com/pravega/zookeeper-operator`** — see below.
 
-Separate direct dependencies from indirect ones, and treat these as linked sets that must move
-together, because bumping one alone produces a tidy that resolves but a build that fails:
+Read each candidate's release notes for the span crossed.
 
-- **The Kubernetes set.** `k8s.io/api`, `k8s.io/apimachinery`, `k8s.io/client-go`, and the
-  `k8s.io/*` indirect entries (`apiextensions-apiserver`, `apiserver`, `cli-runtime`,
-  `component-base`, `kubectl`) all sit on one version. `helm.sh/helm/v3` pulls several of them, so
-  Helm and the `k8s.io/*` set must be bumped in lockstep.
-- **`sigs.k8s.io/controller-runtime`**, which also decides which `setup-envtest` release branch the
-  Makefile derives.
-- **`github.com/onsi/ginkgo/v2`**, which the Makefile derives the installed ginkgo version from.
-- **`github.com/pravega/zookeeper-operator`**, which is special — see the next section.
+### A new major is the user's call
 
-For each candidate, read its release notes for the span you are crossing.
+Never fold one in unilaterally, and never take the minor without saying the major exists. Cost it
+out in minutes:
 
-### A new major version is the user's call
+1. Migration notes for the major boundary only, not every release in the span.
+2. Blast radius: `grep -rln '<module path>' --include='*.go' .`
+3. What it drags along: a `controller-runtime` major usually forces the Kubernetes set, and
+   `helm.sh/helm` pulls `k8s.io/*`, so one major becomes four.
+4. User-visible effects: CRD schema, generated RBAC, minimum Kubernetes version.
+5. Whether the old major is still maintained. EOL means staying put is the risk.
 
-Never fold a major-version bump into the sweep on your own, and never take the minor silently
-either — an available major that nobody mentions is how a project drifts years behind. Instead cost
-it out quickly, then put the choice to the user.
+Present per module: current → available major, which breaking changes touch this codebase, file
+count, knock-on bumps, recommendation. Offer three options — take it now, take the minor and leave
+the major to a dedicated PR, or hold the module.
 
-Spend a few minutes per module, not an hour:
-
-1. Read the migration or breaking-changes notes **for the major boundary only**, not every release
-   in the span.
-2. Count the blast radius: `grep -rln '<module path>' --include='*.go' .` — a module used behind one
-   adapter is a different proposition from one threaded through the controllers.
-3. Check what it drags with it. A `controller-runtime` major usually forces the Kubernetes set, and
-   `helm.sh/helm` pulls `k8s.io/*`, so one major can turn into four.
-4. Check whether it is user-visible — CRD schema, generated RBAC, minimum Kubernetes version — which
-   means upgrade notes and a changelog entry beyond the routine one.
-5. Check whether the old major is still maintained. If it is EOL, staying put is itself the risk.
-
-Then present, in a few lines per module: current version → available major, which breaking changes
-actually touch this codebase, roughly how many files, what else the bump forces, and a
-recommendation. Ask whether to take the major now, take the minor and leave the major for a
-dedicated PR, or hold the module where it is.
-
-When it is a genuine toss-up, recommend the minor now and a separate PR for the major: a module-path
-change is hard to review and harder to revert when it is buried in thousands of lines of regenerated
-CRDs. Recommend doing it now when the migration is small and mechanical, when the old major is
-unmaintained, or when a bump the user already wants requires it anyway. Say which of those applies.
-
-If a major is taken, give it its own commit within the branch and its own paragraph in the PR
-description.
+On a toss-up recommend the minor plus a separate PR — a module-path change is unreviewable buried
+in regenerated CRDs. Recommend taking it now when the migration is mechanical, the old major is
+unmaintained, or a wanted bump requires it; say which. A major taken gets its own commit and its own
+PR paragraph.
 
 ## The Zookeeper Operator is pinned in a dozen places
 
-`versions.props` is the single source of truth, and `make check-zk-op-version` enforces consistency
-across most, but not all, of the copies. If you move it, update every one of these and then run that
-target:
+`versions.props` is the source of truth and `make check-zk-op-version` enforces most, not all, of
+the copies. If it moves, update every one of `versions.props`, `go.mod`,
+`config/dependencies/zookeeper_cluster_crd.yaml` (both the `tree/` comment and the
+`operator.zookeeper.pravega.io/version` annotation), `helm/solr-operator/Chart.yaml` (the
+`dependencies:` entry), `helm/solr-operator/README.md`, `NOTICE` and
+`docs/modules/development/pages/development.adoc`, then run that target.
 
-`versions.props`, `go.mod`, `config/dependencies/zookeeper_cluster_crd.yaml` (both the `tree/`
-comment and the `operator.zookeeper.pravega.io/version` annotation), `helm/solr-operator/Chart.yaml`
-(the `dependencies:` entry), `helm/solr-operator/README.md`, `NOTICE`, and
-`docs/modules/development/pages/development.adoc`.
-
-Two traps. First, the **`v` prefix is inconsistent on purpose**: `versions.props`, `go.mod`, the CRD
-file, `NOTICE` and the chart README use `v0.0.0`, while `Chart.yaml` and `development.adoc` use bare
-`0.0.0`. The check script enforces both forms and prints a hint when you get it wrong. Second, the
-ZookeeperCluster CRD is **not** regenerated by any make target — run `hack/zk-operator/update-crd.sh`
-by hand, which needs network.
-
-Also update `tests/scripts/manage_e2e_tests.sh`, which pins the Zookeeper *server* image
-independently and is not covered by the check script.
+- The **`v` prefix is inconsistent on purpose**: `v0.0.0` in `versions.props`, `go.mod`, the CRD
+  file, `NOTICE` and the chart README; bare `0.0.0` in `Chart.yaml` and `development.adoc`. The
+  check enforces both forms and hints when you get it wrong.
+- The ZookeeperCluster CRD is regenerated by **no** make target. Run `hack/zk-operator/update-crd.sh`
+  by hand; it needs network.
+- `tests/scripts/manage_e2e_tests.sh` pins the Zookeeper *server* image separately, unchecked.
 
 ## The minimum Kubernetes version is not a dependency
 
-The `k8s.io/*` libraries are an ordinary dependency, but the *declared minimum supported
-Kubernetes* is a support promise: it lives in `kubeVersion` in both charts and in the compatibility
-matrix in `docs/modules/upgrade-notes/pages/upgrade-notes.adoc`, Helm enforces it at install time,
-and raising it stops existing users from upgrading. Nothing links the two — no make target, script
-or Go code reads `kubeVersion` — so a library bump cannot raise the floor by accident, but it does
-widen the gap between what the operator is built against and what it still claims to support.
-`make list-upgrades` prints declared, built and tested side by side; report that gap, never close
-it. **Never edit `kubeVersion` or the matrix during a sweep.** Raising the floor is its own PR,
-timed to a release, with an upgrade-notes entry and a `changed` entry in both charts. The one
-exception is a bump that *forces* the floor — new libraries dropping an API the operator uses, or
-CRD schema older API servers reject — in which case stop, because the supported range is now the
-decision to make first.
+The `k8s.io/*` libraries are an ordinary dependency, but the declared minimum supported Kubernetes
+is a support promise: `kubeVersion` in both charts plus the matrix in
+`docs/modules/upgrade-notes/pages/upgrade-notes.adoc`, enforced by Helm at install time, so raising
+it stops existing users from upgrading. Nothing links the two, so a library bump cannot raise the
+floor by accident — but it widens the gap between what the operator is built against and what it
+claims to support. `make list-upgrades` prints declared, built and tested side by side: report that
+gap, never close it. **Never edit `kubeVersion` or the matrix during a sweep.** Raising the floor is
+its own PR, timed to a release, with an upgrade-notes entry and a `changed` entry in both charts. The
+exception is a bump that *forces* the floor — new libraries dropping an API the operator uses, or CRD
+schema older API servers reject — and then you stop, because the supported range is the first
+decision.
 
-## Tier C: the pins nothing watches
-
-`make list-upgrades` prints these at the end because it cannot check them against anything upstream.
-They are image tags and version strings scattered through the Makefile, the test scripts and the
-docs. It does locate them for you, by pattern rather than by line number, and prints each current
-value — so if it reports `PATTERN NOT FOUND` or `MISSING FILE`, a pin has moved or been renamed and
-the table in the script needs updating. Walk the list during a sweep and bump what is clearly stale;
-none of them has to move every time.
+## Tier C notes
 
 Two that need care rather than a bump:
 
-- The `golang` builder image in `build/Dockerfile` is not independent. It has to move together with
-  the `go` directive in `go.mod` and the `go-version` matrix in the CI workflows, because the
-  Makefile's version gate rejects a mismatch in either direction.
-- `artifacthub/ah` in the Makefile is **untagged**, so `make lint` pulls `:latest` and the check is
-  not reproducible between runs. Pinning it is a worthwhile change, but a deliberate one of its own.
+- The `golang` builder image in `build/Dockerfile` moves together with the `go` directive in
+  `go.mod` and the `go-version` matrix in CI, because the Makefile's gate rejects a mismatch either
+  way.
+- `artifacthub/ah` in the Makefile is **untagged**, so `make lint` pulls `:latest`. Pinning it is
+  worthwhile but a deliberate change of its own.
 
-Several of these pins have already drifted apart — kind and the Kubernetes version differ between
-the e2e script and the smoke-test script, and `hack/test-upgrade.sh` still names an old Zookeeper
-Operator. Do not fold a drift cleanup into a dependency sweep. File it separately, or the sweep's
-diff stops being reviewable.
+Some Tier C pins have already drifted (kind and Kubernetes differ between the e2e and smoke-test
+scripts; `hack/test-upgrade.sh` names an old Zookeeper Operator). Do not fold a drift cleanup into a
+sweep — file it separately, or the diff stops being reviewable.
 
 ## Do the upgrade
 
-1. Run `make list-upgrades` and decide the scope, including any major-version interview.
-2. Edit `go.mod` to the target versions, and `versions.props` if the Zookeeper Operator moves.
+1. `make list-upgrades`, and decide the scope including any major-version interview.
+2. Edit `go.mod`, and `versions.props` if the Zookeeper Operator moves.
 3. `make mod-tidy`.
-4. If the Zookeeper Operator moved: run `hack/zk-operator/update-crd.sh`, update the files listed
-   above, then `make check-zk-op-version` until it passes.
-5. `make install-dependencies`, which now installs the tools at the new pinned and derived versions.
-6. `make prepare`. This is the one command that makes a PR pass lint: it runs `fmt`, `generate`,
-   `manifests`, `fetch-licenses-list` and `mod-tidy` in the right order.
-7. `make test`, then repair fixtures as below.
-8. Add the changelog entries. See the dedicated section.
-9. `make lint`, then `make test` once more.
+4. If the Zookeeper Operator moved: `hack/zk-operator/update-crd.sh`, update the files listed above,
+   then `make check-zk-op-version` until it passes.
+5. `make install-dependencies` — installs the tools at the new pinned and derived versions.
+6. `make prepare` — the one command that makes a PR pass lint. Runs `fmt`, `generate`, `manifests`,
+   `fetch-licenses-list` and `mod-tidy` in the right order.
+7. `make test`, then repair fixtures.
+8. Add the changelog entries.
+9. `make lint`, then `make test` again.
 
 ### Regenerate, never hand-edit
 
-`make manifests` writes to `config/` **and** `helm/`, from one `controller-gen` run, transforming on
-the way. Never hand-edit `helm/solr-operator/crds/crds.yaml` (a concatenation of the three
-`config/crd/bases` files with a header prepended) or `helm/solr-operator/templates/role.yaml`
-(`config/rbac/role.yaml` wrapped in Helm conditionals with names templated). `make check-manifests`
-diffs both trees recursively, so a partial regeneration fails.
+`make manifests` writes `config/` **and** `helm/` from one `controller-gen` run, transforming on the
+way, and `make check-manifests` diffs both trees recursively — a partial regeneration fails. Never
+hand-edit `helm/solr-operator/crds/crds.yaml` (the three `config/crd/bases` files concatenated under
+a header) or `helm/solr-operator/templates/role.yaml` (`config/rbac/role.yaml` in Helm conditionals
+with templated names). A `controller-gen` bump alone rewrites every CRD, because the annotation
+script stamps a version line into each; several thousand changed lines is normal.
 
-Expect a **controller-gen bump alone to rewrite every CRD**, because the annotation script stamps a
-version line into each one. Diffs of several thousand lines across the CRD files are normal for a
-sweep and are not a reason to doubt the result.
+### Lint targets run serially
 
-### Run the lint targets serially
+`check-mod`, `check-manifests` and `check-generated` each delete a shared scratch directory, so
+`make -j` has them destroy each other's work. `check-mod` also moves `go.mod`/`go.sum` aside,
+re-tidies, then moves the originals back — interrupt it mid-way and the tree keeps the tidied files
+while the originals sit in a scratch directory `make clean` deletes. After interrupting, check
+`git diff go.mod` first.
 
-`check-mod`, `check-manifests` and `check-generated` each start by deleting a shared scratch
-directory, so `make -j` makes them destroy each other's work. `check-mod` is the fragile one: it
-moves `go.mod`/`go.sum` aside, re-tidies in place, then moves the originals back. Interrupt it
-between those steps and your working tree keeps the tidied files while the originals sit in the
-scratch directory that `make clean` then deletes. If you must interrupt, check `git diff go.mod`
-before doing anything else.
+### The license list is platform-sensitive
 
-### Regenerate the license list on the right platform
+`fetch-licenses-list` is prefixed `GOOS=linux GOARCH=amd64` deliberately: `go-licenses` walks only
+the current platform's build graph, so regenerating on macOS or ARM silently omits Linux-only
+dependencies and CI's byte-exact diff then fails. Always use the make target, never `go-licenses`
+directly. Do not re-sort the CSV; it is in the generator's native order.
 
-`fetch-licenses-list` is prefixed with `GOOS=linux GOARCH=amd64` deliberately: `go-licenses` only
-walks the current platform's build graph, so regenerating on macOS or ARM silently omits Linux-only
-dependencies and CI's byte-exact diff then fails even though you "just regenerated". Always go
-through the make target, never call `go-licenses` directly.
-
-Two distinct failures come out of `make check-licenses`. A `<`/`>` diff means the CSV is stale —
-regenerate it. A complaint about a disallowed license means a new transitive dependency arrived
-under a license outside the allow-list, and **there is no override**: either find a version that
-avoids that dependency, or stop and raise it with the PMC. Do not edit the allow-list to make a build
-pass. Do not re-sort the CSV; it is in the generator's native order.
+`make check-licenses` fails two ways. A `<`/`>` diff means the CSV is stale — regenerate it. A
+disallowed-license complaint means a new transitive dependency landed under a license outside the
+allow-list, and **there is no override**: find a version that avoids it, or stop and raise it with
+the PMC. Never edit the allow-list to make a build pass.
 
 ## Fixing what a Kubernetes bump breaks
 
 The controller tests boot a real API server through envtest and load the real CRDs, so an API bump
-changes behaviour rather than just signatures. Expect to repair test fixtures, not production code.
-Past sweeps needed a toleration operator changed from `Exists` to `Equal`, and mandatory storage
-resource requests added to PVC templates.
+changes behaviour, not just signatures. Expect to repair test fixtures, not production code — past
+sweeps needed a toleration operator changed from `Exists` to `Equal`, and storage resource requests
+added to PVC templates. One failure at a time, and for each ask whether it is a fixture encoding an
+old default or a real regression. A regression means fixing the controller and a changelog entry; so
+does any change to generated RBAC, which is user-visible.
 
-Work one failure at a time and ask, for each, whether it is a fixture that encoded an old default or
-a real behavioural regression. If it is the latter, fix the controller and note it in the changelog.
-
-Note that all controller and e2e specs use focused Ginkgo nodes (`FDescribe`, `FContext`, `FIt`), so
-`GINKGO_EDITOR_INTEGRATION=true` is load-bearing. `make test` sets it; running `go test ./controllers/...`
+All controller and e2e specs use focused Ginkgo nodes (`FDescribe`, `FContext`, `FIt`), so
+`GINKGO_EDITOR_INTEGRATION=true` is load-bearing. `make test` sets it; `go test ./controllers/...`
 by hand without it fails confusingly on programmatic focus.
 
-If a dependency changed generated RBAC, that is user-visible on upgrade and **must** get a changelog
-entry.
-
-## Record the change in both charts
+## Changelog: both charts
 
 Add entries to `artifacthub.io/changes` in **both** `helm/solr-operator/Chart.yaml` and
-`helm/solr/Chart.yaml`. The annotation is a YAML block scalar holding a list. `kind` accepts exactly
-`added`, `changed`, `deprecated`, `removed`, `fixed` and `security`. Follow the entries already in
-the file, including the `links:` convention of a `Github Issue` and/or `Github PR` pair.
+`helm/solr/Chart.yaml` — a YAML block scalar holding a list. `kind` accepts exactly `added`,
+`changed`, `deprecated`, `removed`, `fixed`, `security`. Follow the existing entries, including the
+`links:` convention of a `Github Issue` and/or `Github PR` pair. Malformed YAML fails
+`make check-helm`.
 
-Write for a user deciding whether to upgrade, not for a reviewer reading the diff:
+Write for a user deciding whether to upgrade, not a reviewer reading the diff:
 
-- Do not list library bumps individually. One `changed` entry summarising the sweep is enough.
-- Do write a separate entry for anything that changes behaviour or required action: new RBAC
-  permissions, a bundled Zookeeper Operator bump, a changed default. A new minimum Kubernetes
-  version belongs here too, but should never be reaching this point from a sweep — see above.
-- If a CVE is addressed, use `kind: security` **and** flip `artifacthub.io/containsSecurityUpdates`
-  to `"true"` in that chart.
-- A sweep with no user-visible effect still gets one `changed` entry. Silence is not an option.
+- Never list library bumps individually. One `changed` entry summarising the sweep.
+- A separate entry for anything changing behaviour or requiring action: new RBAC permissions, a
+  bundled Zookeeper Operator bump, a changed default.
+- A CVE fix uses `kind: security` **and** flips `artifacthub.io/containsSecurityUpdates` to `"true"`
+  in that chart.
+- A sweep with no user-visible effect still gets one `changed` entry.
 
-Malformed changelog YAML fails `make check-helm`, so `make lint` is the check.
+If the bundled Zookeeper Operator moved, also add an entry to
+`docs/modules/upgrade-notes/pages/upgrade-notes.adoc`; its matrices are hand-maintained.
 
-If the bundled Zookeeper Operator or the supported Kubernetes range moved, also add an entry to
-`docs/modules/upgrade-notes/pages/upgrade-notes.adoc`. Its compatibility matrices are hand-maintained
-and nothing regenerates them.
-
-Be aware of release-time interaction: the release process wipes `artifacthub.io/changes` back to a
-placeholder just after a release branch is cut. An entry added to `main` after that point lands in
-the *next* release's changelog. If the upgrade belongs to the release being cut, it must merge before
-that step.
+Release-time interaction: the release process wipes `artifacthub.io/changes` to a placeholder just
+after a release branch is cut, so an entry added to `main` after that lands in the *next* release.
+An upgrade belonging to the release being cut must merge before that step.
 
 ## Verify before you commit
 
-Run, in order, and treat any failure as unfinished work:
-
-1. `make lint` — serially. Covers zk version consistency, tidy, formatting, licenses, manifests,
-   generated code, charts and docs.
+1. `make lint`, serially. Covers zk version consistency, tidy, formatting, licenses, manifests,
+   generated code, charts, docs.
 2. `make test`.
-3. `git status --short`, and stage deliberately — name the paths, never `git add -A`. A sweep's tree
-   often still holds an untracked `vendor/` (6500+ files) or scratch notes, and `-A` sweeps those
-   straight into the commit. Then confirm **both** `git diff --exit-code` and `git status --short`
-   are clean. CI's `check-git` only checks the former, so an untracked generated file passes CI and
-   still breaks the next person.
+3. `git status --short`, then stage deliberately by naming paths. **Never `git add -A`** — the tree
+   often still holds an untracked `vendor/` (6500+ files) or scratch notes. Confirm **both**
+   `git diff --exit-code` and `git status --short` are clean; CI's `check-git` only checks the
+   former, so an untracked generated file passes CI and breaks the next person.
 
-Optionally `make smoke-test` if the change could affect packaging. It needs Docker, kind and network,
-and it unpacks the source release and runs `make check` again inside it.
+Treat any failure as unfinished work. Add `make smoke-test` if packaging could be affected; it needs
+Docker, kind and network, unpacks the source release and runs `make check` inside it.
 
-Know what CI will and will not tell you. The build-and-check workflow runs on every PR. The
-smoke-test workflow is skipped for doc-only paths but does run for `go.mod`, `go.sum`, `Makefile`,
-the license CSV and `helm/`. **The e2e workflow is permanently disabled** and reports as skipped, so
-it is not evidence of anything — if the change could plausibly affect runtime behaviour, run
-`make e2e-tests` locally and say in the PR that you did.
+CI coverage: build-and-check runs on every PR; smoke-test skips doc-only paths but runs for
+`go.mod`, `go.sum`, `Makefile`, the license CSV and `helm/`. **The e2e workflow is permanently
+disabled** and reports as skipped, so it is evidence of nothing — if runtime behaviour could be
+affected, run `make e2e-tests` locally and say so in the PR.
 
 ## Commit, then ask before pushing
 
-**Commit.** One commit, or a small number of logically separate ones, keeping generated output in
-the same commit as the change that generated it so a reviewer can regenerate and compare. Keep the
-message to a line or two: an imperative subject of about 70 characters or less, in the style of the
-existing log (`Upgrade almost all operator dependencies`), and at most a sentence of body if
-something genuinely needs explaining. The detail belongs in the PR description, not the commit.
+One commit, or a few logically separate ones, with generated output in the same commit as the change
+that generated it. Message is a line or two: imperative subject under ~70 characters matching the
+existing log (`Upgrade almost all operator dependencies`), at most a sentence of body. Detail belongs
+in the PR description.
 
-**Identify the user's fork, and ask before pushing.** The fork is the remote whose URL is
-`<user>/solr-operator` rather than `apache/solr-operator`:
+The fork is the remote whose URL is not `apache/solr-operator`:
 
 ```bash
 git remote -v | grep -v apache/solr-operator
 ```
 
-Several candidates, or none, means ask which to use. **Never push without the user agreeing in this
-conversation**, and never push to the apache remote at all. After pushing, propose the PR
-description below and let the user open the PR unless they ask you to.
+Several candidates or none means ask which. **Never push without the user agreeing in this
+conversation**, and never push to the apache remote. After pushing, propose the PR description and
+let the user open the PR unless they ask you to.
 
-### What the PR description should say
+### PR description
 
-Short and concise. A reviewer cannot meaningfully read thousands of lines of regenerated CRDs, so
-the description's job is to say what to check instead of the diff. Aim for well under a screenful:
+A reviewer cannot read thousands of lines of regenerated CRDs, so the description says what to check
+instead. Well under a screenful:
 
-- One sentence of summary: which dependency sets moved, and why now — routine sweep, pre-release, or
-  a CVE.
-- A short bullet list of the sets and the version spans crossed (the Kubernetes set,
-  controller-runtime, Helm, Zookeeper Operator), not one bullet per module.
-- Everything that is not mechanical: any major-version bump and what it required; each test fixture
-  that changed, and whether it was a stale fixture or a real behaviour change; any RBAC, minimum
-  Kubernetes version, or default that moved.
-- One line naming the changelog entries added, so they can be checked without hunting for them.
-- What you ran: `make lint`, `make test`, and `make e2e-tests` if you ran it — CI's e2e workflow is
-  disabled, so say so explicitly.
+- One sentence: which dependency sets moved, and why now — routine sweep, pre-release, CVE.
+- The sets and version spans crossed, not one bullet per module.
+- Everything not mechanical: each major bump and what it required; each changed fixture, and whether
+  it was stale or a real behaviour change; any RBAC or default that moved.
+- One line naming the changelog entries added.
+- What you ran: `make lint`, `make test`, and `make e2e-tests` if you did — CI's e2e is disabled.
 
-Leave out anything visible from the file list, and do not paste regenerated diffs. Write each
-paragraph and bullet as a single unwrapped line; GitHub reflows them to the reader's width.
+Leave out anything visible from the file list, and never paste regenerated diffs. Write each
+paragraph and bullet as one unwrapped line; GitHub reflows them.
