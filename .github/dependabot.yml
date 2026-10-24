@@ -23,8 +23,9 @@
 #     settle (and to be patched, if needed). Cooldown applies to version
 #     updates only; security updates are never delayed by it.
 #
-# The companion workflow .github/workflows/dependabot-licenses.yaml regenerates
-# dependency_licenses.csv on Dependabot PRs so that "make check-licenses" passes.
+# Note that a Go dependency bump sometimes moves a transitive dependency's license
+# URL, which makes "make check-licenses" fail until dependency_licenses.csv is
+# regenerated with "make fetch-licenses-list" and committed to the PR branch.
 #
 # Reference: https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
 # Cooldown:  https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
