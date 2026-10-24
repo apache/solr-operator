@@ -171,8 +171,29 @@ jobs:
           SOLR_CHART_FILE: ${{ steps.inputs.outputs.solr-chart-file }}
         run: |
           set -euo pipefail
-          OPERATOR_VERSION="$(tar -xzOf "${OPERATOR_CHART_FILE}" solr-operator/Chart.yaml | awk '$1 == "version:" {print $2; exit}')"
-          SOLR_VERSION="$(tar -xzOf "${SOLR_CHART_FILE}" solr/Chart.yaml | awk '$1 == "version:" {print $2; exit}')"
+
+          # The match must be anchored to column 0. awk strips leading whitespace when it
+          # splits fields, so '$1 == "version:"' also matches the indented version keys in
+          # the artifacthub.io/crds annotation and in dependencies - and the solr-operator
+          # chart has four of those before the real chart version.
+          chart_version() {
+            tar -xzOf "$1" "$2/Chart.yaml" | awk '/^version:/ {gsub(/"/, "", $2); print $2; exit}'
+          }
+
+          OPERATOR_VERSION="$(chart_version "${OPERATOR_CHART_FILE}" solr-operator)"
+          SOLR_VERSION="$(chart_version "${SOLR_CHART_FILE}" solr)"
+
+          # The byte-comparison further down assumes 'helm pull' writes <chart>-<version>.tgz,
+          # i.e. exactly the released filename. Assert it here so a bad extraction fails with
+          # a clear message instead of surfacing as a confusing error three steps later.
+          for pair in "solr-operator:${OPERATOR_VERSION}:${OPERATOR_CHART_FILE}" \
+                      "solr:${SOLR_VERSION}:${SOLR_CHART_FILE}"; do
+            IFS=: read -r name version file <<< "${pair}"
+            if [[ "${file}" != "${name}-${version}.tgz" ]]; then
+              echo "Error: ${name} chart version '${version}' does not match filename '${file}'" >&2
+              exit 1
+            fi
+          done
 
           echo "operator-version=${OPERATOR_VERSION}" >> "$GITHUB_OUTPUT"
           echo "solr-version=${SOLR_VERSION}" >> "$GITHUB_OUTPUT"
