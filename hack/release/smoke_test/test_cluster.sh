@@ -23,7 +23,7 @@ set -u
 
 show_help() {
 cat << EOF
-Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] [-t SOLR_IMAGE] [-g GPG_KEY] -v VERSION -l LOCATION
+Usage: ./hack/release/smoke_test/test_cluster.sh [-h] [-i IMAGE] [-k KUBERNETES_VERSION] [-t SOLR_IMAGE] [-g GPG_KEY] [-o OCI_REGISTRY] -v VERSION -l LOCATION
 
 Test the release candidate in a Kind cluster
 
@@ -34,11 +34,14 @@ Test the release candidate in a Kind cluster
     -g  GPG Key (fingerprint) used to sign the artifacts (Optional, if not provided then the helm chart will not be verified)
     -k  Kubernetes Version to test with (full tag, e.g. v1.26.6) (Optional, defaults to a compatible version)
     -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 9.10.0). (Optional, defaults to a compatible version)
+    -o  OCI registry to install the Helm charts from, e.g. oci://ghcr.io/apache/solr-operator/helm (Optional)
+        Use this after a release has been published, to smoke test the published OCI artifacts.
+        The CRDs are still taken from LOCATION, since they are not part of the OCI artifacts.
 EOF
 }
 
 OPTIND=1
-while getopts hv:i:l:g:k:t: opt; do
+while getopts hv:i:l:g:k:t:o: opt; do
     case $opt in
         h)
             show_help
@@ -55,6 +58,8 @@ while getopts hv:i:l:g:k:t: opt; do
         k)  KUBERNETES_VERSION=$OPTARG
             ;;
         t)  SOLR_IMAGE=$OPTARG
+            ;;
+        o)  OCI_REGISTRY=$OPTARG
             ;;
         *)
             show_help >&2
@@ -86,14 +91,15 @@ fi
 export LOCATION="$LOCATION"
 export VERSION="$VERSION"
 
+# An OCI registry is never a helm repo, so there is nothing to add or remove for it.
 function add_solr_helm_repo() {
-  if (echo "${LOCATION}" | grep "http"); then
+  if [[ -z "${OCI_REGISTRY:-}" ]] && (echo "${LOCATION}" | grep "http"); then
     helm repo add --force-update "apache-solr-test-${VERSION}" "${LOCATION}/helm-charts"
   fi
 }
 
 function remove_solr_helm_repo() {
-  if (echo "${LOCATION}" | grep "http"); then
+  if [[ -z "${OCI_REGISTRY:-}" ]] && (echo "${LOCATION}" | grep "http"); then
     helm repo remove "apache-solr-test-${VERSION}"
   fi
 }
@@ -111,6 +117,16 @@ else
 
   OP_HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
   SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
+fi
+
+# The charts published to an OCI registry are the same artifacts that were staged at
+# LOCATION, so only where the charts are pulled from changes. CRDs still come from LOCATION.
+# Unlike a helm repo, an OCI reference has no index, so the version must be given explicitly.
+CHART_VERSION_ARG=()
+if [[ -n "${OCI_REGISTRY:-}" ]]; then
+  OP_HELM_CHART="${OCI_REGISTRY}/solr-operator"
+  SOLR_HELM_CHART="${OCI_REGISTRY}/solr"
+  CHART_VERSION_ARG=(--version "${VERSION#v}")
 fi
 
 if ! (which kind); then
@@ -163,13 +179,13 @@ add_solr_helm_repo
 
 # Install the Solr Operator
 kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl replace -f "${LOCATION}/crds/all-with-dependencies.yaml"
-helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" \
+helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
     --set-string image.tag="${IMAGE##*:}" \
     --set image.repository="${IMAGE%%:*}" \
     --set image.pullPolicy="Never"
 
 printf "\nInstall a test Solr Cluster\n"
-helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" \
+helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
     --set replicas=2 \
     --set image.repository="${SOLR_IMAGE%%:*}" \
     --set-string image.tag="${SOLR_IMAGE##*:}" \
@@ -291,7 +307,7 @@ fi
 
 printf "\nDo a rolling restart and make sure the cluster is healthy afterwards\n"
 add_solr_helm_repo
-helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" --reuse-values  \
+helm upgrade --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} --reuse-values  \
     --set-string podOptions.annotations.restart="true"
 printf '\nWait for the rolling restart to begin.\n\n'
 grep -q "2              [[:digit:]]       [[:digit:]]            0" <(exec kubectl get solrcloud example -w); kill $!
