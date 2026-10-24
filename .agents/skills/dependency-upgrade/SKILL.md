@@ -17,6 +17,19 @@ must say so. This is the step most often forgotten, and the main reason this ski
 Read `AGENTS.md` at the repo root, and whatever it links, before you start. Where it and this skill
 disagree, the repository wins.
 
+## Who owns what
+
+Not every pinned version in this repo is yours to move. Three populations, three owners:
+
+| Tier | What | Owner |
+|---|---|---|
+| A | GitHub Actions | **Dependabot** (`.github/dependabot.yml`). Not yours. Leave its PRs alone and do not bump `uses:` SHAs during a sweep. |
+| B | Go modules, the Makefile's pinned tools, the envtest assets | **This skill.** `make list-upgrades` detects them. |
+| C | Base images, kind/Kubernetes versions in the test scripts, the Zookeeper server image, the docs matrices | **This skill**, but no tool sees them. Walk the checklist `make list-upgrades` prints at the end. |
+
+Out of scope entirely: `DefaultSolrVersion`, chart `appVersion`, and the operator's own image tag. Those
+belong to the release process (`hack/release/version/propagate_version.sh`), not to a dependency sweep.
+
 ## Step 0: branch off the latest upstream main
 
 Do this before the environment checks below, and before editing anything. A sweep touches generated
@@ -76,11 +89,19 @@ Work through all five. Each one silently ruins the run if skipped.
 
 ## Decide the scope
 
-Read `go.mod` first, then `go list -m -u all` to see what has moved. Be aware that `go list -u` only
-reports updates *within* each module's current major version: under semantic import versioning a new
-major lives at a different module path (`/v2` → `/v3`), so it can never appear there. Look for one
-explicitly on the direct dependencies, with `go list -m -versions <path>/v<next>` or from the
-project's releases page.
+Run `make list-upgrades` first. It reports, from the Go module proxy, the direct dependencies with a
+newer version in the same major, the ones with a whole new major available, the Makefile's pinned
+tool versions, and the envtest assets — then prints the Tier C pins it cannot see.
+
+Run it as `./hack/list-upgrades.sh` when the Makefile's Go-version gate is in your way, which it will
+be whenever your toolchain does not already match `go.mod`. The script sets `-mod=mod` itself, so it
+also works before you have dealt with a stale `vendor/`. It writes nothing and always exits 0.
+
+It is worth knowing why the detector needs its own major-version probe: `go list -u`, which is the
+obvious thing to reach for, only reports updates *within* each module's current major. Under semantic
+import versioning a new major is a different module path (`/v2` → `/v3`), so it is not an update to
+the current one and can never appear there. Nothing about a stale major shows up until you go looking
+for the successor path.
 
 **Take every patch and minor bump without asking.** Wanting them is what asking for the sweep meant.
 Do not interview the user about them, do not present them for approval one by one, and do not hold
@@ -151,18 +172,38 @@ by hand, which needs network.
 Also update `tests/scripts/manage_e2e_tests.sh`, which pins the Zookeeper *server* image
 independently and is not covered by the check script.
 
+## Tier C: the pins nothing watches
+
+`make list-upgrades` prints these at the end because it cannot check them for you. They are image
+tags and version strings scattered through the Makefile, the test scripts and the docs. Walk the
+list during a sweep and bump what is clearly stale; none of them is required to move every time.
+
+Two that need care rather than a bump:
+
+- The `golang` builder image in `build/Dockerfile` is not independent. It has to move together with
+  the `go` directive in `go.mod` and the `go-version` matrix in the CI workflows, because the
+  Makefile's version gate rejects a mismatch in either direction.
+- `artifacthub/ah` in the Makefile is **untagged**, so `make lint` pulls `:latest` and the check is
+  not reproducible between runs. Pinning it is a worthwhile change, but a deliberate one of its own.
+
+Several of these pins have already drifted apart — kind and the Kubernetes version differ between
+the e2e script and the smoke-test script, and `hack/test-upgrade.sh` still names an old Zookeeper
+Operator. Do not fold a drift cleanup into a dependency sweep. File it separately, or the sweep's
+diff stops being reviewable.
+
 ## Do the upgrade
 
-1. Edit `go.mod` to the target versions, and `versions.props` if the Zookeeper Operator moves.
-2. `make mod-tidy`.
-3. If the Zookeeper Operator moved: run `hack/zk-operator/update-crd.sh`, update the files listed
+1. Run `make list-upgrades` and decide the scope, including any major-version interview.
+2. Edit `go.mod` to the target versions, and `versions.props` if the Zookeeper Operator moves.
+3. `make mod-tidy`.
+4. If the Zookeeper Operator moved: run `hack/zk-operator/update-crd.sh`, update the files listed
    above, then `make check-zk-op-version` until it passes.
-4. `make install-dependencies`, which now installs the tools at the new pinned and derived versions.
-5. `make prepare`. This is the one command that makes a PR pass lint: it runs `fmt`, `generate`,
+5. `make install-dependencies`, which now installs the tools at the new pinned and derived versions.
+6. `make prepare`. This is the one command that makes a PR pass lint: it runs `fmt`, `generate`,
    `manifests`, `fetch-licenses-list` and `mod-tidy` in the right order.
-6. `make test`, then repair fixtures as below.
-7. Add the changelog entries. See the dedicated section.
-8. `make lint`, then `make test` once more.
+7. `make test`, then repair fixtures as below.
+8. Add the changelog entries. See the dedicated section.
+9. `make lint`, then `make test` once more.
 
 ### Regenerate, never hand-edit
 

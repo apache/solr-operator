@@ -389,6 +389,10 @@ $(LOCALBIN):
 
 install-dependencies: controller-gen kustomize go-licenses setup-envtest kind ginkgo ## Install necessary dependencies for building and testing the Solr Operator
 
+.PHONY: list-upgrades
+list-upgrades: ## List dependencies with newer versions available (requires network)
+	./hack/list-upgrades.sh
+
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
