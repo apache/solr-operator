@@ -72,8 +72,12 @@ jobs:
     steps:
       # Both the action and the Helm version it installs are pinned: this workflow publishes
       # release artifacts, so it must not change behaviour because an upstream tag moved.
+      #
+      # The action SHA must be one the ASF allowlist approves, or the run fails at startup
+      # before any step executes. The approved SHAs live in apache/infrastructure-actions,
+      # in actions.yml, so do not bump this to a newer release without checking there first.
       - name: Install Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: 'v4.3.1'
 
