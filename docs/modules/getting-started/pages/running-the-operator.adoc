@@ -47,7 +47,8 @@ $ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operat
 
 [NOTE]
 ====
-The chart is also still served from the HTTPS Helm repository at `https://solr.apache.org/charts`, which is deprecated:
+The chart is also still served from the deprecated HTTPS Helm repository
+(see xref:upgrade-notes:upgrade-notes.adoc#where-the-helm-charts-are-published[Where the Helm charts are published]):
 
 [source,bash,subs="verbatim,attributes"]
 ----
@@ -56,8 +57,6 @@ $ helm repo update
 $ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
 
-Charts are published to both locations for now, and the HTTPS repository will be retired in a
-future release.
 ====
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._

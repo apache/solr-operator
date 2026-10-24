@@ -58,8 +58,7 @@ Please visit the following pages for documentation on using and developing the S
   - The Helm charts are published as OCI artifacts (recommended):
     - **Solr Operator**: `helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version <VERSION>`
     - **Solr Cloud**: `helm install solr oci://ghcr.io/apache/solr-operator/helm/solr --version <VERSION>`
-  - Or via the deprecated HTTPS repository: [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
-    - Charts are published to both locations for now. The HTTPS repository will be retired in a future release, announced in advance.
+  - Or via the [deprecated HTTPS repository](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published)
   - The released helm charts and their instructions should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
 - [Running the Solr Operator](https://solr.apache.org/guide/operator/latest/getting-started/running-the-operator.html)
