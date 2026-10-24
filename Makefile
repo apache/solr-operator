@@ -40,7 +40,7 @@ ARCH = $(shell go env GOARCH)
 TEST_PARALLELISM ?= 3
 
 KUSTOMIZE_VERSION=v4.5.7
-CONTROLLER_GEN_VERSION=v0.21.0
+CONTROLLER_GEN_VERSION=v0.23.0
 GO_LICENSES_VERSION=v2.0.1
 # go-licenses only sees packages in the build graph for the current platform.
 # The operator only ever runs in Linux containers, and CI runs on linux/amd64,
@@ -49,11 +49,11 @@ GO_LICENSES_VERSION=v2.0.1
 # otherwise omit Linux-only deps such as github.com/prometheus/procfs).
 GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
-KIND_VERSION=v0.30.0
-YQ_VERSION=v4.53.3
+KIND_VERSION=v0.33.0
+YQ_VERSION=v4.54.1
 CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION ?= 1.36.0
+ENVTEST_K8S_VERSION ?= 1.37.0
 
 GO111MODULE ?= on
 
