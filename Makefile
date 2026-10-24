@@ -39,7 +39,7 @@ ARCH = $(shell go env GOARCH)
 # Default some of the testing options
 TEST_PARALLELISM ?= 3
 
-KUSTOMIZE_VERSION=v5.8.0
+KUSTOMIZE_VERSION=v5.8.3
 CONTROLLER_GEN_VERSION=v0.23.0
 GO_LICENSES_VERSION=v2.0.1
 # go-licenses only sees packages in the build graph for the current platform.
