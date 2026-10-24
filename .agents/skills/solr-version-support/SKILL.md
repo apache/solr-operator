@@ -1,7 +1,7 @@
 ---
 name: solr-version-support
-description: Adopt a new Apache Solr release in the Solr Operator - bump the default Solr version everywhere it is duplicated, decide whether the release needs operator work, extend the Solr compatibility matrix, and record the change in both Helm charts' artifacthub.io/changes changelog. Nothing in CI checks any of this.
-when_to_use: The user asks to support, adopt, test against or default to a new Solr version, or to bump DefaultSolrVersion or the solr chart's appVersion. Also when a new Solr release is out and the operator should follow it.
+description: Adopt a new Apache Solr release in the Solr Operator - bump the default Solr version everywhere it is duplicated, decide whether the release needs operator work, extend the Solr compatibility matrix, and record the change in both Helm charts' artifacthub.io/changes changelog. Covers a new Solr major version too, where support is gated on the major rather than carried by a version string. Nothing in CI checks any of this.
+when_to_use: The user asks to support, adopt, test against or default to a new Solr version or a new Solr major version, or to bump DefaultSolrVersion or the solr chart's appVersion. Also when a new Solr release is out and the operator should follow it.
 ---
 
 # Adopt a new Solr version
@@ -27,8 +27,8 @@ Validate before touching anything:
 - The tag must exist: `curl -fsS "https://hub.docker.com/v2/repositories/library/solr/tags/<version>/" >/dev/null`
 - A target older than the current default is a downgrade. Confirm it is deliberate; do not treat it
   as a typo and silently correct it.
-- A **major** Solr bump (9.x → 10.x) is not this skill. Expect removed APIs and config changes;
-  that is a deliberate project decision with its own issue and PR.
+- A **major** Solr release (9.x → 10.x) takes a different path through this skill — see "A new
+  Solr major version". Do not treat it as a bigger patch bump.
 
 ## Step 0: branch from upstream main
 
@@ -83,6 +83,9 @@ check whether anything the operator depends on moved:
 - New config knobs worth exposing as CRD fields. That is a separate change; see the
   `add-crd-field` skill rather than folding it in here.
 
+Within a major, differences are usually additive and need no gating. Across a major, they do — see
+below.
+
 Then run the e2e suite against the new image, because **the e2e workflow is permanently disabled in
 CI** and proves nothing:
 
@@ -92,6 +95,34 @@ tests/scripts/manage_e2e_tests.sh run-tests -s <version> -i <operator image>
 ```
 
 Say in the PR that you ran it, and on which Kubernetes version.
+
+## A new Solr major version
+
+Supporting a new major is **not** the same decision as making it the default, and the two should
+not land together. Support means the operator can run it; the default stays on the proven major
+until it is. Work out which you are being asked for, and say so.
+
+A major removes and renames things, so the operator needs version-conditional code rather than a
+new version string. The mechanism arrived in #827 (`solr-10-compat`): `SolrCloud.SolrMajorVersion()
+(int, error)` reads the major from the image tag, behaviour differences are gated on it, and a
+major the operator does not support is **not reconciled** — it gets an `UnsupportedSolrVersion`
+warning event. Re-read the current code before relying on these names; #827 was unmerged when this
+was written.
+
+Consequences worth knowing:
+
+- **The image tag must start with the Solr version.** `10.0.0`, `9.10.0-slim`, `10.0.0@sha256:…`
+  all work; `latest` or a date-based tag does not, and stops reconciliation.
+- Where differences land, from the Solr 10 work: `solr.xml` (`DefaultSolrXMLForSolr10`), env var
+  names (`SOLR_PORT_LISTEN`, `SOLR_HOST_ADVERTISE`), module paths under `sharedLib`, CLI commands
+  (`solr cluster --property` replacing the removed `zkcli.sh`), and probe invocation
+  (`solr api --solr-url`, `--credentials`).
+- A major can remove a feature outright — Solr 10 dropped `solr-exporter`, so the Prometheus
+  exporter has no Solr 10 support (#820). Say so rather than quietly leaving it broken.
+
+For each removal or rename in the Solr upgrade notes, find the operator touchpoint, gate it on the
+major, and unit-test **both** majors. Run e2e against both. Add a matrix column, write upgrade
+notes, and give the major its own PR.
 
 ## The compatibility matrix
 
@@ -138,7 +169,8 @@ work and what; what the matrix now says; the changelog entries; and what you ran
 
 - **Raising the *minimum* supported Solr version.** A support promise, not a version bump — its own
   PR, timed to a release, with upgrade notes.
-- **A major Solr release (10.x).** See Invocation.
+- **Making a new major the default** in the same change that adds support for it. Two decisions,
+  two PRs.
 - **New CRD fields** for new Solr config. Use the `add-crd-field` skill.
 - **`appVersion` in `helm/solr-operator/Chart.yaml`** and the operator image tag — release process,
   via `hack/release/version/propagate_version.sh`.
