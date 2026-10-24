@@ -94,8 +94,11 @@ newer version in the same major, the ones with a whole new major available, the 
 tool versions, and the envtest assets — then prints the Tier C pins it cannot see.
 
 Run it as `./hack/list-upgrades.sh` when the Makefile's Go-version gate is in your way, which it will
-be whenever your toolchain does not already match `go.mod`. The script sets `-mod=mod` itself, so it
-also works before you have dealt with a stale `vendor/`. It writes nothing and always exits 0.
+be whenever your toolchain does not already match `go.mod`. The script sets `-mod=readonly` itself,
+so it works before you have dealt with a stale `vendor/` and cannot rewrite `go.mod` or `go.sum` as
+a side effect. It writes nothing, always exits 0, and prints every section even when one of them
+fails — so a half-edited `go.mod` gets you a real error message for that section and the hand-check
+list for the rest, rather than silence.
 
 It is worth knowing why the detector needs its own major-version probe: `go list -u`, which is the
 obvious thing to reach for, only reports updates *within* each module's current major. Under semantic
@@ -287,16 +290,18 @@ placeholder just after a release branch is cut. An entry added to `main` after t
 the *next* release's changelog. If the upgrade belongs to the release being cut, it must merge before
 that step.
 
-## Verify before pushing
+## Verify before you commit
 
 Run, in order, and treat any failure as unfinished work:
 
 1. `make lint` — serially. Covers zk version consistency, tidy, formatting, licenses, manifests,
    generated code, charts and docs.
 2. `make test`.
-3. `git add -A`, then confirm **both** `git diff --exit-code` and `git status --short` are clean.
-   CI's `check-git` only checks the former, so an untracked generated file passes CI and still breaks
-   the next person.
+3. `git status --short`, and stage deliberately — name the paths, never `git add -A`. A sweep's tree
+   often still holds an untracked `vendor/` (6500+ files) or scratch notes, and `-A` sweeps those
+   straight into the commit. Then confirm **both** `git diff --exit-code` and `git status --short`
+   are clean. CI's `check-git` only checks the former, so an untracked generated file passes CI and
+   still breaks the next person.
 
 Optionally `make smoke-test` if the change could affect packaging. It needs Docker, kind and network,
 and it unpacks the source release and runs `make check` again inside it.

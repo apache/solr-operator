@@ -59,7 +59,7 @@ your own `.claude/settings.local.json` (or `~/.claude/settings.json` to get it i
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup",
+        "matcher": "startup|clear|resume|compact",
         "hooks": [
           { "type": "command", "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/sync-agent-skills.sh" }
         ]
@@ -77,9 +77,6 @@ the hook runs on every session start, including after `/clear` and compaction.
 **Copy by hand.** The same thing, without the hook: copy
 `.agents/skills/<name>/SKILL.md` to `.claude/skills/<name>/SKILL.md` and repeat whenever the skill
 changes. Fine if you rarely touch it, easy to forget if you do.
-
-**Point Claude at the directory for one session.** Recent versions accept `--add-dir`, which loads
-skills from an extra directory for that session only. Nothing to maintain, nothing persisted.
 
 **Do not use a symlink.** Claude Code's skill discovery and validation do not resolve symlinks even
 though execution does, so a symlinked skill can appear to be missing while still working when
