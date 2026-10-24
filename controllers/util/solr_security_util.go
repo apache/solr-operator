@@ -504,7 +504,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
 		if isSolr10 {
-			// On Solr 10, passing -Dbasicauth via JAVA_TOOL_OPTIONS no longer authenticates the CLI, so pass the credentials as an argument.
+			// Solr 10 removed the PreemptiveBasicAuthClientBuilderFactory used with JAVA_TOOL_OPTIONS below, so pass the credentials as an argument.
 			// This makes them visible in the process arguments inside the pod.
 			credentialsArg = fmt.Sprintf(` --credentials "$(cat %s):$(cat %s)"`, usernameFile, passwordFile)
 		} else {

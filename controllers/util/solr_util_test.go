@@ -464,7 +464,7 @@ func TestUseSecureProbeWithBasicAuth(t *testing.T) {
 	useSecureProbe(newCloud("10.0.0"), probe, "/etc/secrets/foo")
 	cmd = probe.Exec.Command[2]
 	assert.Equal(t, `solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system" --credentials `+creds, cmd, "Solr 10 should pass credentials via --credentials")
-	assert.NotContains(t, cmd, "JAVA_TOOL_OPTIONS", "Solr 10 no longer reads the basicauth sysprop")
+	assert.NotContains(t, cmd, "JAVA_TOOL_OPTIONS", "Solr 10 removed the client builder factory used with JAVA_TOOL_OPTIONS")
 }
 
 func TestSetUrlSchemeClusterPropCmd(t *testing.T) {
@@ -570,4 +570,9 @@ func TestImageVersion(t *testing.T) {
 	assert.Equal(t, "10.0.0", solr.ImageVersion("library/solr:10.0.0@sha256:0123456789abcdef"), "a digest should be ignored")
 	assert.Equal(t, "10.0.0", solr.ImageVersion("my-registry:5000/solr:10.0.0"))
 	assert.Equal(t, "", solr.ImageVersion("library/solr"))
+
+	// The version of the SolrCloud's image must match the version of its pods' images, also for pinned digests
+	image := &solr.ContainerImage{Repository: "library/solr", Tag: "10.0.0@sha256:0123456789abcdef"}
+	assert.Equal(t, "10.0.0", image.Version())
+	assert.Equal(t, solr.ImageVersion(image.ToImageName()), image.Version())
 }

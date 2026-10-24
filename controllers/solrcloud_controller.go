@@ -880,7 +880,7 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 		if len(p.Status.ContainerStatuses) > 0 {
 			// The first container should always be running solr
 			nodeStatus.Version = solrv1beta1.ImageVersion(p.Spec.Containers[0].Image)
-			if nodeStatus.Version != solrCloud.Spec.SolrImage.Tag {
+			if nodeStatus.Version != solrCloud.Spec.SolrImage.Version() {
 				otherVersions = append(otherVersions, nodeStatus.Version)
 			}
 		}
@@ -964,11 +964,11 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
 	if len(otherVersions) > 0 {
-		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Tag
+		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Version()
 		newStatus.Version = otherVersions[0]
 	} else {
 		newStatus.TargetVersion = ""
-		newStatus.Version = solrCloud.Spec.SolrImage.Tag
+		newStatus.Version = solrCloud.Spec.SolrImage.Version()
 	}
 
 	newStatus.InternalCommonAddress = solrCloud.UrlScheme(false) + "://" + solrCloud.InternalCommonUrl(true)

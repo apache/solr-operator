@@ -82,7 +82,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"solr"` | The repository of the Solr image |
-| image.tag | string | `"9.10.0"` | The tag/version of Solr to run |
+| image.tag | string | `"9.10.0"` | The tag/version of Solr to run. Must start with the Solr version, e.g. `9.10.0`, `10.0.0-slim` or `9.10`; tags like `latest` are not supported by the Solr Operator. |
 | image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string | | PullSecret for the Solr image |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
