@@ -168,7 +168,7 @@ kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_
 # The Solr image is never loaded: it always comes from a registry, and the Kind nodes pull it.
 if [[ "${LOAD_OPERATOR_IMAGE}" = true ]]; then
   if ! (docker image inspect "${IMAGE}" &>/dev/null); then
-    echo "Solr Operator image \"${IMAGE}\" was not found locally. Build it, or pass a registry image with -i." >&2
+    echo "Solr Operator image \"${IMAGE}\" was not found locally. Build it locally before running this smoke test with a local artifact location." >&2
     exit 1
   fi
   printf "\nLoading local Solr Operator image \"${IMAGE}\" into the Kind cluster.\n\n"
