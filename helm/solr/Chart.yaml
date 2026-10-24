@@ -62,6 +62,9 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/832
     - kind: changed
       description: The SolrCloud CRD now accepts the new optional pod fields that come with the Kubernetes 1.37 API types, which can be set through podOptions once the Solr Operator chart's CRDs are updated. No existing field or default changed
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
   artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

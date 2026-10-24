@@ -140,8 +140,14 @@ annotations:
           url: https://github.com/apache/solr-operator/pull/571
     - kind: security
       description: Upgraded golang.org/x/net and golang.org/x/text, fixing six vulnerabilities that were reachable from the operator - five HTTP/2 denial-of-service issues (memory exhaustion via Trailer headers, acceptance of malformed framing headers, excessive CPU use from repeated initial window changes, a double flow-control refund on server streams, and an HPACK encoder race) and an infinite loop on invalid input in golang.org/x/text
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
     - kind: changed
       description: Upgraded the operator's Go dependencies, notably the Kubernetes client libraries to 1.37 and controller-runtime to 0.25, together with the pinned build tools. The CRDs gained the new optional pod fields that come with the Kubernetes 1.37 API types; no existing field, default or RBAC permission changed
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
