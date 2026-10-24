@@ -62,7 +62,22 @@ writes nothing, exits 0, and prints every section even when one of them fails.
 **Take every patch and minor bump without asking.** No interview, no per-module approval, and never
 hold one back because its release notes are long.
 
-These move as linked sets — bumping one alone produces a tidy that resolves and a build that fails:
+### Resolve the Go toolchain first
+
+Decide the target Go version before judging any other candidate. A dependency's newest release may
+require a newer Go than `go.mod` pins; taking it anyway silently pulls a second toolchain, and the
+Makefile's gate then rejects the mismatch. `make list-upgrades` marks those candidates
+`[needs Go X.Y]` — compared against the *current* directive, so if you raise `go` in `go.mod`,
+re-run it and judge everything else against the new floor.
+
+Raising Go is its own decision: it moves `build/Dockerfile` and the `go-version` matrix in CI, and
+forces every contributor to update. If Go stays put, take the newest dependency version that still
+builds on it rather than skipping the module — e.g. kustomize v5.8.3 needs Go 1.27, while v5.8.0
+needs only 1.24.
+
+### Linked sets
+
+These move together — bumping one alone produces a tidy that resolves and a build that fails:
 
 - **The Kubernetes set:** `k8s.io/api`, `apimachinery`, `client-go`, plus the indirect `k8s.io/*`
   entries (`apiextensions-apiserver`, `apiserver`, `cli-runtime`, `component-base`, `kubectl`) — all
@@ -140,7 +155,8 @@ sweep — file it separately, or the diff stops being reviewable.
 
 ## Do the upgrade
 
-1. `make list-upgrades`, and decide the scope including any major-version interview.
+1. `make list-upgrades`. Settle the Go toolchain target first, then the rest of the scope,
+   including any major-version interview.
 2. Edit `go.mod`, and `versions.props` if the Zookeeper Operator moves.
 3. `make mod-tidy`.
 4. If the Zookeeper Operator moved: `hack/zk-operator/update-crd.sh`, update the files listed above,
@@ -204,6 +220,7 @@ Add entries to `artifacthub.io/changes` in **both** `helm/solr-operator/Chart.ya
 
 Write for a user deciding whether to upgrade, not a reviewer reading the diff:
 
+- Tight wording. One line per entry, no prose, no restating the diff.
 - Never list library bumps individually. One `changed` entry summarising the sweep.
 - A separate entry for anything changing behaviour or requiring action: new RBAC permissions, a
   bundled Zookeeper Operator bump, a changed default.

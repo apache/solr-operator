@@ -77,6 +77,25 @@ resolve_module_path() {
   return 1
 }
 
+# The Go version go.mod pins. Resolve the toolchain target BEFORE judging any
+# other candidate: a dependency's newest release may require a newer Go than
+# this, in which case taking it silently pulls a second toolchain.
+GO_DIRECTIVE="$(grep -E '^go [0-9]' go.mod 2>/dev/null | awk '{print $2}' | head -1)"
+
+# Go version a specific module version requires, or nothing. One proxy call.
+go_requirement() {
+  go list -m -f '{{.GoVersion}}' "$1@$2" 2>/dev/null
+}
+
+# " [needs Go X.Y]" when $1@$2 requires a newer Go than go.mod pins, else "".
+go_req_note() {
+  local req
+  req="$(go_requirement "$1" "$2")"
+  if [[ -n "${req}" && -n "${GO_DIRECTIVE}" ]] && version_gt "${req}" "${GO_DIRECTIVE}"; then
+    printf '  [needs Go %s]' "${req}"
+  fi
+}
+
 # True when $1 is a strictly newer version than $2. Version-aware, so a
 # transient resolution failure or a retracted version can never present a
 # downgrade as an upgrade.
@@ -133,7 +152,10 @@ if [[ "${1:-}" == "--probe-major" ]]; then
   # Resolve to the real module first. Without this, a tool pinned by package
   # path would be probed at .../cmd/controller-gen/v2, a path that can never
   # exist, and a genuine major move would be reported as "none".
-  probe_module="$(resolve_module_path "${probe_path}")" || exit 0
+  if ! probe_module="$(resolve_module_path "${probe_path}")"; then
+    printf '  %-50s %s\n' "${probe_path}" "LOOKUP FAILED - majors unchecked for this module"
+    exit 0
+  fi
 
   # Split the resolved module path into its base and its current major. Paths
   # without a /vN suffix are major 0 or 1, whose successor is /v2 either way.
@@ -151,7 +173,17 @@ if [[ "${1:-}" == "--probe-major" ]]; then
   # skipped a major number outright would be missed, which is rare enough to
   # live with and cheaper than probing a fixed range every time.
   for ((n = probe_major + 1; n <= probe_major + 5; n++)); do
-    versions="$(go list -m -versions "${probe_base}/v${n}" 2>/dev/null)" || break
+    if ! versions="$(go list -m -versions "${probe_base}/v${n}" 2>/dev/null)"; then
+      # Non-zero means either "no such module" or "the lookup failed", and the
+      # exit code is 1 for both. Re-probe a path known to exist: if that now
+      # fails too, the proxy is the problem and this is an unchecked module,
+      # not a module without a successor.
+      if go list -m -versions "${probe_module}" >/dev/null 2>&1; then
+        break
+      fi
+      printf '  %-50s %s\n' "${probe_base}" "LOOKUP FAILED - majors unchecked for this module"
+      exit 0
+    fi
     stable="$(newest_stable "${versions}")"
     [[ -z "${stable}" ]] && break
     found_path="${probe_base}/v${n}"
@@ -159,7 +191,8 @@ if [[ "${1:-}" == "--probe-major" ]]; then
   done
 
   if [[ -n "${found_path}" ]]; then
-    printf '  %-50s %-28s -> %s %s\n' "${probe_base}" "${probe_current}" "${found_version}" "(${found_path})"
+    printf '  %-50s %-28s -> %s %s%s\n' "${probe_base}" "${probe_current}" \
+      "${found_version}" "(${found_path})" "$(go_req_note "${found_path}" "${found_version}")"
   fi
   exit 0
 fi
@@ -176,7 +209,7 @@ printf '\n=== Go modules (direct, within the current major) ===\n\n'
 modules_ok=true
 module_err="$(mktemp)"
 trap 'rm -f "${module_err}"' EXIT
-module_updates="$(go list -m -u -f '{{if and (not .Indirect) .Update}}  {{printf "%-50s %-28s -> %s" .Path .Version .Update.Version}}{{end}}' all 2>"${module_err}")"
+module_updates="$(go list -m -u -f '{{if and (not .Indirect) .Update}}{{.Path}} {{.Version}} {{.Update.Version}}{{end}}' all 2>"${module_err}")"
 module_rc=$?
 if ((module_rc != 0)); then
   modules_ok=false
@@ -186,7 +219,11 @@ if ((module_rc != 0)); then
 else
   module_updates="$(grep . <<<"${module_updates}" || true)"
   if [[ -n "${module_updates}" ]]; then
-    printf '%s\n' "${module_updates}"
+    while read -r m_path m_cur m_new; do
+      [[ -z "${m_path}" ]] && continue
+      printf '  %-50s %-28s -> %s%s\n' \
+        "${m_path}" "${m_cur}" "${m_new}" "$(go_req_note "${m_path}" "${m_new}")"
+    done <<<"${module_updates}"
   elif [[ "${NETWORK_OK}" == true ]]; then
     printf '  Everything is current.\n'
   else
@@ -260,7 +297,8 @@ while IFS='|' read -r tool_var tool_path tool_version; do
   if [[ -z "${tool_latest}" ]]; then
     printf '  %-26s %-12s (could not resolve %s)\n' "${tool_var}" "${tool_version}" "${tool_path}"
   elif version_gt "${tool_latest}" "${tool_version}"; then
-    printf '  %-26s %-12s -> %s\n' "${tool_var}" "${tool_version}" "${tool_latest}"
+    printf '  %-26s %-12s -> %s%s\n' "${tool_var}" "${tool_version}" "${tool_latest}" \
+      "$(go_req_note "${tool_module}" "${tool_latest}")"
   else
     printf '  %-26s %-12s current\n' "${tool_var}" "${tool_version}"
   fi
@@ -277,9 +315,14 @@ elif [[ ! -x "${SETUP_ENVTEST}" ]]; then
     "ENVTEST_K8S_VERSION" "${ENVTEST_PINNED}"
 else
   # Asset versions are plain x.y.z, and the list is not ordered newest-first.
-  envtest_latest="$("${SETUP_ENVTEST}" list 2>/dev/null |
-    grep -o -E '[0-9]+\.[0-9]+\.[0-9]+' | sort -V -u | tail -1 || true)"
-  if [[ -n "${envtest_latest}" ]] && version_gt "${envtest_latest}" "${ENVTEST_PINNED}"; then
+  envtest_raw="$("${SETUP_ENVTEST}" list 2>/dev/null)"
+  envtest_rc=$?
+  envtest_latest="$(grep -o -E '[0-9]+\.[0-9]+\.[0-9]+' <<<"${envtest_raw}" | sort -V -u | tail -1)"
+  if ((envtest_rc != 0)) || [[ -z "${envtest_latest}" ]]; then
+    # An empty or failed listing is not evidence the pin is current.
+    printf '  %-26s %-12s UNCHECKED - "setup-envtest list" returned nothing\n' \
+      "ENVTEST_K8S_VERSION" "${ENVTEST_PINNED}"
+  elif version_gt "${envtest_latest}" "${ENVTEST_PINNED}"; then
     printf '  %-26s %-12s -> %s\n' "ENVTEST_K8S_VERSION" "${ENVTEST_PINNED}" "${envtest_latest}"
   else
     printf '  %-26s %-12s current\n' "ENVTEST_K8S_VERSION" "${ENVTEST_PINNED}"
