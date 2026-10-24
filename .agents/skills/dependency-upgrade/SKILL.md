@@ -178,40 +178,18 @@ independently and is not covered by the check script.
 
 ## The minimum Kubernetes version is not a dependency
 
-Two different things share the name "Kubernetes version", and conflating them is how a sweep does
-real damage:
-
-- **The `k8s.io/*` libraries** are an ordinary dependency. Bump them like anything else.
-- **The declared minimum supported Kubernetes** is a support promise. It lives in `kubeVersion` in
-  *both* `helm/solr-operator/Chart.yaml` and `helm/solr/Chart.yaml`, and in the compatibility matrix
-  in `docs/modules/upgrade-notes/pages/upgrade-notes.adoc`. Helm enforces it at install time, so
-  raising it stops existing users from upgrading. That is a breaking change.
-
-Nothing links the two. No make target, no script, no Go code reads `kubeVersion`, so bumping the
-libraries cannot raise the floor by accident. **Never edit `kubeVersion` or the matrix during a
-sweep** — not even to close the gap below. Raising the floor is its own PR, timed to a minor or
-major operator release, carrying an upgrade-notes entry and a `changed` changelog entry in both
-charts.
-
-The real effect a sweep has here is quieter: it widens the distance between what the operator is
-built against and what it still claims to support. `make list-upgrades` prints the four numbers side
-by side so the gap stays visible:
-
-```
-=== Kubernetes support contract ===
-
-  declared minimum (both charts)     >= 1.22.0-0
-  k8s.io/* libraries built against   v0.36.2 (Kubernetes 1.36)
-  envtest API server                 1.36.0
-  oldest Kubernetes actually tested  1.26.6
-```
-
-Report that gap; do not act on it. If it looks indefensible, say so and let the PMC decide.
-
-One exception. A library bump can *force* the floor up — if the new libraries drop an API version
-the operator uses, or `controller-gen` starts emitting CRD schema that older API servers reject.
-This is rare, and the tests surface it. If it happens, stop: the sweep no longer stands on its own,
-and the supported range becomes the decision to make first.
+The `k8s.io/*` libraries are an ordinary dependency, but the *declared minimum supported
+Kubernetes* is a support promise: it lives in `kubeVersion` in both charts and in the compatibility
+matrix in `docs/modules/upgrade-notes/pages/upgrade-notes.adoc`, Helm enforces it at install time,
+and raising it stops existing users from upgrading. Nothing links the two — no make target, script
+or Go code reads `kubeVersion` — so a library bump cannot raise the floor by accident, but it does
+widen the gap between what the operator is built against and what it still claims to support.
+`make list-upgrades` prints declared, built and tested side by side; report that gap, never close
+it. **Never edit `kubeVersion` or the matrix during a sweep.** Raising the floor is its own PR,
+timed to a release, with an upgrade-notes entry and a `changed` entry in both charts. The one
+exception is a bump that *forces* the floor — new libraries dropping an API the operator uses, or
+CRD schema older API servers reject — in which case stop, because the supported range is now the
+decision to make first.
 
 ## Tier C: the pins nothing watches
 
