@@ -104,6 +104,26 @@ function remove_solr_helm_repo() {
   fi
 }
 
+# Wait until a backgrounded 'kubectl port-forward' is accepting connections.
+#
+# A fixed sleep races with the port-forward: on a loaded machine the forward can print
+# "Forwarding from ..." only after the first request has already been refused, and with
+# 'set -e' that aborts the whole smoke test. Any HTTP response means the forward is up,
+# so a non-zero curl exit (7 for a refused connection) is what we retry on.
+function wait_for_port_forward() {
+  local port="$1"
+  local waited=0
+  while [[ "${waited}" -lt 60 ]]; do
+    if curl --silent --max-time 2 --output /dev/null "http://127.0.0.1:${port}/"; then
+      return 0
+    fi
+    waited=$((waited + 1))
+    sleep 1
+  done
+  echo "Timed out waiting for the port-forward on localhost:${port} to accept connections" >&2
+  return 1
+}
+
 # If LOCATION is not a URL, then get the absolute path
 if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
@@ -208,7 +228,7 @@ grep -q "2              2       2            2" <(exec kubectl get solrcloud exa
 
 # Expose the common Solr service to localhost
 kubectl port-forward service/example-solrcloud-common 18983:80 || true &
-sleep 2
+wait_for_port_forward 18983
 
 printf "\nCheck the admin URL to make sure it works\n"
 curl --silent "http://localhost:18983/solr/admin/info/health" | grep '"status":0' > /dev/null
@@ -318,7 +338,7 @@ grep -q "2              2       2            2" <(exec kubectl get solrcloud exa
 
 # Need a new port-forward, since the last one will have broken due to all pods restarting
 kubectl port-forward service/example-solrcloud-common 28983:80 || true &
-sleep 2
+wait_for_port_forward 28983
 
 printf "\nQuery the test collection, test for 0 docs\n\n"
 curl --silent "http://localhost:28983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null
