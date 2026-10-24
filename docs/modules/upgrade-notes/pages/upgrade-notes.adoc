@@ -114,12 +114,12 @@ Installing from an OCI registry requires no `helm repo add`, and no credentials.
 ====
 The HTTPS Helm repository at `https://solr.apache.org/charts` is *deprecated*.
 
-Charts are published to both the OCI registry and the HTTPS repository throughout the 0.x releases,
-so there is no rush to migrate. Starting with `v1.0.0`, charts will be published to the OCI registry
-only, and the HTTPS repository will receive no further releases.
+Charts are published to both the OCI registry and the HTTPS repository for now, so there is no rush
+to migrate. The HTTPS repository will be retired in a future release, and that will be announced in
+advance in these upgrade notes.
 
-If you install or upgrade the charts through automation, update it to use the `oci://` URLs above
-before upgrading to `v1.0.0`.
+If you install or upgrade the charts through automation, moving it to the `oci://` URLs above is
+recommended.
 ====
 
 == Installing the Solr Operator vs Solr CRDs
@@ -165,7 +165,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 +
 The charts are published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`, alongside the
 existing HTTPS Helm repository. The HTTPS repository at `https://solr.apache.org/charts` is deprecated
-and will receive no further releases starting with `v1.0.0`.
+and will be retired in a future release.
 See <<where-the-helm-charts-are-published>>.
 
 * *Logging now defaults to JSON format*

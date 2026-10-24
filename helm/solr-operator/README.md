@@ -36,8 +36,8 @@ If you do not wish to use the Zookeeper Operator, set:
 The Solr Operator Helm chart can be installed either from the OCI registry (recommended) or from the deprecated HTTPS repository.
 
 > **Note:** The HTTPS Helm repository at `https://solr.apache.org/charts` is deprecated.
-> Charts are published to both locations throughout the 0.x releases.
-> Starting with `v1.0.0`, charts will be published to the OCI registry only.
+> Charts are published to both locations for now, and the HTTPS repository will be retired in a
+> future release.
 
 #### Installation via OCI Registry (Recommended)
 

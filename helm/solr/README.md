@@ -36,8 +36,8 @@ There may be breaking changes between the version you are using and the version 
 The Solr Helm chart can be installed either from the OCI registry (recommended) or from the deprecated HTTPS helm repository.
 
 > **Note:** The HTTPS Helm repository at `https://solr.apache.org/charts` is deprecated.
-> Charts are published to both locations throughout the 0.x releases.
-> Starting with `v1.0.0`, charts will be published to the OCI registry only.
+> Charts are published to both locations for now, and the HTTPS repository will be retired in a
+> future release.
 
 To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version:
 

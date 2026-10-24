@@ -56,8 +56,8 @@ $ helm repo update
 $ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
 
-Charts are published to both locations throughout the 0.x releases.
-Starting with `v1.0.0`, charts will be published to the OCI registry only.
+Charts are published to both locations for now, and the HTTPS repository will be retired in a
+future release.
 ====
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
