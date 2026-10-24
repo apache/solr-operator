@@ -71,6 +71,7 @@ const (
 
 	DistLibs              = "/opt/solr/dist"
 	ContribLibs           = "/opt/solr/contrib/%s/lib"
+	ModuleLibs            = "/opt/solr/modules/%s/lib"
 	SysPropLibPlaceholder = "${solr.sharedLib:}"
 )
 
@@ -80,6 +81,13 @@ var (
 	DefaultSolrZKPrepInitContainerMemory     = resource.NewScaledQuantity(200, 6)
 	DefaultSolrZKPrepInitContainerCPU        = resource.NewMilliQuantity(400, resource.DecimalExponent)
 )
+
+// SolrCloudSelectorLabels returns the labels that the SolrCloud's StatefulSet selects its pods (and PVCs) by.
+func SolrCloudSelectorLabels(solrCloud *solr.SolrCloud) map[string]string {
+	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels["technology"] = solr.SolrTechnologyLabel
+	return selectorLabels
+}
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
 // object: SolrCloud instance
@@ -104,10 +112,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	defaultReadinessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultReadinessProbePath)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels := SolrCloudSelectorLabels(solrCloud)
 
 	labels["technology"] = solr.SolrTechnologyLabel
-	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
 	annotations := map[string]string{
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
@@ -155,11 +162,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{}
-	if !isSolr10 {
-		// The hostPort sysprop is only needed for Solr 9 and earlier
-		allSolrOpts = append(allSolrOpts, "-DhostPort=$(SOLR_NODE_PORT)")
-	}
+	// The hostPort sysprop is deprecated in favor of SOLR_PORT_ADVERTISE, but custom solr.xml files may still use it
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -407,19 +411,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	// Solr 10+ uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop,
-	// and loads modules via SOLR_MODULES instead of sharedLib contrib paths.
+	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
+	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
+	// These are only set for Solr 10+, so that pods of older Solr versions are not restarted by an operator upgrade.
 	if isSolr10 {
 		envVars = append(envVars, corev1.EnvVar{
+			Name:  "SOLR_PORT_LISTEN",
+			Value: strconv.Itoa(solrPodPort),
+		}, corev1.EnvVar{
 			Name:  "SOLR_HOST_ADVERTISE",
 			Value: solrHostName,
 		})
-		if modules := cloudSolrModules(solrCloud); len(modules) > 0 {
-			envVars = append(envVars, corev1.EnvVar{
-				Name:  "SOLR_MODULES",
-				Value: strings.Join(modules, ","),
-			})
-		}
 	}
 
 	// Add all necessary information for connection to Zookeeper
@@ -887,18 +889,23 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 `
 
 // DefaultSolrXMLForSolr10 is the solr.xml template for Solr 10+.
-// Settings dropped relative to Solr 9 are no longer supported by Solr 10:
-//   - hostContext (always "solr")
-//   - genericCoreNodeNames (always true)
-//   - allowPaths (moved out of <solrcloud>; we omit it and rely on the empty default)
-//   - metrics enabled (metrics are always on)
+// It mirrors Solr 10's stock server/solr/solr.xml, so the two can be diffed directly. The operator only changes:
+//   - sharedLib, which is generated (first placeholder) to add custom library paths
+//   - backup repositories, which are generated (second placeholder)
 //
-// The "host" element is still required, but its system property was renamed
-// from "host" to "solr.host.advertise". The remaining elements mirror Solr 10's
-// stock server/solr/solr.xml so reviewers can diff against upstream.
+// Compared to DefaultSolrXML (Solr 9 and earlier), it drops settings that Solr 10 rejects (hostContext,
+// genericCoreNodeNames) and the metrics element, which Solr 10's stock solr.xml doesn't contain either.
+// It reads the advertised host from "solr.host.advertise" instead of the deprecated "host" sysprop,
+// and allowPaths from its Solr 10 sysprop "solr.security.allow.paths".
 const DefaultSolrXMLForSolr10 = `<?xml version="1.0" encoding="UTF-8" ?>
 <solr>
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
   %s
+  <str name="modules">${solr.modules:}</str>
+  <str name="allowPaths">${solr.security.allow.paths:}</str>
+  <str name="allowUrls">${solr.security.allow.urls:}</str>
+  <str name="hideStackTrace">${solr.hideStackTrace:false}</str>
+  <int name="indexSearcherExecutorThreads">${solr.searchThreads:0}</int>
   <solrcloud>
     <str name="host">${solr.host.advertise:}</str>
     <int name="hostPort">${solr.port.advertise:0}</int>
@@ -911,12 +918,10 @@ const DefaultSolrXMLForSolr10 = `<?xml version="1.0" encoding="UTF-8" ?>
     <int name="minStateByteLenForCompression">${minStateByteLenForCompression:-1}</int>
     <str name="stateCompressor">${stateCompressor:org.apache.solr.common.util.ZLibCompressor}</str>
   </solrcloud>
-  <shardHandlerFactory name="shardHandlerFactory"
-    class="HttpShardHandlerFactory">
+  <shardHandlerFactory name="shardHandlerFactory" class="${defaultShardHandlerFactory:HttpShardHandlerFactory}">
     <int name="socketTimeout">${socketTimeout:600000}</int>
     <int name="connTimeout">${connTimeout:60000}</int>
   </shardHandlerFactory>
-  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
   %s
 </solr>
 `
@@ -948,13 +953,6 @@ func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
 	return configMap
 }
 
-// cloudSolrModules returns the union of modules implied by configured backup repositories
-// and explicit Spec.SolrModules entries.
-func cloudSolrModules(solrCloud *solr.SolrCloud) []string {
-	_, modules, _ := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
-	return append(modules, solrCloud.Spec.SolrModules...)
-}
-
 func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
 	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
@@ -976,8 +974,13 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string,
 	// Placeholder for users to specify libs via sysprop
 	libs[SysPropLibPlaceholder] = true
 
-	if !isSolr10 {
-		// Solr 9 and earlier: modules are loaded via sharedLib paths to contrib directories
+	// Add all module library locations
+	if isSolr10 {
+		// The contrib and dist directories were removed in Solr 10, modules only live in the modules directory
+		for _, module := range solrModules {
+			libs[fmt.Sprintf(ModuleLibs, module)] = true
+		}
+	} else {
 		if len(solrModules) > 0 {
 			libs[DistLibs] = true
 		}
@@ -985,10 +988,8 @@ func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string,
 			libs[fmt.Sprintf(ContribLibs, module)] = true
 		}
 	}
-	// Solr 10+: modules are loaded via SOLR_MODULES env var, not sharedLib contrib paths.
-	// The contrib directory no longer exists in the Solr 10 Docker image.
 
-	// Add all custom library locations (these still work in Solr 10)
+	// Add all custom library locations
 	for _, libPath := range additionalLibs {
 		libs[libPath] = true
 	}

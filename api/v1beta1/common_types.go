@@ -278,6 +278,8 @@ func (c *ContainerImage) ToImageName() (name string) {
 }
 
 func ImageVersion(image string) (version string) {
+	// Ignore a digest, e.g. "solr:10.0.0@sha256:..."
+	image, _, _ = strings.Cut(image, "@")
 	split := strings.Split(image, ":")
 	if len(split) < 2 {
 		return ""

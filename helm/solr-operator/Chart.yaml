@@ -139,10 +139,15 @@ annotations:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/571
     - kind: added
-      description: Support for Solr 10. A new required SolrCloud field `spec.solrMajorVersion` (8-10) selects version-specific operator behavior; see upgrade notes before bumping a SolrCloud to Solr 10.x.
+      description: Support for Solr 10. See the upgrade notes before upgrading a SolrCloud to Solr 10.
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/821
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The SolrCloud image tag must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). SolrClouds with other tags, such as `latest`, are no longer reconciled; see the upgrade notes before upgrading the operator.
+      links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/images: |

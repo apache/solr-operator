@@ -514,7 +514,8 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 	if isSolr10 {
 		command = []string{"solr", "api", "--solr-url", solrUrl, "-v"}
 		if credentials != "" {
-			command = append(command, "--credentials", credentials)
+			// The command is run via 'sh -c', and generated passwords can contain shell characters such as '('
+			command = append(command, "--credentials", "'"+strings.ReplaceAll(credentials, "'", `'\''`)+"'")
 		}
 	} else {
 		command = []string{"solr", "api", "-verbose", "-" + strings.ToLower(httpMethod), solrUrl}
@@ -587,8 +588,7 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 			Namespace: testNamespace(),
 		},
 		Spec: solrv1beta1.SolrCloudSpec{
-			Replicas:         pointer.Int32(int32(replicas)),
-			SolrMajorVersion: parseMajorVersion(strings.Split(solrImage+":", ":")[1]),
+			Replicas: pointer.Int32(int32(replicas)),
 			// Set the image to reflect the inputs given via EnvVars.
 			SolrImage: &solrv1beta1.ContainerImage{
 				Repository: strings.Split(solrImage, ":")[0],
@@ -618,18 +618,12 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 	}
 }
 
-// parseMajorVersion extracts the major version from a tag like "10.0.0" or "9.10.0".
-// E2E test images always use well-formed semver tags.
-func parseMajorVersion(tag string) int {
-	parts := strings.SplitN(tag, ".", 2)
-	if len(parts) == 0 {
-		return 9
+// skipIfPrometheusExporterUnavailable skips the current tests if the Solr image under test is Solr 10 or later,
+// which no longer ships the Prometheus exporter.
+func skipIfPrometheusExporterUnavailable() {
+	if generateBaseSolrCloud(1).IsSolr10OrLater() {
+		Skip("The Prometheus exporter was removed in Solr 10")
 	}
-	v, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 9
-	}
-	return v
 }
 
 // Uses default password from docs : SolrRocks

@@ -117,6 +117,19 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// Version-specific resources cannot be generated without a supported Solr major version.
+	// Wait for the user to fix the image tag, which triggers a new reconcile.
+	if _, versionErr := instance.SolrMajorVersion(); versionErr != nil {
+		if !instance.DeletionTimestamp.IsZero() {
+			// Don't block the deletion of the SolrCloud on its storage finalizer
+			return r.reconcileStorageFinalizerForDeletion(ctx, instance, logger)
+		}
+		logger.Error(versionErr, "Not reconciling SolrCloud, its Solr version is not supported")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "UnsupportedSolrVersion",
+			"Not reconciling SolrCloud: %s", versionErr.Error())
+		return reconcile.Result{}, nil
+	}
+
 	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
 	requeueOrNot := reconcile.Result{}
 
@@ -1237,6 +1250,29 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 		}
 	}
 	return nil
+}
+
+// reconcileStorageFinalizerForDeletion handles the storage finalizer of a SolrCloud that is being deleted,
+// without reconciling anything else. It is used when the rest of the SolrCloud cannot be reconciled.
+func (r *SolrCloudReconciler) reconcileStorageFinalizerForDeletion(ctx context.Context, cloud *solrv1beta1.SolrCloud, logger logr.Logger) (reconcile.Result, error) {
+	statefulSet := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cloud.Namespace, Name: cloud.StatefulSetName()}, statefulSet); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, err
+		}
+		// The StatefulSet can already be gone, e.g. with foreground cascading deletion.
+		// Its PVCs still carry the StatefulSet's selector labels, so use those.
+		statefulSet.Spec.Selector = &metav1.LabelSelector{MatchLabels: util.SolrCloudSelectorLabels(cloud)}
+	}
+	// Same as in the main reconcile: without the PVC labels, all PVCs could be deleted
+	if len(statefulSet.Spec.Selector.MatchLabels) == 0 {
+		return reconcile.Result{}, nil
+	}
+	if err := r.reconcileStorageFinalizer(ctx, cloud, statefulSet, logger); err != nil {
+		logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
+		return reconcile.Result{RequeueAfter: time.Second * 15}, nil
+	}
+	return reconcile.Result{}, nil
 }
 
 func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (int, error) {

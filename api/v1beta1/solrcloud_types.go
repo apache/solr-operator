@@ -22,6 +22,7 @@ import (
 	"github.com/go-logr/logr"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"math/rand"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -73,15 +74,6 @@ type SolrCloudSpec struct {
 
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
-
-	// Solr major version (8, 9, or 10). Determines version-specific operator
-	// behavior such as solr.xml format, CLI flags, and env vars.
-	// Required — image tags alone are not reliably parseable.
-	//
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=8
-	// +kubebuilder:validation:Maximum=10
-	SolrMajorVersion int `json:"solrMajorVersion"`
 
 	// Customize how the cloud data is stored.
 	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
@@ -1336,9 +1328,47 @@ func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
 	return zkInfo.InternalConnectionString + zkInfo.ChRoot
 }
 
-// IsSolr10OrLater returns true if this SolrCloud targets Solr 10+.
+// solrImageTagVersionRegex matches Solr image tags, which must start with the Solr version, "<major>[.<minor>[.<patch>...]]".
+// Anything after the version must start with neither a digit nor a dot,
+// e.g. "10.0.0", "10.1.0-SNAPSHOT", "10.0.0.1", "10.0.0@sha256:...", "9.10-slim" or "8.11".
+// Short versions are accepted because released Solr Operator versions defaulted to tags such as "8.11",
+// and they cannot change their major version.
+var solrImageTagVersionRegex = regexp.MustCompile(`^(?P<major>\d+)(?:\.\d+)*(?:[^\d.].*)?$`)
+
+const (
+	// The range of Solr major versions that the Solr Operator supports.
+	MinSupportedSolrMajorVersion = 8
+	MaxSupportedSolrMajorVersion = 10
+)
+
+// SolrMajorVersion returns the major version of Solr that this SolrCloud runs, parsed from spec.solrImage.tag.
+// An error is returned if the tag does not start with the Solr version,
+// or if the major version is not supported by the Solr Operator.
+func (sc *SolrCloud) SolrMajorVersion() (int, error) {
+	tag := ""
+	if sc.Spec.SolrImage != nil {
+		tag = sc.Spec.SolrImage.Tag
+	}
+	match := solrImageTagVersionRegex.FindStringSubmatch(tag)
+	if match == nil {
+		return 0, fmt.Errorf("cannot determine the Solr version from image tag %q: "+
+			"the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"", tag)
+	}
+	major, err := strconv.Atoi(match[solrImageTagVersionRegex.SubexpIndex("major")])
+	if err != nil || major < MinSupportedSolrMajorVersion || major > MaxSupportedSolrMajorVersion {
+		return 0, fmt.Errorf("image tag %q is not a supported Solr version: the Solr Operator supports Solr %d to %d, "+
+			"and the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"",
+			tag, MinSupportedSolrMajorVersion, MaxSupportedSolrMajorVersion)
+	}
+	return major, nil
+}
+
+// IsSolr10OrLater returns true if this SolrCloud runs Solr 10 or later.
+// The SolrCloud controller does not reconcile a cloud whose version cannot be determined,
+// so an undeterminable version is treated as pre-10 here.
 func (sc *SolrCloud) IsSolr10OrLater() bool {
-	return sc.Spec.SolrMajorVersion >= 10
+	major, err := sc.SolrMajorVersion()
+	return err == nil && major >= 10
 }
 
 // UsesHeadlessService returns whether the given solrCloud requires a headless service to be created for it.

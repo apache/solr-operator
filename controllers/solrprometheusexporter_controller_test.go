@@ -341,9 +341,8 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
-					SolrMajorVersion: 9,
 					SolrImage: &solrv1beta1.ContainerImage{
-						Tag:             "should-be-the-same",
+						Tag:             "9.10.0-should-be-the-same",
 						PullPolicy:      corev1.PullAlways,
 						ImagePullSecret: testImagePullSecretName2,
 					},
@@ -372,7 +371,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			expectDeploymentWithChecks(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName(), func(g Gomega, found *appsv1.Deployment) {
 
 				g.Expect(found.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
-				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(Equal(solrv1beta1.DefaultSolrRepo+":should-be-the-same"), "Incorrect image, should be pulled from the SolrCloud")
+				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(Equal(solrv1beta1.DefaultSolrRepo+":9.10.0-should-be-the-same"), "Incorrect image, should be pulled from the SolrCloud")
 				g.Expect(found.Spec.Template.Spec.Containers[0].ImagePullPolicy).To(Equal(corev1.PullAlways), "Incorrect imagePullPolicy, should be pulled from the SolrCloud")
 				g.Expect(found.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(corev1.LocalObjectReference{Name: testImagePullSecretName2}), "Incorrect imagePullSecrets, should be pulled from the SolrCloud")
 
@@ -511,9 +510,8 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 					Namespace: "default",
 				},
 				Spec: solrv1beta1.SolrCloudSpec{
-					SolrMajorVersion: 9,
 					SolrImage: &solrv1beta1.ContainerImage{
-						Tag:             "should-be-the-same",
+						Tag:             "9.10.0-should-be-the-same",
 						PullPolicy:      corev1.PullAlways,
 						ImagePullSecret: testImagePullSecretName2,
 					},
