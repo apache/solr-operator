@@ -29,6 +29,7 @@ Not every pinned version in this repo is yours to move. Three populations, three
 
 Out of scope entirely: `DefaultSolrVersion`, chart `appVersion`, and the operator's own image tag. Those
 belong to the release process (`hack/release/version/propagate_version.sh`), not to a dependency sweep.
+So is the declared minimum Kubernetes version — see below; it is a support promise, not a dependency.
 
 ## Step 0: branch off the latest upstream main
 
@@ -175,6 +176,43 @@ by hand, which needs network.
 Also update `tests/scripts/manage_e2e_tests.sh`, which pins the Zookeeper *server* image
 independently and is not covered by the check script.
 
+## The minimum Kubernetes version is not a dependency
+
+Two different things share the name "Kubernetes version", and conflating them is how a sweep does
+real damage:
+
+- **The `k8s.io/*` libraries** are an ordinary dependency. Bump them like anything else.
+- **The declared minimum supported Kubernetes** is a support promise. It lives in `kubeVersion` in
+  *both* `helm/solr-operator/Chart.yaml` and `helm/solr/Chart.yaml`, and in the compatibility matrix
+  in `docs/modules/upgrade-notes/pages/upgrade-notes.adoc`. Helm enforces it at install time, so
+  raising it stops existing users from upgrading. That is a breaking change.
+
+Nothing links the two. No make target, no script, no Go code reads `kubeVersion`, so bumping the
+libraries cannot raise the floor by accident. **Never edit `kubeVersion` or the matrix during a
+sweep** — not even to close the gap below. Raising the floor is its own PR, timed to a minor or
+major operator release, carrying an upgrade-notes entry and a `changed` changelog entry in both
+charts.
+
+The real effect a sweep has here is quieter: it widens the distance between what the operator is
+built against and what it still claims to support. `make list-upgrades` prints the four numbers side
+by side so the gap stays visible:
+
+```
+=== Kubernetes support contract ===
+
+  declared minimum (both charts)     >= 1.22.0-0
+  k8s.io/* libraries built against   v0.36.2 (Kubernetes 1.36)
+  envtest API server                 1.36.0
+  oldest Kubernetes actually tested  1.26.6
+```
+
+Report that gap; do not act on it. If it looks indefensible, say so and let the PMC decide.
+
+One exception. A library bump can *force* the floor up — if the new libraries drop an API version
+the operator uses, or `controller-gen` starts emitting CRD schema that older API servers reject.
+This is rare, and the tests surface it. If it happens, stop: the sweep no longer stands on its own,
+and the supported range becomes the decision to make first.
+
 ## Tier C: the pins nothing watches
 
 `make list-upgrades` prints these at the end because it cannot check them against anything upstream.
@@ -273,8 +311,8 @@ Write for a user deciding whether to upgrade, not for a reviewer reading the dif
 
 - Do not list library bumps individually. One `changed` entry summarising the sweep is enough.
 - Do write a separate entry for anything that changes behaviour or required action: new RBAC
-  permissions, a new minimum Kubernetes version, a bundled Zookeeper Operator bump, a changed
-  default.
+  permissions, a bundled Zookeeper Operator bump, a changed default. A new minimum Kubernetes
+  version belongs here too, but should never be reaching this point from a sweep — see above.
 - If a CVE is addressed, use `kind: security` **and** flip `artifacthub.io/containsSecurityUpdates`
   to `"true"` in that chart.
 - A sweep with no user-visible effect still gets one `changed` entry. Silence is not an option.

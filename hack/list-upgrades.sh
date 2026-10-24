@@ -286,6 +286,33 @@ else
   fi
 fi
 
+# --- Kubernetes support contract ----------------------------------------------
+printf '\n=== Kubernetes support contract ===\n\n'
+# The declared minimum is NOT a dependency: it is a support promise that Helm
+# enforces at install time, and nothing links it to the libraries. A sweep can
+# therefore never raise it by accident - but it can quietly leave it behind,
+# which is why all four numbers are printed side by side rather than checked.
+k8s_lib="$(grep -E '^[[:space:]]+k8s\.io/api ' go.mod | awk '{print $2}' | head -1)"
+k8s_lib_release=""
+[[ "${k8s_lib}" =~ ^v0\.([0-9]+)\. ]] && k8s_lib_release="1.${BASH_REMATCH[1]}"
+declared_operator="$(grep -E '^kubeVersion' helm/solr-operator/Chart.yaml 2>/dev/null | sed -E 's/.*"(.*)".*/\1/' || true)"
+declared_solr="$(grep -E '^kubeVersion' helm/solr/Chart.yaml 2>/dev/null | sed -E 's/.*"(.*)".*/\1/' || true)"
+oldest_tested="$(grep -hoE 'KUBERNETES_VERSION="v[0-9]+\.[0-9]+\.[0-9]+"' \
+  tests/scripts/manage_e2e_tests.sh hack/release/smoke_test/test_cluster.sh 2>/dev/null |
+  grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -V | head -1 || true)"
+
+printf '  %-34s %s\n' "declared minimum (both charts)" "${declared_operator:-not found}"
+if [[ "${declared_operator}" != "${declared_solr}" ]]; then
+  printf '  %-34s %s\n' "  MISMATCH, helm/solr says" "${declared_solr:-not found}"
+fi
+printf '  %-34s %s\n' "k8s.io/* libraries built against" "${k8s_lib:-not found}${k8s_lib_release:+ (Kubernetes ${k8s_lib_release})}"
+printf '  %-34s %s\n' "envtest API server" "${ENVTEST_PINNED:-not found}"
+printf '  %-34s %s\n' "oldest Kubernetes actually tested" "${oldest_tested:-not found}"
+printf '\n  Raising the declared minimum is a breaking change for users and is NOT\n'
+printf '  part of a sweep. Leave kubeVersion and the compatibility matrix alone;\n'
+printf '  if the gap above has grown too wide, that is its own PR against a\n'
+printf '  release. See the skill.\n'
+
 # --- pins nothing watches -----------------------------------------------------
 printf '\n=== Not detectable automatically - check these by hand ===\n\n'
 

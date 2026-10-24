@@ -37,6 +37,9 @@ updates:
     open-pull-requests-limit: 2
     # Keep brand-new releases out until they have had a week to settle. This
     # applies to version updates only; security updates are never delayed.
+    # The github-actions ecosystem supports default-days only - the
+    # semver-major-days / semver-minor-days / semver-patch-days variants are
+    # not honoured here, so do not add them.
     cooldown:
       default-days: 7
     # One PR for all actions rather than one per action.
