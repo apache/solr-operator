@@ -30,6 +30,31 @@ Validate before touching anything:
 - A **major** Solr release (9.x → 10.x) takes a different path through this skill — see "A new
   Solr major version". Do not treat it as a bigger patch bump.
 
+## Which ask is it: support, or default?
+
+Two different outcomes hide behind "adopt Solr 9.11":
+
+- **Support** — the operator and its CRDs can run the version. Users who set `spec.solrImage.tag`
+  themselves get a version the operator understands, documents and tests. `DefaultSolrVersion` does
+  not move.
+- **Default too** — `DefaultSolrVersion` becomes the new version, so newly created SolrClouds come
+  up on it without anyone asking for it.
+
+The difference is blast radius, not difficulty, and the default half is what drags in the
+compatibility matrix, the changelog entries in both charts and the upgrade note.
+
+**Ask explicitly; do not assume.** Put the recommendation in the question — for a minor or patch
+inside an already-supported major, bump the default as well — and wait for an answer before editing.
+For a new **major** the answer is fixed and not a preference: support and default must not land
+together, see "A new Solr major version".
+
+If the ask is support only, leave the default sites alone — `DefaultSolrVersion`, plus `appVersion`
+and the `artifacthub.io/images` example in `helm/solr/Chart.yaml` and the values-table default in
+`helm/solr/README.md` — and say in the PR that the default deliberately stays put. The matrix and
+the changelog entries are still required: support is a claim about what the operator can run, and
+the matrix is where that claim lives. Decide deliberately which version the e2e and example sites
+should exercise, and say which one you ran.
+
 ## Step 0: branch from upstream main
 
 ```bash
@@ -44,7 +69,8 @@ prints nothing, ask. Branch from `<remote>/main`, never local `main`.
 
 ## Do the work
 
-1. Validate the target version. A major takes the other path — see "A new Solr major version".
+1. Validate the target version, and settle which ask it is: support only, or a default bump too.
+   A major takes the other path — see "A new Solr major version".
 2. Read what changed across the whole span crossed, then size every change it implies.
    **Stop at L**, and follow the halt rules below.
 3. Edit the 15 version sites.
@@ -208,9 +234,9 @@ The script's Kubernetes default has drifted from the smoke test's, so state whic
 
 ## A new Solr major version
 
-Supporting a new major is **not** the same decision as making it the default, and the two should
-not land together. Support means the operator can run it; the default stays on the proven major
-until it is. Work out which you are being asked for, and say so.
+The support-versus-default question above hardens into a rule here: supporting a new major and
+making it the default **must not land together**. Support means the operator can run it; the default
+stays on the proven major until the new one has earned it.
 
 A major removes and renames things, so the operator needs version-conditional code rather than a
 new version string. The mechanism arrived in #827 (`solr-10-compat`): `SolrCloud.SolrMajorVersion()
