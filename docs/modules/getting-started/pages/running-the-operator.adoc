@@ -29,12 +29,19 @@ The chart's values and changelog are listed on https://artifacthub.io/packages/h
 The chart is published to the GitHub Container Registry as an OCI artifact.
 Nothing needs to be added or configured first, and no credentials are required.
 
-Install the Solr Operator chart with the command below.
-This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
+First install the CRDs. This step is the same whichever chart source you use, and it is required:
+the chart installs the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default,
+but does not create its `ZookeeperCluster` CRD.
 
 [source,bash,subs="verbatim,attributes"]
 ----
 $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
+----
+
+Then install the Solr Operator chart:
+
+[source,bash,subs="verbatim,attributes"]
+----
 $ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
 ----
 
