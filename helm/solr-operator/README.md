@@ -74,11 +74,17 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ### Upgrading the Solr Operator
 
-If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
+If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS.
+
+Upgrade the CRDs first. Helm does not update CRDs that are already installed, so this step is required whichever chart source you use:
 
 ```bash
-# Upgrade the CRDs first, then the chart
 kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+```
+
+Then upgrade the chart:
+
+```bash
 helm upgrade solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease
 ```
 
