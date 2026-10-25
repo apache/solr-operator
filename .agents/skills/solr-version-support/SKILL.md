@@ -191,12 +191,20 @@ Then run the e2e suite against the new image, because **the e2e workflow is perm
 CI** and proves nothing:
 
 ```bash
-make e2e-tests                                             # after the bump: picks up the new default
-tests/scripts/manage_e2e_tests.sh run-tests -s <version>   # before it: pins the version explicitly
+make e2e-tests                              # after the bump: picks up the new default
+make e2e-tests SOLR_IMAGE=solr:<version>    # before it: pins the version explicitly
 ```
 
-The script's Kubernetes default has drifted from the smoke test's, so state which you used; `-k`
-overrides it. Say in the PR that you ran it, and on which Kubernetes version.
+Always go through the make target, never `manage_e2e_tests.sh` directly. Its usage string advertises
+`run-tests [-s SOLR_IMAGE]`, but the script runs `getopts` *before* it consumes the action
+(`shift "$((OPTIND-1))"`, then `ACTION="${1:-}"`), so `getopts` stops at `run-tests` and every flag
+after it is dropped — `ACTION_ARGS` is assigned and never read. Nothing errors: with
+`OPERATOR_IMAGE` already set you silently test the **old** default, and without it the script exits
+asking for an operator image. The make target also builds the operator image and the other
+prerequisites, and passes `SOLR_IMAGE` and `KUBERNETES_VERSION` through as environment.
+
+The script's Kubernetes default has drifted from the smoke test's, so state which you used;
+`KUBERNETES_VERSION=` overrides it. Say in the PR that you ran e2e, and on which Kubernetes version.
 
 ## A new Solr major version
 
