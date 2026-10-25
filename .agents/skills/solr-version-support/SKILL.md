@@ -114,10 +114,23 @@ site repeats it with nothing enforcing agreement. Eleven rows, fifteen files:
 is yours; in `helm/solr-operator` it is the **operator** version and belongs to the release process.
 Never touch the latter here.
 
-After editing, `git grep -n '<previous version>'` must return only deliberate historical references
-— upgrade notes, and older `artifacthub.io/changes` entries. Review every remaining hit; there is no
-check target to catch one you missed. The grep is not sufficient on its own: the e2e workflow pins
-the major alone, so check that file by hand every time.
+### The tutorial is not three copies of the default
+
+`local-tutorial.adoc` is the one file whose sites are not interchangeable. Its *Upgrade to newer
+version* section demonstrates a rolling upgrade, so the two `helm install` sites must stay on the
+**previous** default while the single `helm upgrade` site takes the new one (#869). Bump all three
+and they collapse onto one version, leaving a section that upgrades from X to X and shows no rolling
+update at all — which is exactly what a blanket sed did in #807.
+
+So read the surrounding prose before replacing a version here, and expect the install version to
+survive the final old-version grep.
+
+### The final grep
+
+After editing, `git grep -n '<previous version>'` must return only deliberate references — the
+tutorial's install sites above, upgrade notes, and older `artifacthub.io/changes` entries. Review
+every remaining hit; there is no check target to catch one you missed. The grep is not sufficient on
+its own either: the e2e workflow pins the major alone, so check that file by hand every time.
 
 ## Does the release need operator work?
 
