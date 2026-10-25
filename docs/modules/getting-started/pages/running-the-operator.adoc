@@ -18,30 +18,46 @@
 
 == Using the Solr Operator Helm Chart
 
-The easiest way to run the Solr Operator is via the https://artifacthub.io/packages/helm/apache-solr/solr-operator[provided Helm Chart].
+The easiest way to run the Solr Operator is via the provided Helm Chart.
 
 The helm chart provides abstractions over the Input Arguments described below, and should work with any official images in docker hub.
 
 === How to install via Helm
 
-The official documentation for installing the Solr Operator Helm chart can be found on https://artifacthub.io/packages/helm/apache-solr/solr-operator[Artifact Hub].
+The chart's values and changelog are listed on https://artifacthub.io/packages/helm/apache-solr/solr-operator[Artifact Hub].
 
-The first step is to add the Solr Operator helm repository.
+The chart is published to the GitHub Container Registry as an OCI artifact.
+Nothing needs to be added or configured first, and no credentials are required.
 
-[source,bash]
-----
-$ helm repo add apache-solr https://solr.apache.org/charts
-$ helm repo update
-----
-
-Next, install the Solr Operator chart. Note this is using Helm v3, use the official Helm chart documentation linked to above.
-This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
+First install the CRDs. This step is the same whichever chart source you use, and it is required:
+the chart installs the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default,
+but does not create its `ZookeeperCluster` CRD.
 
 [source,bash,subs="verbatim,attributes"]
 ----
 $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
+----
+
+Then install the Solr Operator chart:
+
+[source,bash,subs="verbatim,attributes"]
+----
+$ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
+----
+
+[NOTE]
+====
+The chart is also still served from the deprecated HTTPS Helm repository
+(see xref:upgrade-notes:upgrade-notes.adoc#where-the-helm-charts-are-published[Where the Helm charts are published]):
+
+[source,bash,subs="verbatim,attributes"]
+----
+$ helm repo add apache-solr https://solr.apache.org/charts
+$ helm repo update
 $ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
+
+====
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
@@ -73,9 +89,9 @@ Helm 3 automatically installs the Solr CRDs in the /crds directory, so no furthe
 If you have solr operator installations in multiple namespaces that are managed separately, you will likely want to skip installing CRDs when installing the chart.
 This can be done with the `--skip-crds` helm option.
 
-[source,bash]
+[source,bash,subs="verbatim,attributes"]
 ----
-helm install solr-operator apache-solr/solr-operator --skip-crds --namespace solr
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version} --skip-crds --namespace solr
 ----
 
 *Helm will not upgrade CRDs once they have been installed.
