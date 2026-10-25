@@ -250,9 +250,19 @@ worse than no matrix.
 Add an `artifacthub.io/changes` entry to **both** `helm/solr-operator/Chart.yaml` and
 `helm/solr/Chart.yaml`. Tight wording, one line per entry, no prose.
 
-This is user-visible and not optional: `helm/solr/values.yaml` ships `tag: ""`, so any SolrCloud
-that did not pin its own image follows `DefaultSolrVersion`. **Bumping the default changes the Solr
-version those users get on their next operator upgrade.** Say so explicitly.
+This is user-visible and not optional, but be precise about *who* is affected, because the obvious
+claim is wrong. `helm/solr/values.yaml` ships `tag: ""` and the chart omits the field entirely when
+it is empty (`helm/solr/templates/solrcloud.yaml`), so a new SolrCloud comes up on
+`DefaultSolrVersion`. The operator then **writes that tag back into the spec**: `withDefaults` fills
+an empty tag (`api/v1beta1/common_types.go`) and the controller persists the change with `r.Update`
+(`controllers/solrcloud_controller.go`). The tag is set from then on, a later `helm upgrade` leaves
+an absent field alone, and so a new operator default does **not** move a cluster that is already
+running.
+
+**Bumping the default changes the Solr version newly created SolrClouds get — not the version
+existing clusters are upgraded to.** Say exactly that. "Every unpinned cluster follows the default"
+oversells the change, and inside a `security` entry it misleads in the dangerous direction, telling
+users they have picked up a CVE fix that their running clusters have not.
 
 Add a `fixed` or `security` entry as well if the Solr release addresses a CVE that reaches
 operator-managed deployments, and flip `artifacthub.io/containsSecurityUpdates` to `"true"` in the
