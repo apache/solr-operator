@@ -112,15 +112,24 @@ function remove_solr_helm_repo() {
 # so a non-zero curl exit (7 for a refused connection) is what we retry on.
 function wait_for_port_forward() {
   local port="$1"
-  local waited=0
-  while [[ "${waited}" -lt 60 ]]; do
-    if curl --silent --max-time 2 --output /dev/null "http://127.0.0.1:${port}/"; then
+  local timeout=60
+  local deadline=$((SECONDS + timeout))
+  local probe
+  while (( SECONDS < deadline )); do
+    # Bound each probe by the time actually left. A port that is listening but not yet
+    # proxying accepts the connection and then hangs, so a fixed --max-time per attempt
+    # would let an attempt count overrun the deadline several times over. Never pass 0,
+    # which curl reads as "no timeout at all".
+    probe=$((deadline - SECONDS))
+    if (( probe > 2 )); then
+      probe=2
+    fi
+    if curl --silent --max-time "${probe}" --output /dev/null "http://127.0.0.1:${port}/"; then
       return 0
     fi
-    waited=$((waited + 1))
     sleep 1
   done
-  echo "Timed out waiting for the port-forward on localhost:${port} to accept connections" >&2
+  echo "Timed out after ${timeout}s waiting for the port-forward on localhost:${port} to accept connections" >&2
   return 1
 }
 
