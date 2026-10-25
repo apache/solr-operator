@@ -106,7 +106,7 @@ site repeats it with nothing enforcing agreement. Eleven rows, fifteen files:
 | `tests/scripts/manage_e2e_tests.sh` | the `-s` default and its help text |
 | `hack/release/smoke_test/test_cluster.sh` | the same pair |
 | `tests/e2e/suite_test.go` | the e2e default |
-| `docs/modules/getting-started/pages/local-tutorial.adoc` | 3 sites in tutorial commands |
+| `docs/modules/getting-started/pages/local-tutorial.adoc` | Keep the install comment and image tag on an older compatible version; set the upgrade tag to the target. The initial version is a deliberate historical reference for the final grep. |
 | `dev-docs/e2e-testing.md` | 1 example |
 | `.github/workflows/e2e-tests.yaml` | the `solr-version` matrix — **major only** (`'9'`), so the grep below cannot see it |
 
