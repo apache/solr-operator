@@ -281,8 +281,13 @@ ships the Solr version; the operator chart's own code carries no fix, so its fla
 1. `make lint` — serially, never `make -j`.
 2. `make test`.
 3. `git grep -n '<previous version>'`, and account for every hit.
-4. `git status --short`, then stage deliberately by naming paths. **Never `git add -A`**. Confirm
-   both `git diff --exit-code` and `git status --short` are clean.
+4. `git status --short` to see what moved, then stage deliberately by naming paths. **Never
+   `git add -A`**.
+5. Before committing: `git diff --exit-code` to prove nothing is left unstaged, and
+   `git diff --cached --name-only` to check what is staged against the paths you meant. Do not
+   expect `git status --short` to be clean here — it lists everything you just staged, by design.
+6. After committing: `git status --short` should show nothing but untracked files you deliberately
+   left alone.
 
 ## Commit, then ask before pushing
 
