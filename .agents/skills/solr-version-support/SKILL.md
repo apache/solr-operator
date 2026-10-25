@@ -126,9 +126,12 @@ The mechanical bump is not the deliverable.
 ### Read the whole span, not just the target
 
 Adopting 9.11.0 off a 9.10.0 default means reading **9.10.1 and 9.11.0**. The intermediate patch is
-where a CVE fix usually sits — 9.10.1 is the fix release for every CVE a 9.11.0 adoption picks up,
-and 9.11.0 itself has no `### Security` section at all. Read only the target and the changelog's
-security entry comes out wrong.
+usually where the security fixes sit — every CVE a 9.11.0 adoption picks up was fixed in 9.10.1 — so
+reading only the target gets the changelog's security entry wrong.
+
+Do not go looking for those fixes in `CHANGELOG.md`. A vulnerability is disclosed *after* the
+release that fixes it, so a release's section normally carries no `### Security` subsection even
+when it does fix something, and an absent one tells you nothing either way.
 
 ### Where to read it
 
@@ -138,11 +141,20 @@ Three sources, and they are not interchangeable:
 |---|---|
 | `solr/solr-ref-guide/modules/upgrade-notes/pages/major-changes-in-solr-<major>.adoc` in `apache/solr` git | **Start here.** One `== Solr <x>.<y>` section per release — patch releases get one when they need it (`== Solr 9.8.1`) — written for upgraders: removals, deprecations, renames, and what to do about each. Its `=== Rolling Upgrades` section is where cross-version constraints land, and those are usually operator work: the Solr 8→9 PKI three-restart sequence is the shape of the thing |
 | `https://raw.githubusercontent.com/apache/solr/main/CHANGELOG.md` | Every release in one markdown file, `[9.11.0] - 2026-10-04` headings over `### Added` / `Changed` / `Fixed` / `Deprecated` / `Removed` / `Security` / `Other`. Greppable, and far easier than the per-release `Changes.html`. Complete, but it is a commit list — it says a thing changed, not what an upgrader must do. Fetch it **raw**: at ~1.5 MB it exceeds the GitHub contents API's 1 MB cap and that endpoint returns empty content |
-| `https://solr.apache.org/security-news.html` | The only authoritative source for CVEs: affected ranges, fixed-in version, and the precise conditions for being impacted. Read the conditions — CVE-2026-22022 needs a `RuleBasedAuthorizationPlugin` permission list that omits the `all` predefined permission, which the operator's generated `security.json` defines, so operator defaults are not affected. Fetch and grep the page rather than trusting a summary of it; the index page and the per-CVE entries disagree about which title goes with which ID |
+| `https://solr.apache.org/feeds/solr/security.atom.xml` | **The source for CVEs.** One `<entry>` per advisory — a date, a title carrying the CVE ID, and a link to the advisory itself — so it is far easier to line up against a release date than the HTML. `https://solr.apache.org/security-news.html` is the same set rendered, and each entry carries the affected range, the fixed-in version and the precise conditions for being impacted. Read those conditions: CVE-2026-22022 only bites a `RuleBasedAuthorizationPlugin` permission list that omits the `all` predefined permission, which the operator's generated `security.json` defines, so operator defaults are not affected. Fetch and grep these rather than trusting a summary — the index page and the per-advisory entries disagree about which title goes with which ID, and not every advisory has a CVE in its title |
 
-A CVE can be superseded: CVE-2025-66516 supersedes CVE-2025-54988, and `CHANGELOG.md` records that
-fix under the **older** ID. Searching the changelog for the ID an advisory gave you can therefore
-come up empty. Trust the advisory for the ID, the changelog for the release it landed in.
+**Advisory timing does not track the release**, so never infer the mapping — each advisory states
+its own affected range and fixed-in version, and that is the only thing to trust. CVE-2026-22022
+and CVE-2026-22444 were published the day 9.10.1 shipped; CVE-2025-66516 six weeks before it, with
+an interim config mitigation; the JWT `blockUnknown` advisory months before the 9.11.0 release that
+changed the default. The feed is usually current within a couple of weeks of a release, which means
+**in the first days after a Solr release it cannot yet show everything that release fixes**. Say
+that in the PR rather than implying the release carries no security fixes, and look again before the
+operator release that ships the bump.
+
+A CVE can also be superseded: CVE-2025-66516 supersedes CVE-2025-54988, and `CHANGELOG.md` records
+that fix under the **older** ID. Searching the changelog for the ID an advisory gave you can
+therefore come up empty. Trust the advisory for the ID, the changelog for the release it landed in.
 
 ### What to check against
 
