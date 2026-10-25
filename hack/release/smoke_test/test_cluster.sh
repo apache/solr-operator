@@ -148,6 +148,25 @@ else
   SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
 fi
 
+# Decide how the Solr Operator image gets into the Kind cluster.
+#
+# When LOCATION is a URL the image was just pulled from a registry, so the Kind nodes can
+# pull it themselves. When LOCATION is a local path the image is typically a local build that
+# exists nowhere else, so it has to be loaded into the nodes and must never be pulled.
+#
+# Only locally built images are loaded. Loading a registry image fails with Docker's
+# containerd image store (the default since Docker Engine 29): 'kind load docker-image'
+# exports the full multi-platform index, but only the host platform's content was pulled,
+# so the import dies with "content digest sha256:...: not found".
+# See https://github.com/kubernetes-sigs/kind/issues/3795
+if (echo "${LOCATION}" | grep -q "http"); then
+  LOAD_OPERATOR_IMAGE=false
+  OPERATOR_PULL_POLICY="IfNotPresent"
+else
+  LOAD_OPERATOR_IMAGE=true
+  OPERATOR_PULL_POLICY="Never"
+fi
+
 # The charts published to an OCI registry are the same artifacts that were staged at
 # LOCATION, so only where the charts are pulled from changes. CRDs still come from LOCATION.
 # Unlike a helm repo, an OCI reference has no index, so the version must be given explicitly.
@@ -174,19 +193,28 @@ fi
 echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
 kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}"
 
-# Load the docker images into the cluster
-if (docker image inspect "${IMAGE}" &>/dev/null); then
-  kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-  printf "\nUsing local version of Solr Operator image \"${IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
+# Load the Solr Operator image into the cluster, but only when it is a local build.
+# The Solr image is never loaded: it always comes from a registry, and the Kind nodes pull it.
+if [[ "${LOAD_OPERATOR_IMAGE}" = true ]]; then
+  if ! (docker image inspect "${IMAGE}" &>/dev/null); then
+    echo "Solr Operator image \"${IMAGE}\" was not found locally. Build it locally before running this smoke test with a local artifact location." >&2
+    exit 1
+  fi
+  printf "\nLoading local Solr Operator image \"${IMAGE}\" into the Kind cluster.\n\n"
+  if ! kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"; then
+    cat >&2 <<ERR
+
+Failed to load "${IMAGE}" into Kind. If the error above mentions a missing content digest,
+Docker's containerd image store exported a multi-platform index whose content is not all
+present locally. Only locally built, single-platform images can be loaded this way.
+See https://github.com/kubernetes-sigs/kind/issues/3795
+ERR
+    exit 1
+  fi
 else
-  printf "\nUsing the remote Solr Operator image \"${IMAGE}\", since it was not found in the local Docker image list.\n\n"
+  printf "\nThe Kind nodes will pull the Solr Operator image \"${IMAGE}\" from its registry.\n\n"
 fi
-if (docker image inspect "${SOLR_IMAGE}" &>/dev/null); then
-  kind load docker-image --name "${CLUSTER_NAME}" "${SOLR_IMAGE}"
-  printf "\nUsing local version of Solr image \"${SOLR_IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
-else
-  printf "\nUsing the remote Solr image \"${SOLR_IMAGE}\", since it was not found in the local Docker image list.\n\n"
-fi
+printf "The Kind nodes will pull the Solr image \"${SOLR_IMAGE}\" from its registry.\n\n"
 
 # Add a temporary directory for backups
 docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
@@ -211,7 +239,7 @@ kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl repla
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
     --set-string image.tag="${IMAGE##*:}" \
     --set image.repository="${IMAGE%%:*}" \
-    --set image.pullPolicy="Never"
+    --set image.pullPolicy="${OPERATOR_PULL_POLICY}"
 
 printf "\nInstall a test Solr Cluster\n"
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
