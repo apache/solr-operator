@@ -48,6 +48,7 @@ helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.10
 Or, from the deprecated HTTPS Helm repository:
 
 ```bash
+helm repo add apache-solr https://solr.apache.org/charts
 helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.10.0
 ```
 
