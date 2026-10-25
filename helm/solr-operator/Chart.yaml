@@ -139,7 +139,7 @@ annotations:
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/571
     - kind: changed
-      description: The default Solr version (`DefaultSolrVersion`) is now 9.11.0, up from 9.10.0. Any SolrCloud that does not pin its own image tag will move to Solr 9.11.0 once this operator version reconciles it, picking up the Solr fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516
+      description: The default Solr version (`DefaultSolrVersion`) is now 9.11.0, up from 9.10.0, so newly created SolrClouds without an image tag start on a Solr version carrying the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516. Existing clusters are unaffected; the operator writes the resolved tag into the spec on first reconcile, so an operator upgrade never changes a running cluster's Solr version
       links:
         - name: Solr 9.11.0 Release Notes
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html

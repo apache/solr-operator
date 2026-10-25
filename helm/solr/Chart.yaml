@@ -61,12 +61,12 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/832
     - kind: changed
-      description: The default Solr version is now 9.11.0, up from 9.10.0. Any SolrCloud that does not pin `image.tag` will move to Solr 9.11.0 on its next upgrade
+      description: The default Solr version is now 9.11.0, up from 9.10.0. Newly created SolrClouds that do not set `image.tag` start on 9.11.0; existing clusters keep the tag already written into their spec
       links:
         - name: Solr 9.11.0 Release Notes
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
     - kind: security
-      description: The new default Solr version 9.11.0 carries the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516, all of which affect Solr 9.10.0 and earlier
+      description: Solr 9.11.0 carries the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516, all of which affect Solr 9.10.0 and earlier. Existing SolrClouds are not upgraded automatically; set `image.tag` to 9.11.0 to pick the fixes up
       links:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html

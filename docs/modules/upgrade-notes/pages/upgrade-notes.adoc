@@ -138,9 +138,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 * *The default Solr version is now `9.11.0`*
 +
-Any `SolrCloud` that does not set `spec.solrImage.tag` will be moved to Solr `9.11.0` once this version of the Solr Operator reconciles it.
-Set `spec.solrImage.tag` explicitly if you need to control when that happens.
-Solr `9.11` also refuses to start a node whose `major.minor` version is lower than that of any Solr node already running in the same SolrCloud cluster,
+Newly created `SolrCloud` resources that do not set `spec.solrImage.tag` will run Solr `9.11.0`.
+Existing clusters are not affected, and do not need to be: the operator writes the resolved tag into `spec.solrImage.tag` the first time it reconciles a `SolrCloud`, so upgrading the Solr Operator never changes the Solr version of a running cluster.
+Set `spec.solrImage.tag` yourself to move one.
+Note also that Solr `9.11` refuses to start a node whose `major.minor` version is lower than that of any Solr node already running in the same SolrCloud cluster,
 so rolling a running cluster back to an older Solr version is no longer possible without taking the whole cluster down first.
 
 * *Logging now defaults to JSON format*
