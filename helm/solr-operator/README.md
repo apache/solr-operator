@@ -87,6 +87,7 @@ helm upgrade solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator
 Or, from the deprecated HTTPS repository:
 
 ```bash
+helm repo add apache-solr https://solr.apache.org/charts
 helm upgrade solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
@@ -128,6 +129,7 @@ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator
 Or, from the deprecated HTTPS repository:
 
 ```bash
+helm repo add apache-solr https://solr.apache.org/charts
 helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease --skip-crds --namespace solr
 ```
 
