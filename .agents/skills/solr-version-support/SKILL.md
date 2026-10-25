@@ -45,7 +45,8 @@ prints nothing, ask. Branch from `<remote>/main`, never local `main`.
 ## Do the work
 
 1. Validate the target version. A major takes the other path — see "A new Solr major version".
-2. Size every change the release implies. **Stop at L**, and follow the halt rules below.
+2. Read what changed across the whole span crossed, then size every change it implies.
+   **Stop at L**, and follow the halt rules below.
 3. Edit the 15 version sites.
 4. Do any operator work sized M or below.
 5. `make test`, and repair fixtures.
@@ -120,8 +121,32 @@ the major alone, so check that file by hand every time.
 
 ## Does the release need operator work?
 
-The mechanical bump is not the deliverable. Read the Solr release notes for the span crossed and
-check whether anything the operator depends on moved:
+The mechanical bump is not the deliverable.
+
+### Read the whole span, not just the target
+
+Adopting 9.11.0 off a 9.10.0 default means reading **9.10.1 and 9.11.0**. The intermediate patch is
+where a CVE fix usually sits — 9.10.1 is the fix release for every CVE a 9.11.0 adoption picks up,
+and 9.11.0 itself has no `### Security` section at all. Read only the target and the changelog's
+security entry comes out wrong.
+
+### Where to read it
+
+Three sources, and they are not interchangeable:
+
+| Source | What it gives |
+|---|---|
+| `solr/solr-ref-guide/modules/upgrade-notes/pages/major-changes-in-solr-<major>.adoc` in `apache/solr` git | **Start here.** One `== Solr <x>.<y>` section per release — patch releases get one when they need it (`== Solr 9.8.1`) — written for upgraders: removals, deprecations, renames, and what to do about each. Its `=== Rolling Upgrades` section is where cross-version constraints land, and those are usually operator work: the Solr 8→9 PKI three-restart sequence is the shape of the thing |
+| `https://raw.githubusercontent.com/apache/solr/main/CHANGELOG.md` | Every release in one markdown file, `[9.11.0] - 2026-10-04` headings over `### Added` / `Changed` / `Fixed` / `Deprecated` / `Removed` / `Security` / `Other`. Greppable, and far easier than the per-release `Changes.html`. Complete, but it is a commit list — it says a thing changed, not what an upgrader must do. Fetch it **raw**: at ~1.5 MB it exceeds the GitHub contents API's 1 MB cap and that endpoint returns empty content |
+| `https://solr.apache.org/security-news.html` | The only authoritative source for CVEs: affected ranges, fixed-in version, and the precise conditions for being impacted. Read the conditions — CVE-2026-22022 needs a `RuleBasedAuthorizationPlugin` permission list that omits the `all` predefined permission, which the operator's generated `security.json` defines, so operator defaults are not affected. Fetch and grep the page rather than trusting a summary of it; the index page and the per-CVE entries disagree about which title goes with which ID |
+
+A CVE can be superseded: CVE-2025-66516 supersedes CVE-2025-54988, and `CHANGELOG.md` records that
+fix under the **older** ID. Searching the changelog for the ID an advisory gave you can therefore
+come up empty. Trust the advisory for the ID, the changelog for the release it landed in.
+
+### What to check against
+
+Then check whether anything the operator depends on moved:
 
 - **The admin APIs it calls.** `admin/info/system`, `admin/info/health`, `admin/collections` and the
   v2 `/api/cluster/replicas/balance`, in `controllers/util/solr_api/` and `controllers/util/`.
@@ -197,8 +222,16 @@ that did not pin its own image follows `DefaultSolrVersion`. **Bumping the defau
 version those users get on their next operator upgrade.** Say so explicitly.
 
 Add a `fixed` or `security` entry as well if the Solr release addresses a CVE that reaches
-operator-managed deployments. Flip `artifacthub.io/containsSecurityUpdates` to `"true"` in whichever
-chart carries that entry — both have the annotation, and each is set independently.
+operator-managed deployments, and flip `artifacthub.io/containsSecurityUpdates` to `"true"` in the
+chart that carries it.
+
+**Nothing propagates between the two charts.** They are separate Artifact Hub packages: a `security`
+entry and a `"true"` flag on `helm/solr` produce no security notice whatsoever on
+`helm/solr-operator`. Decide for each chart on its own terms, by asking whose users the claim is
+about. For a default-version bump the Solr chart is the one making a security claim, because it
+ships the Solr version; the operator chart's own code carries no fix, so its flag normally stays
+`"false"`. Operator-chart readers still deserve the information — put the CVE list in that chart's
+`changed` entry instead, and do not leave a `kind: security` entry sitting under a `"false"` flag.
 
 ## Verify before you commit
 
