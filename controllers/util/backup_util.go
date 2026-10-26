@@ -124,6 +124,12 @@ func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collec
 			finished = true
 			success = false
 		}
+		if asyncStatus == "notfound" {
+			finished = true
+			success = false
+			logger.Info("Solr has no record of the collection backup, so it cannot be confirmed. Marking it unsuccessful; the backup repository may still contain a usable backup.",
+				"solrCloud", cloud.Name, "collection", collection)
+		}
 	} else {
 		logger.Error(err, "Error checking on collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
 	}
