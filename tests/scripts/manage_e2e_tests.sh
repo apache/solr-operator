@@ -40,7 +40,7 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
 EOF
 }
 
-ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.15")
+ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.15" "curlimages/curl:8.11.1")
 OPTIND=1
 while getopts hv:i:k:s:a: opt; do
     case $opt in
@@ -101,9 +101,10 @@ export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" #
 export RAWFILE_LOCAL_PV_VERSION=0.13.1
 export CERT_MANAGER_VERSION=1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
-# Keep in sync with the sigs.k8s.io/gateway-api version in go.mod. The standard channel is used, which includes
-# the GA resources the operator manages (HTTPRoute and BackendTLSPolicy).
-export GATEWAY_API_VERSION=1.6.1
+# Envoy Gateway serves the Gateway API (Gateway, HTTPRoute, and BackendTLSPolicy) and installs the matching
+# Gateway API CRDs. Pin a version whose bundled CRDs include BackendTLSPolicy v1 (Gateway API >= 1.4), which the
+# operator requires. Verify against the sigs.k8s.io/gateway-api version in go.mod when bumping.
+export ENVOY_GATEWAY_VERSION=1.8.3
 
 function add_image_to_kind_repo_if_local() {
   IMAGE="$1"
@@ -122,27 +123,6 @@ function add_image_to_kind_repo_if_local() {
   fi
 }
 
-function start_cloud_provider_kind() {
-  # cloud-provider-kind is a host-level daemon (LoadBalancer + Gateway API support) shared by every KinD
-  # cluster on the host, so only one instance is needed. Skip if it is already running.
-  if pgrep -f "cloud-provider-kind" >/dev/null 2>&1; then
-    printf "cloud-provider-kind is already running.\n\n"
-    return
-  fi
-  printf "Starting cloud-provider-kind\n\n"
-  # nohup + disown so the daemon outlives this script invocation (e.g. the create-cluster action)
-  nohup cloud-provider-kind >"${TMPDIR:-/tmp}/cloud-provider-kind.log" 2>&1 &
-  disown
-}
-
-function stop_cloud_provider_kind_if_unused() {
-  # The daemon is shared by every KinD cluster on the host, so only stop it once none of the integration-test
-  # clusters (named with the "solr-op-e2e" prefix) remain. This leaves it running for unrelated KinD clusters
-  # and for other concurrent test runs.
-  if ! kind get clusters 2>/dev/null | grep -q "^${CLUSTER_NAME_PREFIX}"; then
-    pkill -f "cloud-provider-kind" 2>/dev/null || true
-  fi
-}
 
 GINKGO_PARAM_NAMES=(--seed    --procs          --focus-file --label-filter --focus      --skip)
 GINKGO_PARAM_ENVS=( TEST_SEED TEST_PARALLELISM TEST_FILES   TEST_LABELS    TEST_FILTER TEST_SKIP)
@@ -178,7 +158,6 @@ function export_kubeconfig() {
 
 function delete_cluster() {
   kind delete clusters "${CLUSTER_NAME}"
-  stop_cloud_provider_kind_if_unused
 }
 
 function start_cluster() {
@@ -229,13 +208,43 @@ function setup_cluster() {
   helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
   echo ""
 
-  printf "Setup KinD Network Provider\n"
-  kubectl label node "${CLUSTER_NAME}-control-plane" node.kubernetes.io/exclude-from-external-load-balancers-
-  start_cloud_provider_kind
-
-  printf "Installing Gateway API CRDs\n"
-  # Server-side apply is required: the Gateway API CRDs exceed the client-side apply annotation size limit.
-  kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GATEWAY_API_VERSION}/standard-install.yaml"
+  printf "Installing Envoy Gateway (Gateway API implementation + CRDs)\n"
+  # Envoy Gateway installs the Gateway API CRDs (including BackendTLSPolicy v1) and reconciles Gateways of class
+  # "eg" into Envoy proxies, honoring HTTPRoute and BackendTLSPolicy. Tests reach the proxy in-cluster (ClusterIP),
+  # so no LoadBalancer provider is required.
+  helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
+    --version "v${ENVOY_GATEWAY_VERSION}" \
+    -n envoy-gateway-system --create-namespace
+  kubectl wait --timeout=300s -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
+  # Use a ClusterIP proxy Service (via an EnvoyProxy referenced by the GatewayClass) instead of the default
+  # LoadBalancer. There is no LoadBalancer provider in this cluster, so a LoadBalancer Service would never get an
+  # address and Envoy Gateway would hold the Gateway at Programmed=False (AddressNotAssigned). Tests reach the
+  # proxy in-cluster via its ClusterIP, so a LoadBalancer is not needed.
+  kubectl apply -f - <<'EOF'
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: eg-clusterip
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: eg-clusterip
+    namespace: envoy-gateway-system
+EOF
   echo ""
 }
 

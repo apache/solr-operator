@@ -666,12 +666,12 @@ type SolrGatewayOptions struct {
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
 
-	// BackendTLSPolicy defines TLS configuration for backend connections from Gateway to Solr pods.
+	// BackendTLSPolicy optionally overrides how the operator configures TLS for backend connections
+	// from the Gateway to Solr pods.
 	//
-	// This is used when Solr pods are running with TLS enabled (spec.solrTLS) and the Gateway
-	// needs to establish secure connections to the backend services.
-	//
-	// The Solr Operator will create BackendTLSPolicy resources for each HTTPRoute.
+	// When Solr pods are running with TLS enabled (spec.solrTLS), the operator automatically creates
+	// BackendTLSPolicy resources so the Gateway can establish secure connections to the backend services.
+	// This field is only needed to override the defaults (CA trust source or validation hostname).
 	//
 	// +optional
 	BackendTLSPolicy *SolrBackendTLSPolicy `json:"backendTLSPolicy,omitempty"`
@@ -693,36 +693,47 @@ type GatewayParentReference struct {
 	SectionName *string `json:"sectionName,omitempty"`
 }
 
-// SolrBackendTLSPolicy defines backend TLS configuration for Gateway API
+// SolrBackendTLSPolicy overrides how the operator configures the Gateway-to-Solr backend TLS connection.
 //
-// For a valid BackendTLSPolicy configuration, exactly one of CACertificateRefs or
-// WellKnownCACertificates must be specified. The operator validates this constraint
-// via the HasBackendTLSPolicy() function before creating BackendTLSPolicy resources.
-//
-// +kubebuilder:validation:MaxProperties=1
-// +kubebuilder:validation:MinProperties=1
+// When Solr is running with TLS (spec.solrTLS) and Method=Gateway, the operator automatically creates
+// BackendTLSPolicy resources; this struct is optional and only needed to override the defaults. By default
+// the CA trust anchor is derived from the `ca.crt` entry in the Solr TLS keystore secret, and the validation
+// hostname is the internal Solr service address (which the Solr server certificate must already cover).
 type SolrBackendTLSPolicy struct {
-	// CACertificateRefs contains one or more references to Kubernetes objects that contain
-	// TLS certificates of the Certificate Authorities that can be used as a trust anchor
-	// to validate the certificates presented by the backend.
+	// Hostname overrides the hostname the Gateway validates against the certificate presented by the Solr
+	// backend (also sent as SNI). It must match a Subject Alternative Name in the Solr server certificate.
 	//
-	// If specified, WellKnownCACertificates must not be set.
+	// If unset, defaults to the internal Solr service address.
+	//
+	// +optional
+	Hostname *string `json:"hostname,omitempty"`
+
+	// CACertificateRefs overrides the CA trust anchor(s) used to validate the certificate presented by the
+	// backend. If unset, the operator derives the CA from the `ca.crt` entry of the Solr TLS keystore secret.
+	//
+	// Mutually exclusive with WellKnownCACertificates.
 	//
 	// +optional
 	// +kubebuilder:validation:MaxItems=8
 	CACertificateRefs []GatewayCertificateReference `json:"caCertificateRefs,omitempty"`
 
-	// WellKnownCACertificates specifies whether system CA certificates may be used in the
-	// TLS handshake between the gateway and backend pod.
+	// WellKnownCACertificates configures the Gateway to use system CA certificates (e.g. "System") to
+	// validate the certificate presented by the backend.
 	//
-	// If WellKnownCACertificates is unspecified or empty (""), then CACertificateRefs must be
-	// specified with at least one entry for a valid configuration.
-	//
-	// Only one of CACertificateRefs or WellKnownCACertificates may be specified, not both.
-	// If specified, CACertificateRefs must not be set.
+	// Mutually exclusive with CACertificateRefs.
 	//
 	// +optional
+	// +kubebuilder:validation:Enum=System
 	WellKnownCACertificates *string `json:"wellKnownCACertificates,omitempty"`
+}
+
+// HasCAOverride reports whether the user explicitly specified a CA trust source, in which case the operator
+// does not derive one from the Solr TLS secret.
+func (btp *SolrBackendTLSPolicy) HasCAOverride() bool {
+	if btp == nil {
+		return false
+	}
+	return len(btp.CACertificateRefs) > 0 || (btp.WellKnownCACertificates != nil && *btp.WellKnownCACertificates != "")
 }
 
 // GatewayCertificateReference identifies a certificate object in Kubernetes
@@ -1431,6 +1442,12 @@ func (sc *SolrCloud) NodeBackendTLSPolicyName(nodeName string) string {
 	return nodeName
 }
 
+// BackendTLSCACertConfigMapName returns the name of the operator-generated ConfigMap that holds the CA
+// certificate used for Gateway backend TLS validation, when the CA is derived from the Solr TLS secret.
+func (sc *SolrCloud) BackendTLSCACertConfigMapName() string {
+	return fmt.Sprintf("%s-solrcloud-backend-ca", sc.GetName())
+}
+
 // ProvidedZookeeperName returns the provided zk cluster
 func (sc *SolrCloud) ProvidedZookeeperName() string {
 	return fmt.Sprintf("%s-solrcloud-zookeeper", sc.GetName())
@@ -1605,12 +1622,13 @@ func (ea *ExternalAddressability) HasIngressTLSTermination() bool {
 	return false
 }
 
-func (ea *ExternalAddressability) HasBackendTLSPolicy() bool {
-	if ea != nil && ea.Method == Gateway && ea.Gateway != nil && ea.Gateway.BackendTLSPolicy != nil {
-		return (ea.Gateway.BackendTLSPolicy.CACertificateRefs != nil && len(ea.Gateway.BackendTLSPolicy.CACertificateRefs) > 0) ||
-			(ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != nil && *ea.Gateway.BackendTLSPolicy.WellKnownCACertificates != "")
-	}
-	return false
+// UsesGatewayBackendTLS reports whether the operator should manage BackendTLSPolicy resources: when the
+// SolrCloud is exposed via the Gateway API and Solr is running with TLS enabled. Backend TLS is required
+// for a Gateway to reach a TLS-enabled Solr, so it is derived automatically from spec.solrTLS rather than
+// being opt-in.
+func (sc *SolrCloud) UsesGatewayBackendTLS() bool {
+	ext := sc.Spec.SolrAddressability.External
+	return ext != nil && ext.Method == Gateway && sc.Spec.SolrTLS != nil
 }
 
 func (sc *SolrCloud) UrlScheme(external bool) string {

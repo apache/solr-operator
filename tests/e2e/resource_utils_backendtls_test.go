@@ -40,12 +40,6 @@ func expectBackendTLSPolicyWithChecks(ctx context.Context, parentResource client
 	return policy
 }
 
-func expectNoBackendTLSPolicy(ctx context.Context, parentResource client.Object, policyName string, additionalOffset ...int) {
-	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
-		return k8sClient.Get(ctx, resourceKey(parentResource, policyName), &gatewayv1.BackendTLSPolicy{})
-	}).Should(MatchError("backendtlspolicies.gateway.networking.k8s.io \""+policyName+"\" not found"), "BackendTLSPolicy exists when it should not")
-}
-
 func eventuallyExpectNoBackendTLSPolicy(ctx context.Context, parentResource client.Object, policyName string, additionalOffset ...int) {
 	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, policyName), &gatewayv1.BackendTLSPolicy{})

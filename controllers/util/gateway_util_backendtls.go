@@ -24,118 +24,59 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
-// GenerateCommonBackendTLSPolicy creates a BackendTLSPolicy for the common Solr service
-func GenerateCommonBackendTLSPolicy(solrCloud *solr.SolrCloud) *gatewayv1.BackendTLSPolicy {
-	if solrCloud.Spec.SolrAddressability.External.Gateway == nil ||
-		solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy == nil {
+// ConvertCACertificateRefs converts the operator's GatewayCertificateReference values into Gateway API
+// LocalObjectReference values, applying the ConfigMap/core-group defaults for unspecified fields.
+func ConvertCACertificateRefs(refs []solr.GatewayCertificateReference) []gatewayv1.LocalObjectReference {
+	if len(refs) == 0 {
 		return nil
 	}
-
-	// Get the full FQDN for hostname validation
-	domainName := solrCloud.Spec.SolrAddressability.External.DomainName
-	fqdn := solrCloud.ExternalCommonUrl(domainName, false)
-
-	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	backendTLSConfig := solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy
-
-	// Convert CA certificate refs
-	var caCertRefs []gatewayv1.LocalObjectReference
-	if backendTLSConfig.CACertificateRefs != nil {
-		caCertRefs = make([]gatewayv1.LocalObjectReference, len(backendTLSConfig.CACertificateRefs))
-		for i, ref := range backendTLSConfig.CACertificateRefs {
-			// Default to ConfigMap if kind is not specified
-			kind := gatewayv1.Kind("ConfigMap")
-			if ref.Kind != nil {
-				kind = gatewayv1.Kind(*ref.Kind)
-			}
-			// Default to empty group (core API)
-			group := gatewayv1.Group("")
-			if ref.Group != nil {
-				group = gatewayv1.Group(*ref.Group)
-			}
-			certRef := gatewayv1.LocalObjectReference{
-				Group: group,
-				Kind:  kind,
-				Name:  gatewayv1.ObjectName(ref.Name),
-			}
-			caCertRefs[i] = certRef
+	converted := make([]gatewayv1.LocalObjectReference, len(refs))
+	for i, ref := range refs {
+		// Default to ConfigMap if kind is not specified
+		kind := gatewayv1.Kind("ConfigMap")
+		if ref.Kind != nil {
+			kind = gatewayv1.Kind(*ref.Kind)
+		}
+		// Default to empty group (core API)
+		group := gatewayv1.Group("")
+		if ref.Group != nil {
+			group = gatewayv1.Group(*ref.Group)
+		}
+		converted[i] = gatewayv1.LocalObjectReference{
+			Group: group,
+			Kind:  kind,
+			Name:  gatewayv1.ObjectName(ref.Name),
 		}
 	}
-
-	policy := &gatewayv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.CommonBackendTLSPolicyName(),
-			Namespace: solrCloud.GetNamespace(),
-			Labels:    labels,
-		},
-		Spec: gatewayv1.BackendTLSPolicySpec{
-			TargetRefs: []gatewayv1.LocalPolicyTargetReferenceWithSectionName{
-				{
-					LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
-						Group: "",
-						Kind:  "Service",
-						Name:  gatewayv1.ObjectName(solrCloud.CommonServiceName()),
-					},
-				},
-			},
-			Validation: gatewayv1.BackendTLSPolicyValidation{
-				Hostname: gatewayv1.PreciseHostname(fqdn),
-			},
-		},
-	}
-
-	// Set CA certificates or well-known CAs
-	if caCertRefs != nil {
-		policy.Spec.Validation.CACertificateRefs = caCertRefs
-	} else if backendTLSConfig.WellKnownCACertificates != nil {
-		wellKnown := gatewayv1.WellKnownCACertificatesType(*backendTLSConfig.WellKnownCACertificates)
-		policy.Spec.Validation.WellKnownCACertificates = &wellKnown
-	}
-
-	return policy
+	return converted
 }
 
-// GenerateNodeBackendTLSPolicy creates a BackendTLSPolicy for individual Solr node service
-func GenerateNodeBackendTLSPolicy(solrCloud *solr.SolrCloud, nodeName string) *gatewayv1.BackendTLSPolicy {
-	if solrCloud.Spec.SolrAddressability.External.Gateway == nil ||
-		solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy == nil {
-		return nil
-	}
+// GenerateCommonBackendTLSPolicy creates a BackendTLSPolicy for the common Solr service. The CA trust
+// source (caCertRefs or wellKnownCACertificates) is resolved by the caller.
+func GenerateCommonBackendTLSPolicy(solrCloud *solr.SolrCloud, caCertRefs []gatewayv1.LocalObjectReference, wellKnownCACertificates *string) *gatewayv1.BackendTLSPolicy {
+	return generateBackendTLSPolicy(solrCloud, solrCloud.CommonBackendTLSPolicyName(), solrCloud.CommonServiceName(), solrCloud.InternalCommonUrl(false), caCertRefs, wellKnownCACertificates)
+}
 
-	// Get the full FQDN for hostname validation
-	domainName := solrCloud.Spec.SolrAddressability.External.DomainName
-	fqdn := solrCloud.ExternalNodeUrl(nodeName, domainName, false)
+// GenerateNodeBackendTLSPolicy creates a BackendTLSPolicy for an individual Solr node service. The CA trust
+// source (caCertRefs or wellKnownCACertificates) is resolved by the caller.
+func GenerateNodeBackendTLSPolicy(solrCloud *solr.SolrCloud, nodeName string, caCertRefs []gatewayv1.LocalObjectReference, wellKnownCACertificates *string) *gatewayv1.BackendTLSPolicy {
+	return generateBackendTLSPolicy(solrCloud, solrCloud.NodeBackendTLSPolicyName(nodeName), nodeName, solrCloud.InternalNodeUrl(nodeName, false), caCertRefs, wellKnownCACertificates)
+}
 
+// generateBackendTLSPolicy builds a BackendTLSPolicy targeting the given Service. The validation hostname
+// defaults to the internal Solr service address (which the Solr server certificate must cover for TLS
+// inter-node communication), and may be overridden via gateway.backendTLSPolicy.hostname.
+func generateBackendTLSPolicy(solrCloud *solr.SolrCloud, name, serviceName, defaultHostname string, caCertRefs []gatewayv1.LocalObjectReference, wellKnownCACertificates *string) *gatewayv1.BackendTLSPolicy {
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	backendTLSConfig := solrCloud.Spec.SolrAddressability.External.Gateway.BackendTLSPolicy
 
-	// Convert CA certificate refs
-	var caCertRefs []gatewayv1.LocalObjectReference
-	if backendTLSConfig.CACertificateRefs != nil {
-		caCertRefs = make([]gatewayv1.LocalObjectReference, len(backendTLSConfig.CACertificateRefs))
-		for i, ref := range backendTLSConfig.CACertificateRefs {
-			// Default to ConfigMap if kind is not specified
-			kind := gatewayv1.Kind("ConfigMap")
-			if ref.Kind != nil {
-				kind = gatewayv1.Kind(*ref.Kind)
-			}
-			// Default to empty group (core API)
-			group := gatewayv1.Group("")
-			if ref.Group != nil {
-				group = gatewayv1.Group(*ref.Group)
-			}
-			certRef := gatewayv1.LocalObjectReference{
-				Group: group,
-				Kind:  kind,
-				Name:  gatewayv1.ObjectName(ref.Name),
-			}
-			caCertRefs[i] = certRef
-		}
+	hostname := defaultHostname
+	if gateway := solrCloud.Spec.SolrAddressability.External.Gateway; gateway != nil && gateway.BackendTLSPolicy != nil && gateway.BackendTLSPolicy.Hostname != nil {
+		hostname = *gateway.BackendTLSPolicy.Hostname
 	}
 
 	policy := &gatewayv1.BackendTLSPolicy{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      solrCloud.NodeBackendTLSPolicyName(nodeName),
+			Name:      name,
 			Namespace: solrCloud.GetNamespace(),
 			Labels:    labels,
 		},
@@ -145,21 +86,21 @@ func GenerateNodeBackendTLSPolicy(solrCloud *solr.SolrCloud, nodeName string) *g
 					LocalPolicyTargetReference: gatewayv1.LocalPolicyTargetReference{
 						Group: "",
 						Kind:  "Service",
-						Name:  gatewayv1.ObjectName(nodeName),
+						Name:  gatewayv1.ObjectName(serviceName),
 					},
 				},
 			},
 			Validation: gatewayv1.BackendTLSPolicyValidation{
-				Hostname: gatewayv1.PreciseHostname(fqdn),
+				Hostname: gatewayv1.PreciseHostname(hostname),
 			},
 		},
 	}
 
-	// Set CA certificates or well-known CAs
-	if caCertRefs != nil {
+	// Set CA certificates or well-known CAs (exactly one is expected; the caller enforces this)
+	if len(caCertRefs) > 0 {
 		policy.Spec.Validation.CACertificateRefs = caCertRefs
-	} else if backendTLSConfig.WellKnownCACertificates != nil {
-		wellKnown := gatewayv1.WellKnownCACertificatesType(*backendTLSConfig.WellKnownCACertificates)
+	} else if wellKnownCACertificates != nil && *wellKnownCACertificates != "" {
+		wellKnown := gatewayv1.WellKnownCACertificatesType(*wellKnownCACertificates)
 		policy.Spec.Validation.WellKnownCACertificates = &wellKnown
 	}
 

@@ -10991,21 +10991,19 @@ spec:
                             type: object
                           backendTLSPolicy:
                             description: |-
-                              BackendTLSPolicy defines TLS configuration for backend connections from Gateway to Solr pods.
+                              BackendTLSPolicy optionally overrides how the operator configures TLS for backend connections
+                              from the Gateway to Solr pods.
 
-                              This is used when Solr pods are running with TLS enabled (spec.solrTLS) and the Gateway
-                              needs to establish secure connections to the backend services.
-
-                              The Solr Operator will create BackendTLSPolicy resources for each HTTPRoute.
-                            maxProperties: 1
+                              When Solr pods are running with TLS enabled (spec.solrTLS), the operator automatically creates
+                              BackendTLSPolicy resources so the Gateway can establish secure connections to the backend services.
+                              This field is only needed to override the defaults (CA trust source or validation hostname).
                             properties:
                               caCertificateRefs:
                                 description: |-
-                                  CACertificateRefs contains one or more references to Kubernetes objects that contain
-                                  TLS certificates of the Certificate Authorities that can be used as a trust anchor
-                                  to validate the certificates presented by the backend.
+                                  CACertificateRefs overrides the CA trust anchor(s) used to validate the certificate presented by the
+                                  backend. If unset, the operator derives the CA from the `ca.crt` entry of the Solr TLS keystore secret.
 
-                                  If specified, WellKnownCACertificates must not be set.
+                                  Mutually exclusive with WellKnownCACertificates.
                                 items:
                                   description: GatewayCertificateReference identifies
                                     a certificate object in Kubernetes
@@ -11027,16 +11025,21 @@ spec:
                                   type: object
                                 maxItems: 8
                                 type: array
+                              hostname:
+                                description: |-
+                                  Hostname overrides the hostname the Gateway validates against the certificate presented by the Solr
+                                  backend (also sent as SNI). It must match a Subject Alternative Name in the Solr server certificate.
+
+                                  If unset, defaults to the internal Solr service address.
+                                type: string
                               wellKnownCACertificates:
                                 description: |-
-                                  WellKnownCACertificates specifies whether system CA certificates may be used in the
-                                  TLS handshake between the gateway and backend pod.
+                                  WellKnownCACertificates configures the Gateway to use system CA certificates (e.g. "System") to
+                                  validate the certificate presented by the backend.
 
-                                  If WellKnownCACertificates is unspecified or empty (""), then CACertificateRefs must be
-                                  specified with at least one entry for a valid configuration.
-
-                                  Only one of CACertificateRefs or WellKnownCACertificates may be specified, not both.
-                                  If specified, CACertificateRefs must not be set.
+                                  Mutually exclusive with CACertificateRefs.
+                                enum:
+                                - System
                                 type: string
                             type: object
                           labels:
