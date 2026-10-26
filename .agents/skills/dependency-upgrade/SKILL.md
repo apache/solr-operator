@@ -165,7 +165,7 @@ sweep — file it separately, or the diff stops being reviewable.
 6. `make prepare` — the one command that makes a PR pass lint. Runs `fmt`, `generate`, `manifests`,
    `fetch-licenses-list` and `mod-tidy` in the right order.
 7. `make test`, then repair fixtures.
-8. Add the changelog entries.
+8. Add or consolidate the changelog entries.
 9. `make lint`, then `make test` again.
 
 ### Regenerate, never hand-edit
@@ -222,10 +222,13 @@ Write for a user deciding whether to upgrade, not a reviewer reading the diff:
 
 - Tight wording. One line per entry, no prose, no restating the diff.
 - Never list library bumps individually. One `changed` entry summarising the sweep.
+- Several sweeps land in one release cycle. If that grouped entry is already there from an earlier
+  one, update it instead of adding a second — the net span since the last release, not this PR's
+  delta — and add this PR to its `links:`. The separate-entry rules below still apply.
 - A separate entry for anything changing behaviour or requiring action: new RBAC permissions, a
   bundled Zookeeper Operator bump, a changed default.
 - A CVE fix uses `kind: security` **and** flips `artifacthub.io/containsSecurityUpdates` to `"true"`
-  in that chart.
+  in that chart. Once set in a cycle it stays set; a later CVE-free sweep must not flip it back.
 - A sweep with no user-visible effect still gets one `changed` entry.
 
 If the bundled Zookeeper Operator moved, also add an entry to
@@ -233,7 +236,8 @@ If the bundled Zookeeper Operator moved, also add an entry to
 
 Release-time interaction: the release process wipes `artifacthub.io/changes` to a placeholder just
 after a release branch is cut, so an entry added to `main` after that lands in the *next* release.
-An upgrade belonging to the release being cut must merge before that step.
+An upgrade belonging to the release being cut must merge before that step. That placeholder is two
+dummy entries (`Addition 1`, `Change 2`), not an empty list — replace them, don't append.
 
 ## Verify before you commit
 
