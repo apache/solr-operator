@@ -142,6 +142,16 @@ The new default for CLI flag `--zap-devel` is now `false`, causing log encoding 
 There is a new helm value `development` that can be set to `true` to switch to `console` encoding and `debug` level
 that was the default in previous versions.
 
+* *Authenticated probes now actually fail when authentication fails*
++
+When `solrSecurity.probesRequireAuth` is enabled, the generated liveness/readiness/startup probe command used to
+discard the exit code of the Solr request, so the probes reported success no matter what Solr answered.
+The probes now exit with the status of the Solr request.
++
+If a SolrCloud is running with credentials that the probe endpoints reject, its pods were previously reported as
+healthy and will now correctly go un-ready and be restarted.
+Check that the basic auth secret is valid, and that the probe paths are authorized for that user, before upgrading.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*
