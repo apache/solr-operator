@@ -104,6 +104,35 @@ function remove_solr_helm_repo() {
   fi
 }
 
+# Wait until a backgrounded 'kubectl port-forward' is accepting connections.
+#
+# A fixed sleep races with the port-forward: on a loaded machine the forward can print
+# "Forwarding from ..." only after the first request has already been refused, and with
+# 'set -e' that aborts the whole smoke test. Any HTTP response means the forward is up,
+# so a non-zero curl exit (7 for a refused connection) is what we retry on.
+function wait_for_port_forward() {
+  local port="$1"
+  local timeout=60
+  local deadline=$((SECONDS + timeout))
+  local probe
+  while (( SECONDS < deadline )); do
+    # Bound each probe by the time actually left. A port that is listening but not yet
+    # proxying accepts the connection and then hangs, so a fixed --max-time per attempt
+    # would let an attempt count overrun the deadline several times over. Never pass 0,
+    # which curl reads as "no timeout at all".
+    probe=$((deadline - SECONDS))
+    if (( probe > 2 )); then
+      probe=2
+    fi
+    if curl --silent --max-time "${probe}" --output /dev/null "http://127.0.0.1:${port}/"; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "Timed out after ${timeout}s waiting for the port-forward on localhost:${port} to accept connections" >&2
+  return 1
+}
+
 # If LOCATION is not a URL, then get the absolute path
 if ! (echo "${LOCATION}" | grep "http"); then
   LOCATION=$(cd "${LOCATION}"; pwd)
@@ -117,6 +146,25 @@ else
 
   OP_HELM_CHART="apache-solr-test-${VERSION}/solr-operator"
   SOLR_HELM_CHART="apache-solr-test-${VERSION}/solr"
+fi
+
+# Decide how the Solr Operator image gets into the Kind cluster.
+#
+# When LOCATION is a URL the image was just pulled from a registry, so the Kind nodes can
+# pull it themselves. When LOCATION is a local path the image is typically a local build that
+# exists nowhere else, so it has to be loaded into the nodes and must never be pulled.
+#
+# Only locally built images are loaded. Loading a registry image fails with Docker's
+# containerd image store (the default since Docker Engine 29): 'kind load docker-image'
+# exports the full multi-platform index, but only the host platform's content was pulled,
+# so the import dies with "content digest sha256:...: not found".
+# See https://github.com/kubernetes-sigs/kind/issues/3795
+if (echo "${LOCATION}" | grep -q "http"); then
+  LOAD_OPERATOR_IMAGE=false
+  OPERATOR_PULL_POLICY="IfNotPresent"
+else
+  LOAD_OPERATOR_IMAGE=true
+  OPERATOR_PULL_POLICY="Never"
 fi
 
 # The charts published to an OCI registry are the same artifacts that were staged at
@@ -145,19 +193,28 @@ fi
 echo "Create test Kubernetes ${KUBERNETES_VERSION} cluster in Kind. This will allow us to test the CRDs, Helm chart and the Docker image."
 kind create cluster --name "${CLUSTER_NAME}" --image "kindest/node:${KUBERNETES_VERSION}"
 
-# Load the docker images into the cluster
-if (docker image inspect "${IMAGE}" &>/dev/null); then
-  kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-  printf "\nUsing local version of Solr Operator image \"${IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
+# Load the Solr Operator image into the cluster, but only when it is a local build.
+# The Solr image is never loaded: it always comes from a registry, and the Kind nodes pull it.
+if [[ "${LOAD_OPERATOR_IMAGE}" = true ]]; then
+  if ! (docker image inspect "${IMAGE}" &>/dev/null); then
+    echo "Solr Operator image \"${IMAGE}\" was not found locally. Build it locally before running this smoke test with a local artifact location." >&2
+    exit 1
+  fi
+  printf "\nLoading local Solr Operator image \"${IMAGE}\" into the Kind cluster.\n\n"
+  if ! kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"; then
+    cat >&2 <<ERR
+
+Failed to load "${IMAGE}" into Kind. If the error above mentions a missing content digest,
+Docker's containerd image store exported a multi-platform index whose content is not all
+present locally. Only locally built, single-platform images can be loaded this way.
+See https://github.com/kubernetes-sigs/kind/issues/3795
+ERR
+    exit 1
+  fi
 else
-  printf "\nUsing the remote Solr Operator image \"${IMAGE}\", since it was not found in the local Docker image list.\n\n"
+  printf "\nThe Kind nodes will pull the Solr Operator image \"${IMAGE}\" from its registry.\n\n"
 fi
-if (docker image inspect "${SOLR_IMAGE}" &>/dev/null); then
-  kind load docker-image --name "${CLUSTER_NAME}" "${SOLR_IMAGE}"
-  printf "\nUsing local version of Solr image \"${SOLR_IMAGE}\".\nIf you want to use an updated version of this image, run \"docker pull ${SOLR_IMAGE}\" before running the smoke test again.\n\n"
-else
-  printf "\nUsing the remote Solr image \"${SOLR_IMAGE}\", since it was not found in the local Docker image list.\n\n"
-fi
+printf "The Kind nodes will pull the Solr image \"${SOLR_IMAGE}\" from its registry.\n\n"
 
 # Add a temporary directory for backups
 docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
@@ -182,7 +239,7 @@ kubectl create -f "${LOCATION}/crds/all-with-dependencies.yaml" || kubectl repla
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} solr-operator "${OP_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
     --set-string image.tag="${IMAGE##*:}" \
     --set image.repository="${IMAGE%%:*}" \
-    --set image.pullPolicy="Never"
+    --set image.pullPolicy="${OPERATOR_PULL_POLICY}"
 
 printf "\nInstall a test Solr Cluster\n"
 helm install --kube-context "${KUBE_CONTEXT}" ${VERIFY_OR_NOT} example "${SOLR_HELM_CHART}" ${CHART_VERSION_ARG[@]+"${CHART_VERSION_ARG[@]}"} \
@@ -208,7 +265,7 @@ grep -q "2              2       2            2" <(exec kubectl get solrcloud exa
 
 # Expose the common Solr service to localhost
 kubectl port-forward service/example-solrcloud-common 18983:80 || true &
-sleep 2
+wait_for_port_forward 18983
 
 printf "\nCheck the admin URL to make sure it works\n"
 curl --silent "http://localhost:18983/solr/admin/info/health" | grep '"status":0' > /dev/null
@@ -318,7 +375,7 @@ grep -q "2              2       2            2" <(exec kubectl get solrcloud exa
 
 # Need a new port-forward, since the last one will have broken due to all pods restarting
 kubectl port-forward service/example-solrcloud-common 28983:80 || true &
-sleep 2
+wait_for_port_forward 28983
 
 printf "\nQuery the test collection, test for 0 docs\n\n"
 curl --silent "http://localhost:28983/solr/smoke-test/select" | grep '\"numFound\":0' > /dev/null

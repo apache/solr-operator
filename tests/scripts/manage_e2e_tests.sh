@@ -35,12 +35,13 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
     -h  Display this help and exit
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -k  Kubernetes Version to test with (full tag, e.g. v1.24.16) (Optional, defaults to a compatible version)
-    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 9.11.0). (Optional, defaults to a compatible version)
-    -a  Load additional local images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
+    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 9.10.0). (Optional, defaults to a compatible version)
+    -a  Load additional locally built images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
+        Only images that exist nowhere but the local Docker need this; images from a registry are pulled by the Kind nodes.
 EOF
 }
 
-ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.15")
+ADDITIONAL_IMAGES=()
 OPTIND=1
 while getopts hv:i:k:s:a: opt; do
     case $opt in
@@ -100,20 +101,30 @@ export RAWFILE_LOCAL_PV_VERSION=0.13.1
 export CERT_MANAGER_VERSION=1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
 
-function add_image_to_kind_repo_if_local() {
+# Load a locally built image into the Kind cluster. Images that come from a registry are
+# never loaded; the Kind nodes pull those themselves.
+#
+# Loading a registry image fails with Docker's containerd image store (the default since
+# Docker Engine 29): 'kind load docker-image' exports the full multi-platform index, but only
+# the host platform's content was pulled, so the import dies with
+# "content digest sha256:...: not found". See https://github.com/kubernetes-sigs/kind/issues/3795
+function load_local_image_into_kind() {
   IMAGE="$1"
-  PULL_IF_NOT_LOCAL="$2"
-  if (docker image inspect "${IMAGE}" &>/dev/null); then
-    printf "\nUsing local version of image \"%s\".\nIf you want to use an updated version of this image, run \"docker pull %s\" before running the integration tests again.\n\n" "${IMAGE}" "${IMAGE}"
-    kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-  else
-    if [ "${PULL_IF_NOT_LOCAL}" = true ]; then
-      printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}"
-      docker pull "${IMAGE}"
-      kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-    else
-      printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
-    fi
+  if ! (docker image inspect "${IMAGE}" &>/dev/null); then
+    printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
+    return
+  fi
+  printf "\nLoading local image \"%s\" into the Kind cluster.\n\n" "${IMAGE}"
+  if ! kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"; then
+    cat >&2 <<ERR
+
+Failed to load "${IMAGE}" into Kind. If the error above mentions a missing content digest,
+Docker's containerd image store exported a multi-platform index whose content is not all
+present locally. Only locally built, single-platform images can be loaded this way; images
+from a registry should not be loaded at all, the Kind nodes pull them.
+See https://github.com/kubernetes-sigs/kind/issues/3795
+ERR
+    exit 1
   fi
 }
 
@@ -174,12 +185,14 @@ function start_cluster() {
 }
 
 function setup_cluster() {
-  # Load the docker images into the cluster
-  add_image_to_kind_repo_if_local "${OPERATOR_IMAGE}" false
-  add_image_to_kind_repo_if_local "${SOLR_IMAGE}" true
-  for IMAGE in "${ADDITIONAL_IMAGES[@]}"; do
-    add_image_to_kind_repo_if_local "${IMAGE}" true
+  # Only locally built images are loaded into the cluster. The Solr and Zookeeper images
+  # always come from a registry, so the Kind nodes pull them.
+  load_local_image_into_kind "${OPERATOR_IMAGE}"
+  # The array may be empty, and bash < 4.4 treats "${arr[@]}" on an empty array as unbound under 'set -u'.
+  for IMAGE in ${ADDITIONAL_IMAGES[@]+"${ADDITIONAL_IMAGES[@]}"}; do
+    load_local_image_into_kind "${IMAGE}"
   done
+  printf "The Kind nodes will pull the Solr image \"%s\" from its registry.\n\n" "${SOLR_IMAGE}"
 
   printf "Installing Solr & Zookeeper CRDs\n"
   kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
