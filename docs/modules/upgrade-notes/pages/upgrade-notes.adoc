@@ -136,19 +136,12 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 === v0.10.0
 
-* *The default Solr version is now `9.11.0`*
-+
-Newly created `SolrCloud` resources that do not set `spec.solrImage.tag` will run Solr `9.11.0`.
-Existing clusters are not affected, and do not need to be: the operator writes the resolved tag into `spec.solrImage.tag` the first time it reconciles a `SolrCloud`, so upgrading the Solr Operator never changes the Solr version of a running cluster.
-Set `spec.solrImage.tag` yourself to move one.
-Note also that Solr `9.11` refuses to start a node whose `major.minor` version is lower than that of any Solr node already running in the same SolrCloud cluster,
-so rolling a running cluster back to an older Solr version is no longer possible without taking the whole cluster down first.
+* The default Solr version has been upgraded from `8.11` to `9.11.0`.
+This only affects new resources, as default versions are hard-written to the resources immediately.
+Note that Solr `>=9.10` will not start a node older than any Solr node already running in the same cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
 
-* *Logging now defaults to JSON format*
-+
-The new default for CLI flag `--zap-devel` is now `false`, causing log encoding to be `json` and log level to be `info`.
-There is a new helm value `development` that can be set to `true` to switch to `console` encoding and `debug` level
-that was the default in previous versions.
+* Operator logs now default to `json` encoding at `info` level.
+Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
 === v0.8.0
 
