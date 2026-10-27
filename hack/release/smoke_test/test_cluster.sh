@@ -33,7 +33,7 @@ Test the release candidate in a Kind cluster
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -g  GPG Key (fingerprint) used to sign the artifacts (Optional, if not provided then the helm chart will not be verified)
     -k  Kubernetes Version to test with (full tag, e.g. v1.26.6) (Optional, defaults to a compatible version)
-    -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 9.10.0). (Optional, defaults to a compatible version)
+    -t  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.0.0, 9.11.0). (Optional, defaults to a compatible version)
     -o  OCI registry to install the Helm charts from, e.g. oci://ghcr.io/apache/solr-operator/helm (Optional)
         Use this after a release has been published, to smoke test the published OCI artifacts.
         The CRDs are still taken from LOCATION, since they are not part of the OCI artifacts.
@@ -82,7 +82,7 @@ if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
   KUBERNETES_VERSION="v1.26.6"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.10.0}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.11.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
