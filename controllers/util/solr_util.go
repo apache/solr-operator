@@ -253,11 +253,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	volumeMounts := []corev1.VolumeMount{
 		{Name: solrDataVolumeName, MountPath: "/var/solr/data"},
-		// Mount the solr.xml from the ConfigMap directly into the Solr home directory.
-		// A subPath is used so that only this single file is mounted, leaving the rest of the
-		// Solr home directory (which lives on the data volume) untouched.
-		// ConfigMap updates are not propagated to subPath mounts, however the solr.xml MD5 is
-		// tracked in the pod annotations below, so pods are restarted when the solr.xml changes.
+		// Only the solr.xml file is mounted into the Solr home directory, via a subPath, so that
+		// the rest of the directory is untouched. subPath mounts do not see ConfigMap updates,
+		// instead the solr.xml MD5 pod annotation set below restarts the pods.
 		{Name: "solr-xml", MountPath: "/var/solr/data/" + SolrXmlFile, SubPath: SolrXmlFile, ReadOnly: true},
 	}
 
@@ -730,8 +728,8 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 }
 
 func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, security *SecurityConfig) (containers []corev1.Container) {
-	// The solr.xml is mounted into the Solr home directory via a subPath volumeMount, so the only
-	// thing left for a volume prep initContainer to do is fix the permissions of backup volumes.
+	// The solr.xml is mounted into the Solr home directory, so the only thing left to prepare is
+	// the permissions of backup repository volumes.
 	var volumeMounts []corev1.VolumeMount
 	var setupCommands []string
 
@@ -787,7 +785,6 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
-	// Only create the volume prep initContainer if there is something for it to do
 	if len(setupCommands) > 0 {
 		volumePrepResources := corev1.ResourceList{
 			corev1.ResourceCPU:    *DefaultSolrVolumePrepInitContainerCPU,

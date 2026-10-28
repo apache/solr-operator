@@ -36,12 +36,11 @@ spec:
 == Custom solr.xml
 
 Solr pods load node-level configuration settings from `/var/solr/data/solr.xml`.
-This important configuration file is mounted into the `solr.home` directory of each pod directly from a ConfigMap, using a `subPath` volumeMount so that only the `solr.xml` file itself is mounted and the rest of the `solr.home` directory is left untouched.
+It is mounted there from a ConfigMap, via a `subPath` volumeMount so that only this one file is mounted into the `solr.home` directory.
 The default `solr.xml` comes from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
 
 NOTE: The data in the default ConfigMap is not editable! Any changes to the `solr.xml` in the default ConfigMap created by the operator will be overwritten during the next reconcile cycle.
-The `solr.xml` within a running pod is read-only as well, since it is mounted from the ConfigMap.
-Changes to the ConfigMap are not propagated to running pods either, instead the operator restarts the pods when the `solr.xml` changes, as described below.
+The `solr.xml` in a running pod is read-only, and ConfigMap changes only reach pods through the restart described below.
 
 Many of the specific values in `solr.xml` can be set using Java system properties; for instance, the following setting controls the read timeout for the HTTP client used by Solr's `HttpShardHandlerFactory`:
 

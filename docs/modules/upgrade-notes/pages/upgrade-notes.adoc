@@ -143,13 +143,13 @@ Note that Solr `>=9.10` will not start a node older than any Solr node already r
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
-* The `cp-solr-xml` initContainer has been removed from Solr pods.
-The `solr.xml` is now mounted into `/var/solr/data/solr.xml` directly from the ConfigMap, via a `subPath` volumeMount, so it no longer needs to be copied into the Solr home directory before startup.
-Upgrading the operator therefore changes the Solr pod spec, which will result in a rolling restart of all Solr pods.
-Two user-visible consequences:
-** The `solr.xml` within a running pod is now read-only. It was writable before, although any edits were lost on the next pod restart anyway.
-** When a `backupRepository` of type `volume` is used, the initContainer that fixes the permissions of that volume is kept, but is now named `volume-prep` instead of `cp-solr-xml`.
-Pods without such a backup repository no longer have this initContainer at all.
+* The `cp-solr-xml` initContainer has been removed.
+The `solr.xml` is now mounted into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount.
+This changes the Solr pod spec, so all Solr pods are restarted when the operator is upgraded.
+** The `solr.xml` in a running pod is now read-only.
+** Sidecars and custom initContainers mounting the data volume no longer find a `solr.xml` in it, it is only mounted into the Solr container.
+** The initContainer fixing the permissions of a `volume` `backupRepository` is kept, but renamed to `volume-prep`.
+Pods without such a repository have no volume prep initContainer at all.
 
 === v0.8.0
 

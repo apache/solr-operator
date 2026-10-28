@@ -108,7 +108,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(3), "Solr StatefulSet requires the solr container plus the desired sidecars.")
 			Expect(statefulSet.Spec.Template.Spec.Containers[1:]).To(Equal(extraContainers1), "Solr StatefulSet has incorrect extra containers")
 
-			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(2), "Solr StatefulSet should only require the additional initContainers specified, since the solr.xml is mounted directly into the Solr home directory.")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(2), "Solr StatefulSet should only have the additional initContainers specified, no default ones are needed.")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(Equal(extraContainers2), "Solr StatefulSet has incorrect extra initContainers")
 
 			// Check the update strategy
