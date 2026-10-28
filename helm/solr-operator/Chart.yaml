@@ -145,6 +145,11 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: changed
+      description: The `solr.xml` is now mounted into the Solr home directory directly from the ConfigMap, via a subPath volumeMount, instead of being copied there by the `cp-solr-xml` initContainer. Solr pods that do not use a `volume` backupRepository no longer have a volume prep initContainer at all, and the one kept for `volume` backupRepositories is now named `volume-prep`
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/161
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
