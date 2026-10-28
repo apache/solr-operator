@@ -22,6 +22,19 @@ under the License.
 This file is read by automated agents (security scanners, code
 analyzers, AI assistants) operating on this repository.
 
+## Skills
+
+Reusable procedures for this repository are published as [Agent Skills](https://agentskills.io) in
+`.agents/skills/`, the vendor-neutral location that most assistants read. Before doing one of these
+tasks by hand, read its `SKILL.md`:
+
+| Skill | Use it for |
+|---|---|
+| `solr-version-support` | Adopting a new Apache Solr release: the default version, the compatibility matrix, and whether the release needs operator work. |
+
+Most assistants read `.agents/skills/` directly. Claude Code only discovers skills under
+`.claude/skills/`, so it needs a local copy; keep that outside version control.
+
 ## Security
 
 Security model: [SECURITY.md](./SECURITY.md)
