@@ -146,7 +146,6 @@ Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the 
 * The `cp-solr-xml` initContainer has been removed.
 The `solr.xml` is now mounted into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount.
 This changes the Solr pod spec, so all Solr pods are restarted when the operator is upgraded.
-** The `solr.xml` in a running pod is now read-only.
 ** Sidecars and custom initContainers mounting the data volume no longer find a `solr.xml` in it, it is only mounted into the Solr container.
 ** The initContainer fixing the permissions of a `volume` `backupRepository` is kept, but renamed to `volume-prep`.
 Pods without such a repository have no volume prep initContainer at all.
