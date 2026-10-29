@@ -752,7 +752,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 
 				if runAsRoot {
 					// Check writability as the user Solr runs as, which needs that user to exist in
-					// this container. Nothing to add when Solr runs as root, which can write anyway.
+					// this container. Nothing to add when Solr runs as root, which can write anyway,
+					// or when its group is root, which already exists in the busybox image.
 					testDirCommand := "test -w " + volumeMount.MountPath
 					if solrUser != 0 && solrFSGroup != 0 {
 						if !solrUserAdded {
@@ -771,7 +772,7 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 						volumeMount.MountPath))
 				} else {
 					setupCommands = append(setupCommands, fmt.Sprintf(
-						"if ! test -w %s; then echo \"%s\"; exit 1; fi",
+						"if ! test -w %s; then echo \"%s\" >&2; exit 1; fi",
 						volumeMount.MountPath,
 						fmt.Sprintf("Backup repository directory %s is not writable by user %d. "+
 							"Either make the volume writable by that user or group %d, or set "+
@@ -793,6 +794,9 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
 			Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
 			VolumeMounts:    volumeMounts,
+			// So that the reason a backup repository directory was rejected shows up in the pod
+			// status, rather than only in this container's log
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 			Resources: corev1.ResourceRequirements{
 				Requests: volumePrepResources,
 				Limits:   volumePrepResources,
