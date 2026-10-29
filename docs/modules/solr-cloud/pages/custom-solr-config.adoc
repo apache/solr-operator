@@ -104,6 +104,10 @@ spec:
 
 NOTE: If you set `providedConfigMap`, then the ConfigMap must include the `solr.xml` or `log4j2.xml` key, otherwise the SolrCloud will fail to reconcile.
 
+NOTE: The format of `solr.xml` differs between Solr major versions, e.g. Solr 9 requires `hostContext` and Solr 10 refuses to start with it.
+When upgrading a SolrCloud to a new Solr major version, create a new ConfigMap with a `solr.xml` for that version, and change `spec.solrImage.tag` and `providedConfigMap` in the same update.
+The `solr.xml` that ships with the new Solr version (`server/solr/solr.xml`) is a good starting point.
+
 === Changes to Custom Config Trigger Rolling Restarts
 
 The Solr operator stores the MD5 hash of your custom XML in the StatefulSet's pod spec annotations (`spec.template.metadata.annotations`). To see the current annotations for your Solr pods, you can do:

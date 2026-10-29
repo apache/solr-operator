@@ -43,6 +43,8 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
 	*/
 	BeforeAll(func(ctx context.Context) {
+		skipIfPrometheusExporterUnavailable()
+
 		solrCloud = generateBaseSolrCloud(2)
 
 		By("creating the SolrCloud")

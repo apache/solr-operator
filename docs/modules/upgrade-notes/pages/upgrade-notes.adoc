@@ -45,25 +45,26 @@ If you want to skip versions when upgrading, be sure to check out the <<upgradin
 
 === Solr Versions
 
-[cols="^,^,^,^,^,^",options="header"]
+[cols="^,^,^,^,^,^,^",options="header"]
 |===
-| Solr Operator Version | `7.7` | `8.0` - `8.10` | `8.11` | `9.0` - `9.3` | `9.4`+
+| Solr Operator Version | `7.7` | `8.0` - `8.10` | `8.11` | `9.0` - `9.3` | `9.4`+ | `10.0`+
 
-| `v0.2.7` | YES | YES | YES | NO | NO
-| `v0.2.8` | YES | YES | YES | NO | NO
-| `v0.3.x` | YES | YES | YES | NO | NO
-| `v0.4.x` | YES | YES | YES | NO | NO
-| `v0.5.x` | YES | YES | YES | NO | NO
-| `v0.6.x` | YES | YES | YES | YES ^1^ | YES ^1^
-| `v0.7.x` | YES | YES | YES | YES ^1^ | YES ^1^
-| `v0.8.x` | NO | NO | YES | YES ^1^ | YES
-| `v0.9.x` | NO | NO | YES | YES ^1^ | YES
-| `v0.10.x` | NO | NO | YES | YES ^1^ | YES
+| `v0.2.7` | YES | YES | YES | NO | NO | NO
+| `v0.2.8` | YES | YES | YES | NO | NO | NO
+| `v0.3.x` | YES | YES | YES | NO | NO | NO
+| `v0.4.x` | YES | YES | YES | NO | NO | NO
+| `v0.5.x` | YES | YES | YES | NO | NO | NO
+| `v0.6.x` | YES | YES | YES | YES ^1^ | YES ^1^ | NO
+| `v0.7.x` | YES | YES | YES | YES ^1^ | YES ^1^ | NO
+| `v0.8.x` | NO | NO | YES | YES ^1^ | YES | NO
+| `v0.9.x` | NO | NO | YES | YES ^1^ | YES | NO
+| `v0.10.x` | NO | NO | YES | YES ^1^ | YES | YES ^2^
 |===
 
 *Exceptions*
 
 * ^1^ `SolrTLS` and `SolrClientTLS` are not supported
+* ^2^ The `SolrPrometheusExporter` is not supported, because `solr-exporter` was removed in Solr 10
 
 Please note that this represents basic compatibility with the Solr Operator.
 There may be options and features that require newer versions of Solr.
@@ -135,6 +136,49 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 == Upgrade Warnings and Notes
 
 === v0.10.0
+
+* *Solr 10 support, and Solr image tags must start with the Solr version*
++
+The Solr Operator now supports Solr 10.
+Solr 10 needs a different `solr.xml`, different env vars and different `bin/solr` commands than Solr 9, so the operator reads the Solr version from `spec.solrImage.tag`.
+The tag must therefore start with the Solr version, e.g. `9.10.0`, `10.0.0`, `9.10`, `8.11`, `10`, `9.10.0-slim`, `10.0.0-my-custom-build` or `10.0.0@sha256:<digest>`.
+Tags without a version, such as `latest` or `slim`, and custom tags that don't start with the Solr version, are not accepted.
+The operator does not reconcile a SolrCloud with such a tag, or with an unsupported Solr major version; it emits an `UnsupportedSolrVersion` Warning event instead.
+*Before upgrading the operator*, check the image tags of your SolrClouds (including the `image.tag` value of the `solr` Helm chart) and change them where needed.
+SolrClouds that never set a tag got the operator's default tag at the time they were created (e.g. `8.11`), which is accepted.
+Upgrading the operator restarts the pods of every SolrCloud, including the ones that stay on Solr 8.11 or 9.x.
+The Solr 10 specific changes are gated on the Solr major version and do not affect them, but other changes in this release do alter the pod template of every SolrCloud: the new `solr.apache.org/storageMinimumSize` annotation, the removal of the `postStart` lifecycle hook, and the new `SOLR_TOOL_OPTS` environment variable on the ZooKeeper setup initContainer.
+This is a managed rolling restart that takes the cluster operation lock and respects `maxPodsUnavailable`, so it behaves like any other rolling restart, but plan for it.
+Changing a tag, e.g. from `latest` to `9.10.0`, changes the pod template and therefore restarts all Solr pods, even if the new tag points to the same image.
+If you pass `-Dsolr.allowPaths=...` via `solrOpts`, use `-Dsolr.security.allow.paths=...` when moving to Solr 10, which doesn't read the old camelCase name anymore.
+Alternatively, set the paths via an environment variable in `spec.customSolrKubeOptions.podOptions.envVars`: `SOLR_ALLOW_PATHS` on Solr 9.6+, and `SOLR_SECURITY_ALLOW_PATHS` on Solr 10.
+Solr 10 still reads `SOLR_ALLOW_PATHS`, but logs a deprecation warning for it.
+Solr 10 can't open indexes that were created with Solr 8, as Lucene only reads indexes created by the previous major version, so check Solr's own upgrade notes before upgrading a SolrCloud that started on Solr 8.
+
+* *Solr 10: custom `solr.xml` files need to be updated*
++
+If you provide your own `solr.xml` (via `spec.customSolrKubeOptions.configMapOptions.providedConfigMap`), it needs to change together with the Solr version.
+Solr 10 refuses to start with settings it no longer supports, such as `hostContext` and `genericCoreNodeNames`, while Solr 9 requires `hostContext`, so no single `solr.xml` works for both.
+Create a new ConfigMap with a Solr 10 `solr.xml`, and change `spec.solrImage.tag` and `providedConfigMap` in the same update of the SolrCloud.
+The operator emits an `InvalidConfigMap` Warning event if the custom `solr.xml` of a Solr 10 SolrCloud still contains `hostContext` or `genericCoreNodeNames`, but it doesn't stop the rolling restart.
+The easiest way is to start from the `solr.xml` that ships with Solr 10 (`server/solr/solr.xml`) and re-apply your changes; use `${solr.host.advertise:}` for the `host` setting.
+
+* *Solr 10: custom `log4j2.xml` files need to be updated*
++
+Solr 10 renamed the `solr.log.dir` system property to `solr.logs.dir`.
+If you provide your own `log4j2.xml` (via `spec.customSolrKubeOptions.configMapOptions.providedConfigMap`), any appender referring to `${sys:solr.log.dir}` stops working on Solr 10.
+Log4j cannot resolve the old property, so every appender using it fails to initialise and Solr starts with console logging only, writing no log files at all.
+Solr still starts and still logs to stdout, which makes this easy to miss.
+Use `${sys:solr.logs.dir}`, or `${env:SOLR_LOGS_DIR}`, which the Solr container image sets on both Solr 9 and Solr 10 and therefore needs no change when upgrading.
+
+* *The `SolrPrometheusExporter` does not support Solr 10*
++
+`solr-exporter` was removed from the Solr distribution in Solr 10, so Solr 10 images don't contain `/opt/solr/prometheus-exporter` anymore.
+A `SolrPrometheusExporter` with a Solr 10 image cannot start, and one with an older image cannot read the metrics of Solr 10, which only serves them in Prometheus format.
+The operator does not create or update the resources of a `SolrPrometheusExporter` that uses a Solr 10 image or refers to a Solr 10 SolrCloud; it emits an `UnsupportedSolrVersion` Warning event and sets its status to not ready instead.
+An existing exporter Deployment keeps running when its SolrCloud is upgraded to Solr 10, but it no longer reports Solr's metrics.
+Delete any `SolrPrometheusExporter` for a SolrCloud before upgrading that SolrCloud to Solr 10.
+Instead, each Solr 10 node exposes its metrics in Prometheus format at `/solr/admin/metrics`, so Prometheus can scrape the Solr pods directly (see https://github.com/apache/solr-operator/issues/820[#820]).
 
 * The default Solr version has been upgraded from `8.11` to `9.11.0`.
 This only affects new resources, as default versions are hard-written to the resources immediately.

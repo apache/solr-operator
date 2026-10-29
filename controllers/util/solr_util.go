@@ -19,6 +19,8 @@ package util
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -71,6 +73,7 @@ const (
 
 	DistLibs              = "/opt/solr/dist"
 	ContribLibs           = "/opt/solr/contrib/%s/lib"
+	ModuleLibs            = "/opt/solr/modules/%s/lib"
 	SysPropLibPlaceholder = "${solr.sharedLib:}"
 )
 
@@ -80,6 +83,13 @@ var (
 	DefaultSolrZKPrepInitContainerMemory     = resource.NewScaledQuantity(200, 6)
 	DefaultSolrZKPrepInitContainerCPU        = resource.NewMilliQuantity(400, resource.DecimalExponent)
 )
+
+// SolrCloudSelectorLabels returns the labels that the SolrCloud's StatefulSet selects its pods (and PVCs) by.
+func SolrCloudSelectorLabels(solrCloud *solr.SolrCloud) map[string]string {
+	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels["technology"] = solr.SolrTechnologyLabel
+	return selectorLabels
+}
 
 // GenerateStatefulSet returns a new appsv1.StatefulSet pointer generated for the SolrCloud instance
 // object: SolrCloud instance
@@ -104,10 +114,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	defaultReadinessProbe := createDefaultProbeHandlerForPath(probeScheme, solrPodPort, DefaultReadinessProbePath)
 
 	labels := solrCloud.SharedLabelsWith(solrCloud.GetLabels())
-	selectorLabels := solrCloud.SharedLabels()
+	selectorLabels := SolrCloudSelectorLabels(solrCloud)
 
 	labels["technology"] = solr.SolrTechnologyLabel
-	selectorLabels["technology"] = solr.SolrTechnologyLabel
 
 	annotations := map[string]string{
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
@@ -153,6 +162,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
+	// The hostPort sysprop is deprecated in favor of SOLR_PORT_ADVERTISE, but custom solr.xml files may still use it
 	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
 
 	// Volumes & Mounts
@@ -399,6 +409,19 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:  "SOLR_STOP_WAIT",
 			Value: strconv.FormatInt(solrStopWait, 10),
 		},
+	}
+
+	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
+	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
+	// These are only set for Solr 10+, so that pods of older Solr versions are not restarted by an operator upgrade.
+	if solrCloud.SolrVersionAtLeast(10) {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "SOLR_PORT_LISTEN",
+			Value: strconv.Itoa(solrPodPort),
+		}, corev1.EnvVar{
+			Name:  "SOLR_HOST_ADVERTISE",
+			Value: solrHostName,
+		})
 	}
 
 	// Add all necessary information for connection to Zookeeper
@@ -865,6 +888,58 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 </solr>
 `
 
+// DefaultSolrXMLForSolr10 is the solr.xml template for Solr 10+.
+// It mirrors Solr 10's stock server/solr/solr.xml, so the two can be diffed directly. The operator only changes:
+//   - sharedLib, which is generated (first placeholder) to add custom library paths
+//   - backup repositories, which are generated (second placeholder)
+//
+// Compared to DefaultSolrXML (Solr 9 and earlier), it drops settings that Solr 10 rejects (hostContext,
+// genericCoreNodeNames) and the metrics element, which Solr 10's stock solr.xml doesn't contain either.
+// Solr 10 still supports the metrics element, but leaving it out means -DmetricsEnabled=false has no effect on Solr 10.
+// It reads the advertised host from "solr.host.advertise" instead of the deprecated "host" sysprop,
+// and allowPaths from its Solr 10 sysprop "solr.security.allow.paths".
+const DefaultSolrXMLForSolr10 = `<?xml version="1.0" encoding="UTF-8" ?>
+<solr>
+  <int name="maxBooleanClauses">${solr.max.booleanClauses:1024}</int>
+  %s
+  <str name="modules">${solr.modules:}</str>
+  <str name="allowPaths">${solr.security.allow.paths:}</str>
+  <str name="allowUrls">${solr.security.allow.urls:}</str>
+  <str name="hideStackTrace">${solr.hideStackTrace:false}</str>
+  <int name="indexSearcherExecutorThreads">${solr.searchThreads:0}</int>
+  <solrcloud>
+    <str name="host">${solr.host.advertise:}</str>
+    <int name="hostPort">${solr.port.advertise:0}</int>
+    <int name="zkClientTimeout">${zkClientTimeout:30000}</int>
+    <int name="distribUpdateSoTimeout">${distribUpdateSoTimeout:600000}</int>
+    <int name="distribUpdateConnTimeout">${distribUpdateConnTimeout:60000}</int>
+    <str name="zkCredentialsProvider">${zkCredentialsProvider:org.apache.solr.common.cloud.DefaultZkCredentialsProvider}</str>
+    <str name="zkACLProvider">${zkACLProvider:org.apache.solr.common.cloud.DefaultZkACLProvider}</str>
+    <str name="zkCredentialsInjector">${zkCredentialsInjector:org.apache.solr.common.cloud.DefaultZkCredentialsInjector}</str>
+    <int name="minStateByteLenForCompression">${minStateByteLenForCompression:-1}</int>
+    <str name="stateCompressor">${stateCompressor:org.apache.solr.common.util.ZLibCompressor}</str>
+  </solrcloud>
+  <shardHandlerFactory name="shardHandlerFactory" class="${defaultShardHandlerFactory:HttpShardHandlerFactory}">
+    <int name="socketTimeout">${socketTimeout:600000}</int>
+    <int name="connTimeout">${connTimeout:60000}</int>
+  </shardHandlerFactory>
+  %s
+</solr>
+`
+
+// solr10UnsupportedSolrXmlSettingRegex matches solr.xml settings that Solr 10 refuses to start with, e.g. <str name="hostContext">.
+var solr10UnsupportedSolrXmlSettingRegex = regexp.MustCompile(`name\s*=\s*["'](hostContext|genericCoreNodeNames)["']`)
+
+// SettingsUnsupportedBySolr10 returns the names of the settings in the given solr.xml that Solr 10 refuses to start with.
+func SettingsUnsupportedBySolr10(solrXml string) (settings []string) {
+	for _, match := range solr10UnsupportedSolrXmlSettingRegex.FindAllStringSubmatch(solrXml, -1) {
+		if !slices.Contains(settings, match[1]) {
+			settings = append(settings, match[1])
+		}
+	}
+	return settings
+}
+
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance
 func GenerateConfigMap(solrCloud *solr.SolrCloud) *corev1.ConfigMap {
@@ -896,25 +971,36 @@ func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
 	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
 	additionalLibs = append(additionalLibs, solrCloud.Spec.AdditionalLibs...)
-	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs)
+	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs, solrCloud.SolrVersionAtLeast(10))
 }
 
-func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string) string {
-	return fmt.Sprintf(DefaultSolrXML, GenerateAdditionalLibXMLPart(solrModules, additionalLibs), backupSection)
+func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string, isSolr10 bool) string {
+	template := DefaultSolrXML
+	if isSolr10 {
+		template = DefaultSolrXMLForSolr10
+	}
+	return fmt.Sprintf(template, GenerateAdditionalLibXMLPart(solrModules, additionalLibs, isSolr10), backupSection)
 }
 
-func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string) string {
+func GenerateAdditionalLibXMLPart(solrModules []string, additionalLibs []string, isSolr10 bool) string {
 	libs := make(map[string]bool, 0)
 
 	// Placeholder for users to specify libs via sysprop
 	libs[SysPropLibPlaceholder] = true
 
 	// Add all module library locations
-	if len(solrModules) > 0 {
-		libs[DistLibs] = true
-	}
-	for _, module := range solrModules {
-		libs[fmt.Sprintf(ContribLibs, module)] = true
+	if isSolr10 {
+		// The contrib and dist directories were removed in Solr 10, modules only live in the modules directory
+		for _, module := range solrModules {
+			libs[fmt.Sprintf(ModuleLibs, module)] = true
+		}
+	} else {
+		if len(solrModules) > 0 {
+			libs[DistLibs] = true
+		}
+		for _, module := range solrModules {
+			libs[fmt.Sprintf(ContribLibs, module)] = true
+		}
 	}
 
 	// Add all custom library locations
@@ -1298,7 +1384,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		cmd += setUrlSchemeClusterPropCmd()
+		cmd += setUrlSchemeClusterPropCmd(solrCloud.SolrVersionAtLeast(10))
 	}
 
 	if security != nil && security.SecurityJson != "" {

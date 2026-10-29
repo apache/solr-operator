@@ -145,6 +145,25 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: added
+      description: Support for Solr 10. See the upgrade notes before upgrading a SolrCloud to Solr 10.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/821
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The operator no longer reconciles a SolrPrometheusExporter that uses a Solr 10 image or refers to a Solr 10 SolrCloud, as Solr 10 removed the Prometheus exporter. It emits an UnsupportedSolrVersion Warning event instead.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/820
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The SolrCloud image tag must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). SolrClouds with other tags, such as `latest`, are no longer reconciled; see the upgrade notes before upgrading the operator.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
