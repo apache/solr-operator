@@ -281,7 +281,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.resources.requests | map[string]string |  | Provide Resource requests for the Solr container |
 | podOptions.defaultInitContainerResources.limits | map[string]string |  | Provide Resource limits for Solr's default initContainer(s) |
 | podOptions.defaultInitContainerResources.requests | map[string]string |  | Provide Resource requests for Solr's default initContainer(s) |
-| podOptions.defaultInitContainerSecurityContext | object |  | Provide SecurityContext for Solr's default initContainer(s) |
+| podOptions.defaultInitContainerSecurityContext | object |  | Provide SecurityContext for Solr's default initContainer(s), merged over the Pod Security Standards "restricted" profile defaults. Set `runAsUser: 0` to let them take ownership of a backup repository volume. |
 | podOptions.nodeSelector | map[string]string |  | Add a node selector for the Solr pod, to specify where it can be scheduled |
 | podOptions.affinity | object |  | Add Kubernetes affinity information for the Solr pod |
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
@@ -293,8 +293,8 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |
-| podOptions.podSecurityContext | object |  | Security context for the Solr pod |
-| podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod |
+| podOptions.podSecurityContext | object |  | Security context for the Solr pod, merged over the Pod Security Standards "restricted" profile defaults |
+| podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod, merged over the Pod Security Standards "restricted" profile defaults |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |

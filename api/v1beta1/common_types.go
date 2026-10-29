@@ -70,10 +70,16 @@ type PodOptions struct {
 	Volumes []AdditionalVolume `json:"volumes,omitempty"`
 
 	// PodSecurityContext is the security context for the pod.
+	//
+	// The operator generates pods that satisfy the Kubernetes Pod Security Standards "restricted"
+	// profile. Fields given here are merged over those defaults, field by field, so setting one
+	// field overrides one default and leaves the rest in place.
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 
 	// ContainerSecurityContext the container-level security context used by the pod's primary container
+	//
+	// Merged over the "restricted" profile defaults the operator sets, field by field.
 	// +optional
 	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
 
@@ -167,6 +173,10 @@ type PodOptions struct {
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
 
 	// DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+	//
+	// Merged over the "restricted" profile defaults the operator sets, field by field. Setting
+	// "runAsUser: 0" additionally lets these containers do work that a non-root user cannot, such as
+	// taking ownership of a backup repository volume.
 	// +optional
 	DefaultInitContainerSecurityContext *corev1.SecurityContext `json:"defaultInitContainerSecurityContext,omitempty"`
 }

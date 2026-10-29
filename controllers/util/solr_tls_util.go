@@ -588,7 +588,7 @@ func (tls *TLSConfig) mountTLSWrapperScriptAndInitContainer(deployment *appsv1.D
 		wrapperScript, catKsp, catTsp, kspJavaSysProp, tspJavaSysProp, entrypoint, wrapperScript)
 
 	createTLSWrapperScriptInitContainer := corev1.Container{
-		Name:            "create-tls-wrapper-script",
+		Name:            TLSWrapperScriptInitContainer,
 		Image:           initContainerImage.ToImageName(),
 		ImagePullPolicy: initContainerImage.PullPolicy,
 		Command:         []string{"sh", "-c", writeWrapperScript},
@@ -716,7 +716,7 @@ func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPol
 		"/pkcs12/" + DefaultPkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 
 	return corev1.Container{
-		Name:                     "gen-pkcs12-keystore",
+		Name:                     Pkcs12InitContainer,
 		Image:                    imageName,
 		ImagePullPolicy:          imagePullPolicy,
 		TerminationMessagePath:   "/dev/termination-log",

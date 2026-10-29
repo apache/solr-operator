@@ -150,6 +150,18 @@ annotations:
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/161
+    - kind: security
+      description: Solr and Prometheus exporter pods now satisfy the Kubernetes Pod Security Standards "restricted" profile by default. The operator sets a seccompProfile on the pod and runAsNonRoot, allowPrivilegeEscalation false and capabilities.drop ALL on every container it generates. podSecurityContext, containerSecurityContext and defaultInitContainerSecurityContext are now merged over these defaults field by field
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/873
+        - name: Pod Security Standards
+          url: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
+    - kind: security
+      description: The Solr Operator's own container now drops all capabilities and sets a seccompProfile, so the operator pod satisfies the "restricted" profile too
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/873
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

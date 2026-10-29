@@ -167,3 +167,20 @@ spec:
 ----
 
 IMPORTANT: All persistent volumes used with Volume Repositories must have `accessMode: ReadWriteMany` set, otherwise the backups will not succeed.
+
+The directory must be writable by the user Solr runs as, uid `8983` by default.
+An init container checks this before Solr starts and fails the pod with a message naming the directory if it is not.
+The pod's `fsGroup` takes care of this for most volume types, but a volume that comes with its own ownership, such as an NFS export, may need to be prepared externally.
+Alternatively, let the init container take ownership of the directory by running it as root:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      defaultInitContainerSecurityContext:
+        runAsUser: 0
+----
+
+This security context applies to every init container the operator generates, so `setup-zk` runs as root too, and the pod no longer satisfies the Pod Security Standards "restricted" profile.
+See xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security Standards].
