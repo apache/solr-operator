@@ -16,7 +16,7 @@ apiVersion: v2
 name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
 version: 0.10.0-prerelease
-appVersion: 9.10.0
+appVersion: 9.11.0
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org
 sources:
@@ -65,7 +65,17 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/865
-  artifacthub.io/containsSecurityUpdates: "false"
+    - kind: changed
+      description: The default Solr version is now 9.11.0, up from 9.10.0. Newly created SolrClouds that do not set `image.tag` start on 9.11.0; existing clusters keep the tag already written into their spec
+      links:
+        - name: Solr 9.11.0 Release Notes
+          url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
+    - kind: security
+      description: Solr 9.11.0 carries the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516, all of which affect Solr 9.10.0 and earlier. Existing SolrClouds are not upgraded automatically; set `image.tag` to 9.11.0 to pick the fixes up
+      links:
+        - name: Solr Security News
+          url: https://solr.apache.org/security-news.html
+  artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
   artifacthub.io/links: |
@@ -79,7 +89,7 @@ annotations:
       url: https://solr.apache.org/operator/resources#tutorials
   artifacthub.io/images: |
     - name: solr
-      image: solr:9.10.0
+      image: solr:9.11.0
       whitelisted: true
   artifacthub.io/signKey: |
     fingerprint: <fingerprint>
