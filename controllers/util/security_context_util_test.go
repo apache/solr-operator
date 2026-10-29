@@ -236,6 +236,15 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 		assert.False(t, *securityContext.AllowPrivilegeEscalation, "Privilege escalation should still be disallowed")
 	})
 
+	t.Run("capabilities are overridden as a whole", func(t *testing.T) {
+		// "capabilities" is one field of a securityContext, so providing it replaces the default
+		// rather than merging into it. An empty block is therefore how a user keeps the container's
+		// default capabilities, which the "restricted" profile does not allow.
+		provided := &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}}
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		assert.Empty(t, securityContext.Capabilities.Drop, "An empty capabilities block should not have the default dropped capabilities added to it")
+	})
+
 	t.Run("asking for privileged mode turns off the conflicting default", func(t *testing.T) {
 		provided := &corev1.SecurityContext{Privileged: ptr.To(true)}
 		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
