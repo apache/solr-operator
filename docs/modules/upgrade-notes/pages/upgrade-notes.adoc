@@ -173,6 +173,7 @@ Use `${sys:solr.logs.dir}`, or `${env:SOLR_LOGS_DIR}`, which the Solr container 
 +
 `solr-exporter` was removed from the Solr distribution in Solr 10, so Solr 10 images don't contain `/opt/solr/prometheus-exporter` anymore.
 A `SolrPrometheusExporter` that uses the image of a Solr 10 SolrCloud, or any other Solr 10 image, cannot start.
+The operator does not create or update the Deployment of such a `SolrPrometheusExporter`; it emits an `UnsupportedSolrVersion` Warning event on it instead.
 Delete any `SolrPrometheusExporter` for a SolrCloud before upgrading that SolrCloud to Solr 10.
 Instead, each Solr 10 node exposes its metrics in Prometheus format at `/solr/admin/metrics`, so Prometheus can scrape the Solr pods directly (see https://github.com/apache/solr-operator/issues/820[#820]).
 

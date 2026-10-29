@@ -238,4 +238,21 @@ var _ = FDescribe("SolrPrometheusExporter controller - Events", func() {
 			expectEvent(ctx, solrPrometheusExporter, corev1.EventTypeWarning, "InvalidConfigMap")
 		})
 	})
+
+	FContext("with a Solr 10 image", func() {
+		BeforeEach(func() {
+			solrPrometheusExporter.Spec.Image = &solrv1beta1.ContainerImage{Tag: "10.0.0"}
+		})
+
+		FIt("records an UnsupportedSolrVersion event and creates no Deployment", func(ctx context.Context) {
+			By("creating the SolrPrometheusExporter")
+			Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
+
+			By("checking that an UnsupportedSolrVersion event was recorded")
+			expectEvent(ctx, solrPrometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion")
+
+			By("checking that no Deployment was created")
+			expectNoDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
+		})
+	})
 })

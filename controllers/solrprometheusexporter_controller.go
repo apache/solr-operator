@@ -187,6 +187,23 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 		return requeueOrNot, err
 	}
 
+	// Solr 10 removed the Prometheus exporter from the Solr distribution, so its images cannot run the exporter.
+	// Don't create or update the Deployment for them, as it would only crash-loop.
+	// Tags that don't start with a Solr version are allowed here, as custom exporter images don't need to follow Solr's tags.
+	exporterImage := prometheusExporter.Spec.Image
+	if exporterImage == nil {
+		exporterImage = solrCloudImage
+	}
+	if exporterImage != nil {
+		if major, versionErr := solrv1beta1.SolrMajorVersionFromTag(exporterImage.Tag); versionErr == nil && major >= 10 {
+			msg := fmt.Sprintf("Not reconciling SolrPrometheusExporter: image %s is Solr %d, but the Prometheus exporter was removed in Solr 10. "+
+				"Delete this SolrPrometheusExporter and scrape the Solr pods' /solr/admin/metrics endpoint directly instead", exporterImage.ToImageName(), major)
+			logger.Error(nil, msg)
+			r.Recorder.Event(prometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion", msg)
+			return reconcile.Result{}, nil
+		}
+	}
+
 	// Make sure the TLS config is in order
 	var tls *util.TLSCerts = nil
 	if prometheusExporter.Spec.SolrReference.SolrTLS != nil {

@@ -1349,6 +1349,13 @@ func (sc *SolrCloud) SolrMajorVersion() (int, error) {
 	if sc.Spec.SolrImage != nil {
 		tag = sc.Spec.SolrImage.Tag
 	}
+	return SolrMajorVersionFromTag(tag)
+}
+
+// SolrMajorVersionFromTag returns the Solr major version that a Solr image tag starts with.
+// An error is returned if the tag does not start with the Solr version,
+// or if the major version is not supported by the Solr Operator.
+func SolrMajorVersionFromTag(tag string) (int, error) {
 	match := solrImageTagVersionRegex.FindStringSubmatch(tag)
 	if match == nil {
 		return 0, fmt.Errorf("cannot determine the Solr version from image tag %q: "+
