@@ -510,7 +510,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		case PvcExpansionLock:
 			operationComplete, retryLaterDuration, err = handlePvcExpansion(ctx, r, instance, statefulSet, clusterOp, logger)
 			// PVC expansion (the controller-side volume resize) can take a long time on some provisioners,
-			// so it should use the long requeue timeout rather than being preempted after a minute.
+			// so a slow-but-progressing expansion should use the long requeue timeout rather than being
+			// preempted after a minute. An expansion that is erroring is still queued for a later retry
+			// after a minute, like any other failing operation.
 			shortTimeoutForRequeue = false
 		default:
 			operationFound = false
@@ -521,6 +523,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
+			// The error returned by the cluster operation is not returned by the reconcile, because the
+			// clusterOp has its own retry mechanism (it will be queued for a later retry if it keeps failing).
+			// The error is still needed below, to decide whether the operation should be queued for a later retry.
+			clusterOpError := err
 			err = nil
 			if operationComplete {
 				if nextClusterOperation == nil {
@@ -545,7 +551,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
 				queueForLaterReason := ""
-				if err != nil && clusterOpRuntime > time.Minute {
+				if clusterOpError != nil && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "hit an error during operation"
 				} else if shortTimeoutForRequeue && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "timed out during operation (1 minutes)"
@@ -567,6 +573,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationRetry",
 						"Pausing cluster operation %q because it %s; it has been queued to be retried later", string(clusterOp.Operation), queueForLaterReason)
 				}
+			}
+
+			// A failed cluster operation must always be retried, otherwise a transient error (e.g. Solr
+			// being temporarily unreachable) would stall the operation forever, since nothing else is
+			// guaranteed to trigger another reconcile for this SolrCloud.
+			if clusterOpError != nil && retryLaterDuration == 0 {
+				retryLaterDuration = time.Second * 5
 			}
 		}
 	} else if opErr == nil {

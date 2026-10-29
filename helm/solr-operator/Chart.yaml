@@ -145,6 +145,13 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: fixed
+      description: A cluster operation (scale up/down, rolling update, replica balancing, PVC expansion) that fails, e.g. because Solr is temporarily unreachable, is now always retried instead of stalling the SolrCloud until something else triggers a reconcile
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/707
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/876
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
