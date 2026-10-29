@@ -93,3 +93,50 @@ spec:
         clientIP:
           timeoutSeconds: 3600
 ----
+
+== Pod Security Standards
+
+The pods that the operator creates satisfy the Kubernetes https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted[Pod Security Standards "restricted" profile] out of the box, so they can run in a namespace that enforces it without any extra configuration.
+This applies to the Solr pods, the Prometheus exporter pods, and every init container the operator generates for them.
+
+The operator sets a seccomp profile once at the pod level, and the following on each container it generates:
+
+[source,yaml]
+----
+securityContext:
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+----
+
+The init containers that use the `busyBoxImage` additionally get `runAsUser: 8983`, because that image has no non-root user of its own and `runAsNonRoot` cannot be honoured without an explicit user.
+
+Three things are outside the operator's control:
+
+* **Containers you add yourself** through `podOptions.sidecarContainers` and `podOptions.initContainers` keep whatever security context you give them.
+Set one on each if the namespace enforces the profile.
+* **Volumes you add yourself** must be of a type the profile allows, which rules out `hostPath`.
+* **ZooKeeper** is not covered.
+A `provided` ensemble's pods are created by the ZooKeeper operator, whose `zookeeperPodPolicy` exposes only a pod-level `securityContext`, so they cannot be made to satisfy the profile from the SolrCloud resource.
+The `zookeeper-operator` deployment that the Solr Operator Helm chart installs as a dependency is likewise configured by its own chart.
+Use an `external` ZooKeeper ensemble if the namespace enforces the profile.
+
+=== Overriding the defaults
+
+`podOptions.podSecurityContext`, `podOptions.containerSecurityContext` and `podOptions.defaultInitContainerSecurityContext` are merged over these defaults field by field, so setting one field overrides one default and leaves the rest in place.
+To run a custom Solr image that needs to start as root, for example:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      containerSecurityContext:
+        runAsNonRoot: false
+----
+
+Asking for `runAsUser: 0` also turns off the `runAsNonRoot` and `capabilities.drop` defaults for that container, since neither can hold for a container that is meant to run as root.
+`seccompProfile` and `allowPrivilegeEscalation: false` still apply.
+Note that `defaultInitContainerSecurityContext` covers every init container the operator generates, not just one of them.

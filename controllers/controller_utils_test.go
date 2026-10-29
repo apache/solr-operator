@@ -933,6 +933,21 @@ var (
 		RunAsGroup: &two,
 		FSGroup:    &three,
 	}
+	// What the operator generates from testPodSecurityContext: the fields the user provided, plus
+	// the Pod Security Standards "restricted" defaults for the fields they left unset.
+	expectedPodSecurityContext = corev1.PodSecurityContext{
+		RunAsUser:      &one,
+		RunAsGroup:     &two,
+		FSGroup:        &three,
+		SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+	}
+	// What the operator generates for a container when the user provides no security context of
+	// their own. Note that runAsUser is absent: the Solr image has a non-root user of its own.
+	expectedRestrictedSecurityContext = corev1.SecurityContext{
+		AllowPrivilegeEscalation: newBoolPtr(false),
+		RunAsNonRoot:             newBoolPtr(true),
+		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
 	extraVolumes = []solrv1beta1.AdditionalVolume{
 		{
 			Name: "vol1",

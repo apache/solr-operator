@@ -254,7 +254,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 
 			// Other Pod Options
 			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(addBuiltInEnvVars(extraVars)), "Extra Env Vars are not the same as the ones provided in podOptions")
-			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
+			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(expectedPodSecurityContext), "PodSecurityContext is not the one provided in podOptions, with the restricted profile defaults added")
 			Expect(deployment.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits).To(Equal(testResources.Limits), "Resources.Limits is not the same as the one provided in podOptions")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Requests).To(Equal(testResources.Requests), "Resources.Requests is not the same as the one provided in podOptions")
@@ -265,9 +265,8 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect priorityClassName")
 			Expect(deployment.Spec.Template.Spec.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect serviceAccountName")
 			Expect(deployment.Spec.Template.Spec.Tolerations).To(Equal(testTolerationsPromExporter), "Incorrect tolerations")
-			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect tolerations")
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect Pod securityContext")
-			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "Incorrect Pod securityContext")
+			Expect(*deployment.Spec.Template.Spec.SecurityContext).To(Equal(expectedPodSecurityContext), "Incorrect Pod securityContext")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Lifecycle).To(Equal(testLifecycle), "Incorrect Container lifecycle")
 
 			Expect(deployment.Spec.Template.Spec.TopologySpreadConstraints).To(HaveLen(len(testTopologySpreadConstraints)), "Wrong number of topologySpreadConstraints")

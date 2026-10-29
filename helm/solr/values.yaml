@@ -298,6 +298,8 @@ podOptions:
 
   priorityClassName: ""
   envVars: []
+  # The operator generates pods that satisfy the Pod Security Standards "restricted" profile.
+  # Anything set here is merged over those defaults, field by field.
   podSecurityContext: {}
   containerSecurityContext: {}
   terminationGracePeriodSeconds: null
@@ -343,7 +345,9 @@ podOptions:
   # Resources for the init containers created by the Solr Operator
   defaultInitContainerResources: {}
 
-  # Security context for the init containers created by the Solr Operator
+  # Security context for the init containers created by the Solr Operator, merged over the
+  # "restricted" profile defaults. Set "runAsUser: 0" to let them take ownership of a backup
+  # repository volume that the Solr user cannot write to.
   defaultInitContainerSecurityContext: {}
 
   volumes: []
