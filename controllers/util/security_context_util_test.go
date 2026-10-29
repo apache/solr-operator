@@ -173,6 +173,120 @@ func TestGeneratedPrometheusExporterPodsSatisfyRestrictedProfile(t *testing.T) {
 		assert.Contains(t, initContainerNames, TLSWrapperScriptInitContainer, "The TLS wrapper script init container should be generated")
 		expectRestrictedProfile(t, &deployment.Spec.Template, "A Prometheus exporter pod with TLS from a mounted directory")
 	})
+
+	t.Run("with TLS from a secret", func(t *testing.T) {
+		exporter := exporterWithDefaults()
+		exporter.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{
+			PKCS12Secret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"},
+				Key:                  "keystore.p12",
+			},
+			KeyStorePasswordSecret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"},
+				Key:                  "password",
+			},
+		}
+		tls := TLSCertsForExporter(exporter)
+		// Force the keystore conversion init container, the exporter's other generated container
+		tls.ClientConfig.NeedsPkcs12InitContainer = true
+		deployment := GenerateSolrPrometheusExporterDeployment(exporter, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", tls, "")
+
+		initContainerNames := containerNames(deployment.Spec.Template.Spec.InitContainers)
+		assert.Contains(t, initContainerNames, Pkcs12InitContainer, "The keystore conversion init container should be generated")
+		expectRestrictedProfile(t, &deployment.Spec.Template, "A Prometheus exporter pod with TLS from a secret")
+	})
+
+	t.Run("the exporter container is hardened and overridable", func(t *testing.T) {
+		deployment := GenerateSolrPrometheusExporterDeployment(exporterWithDefaults(), SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", nil, "")
+		exporterContainer := findContainer(t, deployment.Spec.Template.Spec.Containers, SolrPrometheusExporterContainer)
+		assert.True(t, *exporterContainer.SecurityContext.RunAsNonRoot, "The exporter container should run as non-root")
+		assert.Equal(t, []corev1.Capability{"ALL"}, exporterContainer.SecurityContext.Capabilities.Drop, "The exporter container should drop all capabilities")
+
+		overridden := exporterWithDefaults()
+		overridden.Spec.CustomKubeOptions.PodOptions = &solr.PodOptions{
+			ContainerSecurityContext: &corev1.SecurityContext{RunAsNonRoot: ptr.To(false)},
+		}
+		deployment = GenerateSolrPrometheusExporterDeployment(overridden, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", nil, "")
+		exporterContainer = findContainer(t, deployment.Spec.Template.Spec.Containers, SolrPrometheusExporterContainer)
+		assert.False(t, *exporterContainer.SecurityContext.RunAsNonRoot, "The provided runAsNonRoot should reach the exporter container")
+		assert.Equal(t, []corev1.Capability{"ALL"}, exporterContainer.SecurityContext.Capabilities.Drop, "The other defaults should still apply to the exporter container")
+	})
+}
+
+// TestOverridingOneFieldKeepsThePodCompliant is the common case for the merging behaviour: a user
+// sets something unrelated to the profile and the pod the operator generates still satisfies it.
+func TestOverridingOneFieldKeepsThePodCompliant(t *testing.T) {
+	solrCloud := testSolrCloudForSecurityContext()
+	solrCloud.Spec.BackupRepositories = []solr.SolrBackupRepository{
+		{
+			Name:   "test-repo",
+			Volume: &solr.VolumeRepository{Source: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		},
+	}
+	solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+		PodSecurityContext:                  &corev1.PodSecurityContext{RunAsGroup: ptr.To(int64(2345))},
+		ContainerSecurityContext:            &corev1.SecurityContext{ReadOnlyRootFilesystem: ptr.To(true)},
+		DefaultInitContainerSecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: ptr.To(true)},
+	}
+	statefulSet := testStatefulSet(solrCloud, nil, nil)
+
+	assert.Equal(t, int64(2345), *statefulSet.Spec.Template.Spec.SecurityContext.RunAsGroup, "The provided runAsGroup should be kept")
+	expectRestrictedProfile(t, &statefulSet.Spec.Template, "A SolrCloud pod with unrelated security context fields set")
+}
+
+// TestInitContainerOverrideReachesTheTLSInitContainers covers the init containers that the TLS code
+// adds after the rest of the pod has been assembled, which the override never reached before.
+func TestInitContainerOverrideReachesTheTLSInitContainers(t *testing.T) {
+	provided := &corev1.SecurityContext{RunAsUser: ptr.To(int64(4321))}
+
+	t.Run("the keystore conversion container", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.SolrTLS = &solr.SolrTLSOptions{
+			PKCS12Secret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"},
+				Key:                  "keystore.p12",
+			},
+			KeyStorePasswordSecret: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"},
+				Key:                  "password",
+			},
+		}
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{DefaultInitContainerSecurityContext: provided}
+		tls := TLSCertsForSolrCloud(solrCloud)
+		tls.ServerConfig.NeedsPkcs12InitContainer = true
+		statefulSet := testStatefulSet(solrCloud, tls, nil)
+
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, Pkcs12InitContainer)
+		assert.Equal(t, int64(4321), *initContainer.SecurityContext.RunAsUser, "The override should reach the keystore conversion init container")
+		assert.True(t, *initContainer.SecurityContext.RunAsNonRoot, "The defaults should still apply to it")
+	})
+
+	t.Run("the initdb container", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.SolrTLS = &solr.SolrTLSOptions{
+			MountedTLSDir: &solr.MountedTLSDirectory{Path: "/var/solr/tls"},
+		}
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{DefaultInitContainerSecurityContext: provided}
+		statefulSet := testStatefulSet(solrCloud, TLSCertsForSolrCloud(solrCloud), nil)
+
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, InitdbInitContainer)
+		assert.Equal(t, int64(4321), *initContainer.SecurityContext.RunAsUser, "The override should reach the initdb init container")
+		assert.True(t, *initContainer.SecurityContext.RunAsNonRoot, "The defaults should still apply to it")
+	})
+
+	t.Run("the exporter's TLS wrapper script container", func(t *testing.T) {
+		exporter := &solr.SolrPrometheusExporter{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+		exporter.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{
+			MountedTLSDir: &solr.MountedTLSDirectory{Path: "/var/solr/tls"},
+		}
+		exporter.Spec.CustomKubeOptions.PodOptions = &solr.PodOptions{DefaultInitContainerSecurityContext: provided}
+		exporter.WithDefaults()
+		deployment := GenerateSolrPrometheusExporterDeployment(exporter, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", TLSCertsForExporter(exporter), "")
+
+		initContainer := findContainer(t, deployment.Spec.Template.Spec.InitContainers, TLSWrapperScriptInitContainer)
+		assert.Equal(t, int64(4321), *initContainer.SecurityContext.RunAsUser, "The override should reach the TLS wrapper script init container")
+		assert.True(t, *initContainer.SecurityContext.RunAsNonRoot, "The defaults should still apply to it")
+	})
 }
 
 func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
@@ -307,6 +421,47 @@ func TestBackupRepositoryPreparationRunsAsSolrByDefault(t *testing.T) {
 		assert.Contains(t, command, "adduser", "A root container should add the Solr user to check writability as it")
 		assert.Equal(t, int64(0), *initContainer.SecurityContext.RunAsUser, "The init container should run as root")
 		assert.Nil(t, initContainer.SecurityContext.RunAsNonRoot, "A root init container cannot run as non-root")
+	})
+
+	t.Run("the failure reason reaches the pod status", func(t *testing.T) {
+		statefulSet := testStatefulSet(solrCloudWithRepo(), nil, nil)
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
+
+		assert.Contains(t, strings.Join(initContainer.Command, " "), ">&2", "The failure message should go to stderr")
+		assert.Equal(t, corev1.TerminationMessageFallbackToLogsOnError, initContainer.TerminationMessagePolicy, "The failure message should show up in the pod status, not only in the container log")
+	})
+
+	t.Run("the Solr user is only added once for several repositories", func(t *testing.T) {
+		solrCloud := solrCloudWithRepo()
+		solrCloud.Spec.BackupRepositories = append(solrCloud.Spec.BackupRepositories, solr.SolrBackupRepository{
+			Name:   "second-repo",
+			Volume: &solr.VolumeRepository{Source: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		})
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+			DefaultInitContainerSecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To(int64(0))},
+		}
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
+		command := strings.Join(initContainer.Command, " ")
+
+		assert.Equal(t, 1, strings.Count(command, "adduser"), "The Solr user should only be added once, however many repositories there are")
+		assert.Contains(t, command, "chown -R 8983:8983 /var/solr/data/backup-restore/test-repo", "The first repository directory should be prepared")
+		assert.Contains(t, command, "chown -R 8983:8983 /var/solr/data/backup-restore/second-repo", "The second repository directory should be prepared")
+		assert.Len(t, initContainer.VolumeMounts, 2, "Both repository volumes should be mounted")
+	})
+
+	t.Run("every repository is checked when running as the Solr user", func(t *testing.T) {
+		solrCloud := solrCloudWithRepo()
+		solrCloud.Spec.BackupRepositories = append(solrCloud.Spec.BackupRepositories, solr.SolrBackupRepository{
+			Name:   "second-repo",
+			Volume: &solr.VolumeRepository{Source: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+		})
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
+		command := strings.Join(initContainer.Command, " ")
+
+		assert.Contains(t, command, "test -w /var/solr/data/backup-restore/test-repo", "The first repository directory should be checked")
+		assert.Contains(t, command, "test -w /var/solr/data/backup-restore/second-repo", "The second repository directory should be checked")
 	})
 
 	t.Run("the pod's user is used for the check", func(t *testing.T) {
