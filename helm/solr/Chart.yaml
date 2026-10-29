@@ -70,6 +70,11 @@ annotations:
       links:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: changed
+      description: The `image.tag` value must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). The Solr Operator does not reconcile SolrClouds with other tags, such as `latest`; see the upgrade notes before upgrading the operator.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
