@@ -137,18 +137,22 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 === v0.10.0
 
 * The default Solr version has been upgraded from `8.11` to `9.11.0`.
-This only affects new resources, as default versions are hard-written to the resources immediately.
-Note that Solr `>=9.10` will not start a node older than any Solr node already running in the same cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
+This only affects newly created resources, since the operator writes the resolved Solr version into the resource's spec on the first reconcile, so an operator upgrade never changes the Solr version of a running cluster.
+Note that a Solr `>=9.10` node refuses to start if its `major.minor` version is lower than the highest version already running in the same Solr cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
 
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
 * The `cp-solr-xml` initContainer has been removed.
-The `solr.xml` is now mounted into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount.
-This changes the Solr pod spec, so all Solr pods are restarted when the operator is upgraded.
-** Sidecars and custom initContainers mounting the data volume no longer find a `solr.xml` in it, it is only mounted into the Solr container.
-** The initContainer fixing the permissions of a `volume` `backupRepository` is kept, but renamed to `volume-prep`.
-Pods without such a repository have no volume prep initContainer at all.
+The `solr.xml` is now mounted read-only into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount, instead of being copied there before Solr starts.
+** This changes the Solr pod spec, so the Solr pods are restarted when the operator is upgraded.
+SolrClouds using `updateStrategy.method: Manual` are the exception, since neither the operator nor Kubernetes deletes their pods: they keep running with the old layout until you delete the pods yourself.
+** The `solr.xml` is now only visible inside the Solr container.
+Sidecars and custom initContainers that mount the data volume no longer get it from there.
+With persistent or `hostPath` data storage they do still see the `solr.xml` that `cp-solr-xml` copied onto the volume before the upgrade, but that copy is stale and will never be updated again.
+Mount the `solr.xml` ConfigMap into such a container if it needs the current configuration.
+** The permission fixing that `cp-solr-xml` also did for `volume` `backupRepositories` has moved to a new `volume-prep` initContainer, which is only created for SolrClouds that have a `volume` `backupRepository`.
+All other Solr pods now start without any volume prep initContainer.
 
 === v0.8.0
 
