@@ -158,8 +158,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	isSolr10 := solrCloud.IsSolr10OrLater()
-
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
 	// The hostPort sysprop is deprecated in favor of SOLR_PORT_ADVERTISE, but custom solr.xml files may still use it
@@ -414,7 +412,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
 	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
 	// These are only set for Solr 10+, so that pods of older Solr versions are not restarted by an operator upgrade.
-	if isSolr10 {
+	if solrCloud.SolrVersionAtLeast(10) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "SOLR_PORT_LISTEN",
 			Value: strconv.Itoa(solrPodPort),
@@ -957,7 +955,7 @@ func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
 	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
 	additionalLibs = append(additionalLibs, solrCloud.Spec.AdditionalLibs...)
-	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs, solrCloud.IsSolr10OrLater())
+	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs, solrCloud.SolrVersionAtLeast(10))
 }
 
 func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string, isSolr10 bool) string {
@@ -1370,7 +1368,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		cmd += setUrlSchemeClusterPropCmd(solrCloud.IsSolr10OrLater())
+		cmd += setUrlSchemeClusterPropCmd(solrCloud.SolrVersionAtLeast(10))
 	}
 
 	if security != nil && security.SecurityJson != "" {

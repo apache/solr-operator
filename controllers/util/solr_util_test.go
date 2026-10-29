@@ -265,12 +265,14 @@ func TestSolrMajorVersion(t *testing.T) {
 			got, err := cloud.SolrMajorVersion()
 			if tt.wantErr {
 				assert.Error(t, err)
-				assert.False(t, cloud.IsSolr10OrLater(), "an unsupported version is treated as pre-10")
+				assert.False(t, cloud.SolrVersionAtLeast(solr.MinSupportedSolrMajorVersion), "an unsupported version is never at least any version")
 				return
 			}
 			assert.NoError(t, err)
 			assert.Equal(t, tt.want, got)
-			assert.Equal(t, tt.want >= 10, cloud.IsSolr10OrLater())
+			assert.Equal(t, tt.want >= 10, cloud.SolrVersionAtLeast(10))
+			assert.True(t, cloud.SolrVersionAtLeast(tt.want))
+			assert.False(t, cloud.SolrVersionAtLeast(tt.want+1))
 		})
 	}
 }

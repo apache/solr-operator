@@ -1363,12 +1363,13 @@ func (sc *SolrCloud) SolrMajorVersion() (int, error) {
 	return major, nil
 }
 
-// IsSolr10OrLater returns true if this SolrCloud runs Solr 10 or later.
+// SolrVersionAtLeast returns true if this SolrCloud runs the given Solr major version or later,
+// e.g. SolrVersionAtLeast(10) for Solr 10+. Use !SolrVersionAtLeast(n) to check for versions before n.
 // The SolrCloud controller does not reconcile a cloud whose version cannot be determined,
-// so an undeterminable version is treated as pre-10 here.
-func (sc *SolrCloud) IsSolr10OrLater() bool {
-	major, err := sc.SolrMajorVersion()
-	return err == nil && major >= 10
+// so an undeterminable version returns false here.
+func (sc *SolrCloud) SolrVersionAtLeast(major int) bool {
+	v, err := sc.SolrMajorVersion()
+	return err == nil && v >= major
 }
 
 // UsesHeadlessService returns whether the given solrCloud requires a headless service to be created for it.
