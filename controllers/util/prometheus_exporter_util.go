@@ -385,12 +385,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	}
 
 	// Harden every container the operator generated, now that they have all been added
-	var containerSecurityContext, initContainerSecurityContext *corev1.SecurityContext
-	if customPodOptions != nil {
-		containerSecurityContext = customPodOptions.ContainerSecurityContext
-		initContainerSecurityContext = customPodOptions.DefaultInitContainerSecurityContext
-	}
-	setSecurityContextOnOperatorContainers(&deployment.Spec.Template.Spec, containerSecurityContext, initContainerSecurityContext)
+	setSecurityContextOnOperatorContainers(&deployment.Spec.Template.Spec, customPodOptions)
 
 	return deployment
 }

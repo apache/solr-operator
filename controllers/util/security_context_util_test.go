@@ -236,6 +236,24 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 		assert.False(t, *securityContext.AllowPrivilegeEscalation, "Privilege escalation should still be disallowed")
 	})
 
+	t.Run("asking for privileged mode turns off the conflicting default", func(t *testing.T) {
+		provided := &corev1.SecurityContext{Privileged: ptr.To(true)}
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		assert.Nil(t, securityContext.AllowPrivilegeEscalation, "Kubernetes rejects allowPrivilegeEscalation: false on a privileged container")
+	})
+
+	t.Run("adding CAP_SYS_ADMIN turns off the conflicting default", func(t *testing.T) {
+		provided := &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"CAP_SYS_ADMIN"}}}
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		assert.Nil(t, securityContext.AllowPrivilegeEscalation, "Kubernetes rejects allowPrivilegeEscalation: false alongside an added CAP_SYS_ADMIN")
+	})
+
+	t.Run("an explicit allowPrivilegeEscalation is kept alongside privileged mode", func(t *testing.T) {
+		provided := &corev1.SecurityContext{Privileged: ptr.To(true), AllowPrivilegeEscalation: ptr.To(true)}
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		assert.True(t, *securityContext.AllowPrivilegeEscalation, "The provided allowPrivilegeEscalation should be kept")
+	})
+
 	t.Run("readOnlyRootFilesystem is kept for the containers that had it", func(t *testing.T) {
 		statefulSet := testStatefulSet(testSolrCloudForSecurityContext(), nil, nil)
 		setupZk := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, SetupZkInitContainer)
@@ -293,6 +311,43 @@ func TestBackupRepositoryPreparationRunsAsSolrByDefault(t *testing.T) {
 		assert.Contains(t, strings.Join(initContainer.Command, " "), "user 1234", "The error message should name the user that the check ran as")
 		assert.Nil(t, initContainer.SecurityContext.RunAsUser, "The init container should inherit the user given at the pod level")
 	})
+}
+
+// TestUserSuppliedContainersKeepTheirSecurityContext covers the case where a container the user adds
+// happens to be named after one the operator generates for other pods. The name alone must not be
+// enough for the operator's defaults to replace the security context the user gave it.
+func TestUserSuppliedContainersKeepTheirSecurityContext(t *testing.T) {
+	userSecurityContext := &corev1.SecurityContext{
+		RunAsUser:    ptr.To(int64(1234)),
+		Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"NET_BIND_SERVICE"}},
+	}
+
+	solrCloud := testSolrCloudForSecurityContext()
+	solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+		SidecarContainers: []corev1.Container{
+			{Name: SolrPrometheusExporterContainer, SecurityContext: userSecurityContext},
+		},
+		// "volume-prep" is only generated for a SolrCloud with a volume backupRepository, which
+		// this one does not have, so the name is free for the user to take.
+		InitContainers: []corev1.Container{
+			{Name: VolumePrepInitContainer, SecurityContext: userSecurityContext},
+		},
+		ContainerSecurityContext:            &corev1.SecurityContext{RunAsUser: ptr.To(int64(4321))},
+		DefaultInitContainerSecurityContext: &corev1.SecurityContext{RunAsUser: ptr.To(int64(4321))},
+	}
+	statefulSet := testStatefulSet(solrCloud, nil, nil)
+	podSpec := statefulSet.Spec.Template.Spec
+
+	sidecar := findContainer(t, podSpec.Containers, SolrPrometheusExporterContainer)
+	assert.Equal(t, userSecurityContext, sidecar.SecurityContext, "A user-supplied sidecar should keep the security context it was given")
+
+	initContainer := findContainer(t, podSpec.InitContainers, VolumePrepInitContainer)
+	assert.Equal(t, userSecurityContext, initContainer.SecurityContext, "A user-supplied init container should keep the security context it was given")
+
+	solrContainer := findContainer(t, podSpec.Containers, SolrNodeContainer)
+	assert.Equal(t, int64(4321), *solrContainer.SecurityContext.RunAsUser, "The operator's own containers should still be hardened")
+	setupZk := findContainer(t, podSpec.InitContainers, SetupZkInitContainer)
+	assert.Equal(t, int64(4321), *setupZk.SecurityContext.RunAsUser, "The operator's own init containers should still be hardened")
 }
 
 func containerNames(containers []corev1.Container) []string {

@@ -669,12 +669,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Harden every container the operator generated, now that they have all been added
-	var containerSecurityContext, initContainerSecurityContext *corev1.SecurityContext
-	if customPodOptions != nil {
-		containerSecurityContext = customPodOptions.ContainerSecurityContext
-		initContainerSecurityContext = customPodOptions.DefaultInitContainerSecurityContext
-	}
-	setSecurityContextOnOperatorContainers(&stateful.Spec.Template.Spec, containerSecurityContext, initContainerSecurityContext)
+	setSecurityContextOnOperatorContainers(&stateful.Spec.Template.Spec, customPodOptions)
 
 	return stateful
 }

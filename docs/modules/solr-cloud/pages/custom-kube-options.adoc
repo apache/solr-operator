@@ -135,8 +135,13 @@ spec:
     podOptions:
       containerSecurityContext:
         runAsNonRoot: false
+      defaultInitContainerSecurityContext:
+        runAsNonRoot: false
 ----
 
-Asking for `runAsUser: 0` also turns off the `runAsNonRoot` and `capabilities.drop` defaults for that container, since neither can hold for a container that is meant to run as root.
-`seccompProfile` and `allowPrivilegeEscalation: false` still apply.
+The `defaultInitContainerSecurityContext` is needed as well here, because the `setup-zk` and `gen-pkcs12-keystore` init containers run the Solr image too.
+Without it the kubelet refuses to start them, since they would still be asked to run as non-root.
 Note that `defaultInitContainerSecurityContext` covers every init container the operator generates, not just one of them.
+
+Asking for `runAsUser: 0` also turns off the `runAsNonRoot` and `capabilities.drop` defaults for that container, since neither can hold for a container that is meant to run as root.
+The `seccompProfile` still applies, and so does `allowPrivilegeEscalation: false`, except on a container asked to run `privileged` or to add `CAP_SYS_ADMIN`, since Kubernetes rejects that combination.

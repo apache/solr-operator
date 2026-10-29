@@ -46,12 +46,16 @@ type operatorContainerOptions struct {
 }
 
 // operatorContainers lists every container and init container that the operator generates, and is
-// therefore responsible for hardening. Containers the user supplies through podOptions are not
-// listed: their security context is the user's to set.
+// therefore responsible for hardening, along with the options that container needs. Containers the
+// user supplies through podOptions are not listed: their security context is the user's to set.
 //
 // A container missing from this map gets no security context, which makes the pod fail "restricted"
 // evaluation. The unit tests evaluate the generated pods against the profile, so a new operator
 // container that is not listed here fails the build.
+//
+// A name in this map is not on its own proof that the operator generated the container, since a
+// user can give a container of their own the same name. setSecurityContextOnOperatorContainers
+// therefore excludes the user's containers by name before consulting this map.
 var operatorContainers = map[string]operatorContainerOptions{
 	SolrNodeContainer:               {},
 	SolrPrometheusExporterContainer: {},
@@ -104,7 +108,10 @@ func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, optio
 	}
 	runsAsRoot := effectiveRunAsUser != nil && *effectiveRunAsUser == 0
 
-	if securityContext.AllowPrivilegeEscalation == nil {
+	// Kubernetes rejects allowPrivilegeEscalation: false alongside privileged: true or an added
+	// CAP_SYS_ADMIN, so the default is not applied when the user asked for either of those. An
+	// explicitly provided value is always kept, even an invalid one, so the user sees the error.
+	if securityContext.AllowPrivilegeEscalation == nil && !securityContextRequiresPrivilegeEscalation(securityContext) {
 		securityContext.AllowPrivilegeEscalation = ptr.To(false)
 	}
 	if !runsAsRoot {
@@ -125,23 +132,63 @@ func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, optio
 	return securityContext
 }
 
+// securityContextRequiresPrivilegeEscalation reports whether the user has asked for something that
+// Kubernetes will not allow alongside allowPrivilegeEscalation: false.
+func securityContextRequiresPrivilegeEscalation(securityContext *corev1.SecurityContext) bool {
+	if securityContext.Privileged != nil && *securityContext.Privileged {
+		return true
+	}
+	if securityContext.Capabilities != nil {
+		for _, capability := range securityContext.Capabilities.Add {
+			if capability == "CAP_SYS_ADMIN" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // setSecurityContextOnOperatorContainers sets the security context on every container and init
 // container that the operator generated for the given pod, leaving user-supplied containers alone.
 //
+// Containers the user supplied through podOptions are matched by name and skipped, so a sidecar or
+// init container of theirs keeps the security context they gave it even when it is named after one
+// of the operator's own containers.
+//
 // Call this once the pod spec is otherwise complete, so that containers added along the way (for
 // TLS, for example) are covered too.
-func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, containerSecurityContext *corev1.SecurityContext, initContainerSecurityContext *corev1.SecurityContext) {
+func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions *solr.PodOptions) {
+	var containerSecurityContext, initContainerSecurityContext *corev1.SecurityContext
+	userProvidedContainers := make(map[string]bool)
+	userProvidedInitContainers := make(map[string]bool)
+	if podOptions != nil {
+		containerSecurityContext = podOptions.ContainerSecurityContext
+		initContainerSecurityContext = podOptions.DefaultInitContainerSecurityContext
+		for _, container := range podOptions.SidecarContainers {
+			userProvidedContainers[container.Name] = true
+		}
+		for _, container := range podOptions.InitContainers {
+			userProvidedInitContainers[container.Name] = true
+		}
+	}
+
 	var podRunAsUser *int64
 	if podSpec.SecurityContext != nil {
 		podRunAsUser = podSpec.SecurityContext.RunAsUser
 	}
 
 	for i, container := range podSpec.Containers {
+		if userProvidedContainers[container.Name] {
+			continue
+		}
 		if options, isOperatorContainer := operatorContainers[container.Name]; isOperatorContainer {
 			podSpec.Containers[i].SecurityContext = defaultContainerSecurityContext(containerSecurityContext, options, podRunAsUser)
 		}
 	}
 	for i, container := range podSpec.InitContainers {
+		if userProvidedInitContainers[container.Name] {
+			continue
+		}
 		if options, isOperatorContainer := operatorContainers[container.Name]; isOperatorContainer {
 			podSpec.InitContainers[i].SecurityContext = defaultContainerSecurityContext(initContainerSecurityContext, options, podRunAsUser)
 		}
