@@ -117,7 +117,8 @@ Three things are outside the operator's control:
 
 * **Containers you add yourself** through `podOptions.sidecarContainers` and `podOptions.initContainers` keep whatever security context you give them.
 Set one on each if the namespace enforces the profile.
-* **Volumes you add yourself** must be of a type the profile allows, which rules out `hostPath`.
+* **Volumes** must be of a type the profile allows, which rules out `hostPath`.
+This applies to the volumes you add through `podOptions.volumes` and to `spec.dataStorage.ephemeral.hostPath`, which the operator will still create if you ask for it.
 * **ZooKeeper** is not covered.
 A `provided` ensemble's pods are created by the ZooKeeper operator, whose `zookeeperPodPolicy` exposes only a pod-level `securityContext`, so they cannot be made to satisfy the profile from the SolrCloud resource.
 The `zookeeper-operator` deployment that the Solr Operator Helm chart installs as a dependency is likewise configured by its own chart.
@@ -145,3 +146,21 @@ Note that `defaultInitContainerSecurityContext` covers every init container the 
 
 Asking for `runAsUser: 0` also turns off the `runAsNonRoot` and `capabilities.drop` defaults for that container, since neither can hold for a container that is meant to run as root.
 The `seccompProfile` still applies, and so does `allowPrivilegeEscalation: false`, except on a container asked to run `privileged` or to add `CAP_SYS_ADMIN`, since Kubernetes rejects that combination.
+
+`capabilities` is overridden as a whole rather than per sub-field, so a `capabilities` block of your own replaces `drop: [ALL]` instead of being added to it.
+Repeat the `drop` if you only mean to add a capability:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      containerSecurityContext:
+        capabilities:
+          drop:
+            - ALL
+          add:
+            - NET_BIND_SERVICE
+----
+
+An empty `capabilities: {}` is how you keep the container's default capabilities, which the `restricted` profile does not allow.
