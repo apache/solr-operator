@@ -70,6 +70,13 @@ annotations:
       links:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: security
+      description: Solr and Prometheus exporter pods now satisfy the Kubernetes Pod Security Standards "restricted" profile by default. Anything set in podOptions.podSecurityContext, podOptions.containerSecurityContext or podOptions.defaultInitContainerSecurityContext is merged over those defaults field by field. A volume backupRepository directory must now be writable by the Solr user, or set podOptions.defaultInitContainerSecurityContext.runAsUser to 0 to have the operator take ownership of it
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/873
+        - name: Pod Security Standards
+          url: https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

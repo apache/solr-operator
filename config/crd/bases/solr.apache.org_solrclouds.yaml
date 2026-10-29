@@ -3362,8 +3362,10 @@ spec:
                         description: Annotations to be added for pods.
                         type: object
                       containerSecurityContext:
-                        description: ContainerSecurityContext the container-level
-                          security context used by the pod's primary container
+                        description: |-
+                          ContainerSecurityContext the container-level security context used by the pod's primary container
+
+                          Merged over the "restricted" profile defaults the operator sets, field by field.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -3615,9 +3617,12 @@ spec:
                             type: object
                         type: object
                       defaultInitContainerSecurityContext:
-                        description: DefaultInitContainerSecurityContext is the security
-                          context for the default init container(s) created by the
-                          Solr Operator, if any are created.
+                        description: |-
+                          DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+
+                          Merged over the "restricted" profile defaults the operator sets, field by field. Setting
+                          "runAsUser: 0" additionally lets these containers do work that a non-root user cannot, such as
+                          taking ownership of a backup repository volume.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -5927,8 +5932,12 @@ spec:
                         description: Node Selector to be added for the StatefulSet.
                         type: object
                       podSecurityContext:
-                        description: PodSecurityContext is the security context for
-                          the pod.
+                        description: |-
+                          PodSecurityContext is the security context for the pod.
+
+                          The operator generates pods that satisfy the Kubernetes Pod Security Standards "restricted"
+                          profile. Fields given here are merged over those defaults, field by field, so setting one
+                          field overrides one default and leaves the rest in place.
                         properties:
                           appArmorProfile:
                             description: |-

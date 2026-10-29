@@ -108,8 +108,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(3), "Solr StatefulSet requires the solr container plus the desired sidecars.")
 			Expect(statefulSet.Spec.Template.Spec.Containers[1:]).To(Equal(extraContainers1), "Solr StatefulSet has incorrect extra containers")
 
-			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(3), "Solr StatefulSet requires a default initContainer plus the additional specified.")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1:]).To(Equal(extraContainers2), "Solr StatefulSet has incorrect extra initContainers")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(2), "Solr StatefulSet should only have the additional initContainers specified, no default ones are needed.")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(Equal(extraContainers2), "Solr StatefulSet has incorrect extra initContainers")
 
 			// Check the update strategy
 			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType), "Incorrect statefulset update strategy")
@@ -139,14 +139,15 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			// Other Pod Options Checks
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil.")
 			Expect(statefulSet.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "PodSecurityContext is not the same as the one provided in podOptions")
-			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
+			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(expectedPodSecurityContext), "PodSecurityContext is not the one provided in podOptions, with the restricted profile defaults added")
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources.Limits).To(Equal(testResources.Limits), "Resources.Limits is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Resources.Requests).To(Equal(testResources.Requests), "Resources.Requests is not the same as the one provided in podOptions")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext).To(BeNil(), "SecurityContext is not the expected default value, 'nil'")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext).To(Not(BeNil()), "The Solr container should be given a securityContext")
+			Expect(*statefulSet.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(expectedRestrictedSecurityContext), "SecurityContext is not the expected restricted profile default")
 			extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+2), "Container has wrong number of volumeMounts")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
@@ -277,6 +278,27 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			Expect(statefulSet.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.SolrXmlFile])))), "Wrong solr.xml MD5 annotation in the pod template!")
 
+			By("testing that the solr.xml is mounted into the Solr home directory, without an initContainer")
+			for _, initContainer := range statefulSet.Spec.Template.Spec.InitContainers {
+				Expect(initContainer.Name).To(Not(Or(Equal("cp-solr-xml"), Equal("volume-prep"))), "No volume prep initContainer is needed, the solr.xml is mounted directly into the Solr home directory")
+			}
+			var solrXmlVol *corev1.Volume = nil
+			for _, vol := range statefulSet.Spec.Template.Spec.Volumes {
+				if vol.Name == "solr-xml" {
+					solrXmlVol = &vol
+					break
+				}
+			}
+			Expect(solrXmlVol).To(Not(BeNil()), "Didn't find the solr-xml volume in the pod template!")
+			Expect(solrXmlVol.ConfigMap).To(Not(BeNil()), "The solr-xml volume should have a ConfigMap source")
+			Expect(solrXmlVol.ConfigMap.Name).To(Equal(solrCloud.ConfigMapName()), "The solr-xml volume has the wrong configMap as its source")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+				Name:      "solr-xml",
+				MountPath: "/var/solr/data/solr.xml",
+				SubPath:   util.SolrXmlFile,
+				ReadOnly:  true,
+			}), "The solr.xml must be mounted into the Solr home directory via a subPath, so that the rest of the directory is untouched")
+
 			Expect(statefulSet.Spec.Template.Spec.Containers).To(HaveLen(1), "Solr StatefulSet requires a container.")
 			expectedEnvVars := map[string]string{
 				"ZK_HOST":             "host:7271/test",
@@ -312,17 +334,12 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add).To(HaveLen(1))
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].SecurityContext.Capabilities.Add[0]).To(Equal(corev1.Capability("someCapability")))
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Resources).To(Equal(testResources2), "Incorrect initContainer[0] resources")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Resources).To(Equal(testResources2), "Incorrect initContainer[1] resources")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].Resources).ToNot(Equal(testResources2), "Incorrect initContainer[2] resources, should not use the default override")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Resources).ToNot(Equal(testResources2), "Incorrect initContainer[1] resources, should not use the default override")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext).To(Not(BeNil()), "InitContainer[0] should have security context")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.RunAsNonRoot).To(PointTo(BeTrue()), "Incorrect initContainer[0] security context runAsNonRoot")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.Capabilities.Add).To(HaveLen(2), "Incorrect number of capabilities in initContainer[0]")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].SecurityContext.Capabilities.Add).To(ContainElements(corev1.Capability("CHOWN"), corev1.Capability("DAC_OVERRIDE")), "Incorrect capabilities in initContainer[0]")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext).To(Not(BeNil()), "InitContainer[1] should have security context")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.RunAsNonRoot).To(PointTo(BeTrue()), "Incorrect initContainer[1] security context runAsNonRoot")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.Capabilities.Add).To(HaveLen(2), "Incorrect number of capabilities in initContainer[1]")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext.Capabilities.Add).To(ContainElements(corev1.Capability("CHOWN"), corev1.Capability("DAC_OVERRIDE")), "Incorrect capabilities in initContainer[1]")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[2].SecurityContext).To(BeNil(), "InitContainer[2] should not have custom security context since it's user-provided")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].SecurityContext).To(BeNil(), "InitContainer[1] should not have custom security context since it's user-provided")
 			Expect(statefulSet.Spec.Template.Spec.Tolerations).To(Equal(testTolerations), "Incorrect Tolerations for Pod")
 			Expect(statefulSet.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect Priority class name for Pod Spec")
 			Expect(statefulSet.Spec.Template.Spec.ImagePullSecrets).To(ConsistOf(append(testAdditionalImagePullSecrets, corev1.LocalObjectReference{Name: testImagePullSecretName})), "Incorrect imagePullSecrets")
@@ -769,13 +786,21 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(customConfigVol.VolumeSource.ConfigMap, "solr-xml Volume should have a ConfigMap source")
 				g.Expect(customConfigVol.VolumeSource.ConfigMap.Name).To(Equal(testCustomConfigMap), "solr-xml has the wrong configMap as its source")
 
+				// The "solr-xml" volume is mounted twice in this case, once for the solr.xml (via a subPath)
+				// and once for the directory containing the log4j2.xml.
 				var logXmlVolMount *corev1.VolumeMount = nil
+				var solrXmlVolMount *corev1.VolumeMount = nil
 				for _, mount := range found.Spec.Template.Spec.Containers[0].VolumeMounts {
 					if mount.Name == "solr-xml" {
-						logXmlVolMount = &mount
-						break
+						if mount.SubPath == util.SolrXmlFile {
+							solrXmlVolMount = &mount
+						} else {
+							logXmlVolMount = &mount
+						}
 					}
 				}
+				g.Expect(solrXmlVolMount).To(Not(BeNil()), "Didn't find the solr-xml Volume mount")
+				g.Expect(solrXmlVolMount.MountPath).To(Equal("/var/solr/data/solr.xml"), "solr-xml Volume mount has the wrong path")
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				expectedMountPath := fmt.Sprintf("/var/solr/%s", testCustomConfigMap)
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")

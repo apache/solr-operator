@@ -86,6 +86,11 @@ resources: {}
 securityContext:
   allowPrivilegeEscalation: false
   runAsNonRoot: true
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
 envVars: []
 labels: {}
 annotations: {}

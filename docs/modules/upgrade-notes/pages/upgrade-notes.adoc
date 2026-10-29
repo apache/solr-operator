@@ -143,6 +143,24 @@ Note that Solr `>=9.10` will not start a node older than any Solr node already r
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
+* The `cp-solr-xml` initContainer has been removed.
+The `solr.xml` is now mounted into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount.
+This changes the Solr pod spec, so all Solr pods are restarted when the operator is upgraded.
+** Sidecars and custom initContainers mounting the data volume no longer find a `solr.xml` in it, it is only mounted into the Solr container.
+** The initContainer fixing the permissions of a `volume` `backupRepository` is kept, but renamed to `volume-prep`.
+Pods without such a repository have no volume prep initContainer at all.
+
+* Solr and Prometheus exporter pods now satisfy the Pod Security Standards https://kubernetes.io/docs/concepts/security/pod-security-standards/#restricted["restricted" profile] by default.
+The operator sets a `seccompProfile` on the pod, and `runAsNonRoot`, `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]` on every container and initContainer it generates.
+This changes the pod spec, so all pods are restarted when the operator is upgraded.
+See xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security Standards] for the full list and how to override it.
+** `podSecurityContext`, `containerSecurityContext` and `defaultInitContainerSecurityContext` are now merged over these defaults field by field, rather than replacing them.
+** A custom Solr image that starts as root needs `containerSecurityContext.runAsNonRoot: false`, and `defaultInitContainerSecurityContext.runAsNonRoot: false` as well, since the `setup-zk` and `gen-pkcs12-keystore` initContainers run that same image.
+** The `volume-prep` initContainer now runs as the Solr user and only checks that the backup repository directories are writable, failing the pod if they are not.
+Set `defaultInitContainerSecurityContext.runAsUser: 0` to have it take ownership of them as before.
+** The exporter pod's `fsGroup` default is now also applied when a `podSecurityContext` that omits it is given, matching how Solr pods have always behaved.
+** Containers and volumes that you add yourself are unchanged, and are yours to bring in line with the profile.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*

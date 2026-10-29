@@ -455,6 +455,8 @@ k8s.io/kube-openapi v0.0.0-20260623045532-0b43c5e46c6b h1:ugmmA3LN9pSEzoBo786Ip2
 k8s.io/kube-openapi v0.0.0-20260623045532-0b43c5e46c6b/go.mod h1:V/QaCUYDa+0QpcHhVVc5l99Uz56wEMEXBSj9oCDkNDY=
 k8s.io/kubectl v0.36.2 h1:rpUGGpeL09XVOLep2yle5jrtk//JA1L6ZHfkQQtVEwk=
 k8s.io/kubectl v0.36.2/go.mod h1:gVbQ3B/yb4bSR2ggQ7rd0W6icUSWs7sduH4e16Vii+0=
+k8s.io/pod-security-admission v0.36.2 h1:mJ/3k6w8A01k/m9MRN6DPT8ldaDmkzMfzfrOquNDwUs=
+k8s.io/pod-security-admission v0.36.2/go.mod h1:PTkT8i1jQ9YszlxWPa8TthuitZW68gCFRmjnmhRIrFM=
 k8s.io/streaming v0.36.2 h1:NSKthPPg9UFSKsRauVJUVGH2Dvn8fhKmY4qrMkw/p98=
 k8s.io/streaming v0.36.2/go.mod h1:z6fV3D+NVkoeqRMtWwlUZK6U17SY/LqNzOxWL6GyR/s=
 k8s.io/utils v0.0.0-20260617174310-a95e086a2553 h1:hmGqDecjc8d7HVzWzRFl0QD9bYuYKbBEG7t8xwnVxfI=

@@ -270,8 +270,8 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			Expect(statefulSet.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testSSAnnotations, expectedStatefulSetAnnotations)), "Wrong statefulSet annotations")
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(2), "Solr StatefulSet requires 2 init containers, one for the solr.xml and one for ZK.")
-			Expect(statefulSet.Spec.Template.Spec.InitContainers[1].Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "}), "Wrong command for the ZK init container")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(1), "Solr StatefulSet requires 1 init container, for ZK.")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "}), "Wrong command for the ZK init container")
 
 			// Check the update strategy
 			Expect(statefulSet.Spec.UpdateStrategy.Type).To(Equal(appsv1.OnDeleteStatefulSetStrategyType), "Incorrect statefulset update strategy")
@@ -587,7 +587,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_OPTS":      "$(SOLR_ZK_OPTS) " + testSolrOpts,
 				"SOLR_TOOL_OPTS": "$(SOLR_ZK_OPTS) " + testSolrOpts,
 			}
-			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[1].Env)
+			testPodEnvVariables(expectedInitContainerEnvVars, statefulSet.Spec.Template.Spec.InitContainers[0].Env)
 		})
 	})
 })
