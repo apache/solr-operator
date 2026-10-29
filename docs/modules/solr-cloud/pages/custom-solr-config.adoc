@@ -36,10 +36,12 @@ spec:
 == Custom solr.xml
 
 Solr pods load node-level configuration settings from `/var/solr/data/solr.xml`.
-This important configuration file gets created by the `cp-solr-xml` initContainer which bootstraps the `solr.home` directory on each pod before starting the main container.
-The default `solr.xml` is mounted into the `cp-solr-xml` initContainer from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
+It is mounted there from a ConfigMap, via a `subPath` volumeMount so that only this one file is mounted into the `solr.home` directory.
+The default `solr.xml` comes from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
+The mount only exists in the Solr container, so a sidecar or custom initContainer that needs the `solr.xml` has to mount the ConfigMap itself.
 
 NOTE: The data in the default ConfigMap is not editable! Any changes to the `solr.xml` in the default ConfigMap created by the operator will be overwritten during the next reconcile cycle.
+The `solr.xml` in a running pod is read-only, and ConfigMap changes only reach pods through the restart described below.
 
 Many of the specific values in `solr.xml` can be set using Java system properties; for instance, the following setting controls the read timeout for the HTTP client used by Solr's `HttpShardHandlerFactory`:
 
