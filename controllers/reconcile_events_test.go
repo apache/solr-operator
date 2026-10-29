@@ -24,6 +24,7 @@ import (
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -165,6 +166,40 @@ var _ = FDescribe("SolrCloud controller - Events", func() {
 			expectEvent(ctx, solrCloud, corev1.EventTypeWarning, "InvalidConfigMap")
 		})
 	})
+	FContext("on Solr 10 with a provided solr.xml that contains hostContext", func() {
+		var providedConfigMap *corev1.ConfigMap
+
+		BeforeEach(func() {
+			providedConfigMap = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "solr9-solrxml-config",
+					Namespace: solrCloud.Namespace,
+				},
+				Data: map[string]string{"solr.xml": `<solr><solrcloud><str name="hostContext">${hostContext:solr}</str>` +
+					`<int name="hostPort">${solr.port.advertise:80}</int></solrcloud></solr>`},
+			}
+			solrCloud.Spec.SolrImage = &solrv1beta1.ContainerImage{Tag: "10.0.0"}
+			solrCloud.Spec.CustomSolrKubeOptions = solrv1beta1.CustomSolrKubeOptions{
+				ConfigMapOptions: &solrv1beta1.ConfigMapOptions{
+					ProvidedConfigMap: providedConfigMap.Name,
+				},
+			}
+		})
+
+		FIt("records an InvalidConfigMap event but still reconciles the SolrCloud", func(ctx context.Context) {
+			By("creating the ConfigMap")
+			Expect(k8sClient.Create(ctx, providedConfigMap)).To(Succeed())
+
+			By("creating the SolrCloud")
+			Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+			By("checking that an InvalidConfigMap event was recorded")
+			expectEvent(ctx, solrCloud, corev1.EventTypeWarning, "InvalidConfigMap")
+
+			By("checking that the StatefulSet was still created")
+			expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+		})
+	})
 })
 
 var _ = FDescribe("SolrPrometheusExporter controller - Events", func() {
@@ -251,8 +286,67 @@ var _ = FDescribe("SolrPrometheusExporter controller - Events", func() {
 			By("checking that an UnsupportedSolrVersion event was recorded")
 			expectEvent(ctx, solrPrometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion")
 
-			By("checking that no Deployment was created")
+			By("checking that no Deployment or Service was created")
 			expectNoDeployment(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsDeploymentName())
+			expectNoService(ctx, solrPrometheusExporter, solrPrometheusExporter.MetricsServiceName(), "Metrics Service should not exist for a Solr 10 exporter")
+		})
+	})
+
+	FContext("referencing a SolrCloud that is upgraded to Solr 10", func() {
+		var solrCloud *solrv1beta1.SolrCloud
+
+		BeforeEach(func(ctx context.Context) {
+			solrCloud = &solrv1beta1.SolrCloud{
+				ObjectMeta: metav1.ObjectMeta{Name: "events-cloud", Namespace: solrPrometheusExporter.Namespace},
+				Spec: solrv1beta1.SolrCloudSpec{
+					SolrImage: &solrv1beta1.ContainerImage{Tag: "9.10.0"},
+					ZookeeperRef: &solrv1beta1.ZookeeperRef{
+						ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{InternalConnectionString: "host:2181"},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+			solrPrometheusExporter.Spec.SolrReference = solrv1beta1.SolrReference{
+				Cloud: &solrv1beta1.SolrCloudReference{Name: solrCloud.Name},
+			}
+		})
+
+		FIt("keeps the existing Deployment unchanged, marks the exporter not ready and records an UnsupportedSolrVersion event", func(ctx context.Context) {
+			By("creating the SolrPrometheusExporter")
+			Expect(k8sClient.Create(ctx, solrPrometheusExporter)).To(Succeed())
+
+			By("waiting for the Solr 9 Deployment and marking it ready")
+			deploymentName := solrPrometheusExporter.MetricsDeploymentName()
+			// Earlier specs use the same exporter name, so make sure to update this exporter's Deployment
+			Eventually(func(g Gomega) {
+				deployment := &appsv1.Deployment{}
+				g.Expect(k8sClient.Get(ctx, resourceKey(solrPrometheusExporter, deploymentName), deployment)).To(Succeed())
+				g.Expect(deployment.OwnerReferences).To(ContainElement(HaveField("UID", solrPrometheusExporter.UID)))
+				g.Expect(deployment.Spec.Template.Spec.Containers[0].Image).To(HaveSuffix(":9.10.0"))
+				deployment.Status.Replicas = 1
+				deployment.Status.ReadyReplicas = 1
+				g.Expect(k8sClient.Status().Update(ctx, deployment)).To(Succeed())
+			}).Should(Succeed())
+			expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
+				g.Expect(found.Status.Ready).To(BeTrue(), "The exporter should be ready while its Deployment is ready")
+			})
+
+			By("upgrading the SolrCloud to Solr 10")
+			Eventually(func(g Gomega) {
+				found := &solrv1beta1.SolrCloud{}
+				g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), found)).To(Succeed())
+				found.Spec.SolrImage.Tag = "10.0.0"
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed())
+			}).Should(Succeed())
+
+			By("checking the event, the exporter status and the unchanged Deployment")
+			expectEvent(ctx, solrPrometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion")
+			expectSolrPrometheusExporterWithChecks(ctx, solrPrometheusExporter, func(g Gomega, found *solrv1beta1.SolrPrometheusExporter) {
+				g.Expect(found.Status.Ready).To(BeFalse(), "The exporter should not be ready once its SolrCloud runs Solr 10")
+			})
+			expectDeploymentWithConsistentChecks(ctx, solrPrometheusExporter, deploymentName, func(g Gomega, found *appsv1.Deployment) {
+				g.Expect(found.Spec.Template.Spec.Containers[0].Image).To(HaveSuffix(":9.10.0"), "The existing Deployment should not be updated")
+			})
 		})
 	})
 })

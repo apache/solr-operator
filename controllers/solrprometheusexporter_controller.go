@@ -92,6 +92,27 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 
 	requeueOrNot := ctrl.Result{}
 
+	// Get the ZkConnectionString to connect to
+	solrConnectionInfo := util.SolrConnectionInfo{}
+	var solrCloudImage *solrv1beta1.ContainerImage
+	if solrConnectionInfo, solrCloudImage, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
+		return requeueOrNot, err
+	}
+
+	// Solr 10 removed the Prometheus exporter, and Solr 10's metrics API only serves the Prometheus format,
+	// so neither a Solr 10+ exporter image nor a referenced Solr 10+ SolrCloud can work.
+	// Don't create or update any resources for such an exporter. An existing Deployment is left alone, but marked not ready.
+	if msg := unsupportedExporterSolrVersion(prometheusExporter.Spec.Image, solrCloudImage); msg != "" {
+		logger.Error(nil, msg)
+		r.Recorder.Event(prometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion", msg)
+		if prometheusExporter.Status.Ready {
+			originalPrometheusExporter := prometheusExporter.DeepCopy()
+			prometheusExporter.Status.Ready = false
+			return reconcile.Result{}, r.Status().Patch(ctx, prometheusExporter, client.MergeFrom(originalPrometheusExporter))
+		}
+		return reconcile.Result{}, nil
+	}
+
 	configMapKey := util.PrometheusExporterConfigMapKey
 	configXmlMd5 := ""
 	if prometheusExporter.Spec.Config == "" && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
@@ -178,30 +199,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	}
 	if err != nil {
 		return requeueOrNot, err
-	}
-
-	// Get the ZkConnectionString to connect to
-	solrConnectionInfo := util.SolrConnectionInfo{}
-	var solrCloudImage *solrv1beta1.ContainerImage
-	if solrConnectionInfo, solrCloudImage, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
-		return requeueOrNot, err
-	}
-
-	// Solr 10 removed the Prometheus exporter from the Solr distribution, so its images cannot run the exporter.
-	// Don't create or update the Deployment for them, as it would only crash-loop.
-	// Tags that don't start with a Solr version are allowed here, as custom exporter images don't need to follow Solr's tags.
-	exporterImage := prometheusExporter.Spec.Image
-	if exporterImage == nil {
-		exporterImage = solrCloudImage
-	}
-	if exporterImage != nil {
-		if major, versionErr := solrv1beta1.SolrMajorVersionFromTag(exporterImage.Tag); versionErr == nil && major >= 10 {
-			msg := fmt.Sprintf("Not reconciling SolrPrometheusExporter: image %s is Solr %d, but the Prometheus exporter was removed in Solr 10. "+
-				"Delete this SolrPrometheusExporter and scrape the Solr pods' /solr/admin/metrics endpoint directly instead", exporterImage.ToImageName(), major)
-			logger.Error(nil, msg)
-			r.Recorder.Event(prometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion", msg)
-			return reconcile.Result{}, nil
-		}
 	}
 
 	// Make sure the TLS config is in order
@@ -291,6 +288,27 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	}
 
 	return requeueOrNot, err
+}
+
+// unsupportedExporterSolrVersion returns why the exporter cannot work with Solr 10 or later, or "" if it can.
+// exporterImage is the exporter's own image, if set; solrCloudImage is the image of the referenced SolrCloud, if any,
+// which is also the exporter's image when it doesn't set one.
+// Tags that don't start with a version are allowed, as custom exporter images don't need to follow Solr's tags.
+func unsupportedExporterSolrVersion(exporterImage *solrv1beta1.ContainerImage, solrCloudImage *solrv1beta1.ContainerImage) string {
+	const fix = "Delete this SolrPrometheusExporter and scrape the Solr pods' /solr/admin/metrics endpoint directly instead"
+	if solrCloudImage != nil {
+		if major, ok := solrv1beta1.ParseSolrMajorVersion(solrCloudImage.Tag); ok && major >= 10 {
+			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: the referenced SolrCloud runs Solr %d, "+
+				"which the Prometheus exporter does not support. %s", major, fix)
+		}
+	}
+	if exporterImage != nil {
+		if major, ok := solrv1beta1.ParseSolrMajorVersion(exporterImage.Tag); ok && major >= 10 {
+			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: image %s is Solr %d, "+
+				"but the Prometheus exporter was removed in Solr 10. %s", exporterImage.ToImageName(), major, fix)
+		}
+	}
+	return ""
 }
 
 func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, solrCloudImage *solrv1beta1.ContainerImage, err error) {

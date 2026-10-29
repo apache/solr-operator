@@ -153,6 +153,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/827
     - kind: changed
+      description: The operator no longer reconciles a SolrPrometheusExporter that uses a Solr 10 image or refers to a Solr 10 SolrCloud, as Solr 10 removed the Prometheus exporter. It emits an UnsupportedSolrVersion Warning event instead.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/820
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
       description: The SolrCloud image tag must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). SolrClouds with other tags, such as `latest`, are no longer reconciled; see the upgrade notes before upgrading the operator.
       links:
         - name: Github PR

@@ -19,6 +19,8 @@ package util
 
 import (
 	"fmt"
+	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -893,6 +895,7 @@ const DefaultSolrXML = `<?xml version="1.0" encoding="UTF-8" ?>
 //
 // Compared to DefaultSolrXML (Solr 9 and earlier), it drops settings that Solr 10 rejects (hostContext,
 // genericCoreNodeNames) and the metrics element, which Solr 10's stock solr.xml doesn't contain either.
+// Solr 10 still supports the metrics element, but leaving it out means -DmetricsEnabled=false has no effect on Solr 10.
 // It reads the advertised host from "solr.host.advertise" instead of the deprecated "host" sysprop,
 // and allowPaths from its Solr 10 sysprop "solr.security.allow.paths".
 const DefaultSolrXMLForSolr10 = `<?xml version="1.0" encoding="UTF-8" ?>
@@ -923,6 +926,19 @@ const DefaultSolrXMLForSolr10 = `<?xml version="1.0" encoding="UTF-8" ?>
   %s
 </solr>
 `
+
+// solr10UnsupportedSolrXmlSettingRegex matches solr.xml settings that Solr 10 refuses to start with, e.g. <str name="hostContext">.
+var solr10UnsupportedSolrXmlSettingRegex = regexp.MustCompile(`name\s*=\s*["'](hostContext|genericCoreNodeNames)["']`)
+
+// SettingsUnsupportedBySolr10 returns the names of the settings in the given solr.xml that Solr 10 refuses to start with.
+func SettingsUnsupportedBySolr10(solrXml string) (settings []string) {
+	for _, match := range solr10UnsupportedSolrXmlSettingRegex.FindAllStringSubmatch(solrXml, -1) {
+		if !slices.Contains(settings, match[1]) {
+			settings = append(settings, match[1])
+		}
+	}
+	return settings
+}
 
 // GenerateConfigMap returns a new corev1.ConfigMap pointer generated for the SolrCloud instance solr.xml
 // solrCloud: SolrCloud instance

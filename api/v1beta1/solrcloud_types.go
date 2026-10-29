@@ -1356,13 +1356,12 @@ func (sc *SolrCloud) SolrMajorVersion() (int, error) {
 // An error is returned if the tag does not start with the Solr version,
 // or if the major version is not supported by the Solr Operator.
 func SolrMajorVersionFromTag(tag string) (int, error) {
-	match := solrImageTagVersionRegex.FindStringSubmatch(tag)
-	if match == nil {
+	major, ok := ParseSolrMajorVersion(tag)
+	if !ok {
 		return 0, fmt.Errorf("cannot determine the Solr version from image tag %q: "+
 			"the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"", tag)
 	}
-	major, err := strconv.Atoi(match[solrImageTagVersionRegex.SubexpIndex("major")])
-	if err != nil || major < MinSupportedSolrMajorVersion || major > MaxSupportedSolrMajorVersion {
+	if major < MinSupportedSolrMajorVersion || major > MaxSupportedSolrMajorVersion {
 		return 0, fmt.Errorf("image tag %q is not a supported Solr version: the Solr Operator supports Solr %d to %d, "+
 			"and the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"",
 			tag, MinSupportedSolrMajorVersion, MaxSupportedSolrMajorVersion)
@@ -1370,10 +1369,21 @@ func SolrMajorVersionFromTag(tag string) (int, error) {
 	return major, nil
 }
 
+// ParseSolrMajorVersion returns the major version that a Solr image tag starts with, without checking
+// whether the Solr Operator supports it. ok is false if the tag does not start with a version.
+func ParseSolrMajorVersion(tag string) (major int, ok bool) {
+	match := solrImageTagVersionRegex.FindStringSubmatch(tag)
+	if match == nil {
+		return 0, false
+	}
+	major, err := strconv.Atoi(match[solrImageTagVersionRegex.SubexpIndex("major")])
+	return major, err == nil
+}
+
 // SolrVersionAtLeast returns true if this SolrCloud runs the given Solr major version or later,
-// e.g. SolrVersionAtLeast(10) for Solr 10+. Use !SolrVersionAtLeast(n) to check for versions before n.
-// The SolrCloud controller does not reconcile a cloud whose version cannot be determined,
-// so an undeterminable version returns false here.
+// e.g. SolrVersionAtLeast(10) for Solr 10+.
+// An undeterminable or unsupported version returns false, so !SolrVersionAtLeast(n) is also true for those.
+// That is safe because the SolrCloud controller does not reconcile such a cloud.
 func (sc *SolrCloud) SolrVersionAtLeast(major int) bool {
 	v, err := sc.SolrMajorVersion()
 	return err == nil && v >= major

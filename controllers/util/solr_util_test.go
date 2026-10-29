@@ -578,3 +578,10 @@ func TestImageVersion(t *testing.T) {
 	assert.Equal(t, "10.0.0", image.Version())
 	assert.Equal(t, solr.ImageVersion(image.ToImageName()), image.Version())
 }
+
+func TestSettingsUnsupportedBySolr10(t *testing.T) {
+	assert.Empty(t, SettingsUnsupportedBySolr10(DefaultSolrXMLForSolr10), "the operator's Solr 10 solr.xml must be accepted")
+	assert.Equal(t, []string{"hostContext", "genericCoreNodeNames"}, SettingsUnsupportedBySolr10(DefaultSolrXML),
+		"the operator's Solr 9 solr.xml contains both settings")
+	assert.Equal(t, []string{"hostContext"}, SettingsUnsupportedBySolr10(`<str name='hostContext'>solr</str><str name = "hostContext">x</str>`))
+}

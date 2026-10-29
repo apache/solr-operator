@@ -260,6 +260,15 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise', or its deprecated alternative 'hostPort', e.g. <int name=\"hostPort\">${solr.port.advertise:80}</int>",
 							providedConfigMapName)
 				}
+				// Solr 10 refuses to start with some settings that Solr 9 needs, so warn before the rolling restart reaches them.
+				// This only warns, as a match can be a false positive, e.g. in an XML comment.
+				if instance.SolrVersionAtLeast(10) {
+					if settings := util.SettingsUnsupportedBySolr10(solrXml); len(settings) > 0 {
+						r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+							"Custom solr.xml in ConfigMap %s contains settings that Solr 10 refuses to start with: %s. "+
+								"Remove them, see the Solr Operator upgrade notes", providedConfigMapName, strings.Join(settings, ", "))
+					}
+				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
 				reconcileConfigInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
 				reconcileConfigInfo[util.SolrXmlFile] = foundConfigMap.Name
