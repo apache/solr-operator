@@ -50,6 +50,7 @@ GO_LICENSES_VERSION=v2.0.1
 GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.30.0
+CLOUD_PROVIDER_KIND_VERSION=v0.11.1
 YQ_VERSION=v4.53.3
 CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
@@ -327,7 +328,7 @@ e2e-tests: export OPERATOR_IMAGE=$(IMG):$(TAG)
 e2e-tests: export TEST_PARALLELISM?=4
 # Use path for subcommands so that we use the correct dev-dependencies rather than those installed globally
 e2e-tests: export PATH:=$(LOCALBIN):${PATH}
-e2e-tests: ginkgo kind manifests generate helm-dependency-build docker-build ## Run e2e/integration tests. For help, refer to: dev-docs/e2e-testing.md
+e2e-tests: ginkgo kind cloud-provider-kind manifests generate helm-dependency-build docker-build ## Run e2e/integration tests. For help, refer to: dev-docs/e2e-testing.md
 	./tests/scripts/manage_e2e_tests.sh run-tests
 
 ##@ Helm
@@ -387,7 +388,7 @@ LOCALBIN ?= $(PROJECT_DIR)/bin
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
-install-dependencies: controller-gen kustomize go-licenses setup-envtest kind ginkgo ## Install necessary dependencies for building and testing the Solr Operator
+install-dependencies: controller-gen kustomize go-licenses setup-envtest kind cloud-provider-kind ginkgo ## Install necessary dependencies for building and testing the Solr Operator
 
 CONTROLLER_GEN = $(LOCALBIN)/controller-gen
 .PHONY: controller-gen
@@ -418,6 +419,12 @@ KIND = $(LOCALBIN)/kind
 kind: $(KIND) ## Download kind locally if necessary.
 $(KIND): $(LOCALBIN)
 	$(call go-get-tool,$(KIND),sigs.k8s.io/kind@$(KIND_VERSION))
+
+CLOUD_PROVIDER_KIND = $(LOCALBIN)/cloud-provider-kind
+.PHONY: cloud-provider-kind
+cloud-provider-kind: $(CLOUD_PROVIDER_KIND) ## Download cloud-provider-kin locally if necessary.
+$(CLOUD_PROVIDER_KIND): $(LOCALBIN)
+	$(call go-get-tool,$(CLOUD_PROVIDER_KIND),sigs.k8s.io/cloud-provider-kind@$(CLOUD_PROVIDER_KIND_VERSION))
 
 YQ = $(LOCALBIN)/yq
 .PHONY: yq

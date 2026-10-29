@@ -52,6 +52,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // SolrCloudReconciler reconciles a SolrCloud object
@@ -63,8 +64,16 @@ type SolrCloudReconciler struct {
 
 var useZkCRD bool
 
+// useGatewayAPI is set when the Gateway API CRDs (both HTTPRoute and BackendTLSPolicy)
+// are installed in the cluster. This is detected at startup rather than configured via a flag.
+var useGatewayAPI bool
+
 func UseZkCRD(useCRD bool) {
 	useZkCRD = useCRD
+}
+
+func UseGatewayAPI(useGateway bool) {
+	useGatewayAPI = useGateway
 }
 
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
@@ -76,6 +85,10 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses/status,verbs=get
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=httproutes/status,verbs=get
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=gateway.networking.k8s.io,resources=backendtlspolicies/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=configmaps/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update;patch;delete
@@ -447,6 +460,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				return requeueOrNot, ingressErr
 			}
 			logger.Info("Deleted Ingress")
+		}
+	}
+
+	// Reconcile Gateway API HTTPRoutes
+	if useGatewayAPI {
+		if err = r.reconcileGatewayResources(ctx, instance, solrNodeNames, logger); err != nil {
+			return requeueOrNot, err
 		}
 	}
 
@@ -1389,6 +1409,10 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zkApi.ZookeeperCluster{})
+	}
+
+	if useGatewayAPI {
+		ctrlBuilder = ctrlBuilder.Owns(&gatewayv1.HTTPRoute{}).Owns(&gatewayv1.BackendTLSPolicy{})
 	}
 
 	return ctrlBuilder.Complete(r)

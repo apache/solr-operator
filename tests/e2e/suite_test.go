@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -109,6 +110,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(gatewayv1.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
@@ -154,6 +156,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(gatewayv1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
