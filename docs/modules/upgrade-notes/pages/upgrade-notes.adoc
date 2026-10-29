@@ -176,11 +176,12 @@ A `SolrPrometheusExporter` that uses the image of a Solr 10 SolrCloud, or any ot
 Delete any `SolrPrometheusExporter` for a SolrCloud before upgrading that SolrCloud to Solr 10.
 Instead, each Solr 10 node exposes its metrics in Prometheus format at `/solr/admin/metrics`, so Prometheus can scrape the Solr pods directly (see https://github.com/apache/solr-operator/issues/820[#820]).
 
-* *Logging now defaults to JSON format*
-+
-The new default for CLI flag `--zap-devel` is now `false`, causing log encoding to be `json` and log level to be `info`.
-There is a new helm value `development` that can be set to `true` to switch to `console` encoding and `debug` level
-that was the default in previous versions.
+* The default Solr version has been upgraded from `8.11` to `9.11.0`.
+This only affects new resources, as default versions are hard-written to the resources immediately.
+Note that Solr `>=9.10` will not start a node older than any Solr node already running in the same cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
+
+* Operator logs now default to `json` encoding at `info` level.
+Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
 === v0.8.0
 
