@@ -86,7 +86,7 @@ var (
 // replicas: the number of replicas for the SolrCloud instance
 // storage: the size of the storage for the SolrCloud instance (e.g. 100Gi)
 // zkConnectionString: the connectionString of the ZK instance to connect to
-func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
+func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, solrCloudStatus *solr.SolrCloudStatus, hostNameIPs map[string]string, reconcileConfigInfo map[string]string, tls *TLSCerts, security *SecurityConfig) *appsv1.StatefulSet {
 	terminationGracePeriod := int64(60)
 	shareProcessNamespace := false
 	var enableServiceLinks *bool
@@ -108,6 +108,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	labels["technology"] = solr.SolrTechnologyLabel
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
+
+	if group.Role != "" {
+		labels[solr.SolrNodeRoleLabel] = string(group.Role)
+		selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
+	}
 
 	annotations := map[string]string{
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
@@ -153,9 +158,11 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+	allSolrOpts = append(allSolrOpts, "-Dsolr.node.roles="+group.Role.NodeRolesSystemProperty())
 	// The "availability_zone" and "spread_domain" system properties are used by Solr's AffinityPlacementFactory
 	// to spread replicas across zones, and across Kubernetes nodes within a zone
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)"}
+	allSolrOpts = append(allSolrOpts, "-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)")
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -554,7 +561,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Decide which update strategy to use
 	updateStrategy := appsv1.OnDeleteStatefulSetStrategyType
-	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate {
+	// Overseers/Coordinators don't hold index data, so a plain k8s rolling
+	// update strategy should be safe here for either of those stateful sets
+	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate || (group.Role != "" && group.Role != solr.SolrNodeRoleData) {
 		// Only use the rolling update strategy if the StatefulSetUpdate method is specified.
 		updateStrategy = appsv1.RollingUpdateStatefulSetStrategyType
 	}
@@ -568,7 +577,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Create the Stateful Set
 	stateful := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        solrCloud.StatefulSetName(),
+			Name:        solrCloud.StatefulSetNameForRole(group.Role),
 			Namespace:   solrCloud.GetNamespace(),
 			Labels:      labels,
 			Annotations: annotations,
