@@ -19,11 +19,12 @@ package v1beta1
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"math/rand"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -73,6 +74,10 @@ type SolrCloudSpec struct {
 
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
+
+	// Distribution of node roles
+	// +optional
+	NodeRoleDistribution *NodeRoleDistribution `json:"nodeRoleDistribution,omitempty"`
 
 	// Customize how the cloud data is stored.
 	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
@@ -197,6 +202,10 @@ func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
+	if spec.NodeRoleDistribution == nil {
+		spec.NodeRoleDistribution = &NodeRoleDistribution{}
+	}
+
 	changed = spec.StorageOptions.withDefaults() || changed
 
 	if spec.BusyBoxImage == nil {
@@ -237,6 +246,65 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+}
+
+// TODO - Decide on best approach w/ this
+//   - Does this take precident over replicas? i.e.
+//     spec:
+//     replicas: 16
+//     nodeRoleDistribution:
+//     dataNodes: 10
+//     overseers: 2
+//     coordinators: 2
+//     If both are set, does the `nodeRoleDistribution` take priority?
+//   - Does the replicas need to be the total number? What happens if we mismatch
+//   - We should, however, ensure safety that if nodeRoleDistribution is nil, then we just default
+//     to the replicas, and set them all as data nodes
+type NodeRoleDistribution struct {
+	// Number of dedicated overseer nodes (data:off, overseer:preferred).
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overseers *int32 `json:"overseers,omitempty"`
+
+	// Number of dedicated coordinator nodes (data:off, coordinator:on).
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Coordinators *int32 `json:"coordinators,omitempty"`
+}
+
+type SolrNodeRole string
+
+const (
+	SolrNodeRoleData        SolrNodeRole = "data"
+	SolrNodeRoleOverseer    SolrNodeRole = "overseer"
+	SolrNodeRoleCoordinator SolrNodeRole = "coordinator"
+	SolrNodeRoleLabel                    = "solr-node-role"
+)
+
+// SolrNodeGroup represent one StatefulSet's worth of Solr Nodes.
+type SolrNodeGroup struct {
+	Role     SolrNodeRole
+	Replicas int32
+}
+
+func (role SolrNodeRole) NodeRolesSystemProperty() string {
+	switch role {
+	case SolrNodeRoleOverseer:
+		return "data:off,overseer:preferred,coordinator:off"
+	case SolrNodeRoleCoordinator:
+		return "data:off,overseer:disallowed,coordinator:on"
+	default:
+		return "data:on,overseer:disallowed,coordinator:off"
+	}
+}
+
+// Format the statefulset name for different node roles. Overseer and Coordinators are
+// suffixed with their respective names.
+func (solrCloud *SolrCloud) StatefulSetNameForRole(role SolrNodeRole) string {
+	if role == "" || role == SolrNodeRoleData {
+		return solrCloud.StatefulSetName()
+	}
+	return fmt.Sprintf("%s-%s", solrCloud.StatefulSetName(), role)
 }
 
 type SolrDataStorageOptions struct {
