@@ -138,6 +138,16 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/535
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/571
+    - kind: security
+      description: Upgraded golang.org/x/net and golang.org/x/text, fixing six reachable vulnerabilities - five HTTP/2 denial-of-service issues and an infinite loop on invalid input
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
+    - kind: changed
+      description: Upgraded Go dependencies and build tools, notably the Kubernetes libraries to 1.37, controller-runtime to 0.25 and the Go toolchain to 1.27. The CRDs gain the new optional pod fields from the 1.37 API types; no existing field, default or RBAC permission changed
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
     - kind: changed
       description: The default Solr version (`DefaultSolrVersion`) is now 9.11.0, up from 9.10.0, so newly created SolrClouds without an image tag start on a Solr version carrying the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516. Existing clusters are unaffected; the operator writes the resolved tag into the spec on first reconcile, so an operator upgrade never changes a running cluster's Solr version
       links:
@@ -233,4 +243,4 @@ annotations:
           - techproducts
           - books
         location: "/this/location"
-  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
