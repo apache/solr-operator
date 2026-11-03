@@ -61,6 +61,11 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/832
     - kind: changed
+      description: The SolrCloud CRD accepts the new optional pod fields from the Kubernetes 1.37 API types, settable via podOptions once the operator chart's CRDs are updated. No existing field or default changed
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/865
+    - kind: changed
       description: The default Solr version is now 9.11.0, up from 9.10.0. Newly created SolrClouds that do not set `image.tag` start on 9.11.0; existing clusters keep the tag already written into their spec
       links:
         - name: Solr 9.11.0 Release Notes
