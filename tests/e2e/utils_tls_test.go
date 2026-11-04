@@ -284,7 +284,7 @@ func installSolrIssuer(ctx context.Context, namespace string) {
 				RotationPolicy: certmanagerv1.RotationPolicyNever,
 				Algorithm:      "RSA",
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  "bootstrap-issuer",
 				Kind:  "ClusterIssuer",
 				Group: "cert-manager.io",
@@ -355,7 +355,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 					},
 				},
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  solrIssuerName,
 				Kind:  "Issuer",
 				Group: "cert-manager.io",
@@ -411,7 +411,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 						},
 					},
 				},
-				IssuerRef: certmanagermetav1.ObjectReference{
+				IssuerRef: certmanagermetav1.IssuerReference{
 					Name:  solrIssuerName,
 					Kind:  "Issuer",
 					Group: "cert-manager.io",
