@@ -155,6 +155,11 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: fixed
+      description: A SolrPrometheusExporter that references a SolrCloud in another namespace is now reconciled when that SolrCloud changes, instead of only when a SolrCloud of the same name in the exporter's own namespace changes
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/879
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
