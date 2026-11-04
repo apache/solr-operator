@@ -119,6 +119,10 @@ This way the tests can be re-run using the same cluster that they failed on prev
 Use the [environment variable `REUSE_KIND_CLUSTER_IF_EXISTS=false`](#customizing-the-test-environment) to re-create the KinD cluster,
 instead of reusing the existing one.
 
+Debugging output for each spec (pod logs, events, resource status and the operator log) is written to `tests/e2e/output/`.
+Ginkgo also writes `junit.xml` and `report.json` to that directory, containing the failure messages of the whole run.
+Since the directory is recreated at the start of every run, copy these files elsewhere if you need to keep them.
+
 # IntelliJ & GoLand Testing
 
 The e2e-tests can be tested via IDEA, just as the unit tests can,
