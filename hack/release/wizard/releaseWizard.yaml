@@ -822,7 +822,7 @@ groups:
           cmd: docker buildx create --use
           tee: true
         - !Command
-          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} --build-arg VERSION={{ release_version }}-rc{{ rc_number }} --build-arg DOCS_VERSION={{ release_version_major }}_{{ release_version_minor }} . --tag {{ docker_image }} -f ./build/Dockerfile
           logfile: rc_docker_upload.log
           tee: true
   - !Todo
@@ -1233,7 +1233,7 @@ groups:
           cmd: docker buildx create --use
           tee: true
         - !Command
-          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} --build-arg VERSION={{ release_version }} --build-arg DOCS_VERSION={{ release_version_major }}_{{ release_version_minor }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
           tee: true
           logfile: docker_upload.log
   - !Todo
