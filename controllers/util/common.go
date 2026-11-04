@@ -26,6 +26,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -195,6 +196,21 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap, logger logr.Logger) bool {
 		logger.Info("Update required because field changed", "field", "Data", "from", to.Data, "to", from.Data)
 	}
 	to.Data = from.Data
+
+	return requireUpdate
+}
+
+// CopyPodMonitorFields copies the owned fields from one PodMonitor to another
+func CopyPodMonitorFields(from, to *monitoringv1.PodMonitor, logger logr.Logger) bool {
+	logger = logger.WithValues("kind", "podMonitor")
+	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
+
+	// Nothing in the PodMonitor spec is defaulted by the API server, so the whole spec is owned here
+	if !DeepEqualWithNils(to.Spec, from.Spec) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec", "from", to.Spec, "to", from.Spec)
+	}
+	to.Spec = from.Spec
 
 	return requireUpdate
 }

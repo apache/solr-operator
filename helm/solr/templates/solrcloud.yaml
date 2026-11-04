@@ -120,6 +120,18 @@ spec:
     populatePodsOnScaleUp: {{ .Values.scaling.populatePodsOnScaleUp }}
   {{- end }}
 
+  {{- if .Values.prometheus }}
+  prometheus:
+    {{- if .Values.prometheus.scrapeAnnotations }}
+    scrapeAnnotations:
+      enable: {{ .Values.prometheus.scrapeAnnotations.enable }}
+    {{- end }}
+    {{- if .Values.prometheus.podMonitor }}
+    podMonitor:
+      {{- toYaml .Values.prometheus.podMonitor | nindent 6 }}
+    {{- end }}
+  {{- end }}
+
   {{- if .Values.dataStorage }}
   dataStorage:
     {{- if eq .Values.dataStorage.type "persistent" }}

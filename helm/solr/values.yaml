@@ -152,6 +152,32 @@ scaling:
   vacatePodsOnScaleDown: true
   populatePodsOnScaleUp: true
 
+# Settings for letting Prometheus scrape the metrics endpoint of the Solr pods.
+# Requires Solr 10 or later, which serves prometheus-format metrics at /solr/admin/metrics.
+# See https://solr.apache.org/guide/operator/latest/solr-cloud/metrics.html
+prometheus:
+  # Put prometheus.io/* annotations on the Solr pods, for a Prometheus that discovers pods by annotation
+  scrapeAnnotations:
+    enable: false
+  # Have the Solr Operator manage a PodMonitor for this SolrCloud. Requires the Prometheus Operator,
+  # and the Solr Operator to be installed with `prometheusOperator.use=true`
+  podMonitor:
+    enable: false
+    # Labels that the podMonitorSelector of your Prometheus instance selects on, e.g. `release: mon`
+    labels: {}
+    # interval: 30s
+    # scrapeTimeout: 10s
+    # Secret with the username/password that Prometheus authenticates with, if the SolrCloud uses
+    # basic auth. Defaults to the basic auth secret that the operator manages for the SolrCloud.
+    # basicAuthSecret: ""
+    # How Prometheus should trust the Solr certificates, if the SolrCloud uses TLS
+    # tlsConfig:
+    #   caSecret:
+    #     name: solr-ca-cert
+    #     key: ca.crt
+    #   serverName: ""
+    #   insecureSkipVerify: false
+
 # A list of BackupRepositories to connect your SolrCloud to
 # See either for more information:
 # - https://solr.apache.org/guide/operator/latest/solr-backup/index.html

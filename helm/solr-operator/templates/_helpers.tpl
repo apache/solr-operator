@@ -83,6 +83,21 @@ What namespace to do leader election in
 {{- end -}}
 
 {{/*
+Whether the Solr Operator should manage PodMonitors for SolrClouds.
+If .Values.prometheusOperator.use is set, that wins.
+If it is not set, this detects whether the Prometheus Operator CRDs are installed in the cluster.
+*/}}
+{{- define "solr-operator.usePrometheusOperator" -}}
+{{- $use := (.Values.prometheusOperator | default dict).use -}}
+{{- if kindIs "invalid" $use -}}
+{{- $use = .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" -}}
+{{- end -}}
+{{- if $use -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
 Determine whether to use ClusterRoles or Roles
 */}}
 {{- define "solr-operator.roleType" -}}

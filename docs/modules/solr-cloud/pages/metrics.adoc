@@ -1,0 +1,141 @@
+= SolrCloud Metrics
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+Solr 10 serves prometheus-format metrics at `/solr/admin/metrics` on every Solr node, so Prometheus can scrape the Solr pods directly.
+The `SolrCloud.spec.prometheus` section tells the Solr Operator to set that scraping up for you.
+
+NOTE: This requires Solr 10 or later.
+Solr 9 and earlier do not serve metrics in the Prometheus format, and are monitored with a xref:solr-prometheus-exporter:index.adoc[SolrPrometheusExporter] instead, which was removed from Solr in Solr 10.
+
+There are two ways to be scraped, and they are independent of each other:
+
+* `spec.prometheus.podMonitor` has the Solr Operator manage a PodMonitor, which is how you point a Prometheus that is managed by the https://github.com/prometheus-operator/prometheus-operator[Prometheus Operator] at the Solr pods.
+* `spec.prometheus.scrapeAnnotations` puts `prometheus.io/*` annotations on the Solr pods, which is how a Prometheus that discovers its targets through pod annotations finds them.
+
+== PodMonitor
+
+One PodMonitor covers a whole SolrCloud: the Prometheus Operator turns it into a single scrape job that discovers every Solr pod as a target of its own, and follows the SolrCloud as it scales up and down.
+The Solr Operator fills in the port, the metrics path, the scheme, and the credentials from the SolrCloud itself.
+
+[source,yaml]
+----
+spec:
+  prometheus:
+    podMonitor:
+      enable: true
+      labels:
+        release: mon
+      interval: 30s
+      scrapeTimeout: 10s
+----
+
+The `labels` are the important part, and what they must be depends entirely on the Prometheus instance that should do the scraping.
+A Prometheus only picks up the PodMonitors that its `podMonitorSelector` matches, e.g. the `kube-prometheus-stack` chart selects on the label `release: <helm release name of Prometheus>`.
+Check your Prometheus resource to see what it selects on:
+
+[source,bash]
+----
+kubectl get prometheus -A -o custom-columns=NAME:.metadata.name,NAMESPACE:.metadata.namespace,PODMONITORS:.spec.podMonitorSelector
+----
+
+If your Prometheus lives in another namespace than the SolrCloud, it also needs a `podMonitorNamespaceSelector` that includes the namespace of the SolrCloud.
+That is a setting on the Prometheus resource, which the Solr Operator cannot do anything about.
+
+=== Enabling PodMonitors in the Solr Operator
+
+The PodMonitor resource comes from the Prometheus Operator, not from Kubernetes itself, so the Solr Operator only manages PodMonitors when it is started with `--prometheus-operator=true`.
+The Helm chart passes that flag by default when the `monitoring.coreos.com` CRDs are installed in the cluster you install it into, so there is usually nothing to do.
+If you install the Prometheus Operator afterwards, or want to decide for yourself, set the value explicitly:
+
+[source,bash]
+----
+helm upgrade solr-operator apache-solr/solr-operator --set prometheusOperator.use=true
+----
+
+A SolrCloud that asks for a PodMonitor from an operator that does not manage them gets a `MissingPrometheusCRD` warning event instead of a PodMonitor.
+The rest of the SolrCloud is managed as usual, so this costs you the metrics, not the Solr cluster.
+The same goes for an operator that is told to manage PodMonitors in a cluster without the CRDs: it logs that it is not managing PodMonitors, rather than refusing to start.
+
+=== Authentication
+
+When the SolrCloud uses xref:authentication-and-authorization.adoc[basic authentication], Prometheus has to authenticate as well.
+The PodMonitor then points at the basic auth secret of the SolrCloud, whose user is granted access to `/admin/metrics` by the bootstrapped `security.json`.
+
+That user can do considerably more than read metrics, so give Prometheus a dedicated Solr user if you do not want it to hold those credentials.
+Add a user with only the `k8s-metrics` permission to your `security.json`, put its username and password in a secret with the `username` and `password` keys, and name that secret:
+
+[source,yaml]
+----
+spec:
+  prometheus:
+    podMonitor:
+      enable: true
+      basicAuthSecret: solr-metrics-user
+----
+
+=== TLS
+
+When the SolrCloud uses xref:tls.adoc[TLS], the PodMonitor scrapes over `https`.
+Prometheus still needs to be able to trust the Solr certificates, so give it the CA certificate to verify them with:
+
+[source,yaml]
+----
+spec:
+  prometheus:
+    podMonitor:
+      enable: true
+      tlsConfig:
+        caSecret:
+          name: solr-ca-cert
+          key: ca.crt
+        # serverName: solr.example.com
+        # insecureSkipVerify: false
+----
+
+The secret must live in the namespace of the SolrCloud, and hold a PEM-formatted certificate.
+
+== Scrape annotations
+
+A Prometheus that is configured to discover pods through annotations, rather than through the Prometheus Operator, can be pointed at the Solr pods with:
+
+[source,yaml]
+----
+spec:
+  prometheus:
+    scrapeAnnotations:
+      enable: true
+----
+
+This puts the following annotations on the Solr pods, filled in with the port and scheme of the SolrCloud:
+
+[source,yaml]
+----
+prometheus.io/scrape: "true"
+prometheus.io/scheme: "http"
+prometheus.io/path: "/solr/admin/metrics"
+prometheus.io/port: "8983"
+----
+
+These annotations are a widely used convention, not a part of Prometheus itself, so they only have an effect if your Prometheus scrape config acts on them.
+Any of them can be overridden through `spec.customSolrKubeOptions.podOptions.annotations`, e.g. to scrape a subset of the metrics with `prometheus.io/path: "/solr/admin/metrics?group=core"`.
+
+Note that changing these annotations changes the Solr pod template, which means the Solr pods are restarted.
+
+== Pushing metrics with OpenTelemetry
+
+Solr can also push metrics to an OpenTelemetry collector over OTLP, which needs no support from the Solr Operator: configure the OTEL SDK through environment variables on the Solr pods, with `spec.customSolrKubeOptions.podOptions.envVars`, as described in the Solr Reference Guide.

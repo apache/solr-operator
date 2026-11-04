@@ -4,7 +4,7 @@ github.com/davecgh/go-spew/spew,https://github.com/davecgh/go-spew/blob/d8f796af
 github.com/emicklei/go-restful/v3,https://github.com/emicklei/go-restful/blob/v3.13.0/LICENSE,MIT
 github.com/evanphx/json-patch/v5,https://github.com/evanphx/json-patch/blob/v5.9.11/v5/LICENSE,BSD-3-Clause
 github.com/fsnotify/fsnotify,https://github.com/fsnotify/fsnotify/blob/v1.10.1/LICENSE,BSD-3-Clause
-github.com/fxamacker/cbor/v2,https://github.com/fxamacker/cbor/blob/v2.9.2/LICENSE,MIT
+github.com/fxamacker/cbor/v2,https://github.com/fxamacker/cbor/blob/v2.9.3/LICENSE,MIT
 github.com/go-logr/logr,https://github.com/go-logr/logr/blob/v1.4.4/LICENSE,Apache-2.0
 github.com/go-logr/zapr,https://github.com/go-logr/zapr/blob/v1.3.0/LICENSE,Apache-2.0
 github.com/go-openapi/jsonpointer,https://github.com/go-openapi/jsonpointer/blob/v1.0.0/LICENSE,Apache-2.0
@@ -32,6 +32,7 @@ github.com/modern-go/reflect2,https://github.com/modern-go/reflect2/blob/35a7c28
 github.com/munnerz/goautoneg,https://github.com/munnerz/goautoneg/blob/a7dc8b61c822/LICENSE,BSD-3-Clause
 github.com/pmezard/go-difflib/difflib,https://github.com/pmezard/go-difflib/blob/5d4384ee4fb2/LICENSE,BSD-3-Clause
 github.com/pravega/zookeeper-operator/api/v1beta1,https://github.com/pravega/zookeeper-operator/blob/v0.2.15/LICENSE,Apache-2.0
+github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring,https://github.com/prometheus-operator/prometheus-operator/blob/pkg/apis/monitoring/v0.94.2/pkg/apis/monitoring/LICENSE,Apache-2.0
 github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil,https://github.com/prometheus/client_golang/blob/v1.24.0/internal/github.com/golang/gddo/LICENSE,BSD-3-Clause
 github.com/prometheus/client_golang/prometheus,https://github.com/prometheus/client_golang/blob/v1.24.0/LICENSE,Apache-2.0
 github.com/prometheus/client_model/go,https://github.com/prometheus/client_model/blob/v0.6.2/LICENSE,Apache-2.0
@@ -61,9 +62,9 @@ k8s.io/apimachinery/pkg,https://github.com/kubernetes/apimachinery/blob/v0.37.1/
 k8s.io/apimachinery/third_party/forked/golang,https://github.com/kubernetes/apimachinery/blob/v0.37.1/third_party/forked/golang/LICENSE,BSD-3-Clause
 k8s.io/client-go,https://github.com/kubernetes/client-go/blob/v0.37.1/LICENSE,Apache-2.0
 k8s.io/klog/v2,https://github.com/kubernetes/klog/blob/v2.140.0/LICENSE,Apache-2.0
-k8s.io/kube-openapi/pkg,https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/LICENSE,Apache-2.0
-k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/pkg/internal/third_party/go-json-experiment/json/LICENSE,BSD-3-Clause
-k8s.io/kube-openapi/pkg/validation/spec,https://github.com/kubernetes/kube-openapi/blob/d427ff9ee9ad/pkg/validation/spec/LICENSE,Apache-2.0
+k8s.io/kube-openapi/pkg,https://github.com/kubernetes/kube-openapi/blob/be32def86098/LICENSE,Apache-2.0
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,https://github.com/kubernetes/kube-openapi/blob/be32def86098/pkg/internal/third_party/go-json-experiment/json/LICENSE,BSD-3-Clause
+k8s.io/kube-openapi/pkg/validation/spec,https://github.com/kubernetes/kube-openapi/blob/be32def86098/pkg/validation/spec/LICENSE,Apache-2.0
 k8s.io/streaming/pkg,https://github.com/kubernetes/streaming/blob/v0.37.1/LICENSE,Apache-2.0
 k8s.io/utils,https://github.com/kubernetes/utils/blob/ca04ba58ecab/LICENSE,Apache-2.0
 k8s.io/utils/internal/third_party/forked/golang,https://github.com/kubernetes/utils/blob/ca04ba58ecab/internal/third_party/forked/golang/LICENSE,BSD-3-Clause

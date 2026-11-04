@@ -11045,6 +11045,104 @@ spec:
                         type: string
                     type: object
                 type: object
+              prometheus:
+                description: Configure how Prometheus should scrape the metrics endpoint
+                  of the Solr nodes.
+                properties:
+                  podMonitor:
+                    description: |-
+                      Have the Solr Operator manage a PodMonitor for this SolrCloud, telling the Prometheus Operator to
+                      scrape the metrics endpoint of every Solr pod. Requires the monitoring.coreos.com CRDs in the
+                      cluster, and the Solr Operator to be started with `--prometheus-operator=true`, which the Helm
+                      chart does by default when those CRDs are installed.
+                    properties:
+                      basicAuthSecret:
+                        description: |-
+                          Name of a secret, in the namespace of the SolrCloud, holding the username and password that
+                          Prometheus should authenticate with. Only used when the SolrCloud uses basic authentication, and
+                          then defaults to the basic auth secret of the SolrCloud, whose user is allowed to read
+                          /admin/metrics. Give Prometheus a dedicated Solr user instead if you do not want it to hold
+                          credentials that can do more than read metrics.
+                        type: string
+                      enable:
+                        default: true
+                        description: Enable the management of a PodMonitor for this
+                          SolrCloud.
+                        type: boolean
+                      interval:
+                        description: |-
+                          How often Prometheus should scrape each Solr pod, e.g. "30s".
+                          Defaults to the scrape interval of the Prometheus instance.
+                        pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
+                        type: string
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Labels to put on the PodMonitor, used by the podMonitorSelector of the Prometheus instance that
+                          should scrape this SolrCloud. Which labels to use depends entirely on that Prometheus instance,
+                          e.g. the kube-prometheus-stack chart selects on the label `release: <helm release of Prometheus>`.
+                        type: object
+                      scrapeTimeout:
+                        description: |-
+                          Timeout for scraping a Solr pod, e.g. "10s". Must not be longer than the interval.
+                          Defaults to the scrape timeout of the Prometheus instance.
+                        pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
+                        type: string
+                      tlsConfig:
+                        description: |-
+                          How Prometheus should trust the Solr certificates, when the SolrCloud uses TLS.
+                          The scrape scheme is set to https in that case, whether or not this is provided.
+                        properties:
+                          caSecret:
+                            description: |-
+                              Secret key containing the PEM-formatted CA certificate that Prometheus should verify the Solr
+                              certificates with. The secret must live in the namespace of the SolrCloud.
+                            properties:
+                              key:
+                                description: The key of the secret to select from.  Must
+                                  be a valid secret key.
+                                type: string
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                              optional:
+                                description: Specify whether the Secret or its key
+                                  must be defined
+                                type: boolean
+                            required:
+                            - key
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          insecureSkipVerify:
+                            description: Do not verify the Solr certificates at all.
+                              Not recommended.
+                            type: boolean
+                          serverName:
+                            description: ServerName to expect in the Solr certificates,
+                              if it differs from the address being scraped.
+                            type: string
+                        type: object
+                    type: object
+                  scrapeAnnotations:
+                    description: |-
+                      Put prometheus.io/* annotations on the Solr pods, for a Prometheus that discovers pods to scrape
+                      through those annotations. This is a convention, not part of Prometheus itself, so it only has an
+                      effect if the Prometheus scrape config acts on these annotations.
+                    properties:
+                      enable:
+                        default: true
+                        description: Enable the prometheus.io/* annotations on the
+                          Solr pods.
+                        type: boolean
+                    type: object
+                type: object
               replicas:
                 description: The number of solr nodes to run
                 format: int32

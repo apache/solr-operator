@@ -62,6 +62,13 @@ zookeeper-operator:
   crd:
     create: false
 
+# Use the Prometheus Operator, which lets the Solr Operator manage a PodMonitor for SolrClouds that
+# ask for one through `SolrCloud.spec.prometheus.podMonitor`.
+# When this is not set, it defaults to whether the monitoring.coreos.com CRDs are installed in the
+# cluster that the chart is installed into. Set it explicitly to turn the feature on or off.
+prometheusOperator: {}
+  # use: true
+
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
 watchNamespaces: ""
