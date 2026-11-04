@@ -16,7 +16,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-Solr 10 serves https://solr.apache.org/guide/solr/10_0/deployment-guide/monitoring-with-prometheus-and-grafana.html#metrics-api-with-prometheus-format[prometheus-format metrics] at `/solr/admin/metrics` on every Solr node, so Prometheus can scrape the Solr pods directly.
+Solr 10 serves https://solr.apache.org/guide/solr/latest/deployment-guide/monitoring-with-prometheus-and-grafana.html#metrics-api-with-prometheus-format[prometheus-format metrics] at `/solr/admin/metrics` on every Solr node, so Prometheus can scrape the Solr pods directly.
 The `SolrCloud.spec.prometheus` section tells the Solr Operator to set that scraping up for you.
 
 If you instead push metrics to an OpenTelemetry collector, as described in <<Pushing metrics with OpenTelemetry>>, nothing needs to scrape Solr and none of this is needed.
@@ -156,7 +156,7 @@ Note that changing them changes the Solr pod template, which means the Solr pods
 == Pushing metrics with OpenTelemetry
 
 Scraping is not the only way out of Solr.
-Solr can also push its metrics, and its traces, to an https://solr.apache.org/guide/solr/10_0/deployment-guide/metrics-reporting.html#opentelemetry-collector-setup[OpenTelemetry collector] over OTLP, which then routes them to the backend of your choice, Prometheus included.
+Solr can also push its metrics, and its traces, to an https://solr.apache.org/guide/solr/latest/deployment-guide/metrics-reporting.html#opentelemetry-collector-setup[OpenTelemetry collector] over OTLP, which then routes them to the backend of your choice, Prometheus included.
 If you do that, nothing has to scrape the Solr pods, so neither a PodMonitor nor the scrape annotations are needed.
 
 This needs no support from the Solr Operator: configure the OTEL SDK through environment variables on the Solr pods, with `spec.customSolrKubeOptions.podOptions.envVars`, and set the collector up as described in the https://solr.apache.org/guide/solr/10_0/deployment-guide/metrics-reporting.html[Solr Reference Guide].
