@@ -76,7 +76,7 @@ annotations:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
     - kind: added
-      description: New `prometheus` values to let Prometheus scrape the metrics endpoint of the Solr pods, either through an operator-managed PodMonitor or through prometheus.io/* annotations on the pods. Requires Solr 10, which serves prometheus-format metrics at /solr/admin/metrics
+      description: New `prometheus` values to have Prometheus scrape the metrics endpoint of the Solr pods, through an operator-managed PodMonitor and/or prometheus.io/* annotations on the pods. Requires Solr 10
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/820

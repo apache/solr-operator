@@ -75,10 +75,9 @@ func UsePrometheusCRD(useCRD bool) {
 	usePrometheusCRD = useCRD
 }
 
-// PrometheusCRDInstalled returns whether the PodMonitor CRD exists in the cluster, logging what to do
-// about it when it does not. The operator must not watch a kind that the cluster does not have: the
-// manager then gives up after its cache sync timeout, so the operator would crash loop without ever
-// reconciling anything, instead of merely not managing PodMonitors.
+// PrometheusCRDInstalled returns whether the PodMonitor CRD exists in the cluster. Watching a kind
+// that the cluster does not have makes the manager give up after its cache sync timeout, which would
+// crash loop the operator instead of merely not managing PodMonitors.
 func PrometheusCRDInstalled(restMapper meta.RESTMapper, logger logr.Logger) bool {
 	podMonitor := monitoringv1.SchemeGroupVersion.WithKind(monitoringv1.PodMonitorsKind)
 	if _, err := restMapper.RESTMapping(podMonitor.GroupKind(), podMonitor.Version); err != nil {
@@ -235,7 +234,6 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	// Manage the PodMonitor that tells Prometheus to scrape the metrics endpoint of the Solr pods
 	if err = r.reconcilePodMonitor(ctx, instance, logger); err != nil {
 		return requeueOrNot, err
 	}
@@ -1030,16 +1028,13 @@ func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger l
 	return nil, ip
 }
 
-// reconcilePodMonitor manages the PodMonitor that tells the Prometheus Operator to scrape the metrics
-// endpoint of every Solr pod of the cloud. A single PodMonitor covers all pods of the cloud, and is
-// deleted again when it is no longer wanted.
+// reconcilePodMonitor creates, updates or deletes the PodMonitor for the cloud.
 func (r *SolrCloudReconciler) reconcilePodMonitor(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger) error {
 	if !instance.UsesPodMonitor() {
 		return r.deletePodMonitor(ctx, instance, logger)
 	}
 
-	// Without the Prometheus Operator CRDs there is nowhere to put a PodMonitor. Warn about it, but
-	// keep managing the rest of the SolrCloud, as metrics are not worth stalling a Solr cluster over.
+	// Keep managing the rest of the SolrCloud: metrics are not worth stalling a Solr cluster over.
 	if !usePrometheusCRD {
 		msg := "Cannot create a PodMonitor, as the Solr Operator is not configured to use the Prometheus Operator CRDs. Install the Solr Operator with `--prometheus-operator=true` to enable this."
 		logger.Error(nil, msg)
@@ -1047,11 +1042,9 @@ func (r *SolrCloudReconciler) reconcilePodMonitor(ctx context.Context, instance 
 		return nil
 	}
 
-	// TODO: Gate this on Solr 10, once #827 has landed and the operator can parse the Solr version
-	// from the image tag. Solr 9 and earlier do not serve prometheus-format metrics at
-	// util.SolrMetricsPath, so a PodMonitor pointed at them only produces scrape errors, and a
-	// SolrPrometheusExporter should be used instead. Deleting the PodMonitor rather than just
-	// skipping it also covers a SolrCloud that is downgraded from Solr 10 back to Solr 9.
+	// TODO: Gate this on Solr 10, once #827 has landed and the operator can parse the Solr version.
+	// Solr 9 serves no prometheus-format metrics, so scraping it only produces errors. Deleting rather
+	// than skipping also covers a SolrCloud downgraded from Solr 10 back to Solr 9.
 	//
 	//	if major, err := instance.SolrMajorVersion(); err != nil {
 	//		return err
@@ -1086,9 +1079,8 @@ func (r *SolrCloudReconciler) reconcilePodMonitor(ctx context.Context, instance 
 	return err
 }
 
-// deletePodMonitor removes a PodMonitor that the operator created for the cloud earlier, but that is
-// no longer wanted. Nothing is done when the Prometheus Operator CRDs are not in use, as the operator
-// cannot have created a PodMonitor in that case.
+// deletePodMonitor removes a PodMonitor that the cloud no longer wants. The operator cannot have
+// created one without the Prometheus Operator CRDs, so there is nothing to look for in that case.
 func (r *SolrCloudReconciler) deletePodMonitor(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger) error {
 	if !usePrometheusCRD {
 		return nil

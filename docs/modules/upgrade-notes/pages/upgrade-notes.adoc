@@ -143,9 +143,9 @@ Note that Solr `>=9.10` will not start a node older than any Solr node already r
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
-* Prometheus can now scrape the metrics endpoint that Solr 10 serves on every Solr node, configured through the new `SolrCloud.spec.prometheus` section.
-Managing PodMonitors for SolrClouds requires the Prometheus Operator CRDs, and the Solr Operator to be started with `--prometheus-operator=true`, which the helm chart does by default when those CRDs are installed in the cluster; the new helm value `prometheusOperator.use` overrides that detection.
-See xref:solr-cloud:metrics.adoc[SolrCloud Metrics] for the details.
+* Prometheus can scrape the metrics endpoint that Solr 10 serves on every node, through the new `SolrCloud.spec.prometheus` section.
+Managing PodMonitors also needs the operator to run with `--prometheus-operator=true`, which the helm chart sets when the Prometheus Operator CRDs are installed; the new `prometheusOperator.use` value overrides that.
+See xref:solr-cloud:metrics.adoc[SolrCloud Metrics].
 
 === v0.8.0
 

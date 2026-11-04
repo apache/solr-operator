@@ -33,15 +33,11 @@ If you do not wish to use the Zookeeper Operator, set:
 
 ### Using the Prometheus Operator
 
-The Solr Operator can manage PodMonitors for your SolrClouds, so that a Prometheus managed by the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) scrapes the metrics endpoint of your Solr pods.
+The Solr Operator can manage PodMonitors for your SolrClouds, so that a Prometheus run by the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) scrapes the metrics endpoint of your Solr pods.
 
-This is enabled by default if the `monitoring.coreos.com` CRDs are installed in the cluster you install the chart into, as detected by Helm. Set `prometheusOperator.use` explicitly to decide for yourself:
+This is enabled when the `monitoring.coreos.com` CRDs are installed in the cluster, as detected by Helm. Set `prometheusOperator.use` to decide for yourself, e.g. `true` when you install the Prometheus Operator after the Solr Operator. If the CRDs turn out to be missing, the operator logs that it is not managing PodMonitors and carries on.
 
-- `prometheusOperator.use: true` to manage PodMonitors, e.g. when you install the Prometheus Operator after the Solr Operator
-- `prometheusOperator.use: false` to never manage PodMonitors
-
-If PodMonitors are enabled but the CRDs are missing, the Solr Operator logs that it is not managing PodMonitors and carries on with everything else.
-Refer to the [SolrCloud Metrics documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/metrics.html) for how to ask for a PodMonitor per SolrCloud.
+See the [SolrCloud Metrics documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/metrics.html) for enabling this per SolrCloud.
 
 
 ### Adding the Solr Operator Helm Chart Repository
@@ -169,7 +165,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| prometheusOperator.use | boolean | *auto* | Use the Prometheus Operator, which lets the Solr Operator manage a PodMonitor for SolrClouds that ask for one through `SolrCloud.spec.prometheus.podMonitor`. Defaults to whether the `monitoring.coreos.com` CRDs are installed in the cluster being installed into. |
+| prometheusOperator.use | boolean | *auto* | Let the Solr Operator manage PodMonitors for SolrClouds. Defaults to whether the `monitoring.coreos.com` CRDs are installed in the cluster. |
 | watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
 | zookeeper-operator.install | boolean | `true` | This option installs the Zookeeper Operator as a helm dependency |
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |

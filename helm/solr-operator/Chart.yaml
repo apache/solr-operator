@@ -156,7 +156,7 @@ annotations:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
     - kind: added
-      description: The operator can manage a PodMonitor for a SolrCloud, telling the Prometheus Operator to scrape the prometheus-format metrics that Solr 10 serves at /solr/admin/metrics on every pod. Requires the new `prometheusOperator.use` value, and adds RBAC permissions for monitoring.coreos.com podmonitors
+      description: The operator can manage a PodMonitor for a SolrCloud, so that Prometheus scrapes the metrics endpoint of every Solr pod. Requires Solr 10 and the Prometheus Operator CRDs, and adds RBAC permissions for podmonitors
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/820

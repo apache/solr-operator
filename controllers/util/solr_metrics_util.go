@@ -32,9 +32,8 @@ const (
 	// SolrMetricsPath is the path of Solr's metrics API
 	SolrMetricsPath = "/solr/admin/metrics"
 
-	// SolrMetricsWtParam and SolrMetricsWtPrometheus ask the metrics API for the Prometheus exposition
-	// format. Solr 10 already answers in that format when the parameter is absent, but the operator
-	// asks for it explicitly, so that a future change of that default cannot silently break scraping.
+	// Solr 10 answers in the Prometheus exposition format even without this parameter, but asking for
+	// it explicitly means a change of that default cannot silently break scraping.
 	SolrMetricsWtParam      = "wt"
 	SolrMetricsWtPrometheus = "prometheus"
 
@@ -42,15 +41,13 @@ const (
 	PrometheusSchemeAnnotation = "prometheus.io/scheme"
 	PrometheusPathAnnotation   = "prometheus.io/path"
 	PrometheusPortAnnotation   = "prometheus.io/port"
-	// PrometheusWtParamAnnotation carries the wt parameter, as a query string in the path annotation
-	// would not work: Prometheus puts the path annotation in __metrics_path__, where a "?" is escaped.
-	// A scrape config has to turn this annotation into the __param_wt label, see the operator docs.
+	// The wt parameter needs an annotation of its own: Prometheus puts the path annotation in
+	// __metrics_path__, where a "?" is escaped. A scrape config maps this one to the __param_wt label.
 	PrometheusWtParamAnnotation = "prometheus.io/param-" + SolrMetricsWtParam
 )
 
 // PrometheusScrapeAnnotations returns the prometheus.io/* annotations describing how to scrape the
-// metrics API of a Solr pod. These are a widely used convention rather than a part of Prometheus
-// itself, so they only have an effect if the Prometheus scrape config is set up to act on them.
+// metrics API of a Solr pod. They are a convention, so only a scrape config acting on them has effect.
 func PrometheusScrapeAnnotations(solrCloud *solr.SolrCloud) map[string]string {
 	return map[string]string{
 		PrometheusScrapeAnnotation:  "true",
@@ -61,25 +58,23 @@ func PrometheusScrapeAnnotations(solrCloud *solr.SolrCloud) map[string]string {
 	}
 }
 
-// GeneratePodMonitor returns a new monitoringv1.PodMonitor pointing at the metrics endpoint of the
-// SolrCloud's pods. One PodMonitor covers the whole cloud: the Prometheus Operator turns it into a
-// single scrape job that discovers every Solr pod as its own target, following the cloud as it scales.
+// GeneratePodMonitor returns a new monitoringv1.PodMonitor for the metrics API of the SolrCloud's
+// pods. One PodMonitor covers the whole cloud: the Prometheus Operator turns it into a single scrape
+// job that discovers every Solr pod as its own target, following the cloud as it scales.
 func GeneratePodMonitor(solrCloud *solr.SolrCloud) *monitoringv1.PodMonitor {
 	options := solrCloud.Spec.Prometheus.PodMonitor
 
 	endpoint := monitoringv1.PodMetricsEndpoint{
-		Port: ptr.To(SolrClientPortName),
-		Path: SolrMetricsPath,
-		// Pin the exposition format, rather than relying on the default of the Solr version in use
+		Port:          ptr.To(SolrClientPortName),
+		Path:          SolrMetricsPath,
 		Params:        map[string][]string{SolrMetricsWtParam: {SolrMetricsWtPrometheus}},
 		Scheme:        ptr.To(monitoringv1.Scheme(solrCloud.UrlScheme(false))),
 		Interval:      monitoringv1.Duration(options.Interval),
 		ScrapeTimeout: monitoringv1.Duration(options.ScrapeTimeout),
 	}
 
-	// Solr requires authentication for /admin/metrics when basic auth is enabled, so Prometheus needs
-	// credentials. The secret of the SolrCloud is used unless another one is given, as its user is
-	// granted access to /admin/metrics by the bootstrapped security.json.
+	// The secret of the SolrCloud is used unless another one is given, as the bootstrapped
+	// security.json grants its user access to /admin/metrics.
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		basicAuthSecret := options.BasicAuthSecret
 		if basicAuthSecret == "" {
@@ -97,8 +92,6 @@ func GeneratePodMonitor(solrCloud *solr.SolrCloud) *monitoringv1.PodMonitor {
 		}
 	}
 
-	// The scheme already says https when the SolrCloud uses TLS, but Prometheus also needs to be told
-	// how to trust the Solr certificates.
 	if tlsConfig := options.TLSConfig; tlsConfig != nil {
 		endpoint.TLSConfig = &monitoringv1.SafeTLSConfig{
 			InsecureSkipVerify: ptr.To(tlsConfig.InsecureSkipVerify),
@@ -115,8 +108,7 @@ func GeneratePodMonitor(solrCloud *solr.SolrCloud) *monitoringv1.PodMonitor {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      solrCloud.PodMonitorName(),
 			Namespace: solrCloud.Namespace,
-			// The labels of the PodMonitor are what the Prometheus instance selects it by, so the
-			// user-provided labels are the important ones here.
+			// The Prometheus instance selects the PodMonitor by its labels, so the user's labels win
 			Labels: MergeLabelsOrAnnotations(options.Labels, solrCloud.SharedLabels()),
 		},
 		Spec: monitoringv1.PodMonitorSpec{

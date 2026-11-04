@@ -205,7 +205,7 @@ func CopyPodMonitorFields(from, to *monitoringv1.PodMonitor, logger logr.Logger)
 	logger = logger.WithValues("kind", "podMonitor")
 	requireUpdate := CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger)
 
-	// Nothing in the PodMonitor spec is defaulted by the API server, so the whole spec is owned here
+	// The whole spec is owned here, as the API server defaults nothing in it
 	if !DeepEqualWithNils(to.Spec, from.Spec) {
 		requireUpdate = true
 		logger.Info("Update required because field changed", "field", "Spec", "from", to.Spec, "to", from.Spec)

@@ -11309,18 +11309,13 @@ spec:
                 properties:
                   podMonitor:
                     description: |-
-                      Have the Solr Operator manage a PodMonitor for this SolrCloud, telling the Prometheus Operator to
-                      scrape the metrics endpoint of every Solr pod. Requires the monitoring.coreos.com CRDs in the
-                      cluster, and the Solr Operator to be started with `--prometheus-operator=true`, which the Helm
-                      chart does by default when those CRDs are installed.
+                      Have the Solr Operator manage a PodMonitor for this SolrCloud. Requires the monitoring.coreos.com
+                      CRDs, and the Solr Operator to be started with `--prometheus-operator=true`.
                     properties:
                       basicAuthSecret:
                         description: |-
-                          Name of a secret, in the namespace of the SolrCloud, holding the username and password that
-                          Prometheus should authenticate with. Only used when the SolrCloud uses basic authentication, and
-                          then defaults to the basic auth secret of the SolrCloud, whose user is allowed to read
-                          /admin/metrics. Give Prometheus a dedicated Solr user instead if you do not want it to hold
-                          credentials that can do more than read metrics.
+                          Secret holding the username and password that Prometheus should authenticate with, when the
+                          SolrCloud uses basic authentication. Defaults to the basic auth secret of the SolrCloud.
                         type: string
                       enable:
                         default: true
@@ -11329,33 +11324,30 @@ spec:
                         type: boolean
                       interval:
                         description: |-
-                          How often Prometheus should scrape each Solr pod, e.g. "30s".
-                          Defaults to the scrape interval of the Prometheus instance.
+                          How often Prometheus should scrape each Solr pod, e.g. "30s". Defaults to the interval of the
+                          Prometheus instance.
                         pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                         type: string
                       labels:
                         additionalProperties:
                           type: string
                         description: |-
-                          Labels to put on the PodMonitor, used by the podMonitorSelector of the Prometheus instance that
-                          should scrape this SolrCloud. Which labels to use depends entirely on that Prometheus instance,
-                          e.g. the kube-prometheus-stack chart selects on the label `release: <helm release of Prometheus>`.
+                          Labels to put on the PodMonitor, matched by the podMonitorSelector of the Prometheus instance that
+                          should scrape this SolrCloud.
                         type: object
                       scrapeTimeout:
-                        description: |-
-                          Timeout for scraping a Solr pod, e.g. "10s". Must not be longer than the interval.
-                          Defaults to the scrape timeout of the Prometheus instance.
+                        description: Timeout for scraping a Solr pod, e.g. "10s".
+                          Must not be longer than the interval.
                         pattern: ^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$
                         type: string
                       tlsConfig:
-                        description: |-
-                          How Prometheus should trust the Solr certificates, when the SolrCloud uses TLS.
-                          The scrape scheme is set to https in that case, whether or not this is provided.
+                        description: How Prometheus should trust the Solr certificates,
+                          when the SolrCloud uses TLS.
                         properties:
                           caSecret:
                             description: |-
-                              Secret key containing the PEM-formatted CA certificate that Prometheus should verify the Solr
-                              certificates with. The secret must live in the namespace of the SolrCloud.
+                              Secret key with the PEM-formatted CA certificate to verify the Solr certificates with, in the
+                              namespace of the SolrCloud.
                             properties:
                               key:
                                 description: The key of the secret to select from.  Must
@@ -11384,15 +11376,14 @@ spec:
                             type: boolean
                           serverName:
                             description: ServerName to expect in the Solr certificates,
-                              if it differs from the address being scraped.
+                              if it differs from the address scraped.
                             type: string
                         type: object
                     type: object
                   scrapeAnnotations:
                     description: |-
                       Put prometheus.io/* annotations on the Solr pods, for a Prometheus that discovers pods to scrape
-                      through those annotations. This is a convention, not part of Prometheus itself, so it only has an
-                      effect if the Prometheus scrape config acts on these annotations.
+                      through annotations.
                     properties:
                       enable:
                         default: true
