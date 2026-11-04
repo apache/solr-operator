@@ -36,7 +36,7 @@ You have two options for the prometheus exporter to find the zookeeper connectio
 
 * Provide the name of a `SolrCloud` object in the same Kubernetes cluster, and optional namespace.
 The Solr Operator will keep the ZK Connection info up to date from the SolrCloud object.
-This name can be provided at: `SolrPrometheusExporter.spec.solrRef.cloud.name`, and the namespace at: `SolrPrometheusExporter.spec.solrRef.cloud.namespace`
+This name can be provided at: `SolrPrometheusExporter.spec.solrReference.cloud.name`, and the namespace at: `SolrPrometheusExporter.spec.solrReference.cloud.namespace`
 The namespace defaults to the namespace of the `SolrPrometheusExporter`.
 A `SolrCloud` in another namespace is supported, but only if the Solr Operator is watching that namespace.
 * Provide explicit Zookeeper Connection info for the prometheus exporter to use.
