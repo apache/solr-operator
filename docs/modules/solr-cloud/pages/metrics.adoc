@@ -16,8 +16,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-Solr 10 serves prometheus-format metrics at `/solr/admin/metrics` on every Solr node, so Prometheus can scrape the Solr pods directly.
+Solr 10 serves https://solr.apache.org/guide/solr/10_0/deployment-guide/monitoring-with-prometheus-and-grafana.html#metrics-api-with-prometheus-format[prometheus-format metrics] at `/solr/admin/metrics` on every Solr node, so Prometheus can scrape the Solr pods directly.
 The `SolrCloud.spec.prometheus` section tells the Solr Operator to set that scraping up for you.
+
+If you instead push metrics to an OpenTelemetry collector, as described in <<Pushing metrics with OpenTelemetry>>, nothing needs to scrape Solr and none of this is needed.
 
 NOTE: This requires Solr 10 or later.
 Solr 9 and earlier do not serve metrics in the Prometheus format, and are monitored with a xref:solr-prometheus-exporter:index.adoc[SolrPrometheusExporter] instead, which was removed from Solr in Solr 10.
@@ -31,6 +33,7 @@ There are two ways to be scraped, and they are independent of each other:
 
 One PodMonitor covers a whole SolrCloud: the Prometheus Operator turns it into a single scrape job that discovers every Solr pod as a target of its own, and follows the SolrCloud as it scales up and down.
 The Solr Operator fills in the port, the metrics path, the scheme, and the credentials from the SolrCloud itself.
+It also passes `wt=prometheus` to the metrics API: Solr 10 answers in that format anyway, but asking for it explicitly means a future change of Solr's default cannot silently break scraping.
 
 [source,yaml]
 ----
@@ -129,13 +132,31 @@ prometheus.io/scrape: "true"
 prometheus.io/scheme: "http"
 prometheus.io/path: "/solr/admin/metrics"
 prometheus.io/port: "8983"
+prometheus.io/param-wt: "prometheus"
 ----
 
 These annotations are a widely used convention, not a part of Prometheus itself, so they only have an effect if your Prometheus scrape config acts on them.
-Any of them can be overridden through `spec.customSolrKubeOptions.podOptions.annotations`, e.g. to scrape a subset of the metrics with `prometheus.io/path: "/solr/admin/metrics?group=core"`.
 
-Note that changing these annotations changes the Solr pod template, which means the Solr pods are restarted.
+The `param-` annotation is less common than the others, and carries a query parameter rather than part of the URL path.
+It cannot be folded into `prometheus.io/path`, because Prometheus puts that annotation in the `__metrics_path__` label, where a `?` is escaped and would be sent to Solr as `%3F`.
+Query parameters have to come from `__param_<name>` labels instead, which one relabeling rule covers for all of them:
+
+[source,yaml]
+----
+      - action: labelmap
+        regex: __meta_kubernetes_pod_annotation_prometheus_io_param_(.+)
+        replacement: __param_${1}
+----
+
+Solr 10 answers the metrics API in the Prometheus format even without `wt=prometheus`, so leaving that rule out works today; the annotation is there so that a future change of Solr's default does not silently break scraping.
+
+Any of these annotations can be overridden, and others added, through `spec.customSolrKubeOptions.podOptions.annotations`, e.g. `prometheus.io/param-group: "core"` to scrape only the core metrics.
+Note that changing them changes the Solr pod template, which means the Solr pods are restarted.
 
 == Pushing metrics with OpenTelemetry
 
-Solr can also push metrics to an OpenTelemetry collector over OTLP, which needs no support from the Solr Operator: configure the OTEL SDK through environment variables on the Solr pods, with `spec.customSolrKubeOptions.podOptions.envVars`, as described in the Solr Reference Guide.
+Scraping is not the only way out of Solr.
+Solr can also push its metrics, and its traces, to an https://solr.apache.org/guide/solr/10_0/deployment-guide/metrics-reporting.html#opentelemetry-collector-setup[OpenTelemetry collector] over OTLP, which then routes them to the backend of your choice, Prometheus included.
+If you do that, nothing has to scrape the Solr pods, so neither a PodMonitor nor the scrape annotations are needed.
+
+This needs no support from the Solr Operator: configure the OTEL SDK through environment variables on the Solr pods, with `spec.customSolrKubeOptions.podOptions.envVars`, and set the collector up as described in the https://solr.apache.org/guide/solr/10_0/deployment-guide/metrics-reporting.html[Solr Reference Guide].

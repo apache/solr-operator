@@ -70,6 +70,8 @@ func TestPodMonitorForOneCloudSelectsAllOfItsPods(t *testing.T) {
 	endpoint := podMonitor.Spec.PodMetricsEndpoints[0]
 	assert.Equal(t, ptr.To(SolrClientPortName), endpoint.Port, "The PodMonitor must scrape the Solr client port")
 	assert.Equal(t, "/solr/admin/metrics", endpoint.Path, "Wrong metrics path for the PodMonitor")
+	// Solr 10 defaults to this format, but the PodMonitor pins it instead of relying on the default
+	assert.Equal(t, map[string][]string{"wt": {"prometheus"}}, endpoint.Params, "The PodMonitor must ask the metrics API for the Prometheus format")
 	assert.Equal(t, ptr.To(monitoringv1.Scheme("http")), endpoint.Scheme, "Wrong scheme for the PodMonitor")
 	assert.Equal(t, monitoringv1.Duration("30s"), endpoint.Interval, "Wrong scrape interval for the PodMonitor")
 	assert.Equal(t, monitoringv1.Duration("10s"), endpoint.ScrapeTimeout, "Wrong scrape timeout for the PodMonitor")
@@ -129,6 +131,8 @@ func TestPrometheusScrapeAnnotationsPointAtTheMetricsEndpoint(t *testing.T) {
 		"prometheus.io/scheme": "http",
 		"prometheus.io/path":   "/solr/admin/metrics",
 		"prometheus.io/port":   "8983",
+		// The wt parameter cannot go in the path annotation, as Prometheus escapes the "?" there
+		"prometheus.io/param-wt": "prometheus",
 	}, annotations, "Wrong prometheus.io/* annotations for the Solr pods")
 
 	solrCloud.Spec.SolrAddressability.PodPort = 9983

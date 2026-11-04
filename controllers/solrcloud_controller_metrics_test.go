@@ -84,6 +84,7 @@ var _ = FDescribe("SolrCloud controller - Metrics", func() {
 			Expect(podAnnotations).To(HaveKeyWithValue("prometheus.io/scheme", "http"), "Wrong scrape scheme on the Solr pods")
 			Expect(podAnnotations).To(HaveKeyWithValue("prometheus.io/path", "/solr/admin/metrics"), "Wrong scrape path on the Solr pods")
 			Expect(podAnnotations).To(HaveKeyWithValue("prometheus.io/port", "8983"), "Wrong scrape port on the Solr pods")
+			Expect(podAnnotations).To(HaveKeyWithValue("prometheus.io/param-wt", "prometheus"), "The metrics API must be asked for the Prometheus format")
 		})
 	})
 
@@ -106,13 +107,15 @@ var _ = FDescribe("SolrCloud controller - Metrics", func() {
 			}
 			solrCloud.Spec.CustomSolrKubeOptions = solrv1beta1.CustomSolrKubeOptions{
 				PodOptions: &solrv1beta1.PodOptions{
-					Annotations: map[string]string{"prometheus.io/path": "/solr/admin/metrics?group=node"},
+					// Only a subset of the metrics, through the group parameter of Solr's metrics API
+					Annotations: map[string]string{"prometheus.io/param-group": "core"},
 				},
 			}
 		})
-		FIt("keeps the annotation given in podOptions", func(ctx context.Context) {
+		FIt("keeps the annotations given in podOptions", func(ctx context.Context) {
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
-				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/path", "/solr/admin/metrics?group=node"), "A user-provided annotation must win over the generated one")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/param-group", "core"), "A user-provided annotation must be kept")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/param-wt", "prometheus"), "The generated annotations must still be set")
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue("prometheus.io/scrape", "true"), "The other generated annotations must still be set")
 			})
 		})

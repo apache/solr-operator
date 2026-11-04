@@ -29,24 +29,35 @@ import (
 )
 
 const (
-	// SolrMetricsPath is the path that Solr 10 and later serve prometheus-format metrics on
+	// SolrMetricsPath is the path of Solr's metrics API
 	SolrMetricsPath = "/solr/admin/metrics"
+
+	// SolrMetricsWtParam and SolrMetricsWtPrometheus ask the metrics API for the Prometheus exposition
+	// format. Solr 10 already answers in that format when the parameter is absent, but the operator
+	// asks for it explicitly, so that a future change of that default cannot silently break scraping.
+	SolrMetricsWtParam      = "wt"
+	SolrMetricsWtPrometheus = "prometheus"
 
 	PrometheusScrapeAnnotation = "prometheus.io/scrape"
 	PrometheusSchemeAnnotation = "prometheus.io/scheme"
 	PrometheusPathAnnotation   = "prometheus.io/path"
 	PrometheusPortAnnotation   = "prometheus.io/port"
+	// PrometheusWtParamAnnotation carries the wt parameter, as a query string in the path annotation
+	// would not work: Prometheus puts the path annotation in __metrics_path__, where a "?" is escaped.
+	// A scrape config has to turn this annotation into the __param_wt label, see the operator docs.
+	PrometheusWtParamAnnotation = "prometheus.io/param-" + SolrMetricsWtParam
 )
 
 // PrometheusScrapeAnnotations returns the prometheus.io/* annotations describing how to scrape the
-// metrics endpoint of a Solr pod. These are a widely used convention rather than a part of Prometheus
+// metrics API of a Solr pod. These are a widely used convention rather than a part of Prometheus
 // itself, so they only have an effect if the Prometheus scrape config is set up to act on them.
 func PrometheusScrapeAnnotations(solrCloud *solr.SolrCloud) map[string]string {
 	return map[string]string{
-		PrometheusScrapeAnnotation: "true",
-		PrometheusSchemeAnnotation: solrCloud.UrlScheme(false),
-		PrometheusPathAnnotation:   SolrMetricsPath,
-		PrometheusPortAnnotation:   strconv.Itoa(solrCloud.Spec.SolrAddressability.PodPort),
+		PrometheusScrapeAnnotation:  "true",
+		PrometheusSchemeAnnotation:  solrCloud.UrlScheme(false),
+		PrometheusPathAnnotation:    SolrMetricsPath,
+		PrometheusPortAnnotation:    strconv.Itoa(solrCloud.Spec.SolrAddressability.PodPort),
+		PrometheusWtParamAnnotation: SolrMetricsWtPrometheus,
 	}
 }
 
@@ -57,8 +68,10 @@ func GeneratePodMonitor(solrCloud *solr.SolrCloud) *monitoringv1.PodMonitor {
 	options := solrCloud.Spec.Prometheus.PodMonitor
 
 	endpoint := monitoringv1.PodMetricsEndpoint{
-		Port:          ptr.To(SolrClientPortName),
-		Path:          SolrMetricsPath,
+		Port: ptr.To(SolrClientPortName),
+		Path: SolrMetricsPath,
+		// Pin the exposition format, rather than relying on the default of the Solr version in use
+		Params:        map[string][]string{SolrMetricsWtParam: {SolrMetricsWtPrometheus}},
 		Scheme:        ptr.To(monitoringv1.Scheme(solrCloud.UrlScheme(false))),
 		Interval:      monitoringv1.Duration(options.Interval),
 		ScrapeTimeout: monitoringv1.Duration(options.ScrapeTimeout),
