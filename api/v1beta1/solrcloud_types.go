@@ -202,10 +202,6 @@ func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
 	}
 	changed = spec.SolrImage.withDefaults(DefaultSolrRepo, DefaultSolrVersion, DefaultPullPolicy) || changed
 
-	if spec.NodeRoleDistribution == nil {
-		spec.NodeRoleDistribution = &NodeRoleDistribution{}
-	}
-
 	changed = spec.StorageOptions.withDefaults() || changed
 
 	if spec.BusyBoxImage == nil {
@@ -248,18 +244,6 @@ type CustomSolrKubeOptions struct {
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
 }
 
-// TODO - Decide on best approach w/ this
-//   - Does this take precident over replicas? i.e.
-//     spec:
-//     replicas: 16
-//     nodeRoleDistribution:
-//     dataNodes: 10
-//     overseers: 2
-//     coordinators: 2
-//     If both are set, does the `nodeRoleDistribution` take priority?
-//   - Does the replicas need to be the total number? What happens if we mismatch
-//   - We should, however, ensure safety that if nodeRoleDistribution is nil, then we just default
-//     to the replicas, and set them all as data nodes
 type NodeRoleDistribution struct {
 	// Number of dedicated overseer nodes (data:off, overseer:preferred).
 	// +kubebuilder:validation:Minimum=0
@@ -293,18 +277,53 @@ func (role SolrNodeRole) NodeRolesSystemProperty() string {
 		return "data:off,overseer:preferred,coordinator:off"
 	case SolrNodeRoleCoordinator:
 		return "data:off,overseer:disallowed,coordinator:on"
+	// To achieve backward compatability, if neither overseer nor coordinator are set, then we default to all being data
+	// nodes, however, we should still allow the role of overseer so that overseers can still be present.
 	default:
-		return "data:on,overseer:disallowed,coordinator:off"
+		return "data:on,overseer:allowed,coordinator:off"
 	}
 }
 
-// Format the statefulset name for different node roles. Overseer and Coordinators are
+func getReplicaCount(x *int32) int32 {
+	if x == nil {
+		return 0
+	}
+	return *x
+}
+
+func (solrCloud *SolrCloud) GetDataNodeGroup() SolrNodeGroup {
+	return SolrNodeGroup{Role: SolrNodeRoleData, Replicas: getReplicaCount(solrCloud.Spec.Replicas)}
+}
+
+func (solrCloud *SolrCloud) GetNonDataNodeGroups() []SolrNodeGroup {
+	nodeRoleDistribution := solrCloud.Spec.NodeRoleDistribution
+	if nodeRoleDistribution == nil {
+		return nil
+	}
+	return []SolrNodeGroup{
+		{Role: SolrNodeRoleOverseer, Replicas: getReplicaCount(nodeRoleDistribution.Overseers)},
+		{Role: SolrNodeRoleCoordinator, Replicas: getReplicaCount(nodeRoleDistribution.Coordinators)},
+	}
+}
+
+// StatefulSetNameForRole Format the StatefulSet name for different node roles. Overseer and Coordinators are
 // suffixed with their respective names.
 func (solrCloud *SolrCloud) StatefulSetNameForRole(role SolrNodeRole) string {
-	if role == "" || role == SolrNodeRoleData {
+	if role == SolrNodeRoleData {
 		return solrCloud.StatefulSetName()
 	}
 	return fmt.Sprintf("%s-%s", solrCloud.StatefulSetName(), role)
+}
+
+// GetNonDataPodNames lists the pods the spec expects for the overseer & coordinator StatefulSets.
+func (solrCloud *SolrCloud) GetNonDataPodNames() (podNames []string) {
+	for _, group := range solrCloud.GetNonDataNodeGroups() {
+		name := solrCloud.StatefulSetNameForRole(group.Role)
+		for i := range group.Replicas {
+			podNames = append(podNames, fmt.Sprintf("%s-%d", name, i))
+		}
+	}
+	return podNames
 }
 
 type SolrDataStorageOptions struct {
