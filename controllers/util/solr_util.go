@@ -108,11 +108,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 
 	labels["technology"] = solr.SolrTechnologyLabel
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
-
-	if group.Role != "" {
-		labels[solr.SolrNodeRoleLabel] = string(group.Role)
-		selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
-	}
+	// Add node role label. We default to data node roles if no overseer or coordinator are specified.
+	labels[solr.SolrNodeRoleLabel] = string(group.Role)
+	selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
 
 	annotations := map[string]string{
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
@@ -159,6 +157,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
 	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+	allSolrOpts = append(allSolrOpts, "-Dsolr.node.roles="+group.Role.NodeRolesSystemProperty())
 	allSolrOpts = append(allSolrOpts, "-Dsolr.node.roles="+group.Role.NodeRolesSystemProperty())
 	// The "availability_zone" and "spread_domain" system properties are used by Solr's AffinityPlacementFactory
 	// to spread replicas across zones, and across Kubernetes nodes within a zone
@@ -563,7 +562,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 	updateStrategy := appsv1.OnDeleteStatefulSetStrategyType
 	// Overseers/Coordinators don't hold index data, so a plain k8s rolling
 	// update strategy should be safe here for either of those stateful sets
-	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate || (group.Role != "" && group.Role != solr.SolrNodeRoleData) {
+	if solrCloud.Spec.UpdateStrategy.Method == solr.StatefulSetUpdate || group.Role != solr.SolrNodeRoleData {
 		// Only use the rolling update strategy if the StatefulSetUpdate method is specified.
 		updateStrategy = appsv1.RollingUpdateStatefulSetStrategyType
 	}
@@ -587,7 +586,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 				MatchLabels: selectorLabels,
 			},
 			ServiceName:         solrCloud.HeadlessServiceName(),
-			Replicas:            solrCloud.Spec.Replicas,
+			Replicas:            &group.Replicas,
 			PodManagementPolicy: podManagementPolicy,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: updateStrategy,
