@@ -1121,6 +1121,78 @@ groups:
           logfile: upload_helm.log
           tee: true
   - !Todo
+    id: publish_helm_charts_oci
+    title: Publish Helm charts to the OCI registry (GHCR)
+    depends: publish_helm_charts
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      solr_operator_chart_url: '{{ dist_release_url }}/helm-charts/solr-operator-{{ release_version[1:] }}.tgz'
+      solr_chart_url: '{{ dist_release_url }}/helm-charts/solr-{{ release_version[1:] }}.tgz'
+      workflow_url: https://github.com/apache/solr-operator/actions/workflows/publish-helm-oci.yaml
+    description: |
+      Publish the released Helm charts as OCI artifacts to the GitHub Container Registry,
+      using the "Publish Helm Charts to OCI Registry" GitHub Actions workflow.
+
+      The charts on dist.apache.org remain the canonical, signed release artifacts.
+      The OCI copies are convenience binaries, published to:
+        - oci://ghcr.io/apache/solr-operator/helm/solr-operator
+        - oci://ghcr.io/apache/solr-operator/helm/solr
+
+      Steps to publish:
+      1. Navigate to the GitHub Actions workflow:
+         {{ workflow_url }}
+
+      2. Click the "Run workflow" button on the right side
+
+      3. Fill in the workflow inputs:
+         - solr-operator-chart-url: {{ solr_operator_chart_url }}
+         - solr-chart-url: {{ solr_chart_url }}
+         - dry-run: true
+
+      4. The dry-run verifies, without publishing anything, that:
+         - The URLs are valid and point at dist.apache.org
+         - The charts, checksums, signatures and provenance files all download
+         - The SHA512 checksums match
+         - The GPG signatures verify against the Solr KEYS file
+         - The chart versions are what you expect
+
+      5. Re-run the workflow with dry-run = false to actually publish
+
+      6. Monitor the workflow execution for any errors. After pushing, the workflow logs
+         out of the registry and pulls both charts back anonymously, verifying their
+         provenance and checking they are byte-identical to the released artifacts.
+         If this step fails with an authorization error, the ghcr.io packages are still
+         private and INFRA needs to make them public - see the note below.
+
+      7. Confirm for yourself that the charts are resolvable, with no credentials:
+
+         helm registry logout ghcr.io
+         helm show chart oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {{ release_version[1:] }}
+         helm show chart oci://ghcr.io/apache/solr-operator/helm/solr --version {{ release_version[1:] }}
+
+      8. Smoke test an actual install from the OCI registry, in a throwaway Kind cluster.
+         The -o flag points the Helm installs at the OCI registry, while the CRDs still come
+         from the release location. This verifies 'helm install --verify' against the pushed
+         .prov files, which is the part 'helm show chart' does not cover:
+
+         ./hack/release/smoke_test/test_cluster.sh \
+             -v "{{ release_version }}" \
+             -l "{{ dist_release_url }}" \
+             -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+             -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
+             -o "oci://ghcr.io/apache/solr-operator/helm"
+
+         Note this uses the RC Docker image, since the final image is not pushed to Docker
+         Hub until a later step. The chart is what is under test here, not the image.
+
+      Note: the workflow authenticates with the built-in GITHUB_TOKEN, so no secrets need
+      to be configured. However, ghcr.io creates new packages as *private*. The very first
+      time a chart name is published, an INFRA ticket is needed to make the package public.
+      This is a one-time action per chart name; later versions inherit the visibility.
+    links:
+      - https://github.com/apache/solr-operator/actions/workflows/publish-helm-oci.yaml
+      - https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}/helm-charts/
+  - !Todo
     id: publish_crds
     title: Publish the staged CRDs
     depends: svn_release_mv
@@ -1179,11 +1251,15 @@ groups:
     depends:
       - publish_docker_image
       - publish_helm_charts
+      - publish_helm_charts_oci
     description: |
       Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} version of the Solr Operator and Solr Helm Charts.
       Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
 
       The ChangeLog is very finicky, so make sure that it renders correctly.
+
+      Note that ArtifactHub still indexes the HTTPS chart repository, not the OCI registry,
+      so the OCI copies published in the previous step will not show up here.
     links:
       - https://artifacthub.io/packages/helm/apache-solr/solr-operator
       - https://artifacthub.io/packages/helm/apache-solr/solr
