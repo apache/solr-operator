@@ -23,8 +23,9 @@
 !go.mod
 !go.sum
 
-# Git metadata and build tooling used during the image build
-!.git
+# Build tooling used during the image build.
+# The .git directory is deliberately excluded: it changes on every commit and would invalidate the cache of every
+# layer after it. The git SHA is provided through the GIT_SHA build arg instead.
 !build
 !hack
 !Makefile

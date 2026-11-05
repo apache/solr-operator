@@ -32,6 +32,8 @@ VERSION_SUFFIX = $(shell cat version/version.go | grep -E 'VersionSuffix([[:spac
 TMP_VERSION = $(shell cat version/version.go | grep -E 'Version([[:space:]]+)=' | sed 's/.*["'"'"']\(.*\)["'"'"']/\1/g')
 VERSION = $(if $(VERSION_SUFFIX),$(TMP_VERSION)-$(VERSION_SUFFIX),$(TMP_VERSION))
 TAG ?= $(VERSION)
+# Docs are only published for released versions, so prerelease builds link to the latest docs (the Dockerfile default)
+DOCS_VERSION = $(if $(VERSION_SUFFIX),latest,$(shell echo $(TMP_VERSION) | sed -E 's/^v([0-9]+)\.([0-9]+).*/\1_\2/'))
 GIT_SHA = $(shell git rev-parse --short HEAD)
 GOOS = $(shell go env GOOS)
 ARCH = $(shell go env GOARCH)
@@ -182,9 +184,11 @@ run: manifests generate fmt vet ## Run a controller from your host
 
 .PHONY: docker-build
 docker-build: ## Build the docker image for the Solr Operator
-	docker build --build-arg GIT_SHA=$(GIT_SHA) . -t solr-operator -f ./build/Dockerfile
+	DOCKER_BUILDKIT=1 docker build --build-arg GIT_SHA=$(GIT_SHA) --build-arg VERSION="$(VERSION)" --build-arg DOCS_VERSION=$(DOCS_VERSION) . -t solr-operator -f ./build/Dockerfile
 	docker tag solr-operator $(IMG):$(TAG)
 	docker tag solr-operator $(IMG):latest
+	# Remove the dangling images that previous builds of this image leave behind (only those built from our Dockerfile)
+	docker image prune -f --filter "label=org.opencontainers.image.title=Apache Solr Operator" >/dev/null
 
 .PHONY: docker-push
 docker-push: ## Push the docker image for the Solr Operator
