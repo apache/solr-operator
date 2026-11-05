@@ -99,6 +99,11 @@ func GeneratePodMonitor(solrCloud *solr.SolrCloud) *monitoringv1.PodMonitor {
 		if tlsConfig.CASecret != nil {
 			endpoint.TLSConfig.CA = monitoringv1.SecretOrConfigMap{Secret: tlsConfig.CASecret}
 		}
+		// A client certificate, for a SolrCloud that requires client authentication
+		if tlsConfig.CertSecret != nil {
+			endpoint.TLSConfig.Cert = monitoringv1.SecretOrConfigMap{Secret: tlsConfig.CertSecret}
+		}
+		endpoint.TLSConfig.KeySecret = tlsConfig.KeySecret
 		if tlsConfig.ServerName != "" {
 			endpoint.TLSConfig.ServerName = ptr.To(tlsConfig.ServerName)
 		}

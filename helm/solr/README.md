@@ -118,7 +118,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | prometheus.podMonitor.interval | string | | How often Prometheus should scrape each Solr pod, e.g. `30s`. |
 | prometheus.podMonitor.scrapeTimeout | string | | Timeout for scraping a Solr pod, e.g. `10s`. Must not be longer than the interval. |
 | prometheus.podMonitor.basicAuthSecret | string | | Secret with the username/password that Prometheus authenticates with. Defaults to the SolrCloud's basic auth secret. |
-| prometheus.podMonitor.tlsConfig | object | | How Prometheus should trust the Solr certificates. Accepts `caSecret` (`name`/`key`), `serverName` and `insecureSkipVerify`. |
+| prometheus.podMonitor.tlsConfig | object | | How Prometheus should trust the Solr certificates. Accepts `caSecret` (`name`/`key`), `certSecret` and `keySecret` (PEM client certificate and key, when `solrTLS.clientAuth` is `Need`), `serverName` and `insecureSkipVerify`. |
 
 ### Data Storage Options
 

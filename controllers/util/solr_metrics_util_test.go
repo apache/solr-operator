@@ -23,6 +23,7 @@ import (
 	"github.com/go-logr/logr"
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -100,6 +101,35 @@ func TestPodMonitorUsesHttpsAndTheGivenCAForATlsEnabledCloud(t *testing.T) {
 	assert.Equal(t, "ca.crt", endpoint.TLSConfig.CA.Secret.Key, "Wrong CA secret key for the PodMonitor")
 	assert.Equal(t, ptr.To("solr.example.com"), endpoint.TLSConfig.ServerName, "Wrong serverName for the PodMonitor")
 	assert.Equal(t, ptr.To(false), endpoint.TLSConfig.InsecureSkipVerify, "The Solr certificates should be verified unless asked otherwise")
+	assert.Nil(t, endpoint.TLSConfig.Cert.Secret, "No client certificate should be presented unless given")
+	assert.Nil(t, endpoint.TLSConfig.KeySecret, "No client key should be presented unless given")
+}
+
+func TestPodMonitorPresentsAClientCertificateWhenGiven(t *testing.T) {
+	solrCloud := podMonitorTestCloud(t)
+	// Solr rejects the TLS handshake of a scrape without a client certificate
+	solrCloud.Spec.SolrTLS = &solr.SolrTLSOptions{
+		PKCS12Secret: &corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: "solr-tls"},
+			Key:                  "keystore.p12",
+		},
+		ClientAuth: solr.Need,
+	}
+	solrCloud.Spec.Prometheus.PodMonitor.TLSConfig = &solr.SolrPodMonitorTLSConfig{
+		CASecret:   &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "prometheus-tls"}, Key: "ca.crt"},
+		CertSecret: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "prometheus-tls"}, Key: "tls.crt"},
+		KeySecret:  &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "prometheus-tls"}, Key: "tls.key"},
+	}
+
+	endpoint := GeneratePodMonitor(solrCloud).Spec.PodMetricsEndpoints[0]
+
+	require.NotNil(t, endpoint.TLSConfig, "The PodMonitor must tell Prometheus how to trust the Solr certificates")
+	require.NotNil(t, endpoint.TLSConfig.Cert.Secret, "The PodMonitor must present the given client certificate")
+	assert.Equal(t, "prometheus-tls", endpoint.TLSConfig.Cert.Secret.Name, "Wrong client certificate secret for the PodMonitor")
+	assert.Equal(t, "tls.crt", endpoint.TLSConfig.Cert.Secret.Key, "Wrong client certificate key for the PodMonitor")
+	require.NotNil(t, endpoint.TLSConfig.KeySecret, "The PodMonitor must present the given client key")
+	assert.Equal(t, "prometheus-tls", endpoint.TLSConfig.KeySecret.Name, "Wrong client key secret for the PodMonitor")
+	assert.Equal(t, "tls.key", endpoint.TLSConfig.KeySecret.Key, "Wrong client key for the PodMonitor")
 }
 
 func TestPodMonitorAuthenticatesWhenTheCloudUsesBasicAuth(t *testing.T) {

@@ -816,6 +816,16 @@ type SolrPodMonitorTLSConfig struct {
 	// +optional
 	CASecret *corev1.SecretKeySelector `json:"caSecret,omitempty"`
 
+	// Secret key with the PEM-formatted client certificate that Prometheus presents to Solr, needed when
+	// the SolrCloud requires client authentication (`spec.solrTLS.clientAuth: Need`). Solr itself reads
+	// PKCS12 keystores, so this is a separate PEM copy; a cert-manager certificate secret holds both.
+	// +optional
+	CertSecret *corev1.SecretKeySelector `json:"certSecret,omitempty"`
+
+	// Secret key with the PEM-formatted private key of the client certificate.
+	// +optional
+	KeySecret *corev1.SecretKeySelector `json:"keySecret,omitempty"`
+
 	// ServerName to expect in the Solr certificates, if it differs from the address scraped.
 	// +optional
 	ServerName string `json:"serverName,omitempty"`

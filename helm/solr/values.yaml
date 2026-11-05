@@ -168,6 +168,9 @@ prometheus:
     # basicAuthSecret: ""
     # tlsConfig:
     #   caSecret: {name: solr-ca-cert, key: ca.crt}
+    #   # Client certificate and key, when solrTLS.clientAuth is Need
+    #   certSecret: {name: prometheus-client-cert, key: tls.crt}
+    #   keySecret: {name: prometheus-client-cert, key: tls.key}
     #   insecureSkipVerify: false
 
 # A list of BackupRepositories to connect your SolrCloud to

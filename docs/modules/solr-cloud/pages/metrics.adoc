@@ -87,6 +87,9 @@ spec:
 When the SolrCloud uses xref:tls.adoc[TLS], the PodMonitor scrapes over `https`, and Prometheus needs the CA certificate to verify the Solr certificates with.
 The secret must hold a PEM-formatted certificate and live in the namespace of the SolrCloud.
 
+A SolrCloud with `solrTLS.clientAuth: Need` also requires Prometheus to present a client certificate, given as PEM-formatted `certSecret` and `keySecret`.
+Solr itself reads PKCS12 keystores, so these are separate PEM copies; a certificate issued by cert-manager comes as a secret holding both.
+
 [source,yaml]
 ----
 spec:
@@ -97,6 +100,13 @@ spec:
         caSecret:
           name: solr-ca-cert
           key: ca.crt
+        # Only when solrTLS.clientAuth is Need
+        # certSecret:
+        #   name: prometheus-client-cert
+        #   key: tls.crt
+        # keySecret:
+        #   name: prometheus-client-cert
+        #   key: tls.key
         # serverName: solr.example.com
         # insecureSkipVerify: false
 ----
