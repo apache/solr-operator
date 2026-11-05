@@ -69,6 +69,9 @@ podSecurityContext:
 containerSecurityContext:
   {{- toYaml .Values.podOptions.containerSecurityContext | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.omitDefaultIDs -}}
+omitDefaultIDs: {{ .Values.podOptions.omitDefaultIDs }}
+{{ end }}
 {{- if (or .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) -}}
 imagePullSecrets:
 {{- range (concat .Values.podOptions.imagePullSecrets .Values.global.imagePullSecrets) }}

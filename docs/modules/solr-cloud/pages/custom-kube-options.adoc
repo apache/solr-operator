@@ -164,3 +164,29 @@ spec:
 ----
 
 An empty `capabilities: {}` is how you keep the container's default capabilities, which the `restricted` profile does not allow.
+
+[#openshift]
+=== OpenShift and other platforms that assign the IDs
+
+Some platforms assign the user and group IDs of a pod themselves and reject any other.
+OpenShift is the common case: its default `restricted-v2` SecurityContextConstraints only allow a `runAsUser` from the namespace's `openshift.io/sa.scc.uid-range` and an `fsGroup` from its `openshift.io/sa.scc.supplemental-groups`, and fill both in when they are left unset.
+Everything else the operator sets, the `seccompProfile`, `runAsNonRoot`, `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`, is accepted as is.
+
+Two of the operator's defaults are numeric IDs, and are rejected on such a platform: `fsGroup: 8983` on the pod (`8080` for the Prometheus exporter), and `runAsUser: 8983` on the init containers that use the `busyBoxImage`.
+Since overrides are merged field by field, an empty `podSecurityContext` does not unset the `fsGroup`.
+Set `omitDefaultIDs` instead, which leaves both out and lets the platform assign them:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      omitDefaultIDs: true
+----
+
+The `SolrPrometheusExporter` has the same option under `customKubeOptions.podOptions`.
+IDs that you give explicitly in a security context are still used.
+
+The official Solr image is built to run as any user in group `0`, as OpenShift requires, and the volumes are made writable through the `fsGroup` the platform assigns, as they otherwise are through the operator's default.
+Only use the option on a platform that does assign the IDs.
+Elsewhere, an init container that uses the `busyBoxImage` would be asked to run as non-root without a user to run as, and the kubelet would refuse to start it.

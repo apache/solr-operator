@@ -560,7 +560,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					ShareProcessNamespace:         &shareProcessNamespace,
 					EnableServiceLinks:            enableServiceLinks,
-					SecurityContext:               defaultPodSecurityContext(nil, defaultFSGroup),
+					SecurityContext:               defaultPodSecurityContext(customPodOptions, defaultFSGroup),
 					Volumes:                       solrVolumes,
 					InitContainers:                initContainers,
 					HostAliases:                   hostAliases,
@@ -603,10 +603,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
 			solrContainer.Resources = customPodOptions.Resources
-		}
-
-		if customPodOptions.PodSecurityContext != nil {
-			stateful.Spec.Template.Spec.SecurityContext = defaultPodSecurityContext(customPodOptions.PodSecurityContext, defaultFSGroup)
 		}
 
 		if customPodOptions.Lifecycle != nil {
@@ -774,10 +770,11 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 					setupCommands = append(setupCommands, fmt.Sprintf(
 						"if ! test -w %s; then echo \"%s\" >&2; exit 1; fi",
 						volumeMount.MountPath,
-						fmt.Sprintf("Backup repository directory %s is not writable by user %d. "+
-							"Either make the volume writable by that user or group %d, or set "+
-							"podOptions.defaultInitContainerSecurityContext.runAsUser to 0 to have this "+
-							"container take ownership of it.", volumeMount.MountPath, solrUser, solrFSGroup)))
+						// The user and groups are looked up at runtime, as the platform may assign them
+						fmt.Sprintf("Backup repository directory %s is not writable by the user the pod runs as "+
+							"(uid $(id -u), groups $(id -G)). Either make the volume writable by that user or one "+
+							"of its groups, or set podOptions.defaultInitContainerSecurityContext.runAsUser to 0 "+
+							"to have this container take ownership of it.", volumeMount.MountPath)))
 				}
 			}
 		}
