@@ -1092,6 +1092,7 @@ func (r *SolrCloudReconciler) reconcilePodMonitor(ctx context.Context, instance 
 
 // deletePodMonitor removes a PodMonitor that the cloud no longer wants. The operator cannot have
 // created one without the Prometheus Operator CRDs, so there is nothing to look for in that case.
+// A PodMonitor of the same name that the SolrCloud does not control is left alone, as it is not ours.
 func (r *SolrCloudReconciler) deletePodMonitor(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger) error {
 	if !usePrometheusCRD {
 		return nil
@@ -1104,6 +1105,11 @@ func (r *SolrCloudReconciler) deletePodMonitor(ctx context.Context, instance *so
 			return nil
 		}
 		return err
+	}
+
+	if !metav1.IsControlledBy(podMonitor, instance) {
+		logger.Info("Not deleting PodMonitor, as it is not controlled by the SolrCloud", "podMonitor", podMonitor.Name)
+		return nil
 	}
 
 	logger.Info("Deleting PodMonitor, as it is no longer enabled for the SolrCloud", "podMonitor", podMonitor.Name)

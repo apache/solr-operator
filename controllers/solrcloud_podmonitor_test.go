@@ -148,6 +148,24 @@ func TestPodMonitorIsDeletedWhenNoLongerEnabled(t *testing.T) {
 	assert.NoError(t, r.reconcilePodMonitor(context.Background(), instance, logr.Discard()))
 }
 
+func TestPodMonitorNotControlledByTheCloudIsNotDeleted(t *testing.T) {
+	instance := podMonitorCloud(t, &solrv1beta1.SolrPodMonitorOptions{Enable: ptr.To(false)})
+	// Someone manages a PodMonitor of the generated name by hand, without ever enabling the operator's
+	handMade := &monitoringv1.PodMonitor{
+		ObjectMeta: metav1.ObjectMeta{Name: instance.PodMonitorName(), Namespace: instance.Namespace},
+	}
+	r := podMonitorFixture(t, instance, handMade)
+
+	require.NoError(t, r.reconcilePodMonitor(context.Background(), instance, logr.Discard()))
+	_, err := getPodMonitor(t, r, instance)
+	assert.NoError(t, err, "A PodMonitor that the SolrCloud does not control must not be deleted when the PodMonitor is disabled")
+
+	instance.Spec.Prometheus.PodMonitor = nil
+	require.NoError(t, r.reconcilePodMonitor(context.Background(), instance, logr.Discard()))
+	_, err = getPodMonitor(t, r, instance)
+	assert.NoError(t, err, "A PodMonitor that the SolrCloud does not control must not be deleted when no PodMonitor is asked for")
+}
+
 func TestPodMonitorRequiresTheOperatorToUseThePrometheusCRDs(t *testing.T) {
 	instance := podMonitorCloud(t, &solrv1beta1.SolrPodMonitorOptions{Enable: ptr.To(true)})
 	r := podMonitorFixture(t, instance)
