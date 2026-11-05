@@ -187,8 +187,8 @@ def get_editor():
 
 
 def check_prerequisites(todo=None):
-    if sys.version_info < (3, 4):
-        sys.exit("Script requires Python v3.4 or later")
+    if sys.version_info < (3, 11):
+        sys.exit("Script requires Python v3.11 or later")
     try:
         gpg_ver = run("gpg --version").splitlines()[0]
     except:
@@ -1293,7 +1293,7 @@ def main():
     try:
         ConsoleMenu(clear_screen=True)
     except Exception as e:
-        sys.exit("You need to install 'consolemenu' package version 0.7.1 for the Wizard to function. Please run 'pip "
+        sys.exit("You need to install the 'console-menu' package for the Wizard to function. Please run 'pip3 "
                  "install -r requirements.txt'")
     if c.dry:
         print("Entering dry-run mode where all commands will be echoed instead of executed")
