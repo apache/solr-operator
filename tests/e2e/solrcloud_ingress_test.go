@@ -57,7 +57,7 @@ var _ = FDescribe("E2E - SolrCloud - Ingress", func() {
 		createAndQueryCollection(ctx, solrCloud, "basic", 1, 1)
 	})
 
-	FContext("Can Remove Ingress and Services when changing addressability", func() {
+	FContext("Can Remove Ingress and Services when changing addressability", Label("pr"), func() {
 
 		FIt("Can adapt to changing needs", func(ctx context.Context) {
 			By("testing the Solr StatefulSet")
