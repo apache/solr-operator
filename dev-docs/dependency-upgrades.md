@@ -116,9 +116,12 @@ The short version, with the detail and the reasoning in the skill:
 
 ## What Dependabot owns, and what it does not
 
-Dependabot handles **GitHub Actions only** (`.github/dependabot.yml`): one grouped PR a month across
-all workflows. Actions are cheap to review, already pinned to commit SHAs, and need no follow-up
-work, so automating them costs nothing.
+Dependabot handles **GitHub Actions and the release wizard's Python requirements**
+(`.github/dependabot.yml`): one grouped PR a month for each. Actions are cheap to review, already
+pinned to commit SHAs, and need no follow-up work, so automating them costs nothing. The same goes
+for `hack/release/wizard/requirements.txt`: those packages are only used by the wizard itself, never
+built into the operator or its image, so a bump needs no regeneration, no license list and no
+changelog entry. Reviewing one is reading the diff and running the wizard once.
 
 It deliberately has **no `gomod` entry**, and Dependabot only runs the ecosystems a config lists, so
 leaving it out is the enforcement. A Go module bump is not self-contained here: Dependabot cannot run
@@ -131,6 +134,9 @@ and the chart changelogs — actually happen.
 
 There is no `docker` entry either. The only Dockerfile pins the Go builder image, which has to move
 in lockstep with the `go` directive in `go.mod` and the CI matrix, so it belongs to the sweep.
+
+The wizard's requirements are pinned exactly (`==`), so a bump is always a commit and never a silent
+resolution change. Only the packages the wizard imports are listed; pip resolves the rest.
 
 ### Reviewing a Dependabot Actions PR
 

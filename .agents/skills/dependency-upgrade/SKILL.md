@@ -15,7 +15,7 @@ wins.
 
 | Tier | What | Owner |
 |---|---|---|
-| A | GitHub Actions | Dependabot (`.github/dependabot.yml`). Not yours: leave its PRs alone, never bump a `uses:` SHA during a sweep. |
+| A | GitHub Actions, the release wizard's `requirements.txt` | Dependabot (`.github/dependabot.yml`). Not yours: leave its PRs alone, never bump a `uses:` SHA or a wizard pin during a sweep. |
 | B | Go modules, Makefile tool pins, envtest assets | This skill. `make list-upgrades` detects them. |
 | C | Base images, kind/Kubernetes versions in the test scripts, the Zookeeper server image, docs matrices | This skill, but nothing upstream to check against. `make list-upgrades` locates them by pattern and prints current values; bump what is clearly stale. `PATTERN NOT FOUND` or `MISSING FILE` means the table in the script needs updating. |
 

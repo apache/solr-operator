@@ -399,7 +399,7 @@ a second kind pin, independent of the Makefile|hack/release/smoke_test/test_clus
 left over from kubebuilder scaffolding|config/default/manager_auth_proxy_patch.yaml|kube-rbac-proxy:
 PINS
 
-for pin_file in hack/release/wizard/requirements.txt docs/modules/upgrade-notes/pages/upgrade-notes.adoc; do
+for pin_file in docs/modules/upgrade-notes/pages/upgrade-notes.adoc; do
   if [[ -f "${pin_file}" ]]; then
     printf '  %-46s %s\n' "${pin_file}" "several pins, read the file"
   else
@@ -409,9 +409,9 @@ done
 
 cat <<'EOF'
 
-  GitHub Actions are Dependabot's, not this script's. See .github/dependabot.yml.
-  The Solr and operator image versions belong to the release process, not to a
-  dependency sweep.
+  GitHub Actions and the release wizard's requirements.txt are Dependabot's, not
+  this script's. See .github/dependabot.yml. The Solr and operator image
+  versions belong to the release process, not to a dependency sweep.
 
 EOF
 

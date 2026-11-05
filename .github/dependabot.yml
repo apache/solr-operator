@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Dependabot owns GitHub Actions, and nothing else in this repository.
+# Dependabot owns GitHub Actions and the release wizard's Python requirements,
+# and nothing else in this repository.
 #
 # There is deliberately no "gomod" entry here. Dependabot only runs the
 # ecosystems listed in this file, so leaving it out is the enforcement.
@@ -28,6 +29,12 @@
 # There is no "docker" entry either. The only Dockerfile pins the Go builder
 # image, which has to move in lockstep with the "go" directive in go.mod and
 # the CI matrix, so it belongs to the same sweep.
+#
+# The wizard's requirements.txt is the opposite case, and that is why it is
+# here: those packages are only used by the release wizard itself, never built
+# into the operator or its image, so a bump needs no regeneration, no license
+# list and no changelog entry. Reviewing it is reading the diff and running
+# the wizard once.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -58,3 +65,25 @@ updates:
     # so check a proposed SHA there before merging. Of the actions used here
     # only azure/setup-helm is third-party; the actions/* ones are first-party
     # and not gated. See the comment in publish-helm-oci.yaml.
+
+  # Python requirements of the release wizard (hack/release/wizard)
+  #
+  # The requirements are pinned exactly, so every upgrade needs a commit. One
+  # group collects them into a single PR covering the whole file. Only the
+  # packages the wizard imports are pinned; pip resolves their dependencies.
+  - package-ecosystem: "pip"
+    directory: "/hack/release/wizard"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    cooldown:
+      default-days: 7
+    groups:
+      release-wizard:
+        patterns:
+          - "*"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"

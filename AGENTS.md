@@ -34,7 +34,8 @@ tasks by hand, read its `SKILL.md`:
 
 To see what has moved before starting an upgrade, run `make list-upgrades`. It reports the Go
 modules, pinned tool versions and envtest assets that the skill owns, and lists the image tags no
-tool can check. GitHub Actions are Dependabot's (`.github/dependabot.yml`), not the skill's.
+tool can check. GitHub Actions and the release wizard's Python requirements are Dependabot's
+(`.github/dependabot.yml`), not the skill's.
 
 Most assistants read `.agents/skills/` directly. Claude Code does not, and needs a small local shim
 that is deliberately not kept in this repository - `dev-docs/dependency-upgrades.md` explains the
