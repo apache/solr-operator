@@ -13,7 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# https://cwiki.apache.org/confluence/display/INFRA/.asf.yaml+features+for+git+repositories
+# Documentation for this file:
+#   https://github.com/apache/infrastructure-asfyaml
+#   https://github.com/apache/infrastructure-asfyaml/blob/main/README.md
 
 github:
   description: "Official Kubernetes operator for Apache Solr"
