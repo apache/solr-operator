@@ -55,7 +55,7 @@ try:
     import holidays
     import yaml
     from ics import Calendar, Event
-    from jinja2 import Environment
+    from jinja2 import Environment, Undefined
 except:
     print("You lack some of the module dependencies to run this script.")
     print("Please run 'pip3 install -r requirements.txt' and try again.")
@@ -64,10 +64,27 @@ except:
 import scriptutil
 from consolemenu import ConsoleMenu
 from consolemenu.items import FunctionItem, SubmenuItem, ExitItem
-from consolemenu.screen import Screen
 from scriptutil import BranchType, Version, download, run
 
 editor = None
+
+
+class ReadableUndefined(Undefined):
+    """Custom Undefined handler that renders undefined variables as {{ varname }}
+
+    This allows users to see which variables are not yet defined when a todo
+    or command template is displayed, instead of rendering them as empty.
+    """
+    def __str__(self):
+        return "{{ %s }}" % self._undefined_name
+
+    def __getattr__(self, name):
+        # Handle special Python attributes normally
+        if name[:2] == '__':
+            raise AttributeError(name)
+        # Chain undefined attribute access for nested vars like {{ todo_id.var_name }}
+        return ReadableUndefined(name="%s.%s" % (self._undefined_name, name))
+
 
 # Edit this to add other global jinja2 variables or filters
 def expand_jinja(text, vars=None):
@@ -126,7 +143,8 @@ def expand_jinja(text, vars=None):
     filled = replace_templates(text)
 
     try:
-        env = Environment(lstrip_blocks=True, keep_trailing_newline=False, trim_blocks=True)
+        env = Environment(lstrip_blocks=True, keep_trailing_newline=False, trim_blocks=True,
+                          undefined=ReadableUndefined)
         env.filters['path_join'] = lambda paths: os.path.join(*paths)
         env.filters['expanduser'] = lambda path: os.path.expanduser(path)
         env.filters['formatdate'] = lambda date: (datetime.strftime(date, "%-d %B %Y") if date else "<date>" )
@@ -256,7 +274,7 @@ def maybe_undo_last_commit():
         Commands(state.get_git_checkout_folder(),
                  """Looks like you made the final local commit for the release, but you have fixes that need to be made. So we need to undo the local commit, and re-do it after the fix commits have been made.""",
                  [Command(
-                     """git commit reset HEAD^ --hard""",
+                     """git reset --hard HEAD^""",
                      logfile="git_commit_reset.log",
                      tee=True
                  )],
@@ -302,7 +320,7 @@ class ReleaseState:
         try:
             self.script_branch_type = scriptutil.find_branch_type()
         except:
-            print("WARNING: This script shold (ideally) run from the release branch, not a feature branch (%s)" % self.script_branch)
+            print("WARNING: This script should (ideally) run from the release branch, not a feature branch (%s)" % self.script_branch)
             self.script_branch_type = 'feature'
         self.set_release_version(release_version)
 
@@ -1165,17 +1183,17 @@ def configure_pgp(gpg_todo):
         gpg_fingerprint = gpg_fingerprint.upper()
         gpg_id = gpg_fingerprint[-8:]
     try:
-        res = run("gpg --list-secret-keys %s" % gpg_id)
+        res = run("gpg --list-secret-keys %s" % gpg_fingerprint)
         print("Found key %s on your private gpg keychain" % gpg_id)
         # Check rsa and key length >= 4096
-        match = re.search(r'^sec +((rsa|dsa)(\d{4})) ', res)
+        match = re.search(r'^sec#? +((rsa|dsa)(\d{4})) ', res)
         type = "(unknown)"
         length = -1
         if match:
             type = match.group(2)
             length = int(match.group(3))
         else:
-            match = re.search(r'^sec +((\d{4})([DR])/.*?) ', res)
+            match = re.search(r'^sec#? +((\d{4})([DR])/.*?) ', res)
             if match:
                 type = 'rsa' if match.group(3) == 'R' else 'dsa'
                 length = int(match.group(2))
@@ -1192,7 +1210,7 @@ def configure_pgp(gpg_todo):
             return False
         if length < 4096:
             print("Your key length is < 4096, Please generate a stronger key.")
-            print("Alternatively, follow instructions in http://www.apache.org/dev/release-signing.html#note")
+            print("Alternatively, follow instructions in https://infra.apache.org/release-signing.html#note")
             if not ask_yes_no("Have you configured your gpg to avoid SHA-1?"):
                 print("Please either generate a strong key or reconfigure your client")
                 return False
@@ -1203,7 +1221,7 @@ def configure_pgp(gpg_todo):
             need to fix this, then try again"""))
         return False
     try:
-        lines = run("gpg --check-signatures %s" % gpg_id).splitlines()
+        lines = run("gpg --check-signatures %s" % gpg_fingerprint).splitlines()
         sigs = 0
         apache_sigs = 0
         for line in lines:
@@ -1215,7 +1233,7 @@ def configure_pgp(gpg_todo):
         if apache_sigs < 1:
             print(textwrap.dedent("""\
                 Your key is not signed by any other committer. 
-                Please review http://www.apache.org/dev/openpgp.html#apache-wot
+                Please review https://infra.apache.org/openpgp.html#apache-wot
                 and make sure to get your key signed until next time.
                 You may want to run 'gpg --refresh-keys' to refresh your keychain."""))
         uses_apacheid = is_code_signing_key = False
@@ -1225,9 +1243,9 @@ def configure_pgp(gpg_todo):
                 if 'CODE SIGNING KEY' in line.upper():
                     is_code_signing_key = True
         if not uses_apacheid:
-            print("WARNING: Your key should use your apache-id email address, see http://www.apache.org/dev/release-signing.html#user-id")
+            print("WARNING: Your key should use your apache-id email address, see https://infra.apache.org/release-signing.html#user-id")
         if not is_code_signing_key:
-            print("WARNING: You code signing key should be labeled 'CODE SIGNING KEY', see http://www.apache.org/dev/release-signing.html#key-comment")
+            print("WARNING: You code signing key should be labeled 'CODE SIGNING KEY', see https://infra.apache.org/release-signing.html#key-comment")
     except Exception as e:
         print("Could not check signatures of your key: %s" % e)
 
@@ -1255,38 +1273,10 @@ def pause(fun=None):
     input("\nPress ENTER to continue...")
 
 
-# Custom classes for ConsoleMenu, to make menu texts dynamic
-# Needed until https://github.com/aegirhall/console-menu/pull/25 is released
-# See https://pypi.org/project/console-menu/ for other docs
-
-class UpdatableConsoleMenu(ConsoleMenu):
-
-    def __repr__(self):
-        return "%s: %s. %d items" % (self.get_title(), self.get_subtitle(), len(self.items))
-
-    def draw(self):
-        """
-        Refreshes the screen and redraws the menu. Should be called whenever something changes that needs to be redrawn.
-        """
-        self.screen.printf(self.formatter.format(title=self.get_title(), subtitle=self.get_subtitle(), items=self.items,
-                                                 prologue_text=self.get_prologue_text(), epilogue_text=self.get_epilogue_text()))
-
-    # Getters to get text in case method reference
-    def get_title(self):
-        return self.title() if callable(self.title) else self.title
-
-    def get_subtitle(self):
-        return self.subtitle() if callable(self.subtitle) else self.subtitle
-
-    def get_prologue_text(self):
-        return self.prologue_text() if callable(self.prologue_text) else self.prologue_text
-
-    def get_epilogue_text(self):
-        return self.epilogue_text() if callable(self.epilogue_text) else self.epilogue_text
-
+# See https://pypi.org/project/console-menu/ for docs
 class CustomExitItem(ExitItem):
-    def show(self, index):
-        return super(ExitItem, self).show(index)
+    def show(self, index, available_width=None):
+        return super(CustomExitItem, self).show(index, available_width)
 
     def get_return(self):
         return ""
@@ -1600,7 +1590,7 @@ class Commands(SecretYamlObject):
                     print("You will get prompted before running each individual command.")
                 else:
                     print(
-                        "You will not be prompted for each command but will see the ouput of each. If one command fails the execution will stop.")
+                        "You will not be prompted for each command but will see the output of each. If one command fails the execution will stop.")
             success = True
             if ask_yes_no("Do you want me to run these commands now?"):
                 if self.remove_files:
@@ -1743,7 +1733,7 @@ def abbreviate_homedir(line):
         elif 'USERPROFILE' in os.environ:
             return re.sub(r'([^/]|\b)%s' % os.path.expanduser('~'), "\\1%USERPROFILE%", line)
     else:
-        return re.sub(r'([^/]|\b)%s' % os.path.expanduser('~'), "\\1~", line)
+        return re.sub(r'([^/]|\b)%s' % os.path.expanduser('~'), "\\1$HOME", line)
 
 
 class Command(SecretYamlObject):

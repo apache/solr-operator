@@ -965,10 +965,10 @@ groups:
     description: |
       At the end of the voting deadline, count the votes and send RESULT message to the mailing list.
 
-      {% set vote_close_epoch = initiate_vote.vote_close_epoch | int %}
+      {% set vote_close_epoch = initiate_vote.vote_close_epoch | default(0) | int %}
       {% if epoch < vote_close_epoch %}
       WARNING: The planned voting deadline {{ initiate_vote.vote_close }} has not yet passed
-      {% else %}
+      {% elif vote_close_epoch > 0 %}
       The planned 72h voting deadline {{ initiate_vote.vote_close }} has passed.
       {% endif %}
     asciidoc: |
