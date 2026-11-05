@@ -83,6 +83,16 @@ type PodOptions struct {
 	// +optional
 	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
 
+	// OmitDefaultIDs leaves the numeric user and group IDs out of the security contexts the operator
+	// generates: no fsGroup on the pod, and no runAsUser on the init containers whose image has no
+	// non-root user of its own. For platforms that assign these IDs from a per-namespace range and
+	// reject any other, such as OpenShift with its restricted SecurityContextConstraints. The rest of
+	// the "restricted" profile defaults still apply, and IDs given explicitly in a security context
+	// are still used. Only use this where the platform does assign the IDs: elsewhere, an init
+	// container without a user of its own cannot start as non-root.
+	// +optional
+	OmitDefaultIDs bool `json:"omitDefaultIDs,omitempty"`
+
 	// Additional environment variables to pass to the default container.
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`

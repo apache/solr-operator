@@ -67,24 +67,33 @@ var operatorContainers = map[string]operatorContainerOptions{
 }
 
 // defaultPodSecurityContext builds the pod-level security context, starting from the one the user
-// provided, if any, and filling in every field they left unset. User-provided fields always win.
+// provided in the podOptions, if any, and filling in every field they left unset. User-provided
+// fields always win.
 //
 // The "restricted" profile asks for a seccomp profile, which is set once here rather than on every
-// container. fsGroup is not part of the profile, it is a long-standing operator default.
-func defaultPodSecurityContext(userProvided *corev1.PodSecurityContext, defaultFSGroup int64) *corev1.PodSecurityContext {
+// container. fsGroup is not part of the profile, it is a long-standing operator default that makes
+// the volumes writable for Solr. It is left out when the user asks for omitDefaultIDs, for platforms
+// that assign the group themselves and reject any other.
+func defaultPodSecurityContext(podOptions *solr.PodOptions, defaultFSGroup int64) *corev1.PodSecurityContext {
 	securityContext := &corev1.PodSecurityContext{}
-	if userProvided != nil {
-		securityContext = userProvided.DeepCopy()
+	if podOptions != nil && podOptions.PodSecurityContext != nil {
+		securityContext = podOptions.PodSecurityContext.DeepCopy()
 	}
 
 	if securityContext.SeccompProfile == nil {
 		securityContext.SeccompProfile = &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault}
 	}
-	if securityContext.FSGroup == nil {
+	if securityContext.FSGroup == nil && !omitsDefaultIDs(podOptions) {
 		securityContext.FSGroup = ptr.To(defaultFSGroup)
 	}
 
 	return securityContext
+}
+
+// omitsDefaultIDs reports whether the user asked for the numeric ID defaults to be left out, so that
+// the platform can assign the IDs instead.
+func omitsDefaultIDs(podOptions *solr.PodOptions) bool {
+	return podOptions != nil && podOptions.OmitDefaultIDs
 }
 
 // defaultContainerSecurityContext builds the security context for one operator-generated container,
@@ -92,7 +101,9 @@ func defaultPodSecurityContext(userProvided *corev1.PodSecurityContext, defaultF
 // User-provided fields always win, so a single field is enough to opt out of a single default.
 //
 // podRunAsUser is the pod-level runAsUser, which containers inherit when they do not set their own.
-func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, options operatorContainerOptions, podRunAsUser *int64) *corev1.SecurityContext {
+// omitDefaultIDs leaves out the runAsUser that an image without a non-root user would otherwise get,
+// for platforms that assign the user themselves.
+func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, options operatorContainerOptions, podRunAsUser *int64, omitDefaultIDs bool) *corev1.SecurityContext {
 	securityContext := &corev1.SecurityContext{}
 	if userProvided != nil {
 		securityContext = userProvided.DeepCopy()
@@ -121,7 +132,7 @@ func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, optio
 		if securityContext.Capabilities == nil {
 			securityContext.Capabilities = &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}}
 		}
-		if options.imageRunsAsRoot && effectiveRunAsUser == nil {
+		if options.imageRunsAsRoot && effectiveRunAsUser == nil && !omitDefaultIDs {
 			securityContext.RunAsUser = ptr.To(int64(DefaultSolrUser))
 		}
 	}
@@ -176,13 +187,14 @@ func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions 
 	if podSpec.SecurityContext != nil {
 		podRunAsUser = podSpec.SecurityContext.RunAsUser
 	}
+	omitDefaultIDs := omitsDefaultIDs(podOptions)
 
 	for i, container := range podSpec.Containers {
 		if userProvidedContainers[container.Name] {
 			continue
 		}
 		if options, isOperatorContainer := operatorContainers[container.Name]; isOperatorContainer {
-			podSpec.Containers[i].SecurityContext = defaultContainerSecurityContext(containerSecurityContext, options, podRunAsUser)
+			podSpec.Containers[i].SecurityContext = defaultContainerSecurityContext(containerSecurityContext, options, podRunAsUser, omitDefaultIDs)
 		}
 	}
 	for i, container := range podSpec.InitContainers {
@@ -190,7 +202,7 @@ func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions 
 			continue
 		}
 		if options, isOperatorContainer := operatorContainers[container.Name]; isOperatorContainer {
-			podSpec.InitContainers[i].SecurityContext = defaultContainerSecurityContext(initContainerSecurityContext, options, podRunAsUser)
+			podSpec.InitContainers[i].SecurityContext = defaultContainerSecurityContext(initContainerSecurityContext, options, podRunAsUser, omitDefaultIDs)
 		}
 	}
 }

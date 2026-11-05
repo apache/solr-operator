@@ -296,7 +296,7 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &gracePeriodTerm,
-					SecurityContext:               defaultPodSecurityContext(nil, fsGroup),
+					SecurityContext:               defaultPodSecurityContext(customPodOptions, fsGroup),
 					Volumes:                       solrVolumes,
 					InitContainers:                initContainers,
 					Containers:                    containers,
@@ -326,10 +326,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
 			metricsContainer.Resources = customPodOptions.Resources
-		}
-
-		if customPodOptions.PodSecurityContext != nil {
-			deployment.Spec.Template.Spec.SecurityContext = defaultPodSecurityContext(customPodOptions.PodSecurityContext, fsGroup)
 		}
 
 		if customPodOptions.Tolerations != nil {
