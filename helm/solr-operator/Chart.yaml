@@ -145,6 +145,13 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: added
+      description: Ability to load environment variables into the Solr container from ConfigMaps or Secrets via `podOptions.envFrom`
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/677
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/877
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

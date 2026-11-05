@@ -49,6 +49,10 @@ priorityClassName: {{ .Values.podOptions.priorityClassName }}
 envVars:
   {{- toYaml .Values.podOptions.envVars | nindent 2 }}
 {{ end }}
+{{- if .Values.podOptions.envFrom -}}
+envFrom:
+  {{- toYaml .Values.podOptions.envFrom | nindent 2 }}
+{{ end }}
 {{- if .Values.podOptions.affinity -}}
 affinity:
   {{- toYaml .Values.podOptions.affinity | nindent 2 }}
