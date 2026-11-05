@@ -164,6 +164,9 @@ See xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security
 Set `defaultInitContainerSecurityContext.runAsUser: 0` to have it take ownership of them as before.
 ** The exporter pod's `fsGroup` default is now also applied when a `podSecurityContext` that omits it is given, matching how Solr pods have always behaved.
 ** Containers and volumes that you add yourself are unchanged, and are yours to bring in line with the profile.
+** On OpenShift, and other platforms that assign the user and group IDs from a namespace range, set `podOptions.omitDefaultIDs: true` to leave the `fsGroup` and init container `runAsUser` defaults out.
+An empty `podSecurityContext` no longer does this.
+See xref:solr-cloud:custom-kube-options.adoc#openshift[OpenShift].
 
 === v0.8.0
 

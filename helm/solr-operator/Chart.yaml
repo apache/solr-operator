@@ -179,6 +179,11 @@ annotations:
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/873
+    - kind: added
+      description: New `podOptions.omitDefaultIDs` option for SolrClouds and SolrPrometheusExporters, which leaves the default fsGroup and init container runAsUser out of the generated pods, for platforms that assign the user and group IDs from a namespace range, such as OpenShift
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/466
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

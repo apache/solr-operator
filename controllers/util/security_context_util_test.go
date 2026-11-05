@@ -302,7 +302,7 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 			FSGroup:        ptr.To(int64(1234)),
 			RunAsUser:      ptr.To(int64(4321)),
 		}
-		securityContext := defaultPodSecurityContext(provided, DefaultSolrGroup)
+		securityContext := defaultPodSecurityContext(&solr.PodOptions{PodSecurityContext: provided}, DefaultSolrGroup)
 		assert.Equal(t, corev1.SeccompProfileTypeUnconfined, securityContext.SeccompProfile.Type, "The provided seccomp profile should be kept")
 		assert.Equal(t, int64(1234), *securityContext.FSGroup, "The provided fsGroup should be kept")
 		assert.Equal(t, int64(4321), *securityContext.RunAsUser, "The provided runAsUser should be kept")
@@ -310,7 +310,7 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 	})
 
 	t.Run("the container defaults are set", func(t *testing.T) {
-		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{}, nil, false)
 		assert.False(t, *securityContext.AllowPrivilegeEscalation, "Privilege escalation should be disallowed")
 		assert.True(t, *securityContext.RunAsNonRoot, "The container should run as non-root")
 		assert.Equal(t, []corev1.Capability{"ALL"}, securityContext.Capabilities.Drop, "All capabilities should be dropped")
@@ -319,13 +319,13 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 	})
 
 	t.Run("a root image is given a user", func(t *testing.T) {
-		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{imageRunsAsRoot: true}, nil)
+		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{imageRunsAsRoot: true}, nil, false)
 		assert.True(t, *securityContext.RunAsNonRoot, "The container should run as non-root")
 		assert.Equal(t, int64(DefaultSolrUser), *securityContext.RunAsUser, "A root image needs an explicit user to run as non-root")
 	})
 
 	t.Run("a root image inherits the pod's user", func(t *testing.T) {
-		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{imageRunsAsRoot: true}, ptr.To(int64(1234)))
+		securityContext := defaultContainerSecurityContext(nil, operatorContainerOptions{imageRunsAsRoot: true}, ptr.To(int64(1234)), false)
 		assert.Nil(t, securityContext.RunAsUser, "The container should inherit the user given at the pod level")
 	})
 
@@ -335,7 +335,7 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 			AllowPrivilegeEscalation: ptr.To(true),
 			Capabilities:             &corev1.Capabilities{Add: []corev1.Capability{"NET_BIND_SERVICE"}},
 		}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil, false)
 		assert.False(t, *securityContext.RunAsNonRoot, "The provided runAsNonRoot should be kept")
 		assert.True(t, *securityContext.AllowPrivilegeEscalation, "The provided allowPrivilegeEscalation should be kept")
 		assert.Empty(t, securityContext.Capabilities.Drop, "The provided capabilities should be kept as they are")
@@ -344,7 +344,7 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 
 	t.Run("asking for root turns off the conflicting defaults", func(t *testing.T) {
 		provided := &corev1.SecurityContext{RunAsUser: ptr.To(int64(0))}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{imageRunsAsRoot: true}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{imageRunsAsRoot: true}, nil, false)
 		assert.Nil(t, securityContext.RunAsNonRoot, "A container asked to run as root cannot also run as non-root")
 		assert.Nil(t, securityContext.Capabilities, "A container asked to run as root keeps the capabilities it needs")
 		assert.False(t, *securityContext.AllowPrivilegeEscalation, "Privilege escalation should still be disallowed")
@@ -355,25 +355,25 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 		// rather than merging into it. An empty block is therefore how a user keeps the container's
 		// default capabilities, which the "restricted" profile does not allow.
 		provided := &corev1.SecurityContext{Capabilities: &corev1.Capabilities{}}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil, false)
 		assert.Empty(t, securityContext.Capabilities.Drop, "An empty capabilities block should not have the default dropped capabilities added to it")
 	})
 
 	t.Run("asking for privileged mode turns off the conflicting default", func(t *testing.T) {
 		provided := &corev1.SecurityContext{Privileged: ptr.To(true)}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil, false)
 		assert.Nil(t, securityContext.AllowPrivilegeEscalation, "Kubernetes rejects allowPrivilegeEscalation: false on a privileged container")
 	})
 
 	t.Run("adding CAP_SYS_ADMIN turns off the conflicting default", func(t *testing.T) {
 		provided := &corev1.SecurityContext{Capabilities: &corev1.Capabilities{Add: []corev1.Capability{"CAP_SYS_ADMIN"}}}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil, false)
 		assert.Nil(t, securityContext.AllowPrivilegeEscalation, "Kubernetes rejects allowPrivilegeEscalation: false alongside an added CAP_SYS_ADMIN")
 	})
 
 	t.Run("an explicit allowPrivilegeEscalation is kept alongside privileged mode", func(t *testing.T) {
 		provided := &corev1.SecurityContext{Privileged: ptr.To(true), AllowPrivilegeEscalation: ptr.To(true)}
-		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil)
+		securityContext := defaultContainerSecurityContext(provided, operatorContainerOptions{}, nil, false)
 		assert.True(t, *securityContext.AllowPrivilegeEscalation, "The provided allowPrivilegeEscalation should be kept")
 	})
 
@@ -472,8 +472,88 @@ func TestBackupRepositoryPreparationRunsAsSolrByDefault(t *testing.T) {
 		statefulSet := testStatefulSet(solrCloud, nil, nil)
 		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
 
-		assert.Contains(t, strings.Join(initContainer.Command, " "), "user 1234", "The error message should name the user that the check ran as")
+		// The user is looked up when the check runs, so that the message is right whoever assigned it
+		assert.Contains(t, strings.Join(initContainer.Command, " "), "uid $(id -u)", "The error message should name the user that the check ran as")
 		assert.Nil(t, initContainer.SecurityContext.RunAsUser, "The init container should inherit the user given at the pod level")
+	})
+}
+
+// TestOmitDefaultIDsLeavesTheIDsToThePlatform covers platforms such as OpenShift, whose restricted
+// SecurityContextConstraints assign the user and group IDs from a per-namespace range and reject any
+// other. The operator's numeric defaults, fsGroup on the pod and runAsUser on the busybox-based init
+// containers, must then be left out, while the rest of the "restricted" profile defaults stay.
+func TestOmitDefaultIDsLeavesTheIDsToThePlatform(t *testing.T) {
+	// A SolrCloud that gets every busybox-based init container: volume-prep and initdb
+	solrCloudWithoutIDs := func() *solr.SolrCloud {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{OmitDefaultIDs: true}
+		solrCloud.Spec.BackupRepositories = []solr.SolrBackupRepository{
+			{
+				Name:   "test-repo",
+				Volume: &solr.VolumeRepository{Source: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			},
+		}
+		solrCloud.Spec.SolrTLS = &solr.SolrTLSOptions{
+			MountedTLSDir: &solr.MountedTLSDirectory{Path: "/var/solr/tls"},
+		}
+		return solrCloud
+	}
+
+	t.Run("neither fsGroup nor runAsUser is generated", func(t *testing.T) {
+		solrCloud := solrCloudWithoutIDs()
+		statefulSet := testStatefulSet(solrCloud, TLSCertsForSolrCloud(solrCloud), nil)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		assert.Nil(t, podSpec.SecurityContext.FSGroup, "No fsGroup should be set, as the platform assigns the group")
+		assert.NotNil(t, podSpec.SecurityContext.SeccompProfile, "The seccomp profile is not an ID, and should still be set")
+
+		initContainerNames := containerNames(podSpec.InitContainers)
+		assert.Contains(t, initContainerNames, VolumePrepInitContainer, "The volume prep init container should be generated")
+		assert.Contains(t, initContainerNames, InitdbInitContainer, "The initdb init container should be generated")
+		for _, container := range append(podSpec.InitContainers, podSpec.Containers...) {
+			require.NotNil(t, container.SecurityContext, "Container %s should still get a security context", container.Name)
+			assert.Nil(t, container.SecurityContext.RunAsUser, "Container %s should not be given a user, as the platform assigns it", container.Name)
+			assert.True(t, *container.SecurityContext.RunAsNonRoot, "Container %s should still run as non-root", container.Name)
+			assert.False(t, *container.SecurityContext.AllowPrivilegeEscalation, "Container %s should still not allow privilege escalation", container.Name)
+		}
+		expectRestrictedProfile(t, &statefulSet.Spec.Template, "A SolrCloud pod without the default IDs")
+	})
+
+	t.Run("IDs given explicitly are still used", func(t *testing.T) {
+		solrCloud := solrCloudWithoutIDs()
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext = &corev1.PodSecurityContext{FSGroup: ptr.To(int64(1000680000))}
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions.DefaultInitContainerSecurityContext = &corev1.SecurityContext{RunAsUser: ptr.To(int64(1000680000))}
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+
+		assert.Equal(t, int64(1000680000), *statefulSet.Spec.Template.Spec.SecurityContext.FSGroup, "An explicit fsGroup should be kept")
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
+		assert.Equal(t, int64(1000680000), *initContainer.SecurityContext.RunAsUser, "An explicit runAsUser should be kept")
+	})
+
+	t.Run("the backup directory check does not assume a user", func(t *testing.T) {
+		statefulSet := testStatefulSet(solrCloudWithoutIDs(), nil, nil)
+		initContainer := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, VolumePrepInitContainer)
+		command := strings.Join(initContainer.Command, " ")
+
+		assert.Contains(t, command, "test -w /var/solr/data/backup-restore/test-repo", "The backup directory should still be checked for writability")
+		assert.NotContains(t, command, "8983", "The check must not name the default user, as the platform assigns another")
+	})
+
+	t.Run("the Prometheus exporter pod", func(t *testing.T) {
+		exporter := &solr.SolrPrometheusExporter{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+		exporter.Spec.SolrReference.SolrTLS = &solr.SolrTLSOptions{
+			MountedTLSDir: &solr.MountedTLSDirectory{Path: "/var/solr/tls"},
+		}
+		exporter.Spec.CustomKubeOptions.PodOptions = &solr.PodOptions{OmitDefaultIDs: true}
+		exporter.WithDefaults()
+		deployment := GenerateSolrPrometheusExporterDeployment(exporter, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", TLSCertsForExporter(exporter), "")
+		podSpec := deployment.Spec.Template.Spec
+
+		assert.Nil(t, podSpec.SecurityContext.FSGroup, "No fsGroup should be set on the exporter pod, as the platform assigns the group")
+		initContainer := findContainer(t, podSpec.InitContainers, TLSWrapperScriptInitContainer)
+		assert.Nil(t, initContainer.SecurityContext.RunAsUser, "The TLS wrapper script init container should not be given a user")
+		assert.True(t, *initContainer.SecurityContext.RunAsNonRoot, "The TLS wrapper script init container should still run as non-root")
+		expectRestrictedProfile(t, &deployment.Spec.Template, "A Prometheus exporter pod without the default IDs")
 	})
 }
 

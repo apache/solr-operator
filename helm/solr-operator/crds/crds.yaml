@@ -6374,6 +6374,16 @@ spec:
                           type: string
                         description: Node Selector to be added for the StatefulSet.
                         type: object
+                      omitDefaultIDs:
+                        description: |-
+                          OmitDefaultIDs leaves the numeric user and group IDs out of the security contexts the operator
+                          generates: no fsGroup on the pod, and no runAsUser on the init containers whose image has no
+                          non-root user of its own. For platforms that assign these IDs from a per-namespace range and
+                          reject any other, such as OpenShift with its restricted SecurityContextConstraints. The rest of
+                          the "restricted" profile defaults still apply, and IDs given explicitly in a security context
+                          are still used. Only use this where the platform does assign the IDs: elsewhere, an init
+                          container without a user of its own cannot start as non-root.
+                        type: boolean
                       podSecurityContext:
                         description: |-
                           PodSecurityContext is the security context for the pod.
@@ -23417,6 +23427,16 @@ spec:
                           type: string
                         description: Node Selector to be added for the StatefulSet.
                         type: object
+                      omitDefaultIDs:
+                        description: |-
+                          OmitDefaultIDs leaves the numeric user and group IDs out of the security contexts the operator
+                          generates: no fsGroup on the pod, and no runAsUser on the init containers whose image has no
+                          non-root user of its own. For platforms that assign these IDs from a per-namespace range and
+                          reject any other, such as OpenShift with its restricted SecurityContextConstraints. The rest of
+                          the "restricted" profile defaults still apply, and IDs given explicitly in a security context
+                          are still used. Only use this where the platform does assign the IDs: elsewhere, an init
+                          container without a user of its own cannot start as non-root.
+                        type: boolean
                       podSecurityContext:
                         description: |-
                           PodSecurityContext is the security context for the pod.
