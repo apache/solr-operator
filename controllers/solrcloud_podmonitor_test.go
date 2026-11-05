@@ -36,6 +36,8 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -43,7 +45,13 @@ import (
 
 // podMonitorFixture builds a reconciler with a fake client holding the given SolrCloud, with the
 // operator configured to use the Prometheus Operator CRDs.
-func podMonitorFixture(t *testing.T, instance *solrv1beta1.SolrCloud) *SolrCloudReconciler {
+func podMonitorFixture(t *testing.T, instance *solrv1beta1.SolrCloud, extraObjects ...client.Object) *SolrCloudReconciler {
+	t.Helper()
+	return podMonitorFixtureWithInterceptors(t, instance, interceptor.Funcs{}, extraObjects...)
+}
+
+// podMonitorFixtureWithInterceptors is podMonitorFixture with a fake client whose calls can be made to fail
+func podMonitorFixtureWithInterceptors(t *testing.T, instance *solrv1beta1.SolrCloud, interceptors interceptor.Funcs, extraObjects ...client.Object) *SolrCloudReconciler {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -56,7 +64,7 @@ func podMonitorFixture(t *testing.T, instance *solrv1beta1.SolrCloud) *SolrCloud
 	t.Cleanup(func() { UsePrometheusCRD(false) })
 
 	return &SolrCloudReconciler{
-		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).Build(),
+		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(instance).WithObjects(extraObjects...).WithInterceptorFuncs(interceptors).Build(),
 		Scheme:   scheme,
 		Recorder: noOpEventRecorder{},
 	}
@@ -158,6 +166,32 @@ func TestPodMonitorRequiresTheOperatorToUseThePrometheusCRDs(t *testing.T) {
 
 	require.Len(t, recorder.Events, 1, "The SolrCloud should have gotten an event about the missing CRDs")
 	assert.Contains(t, <-recorder.Events, "MissingPrometheusCRD", "Wrong event for a PodMonitor that cannot be created")
+}
+
+func TestPodMonitorFailuresDoNotStallTheSolrCloud(t *testing.T) {
+	instance := podMonitorCloud(t, &solrv1beta1.SolrPodMonitorOptions{Enable: ptr.To(true), Labels: map[string]string{"release": "not a valid label value!"}})
+	// The SolrCloud schema does not validate the labels, so the API server rejects the PodMonitor instead
+	rejectPodMonitors := interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			if podMonitor, isPodMonitor := obj.(*monitoringv1.PodMonitor); isPodMonitor {
+				return errors.NewInvalid(monitoringv1.SchemeGroupVersion.WithKind(monitoringv1.PodMonitorsKind).GroupKind(), podMonitor.Name, nil)
+			}
+			return c.Create(ctx, obj, opts...)
+		},
+	}
+	r := podMonitorFixtureWithInterceptors(t, instance, rejectPodMonitors)
+	recorder := record.NewFakeRecorder(5)
+	r.Recorder = recorder
+
+	// Metrics are not worth stalling the Solr cluster over, so the failure is reported and retried instead
+	requeueOrNot := reconcile.Result{}
+	r.reconcilePodMonitorBestEffort(context.Background(), instance, logr.Discard(), &requeueOrNot)
+
+	_, getErr := getPodMonitor(t, r, instance)
+	assert.True(t, errors.IsNotFound(getErr), "The rejected PodMonitor should not exist")
+	assert.Positive(t, requeueOrNot.RequeueAfter, "The SolrCloud should be requeued to retry the PodMonitor")
+	require.Len(t, recorder.Events, 1, "The SolrCloud should have gotten an event about the failed PodMonitor")
+	assert.Contains(t, <-recorder.Events, "PodMonitorError", "Wrong event for a PodMonitor that cannot be created")
 }
 
 func TestPrometheusCRDInstalledChecksTheCluster(t *testing.T) {

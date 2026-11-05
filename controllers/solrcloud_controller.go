@@ -234,9 +234,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	if err = r.reconcilePodMonitor(ctx, instance, logger); err != nil {
-		return requeueOrNot, err
-	}
+	r.reconcilePodMonitorBestEffort(ctx, instance, logger, &requeueOrNot)
 
 	// Use a map to hold additional config info that gets determined during reconcile
 	// needed for creating the STS and supporting objects (secrets, config maps, and so on)
@@ -1026,6 +1024,19 @@ func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger l
 	}
 
 	return nil, ip
+}
+
+// reconcilePodMonitorBestEffort manages the PodMonitor of the cloud without ever failing the reconcile:
+// metrics are not worth stalling a Solr cluster over. A PodMonitor that cannot be managed, e.g. because
+// the API server rejects a user-given label, is reported as a warning event and retried later, while the
+// rest of the SolrCloud is reconciled as usual.
+func (r *SolrCloudReconciler) reconcilePodMonitorBestEffort(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger, requeueOrNot *reconcile.Result) {
+	if err := r.reconcilePodMonitor(ctx, instance, logger); err != nil {
+		logger.Error(err, "Could not reconcile the PodMonitor, continuing with the rest of the SolrCloud", "podMonitor", instance.PodMonitorName())
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodMonitorError",
+			"Could not reconcile PodMonitor %q, will retry: %v", instance.PodMonitorName(), err)
+		updateRequeueAfter(requeueOrNot, time.Second*30)
+	}
 }
 
 // reconcilePodMonitor creates, updates or deletes the PodMonitor for the cloud.
