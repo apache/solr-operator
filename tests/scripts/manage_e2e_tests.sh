@@ -146,6 +146,10 @@ function run_tests() {
     GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
   fi
 
+  # Write machine-readable reports next to the per-test debug output (tests/e2e/output is gitignored and
+  # recreated by the suite before the specs run, so the reports are written once the suite has finished)
+  GINKGO_PARAMS+=(--output-dir "${REPO_DIR}/tests/e2e/output" --junit-report junit.xml --json-report report.json)
+
   GINKGO_EDITOR_INTEGRATION=true ginkgo --randomize-all "${GINKGO_PARAMS[@]}" "${REPO_DIR}"/tests/e2e/...
 
   printf "\n********************\n"
