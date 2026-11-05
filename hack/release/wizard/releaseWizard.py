@@ -365,12 +365,16 @@ class ReleaseState:
 
     def get_released_versions(self):
         if state.released_versions is None:
-            releases_str = load("https://projects.apache.org/json/foundation/releases.json", "utf-8")
-            releases = json.loads(releases_str)
-            state.released_versions = []
-            if 'solr' in releases.keys():
-                releases = releases['solr']
-                state.released_versions = [ r for r in list(map(lambda y: y[14:], filter(lambda x: x.startswith('solr-operator-v'), list(releases.keys())))) ]
+            releases_url = "https://projects.apache.org/json/foundation/releases.json"
+            releases_str = load(releases_url, "utf-8")
+            releases = json.loads(releases_str).get('solr', {})
+            # Keys are on the form 'Solr-Operator-v0.9.1'. Match case insensitively, since the
+            # casing used in releases.json has changed over time.
+            matcher = re.compile(r'solr-operator-(v\d+\.\d+\.\d+)$', re.IGNORECASE)
+            versions = [ m.group(1) for m in map(matcher.match, releases.keys()) if m ]
+            if not versions:
+                sys.exit("Found no released solr-operator versions in %s. Has the format of that file changed?" % releases_url)
+            state.released_versions = versions
         return state.released_versions
 
     def get_released_versions_to_delete(self):
