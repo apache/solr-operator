@@ -182,5 +182,4 @@ spec:
         runAsUser: 0
 ----
 
-This security context applies to every init container the operator generates, so `setup-zk` runs as root too, and the pod no longer satisfies the Pod Security Standards "restricted" profile.
-See xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security Standards].
+This applies to every init container the operator generates, and the pod no longer satisfies the Pod Security Standards "restricted" profile, see xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security Standards].

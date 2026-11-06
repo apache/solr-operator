@@ -120,9 +120,8 @@ Set one on each if the namespace enforces the profile.
 * **Volumes** must be of a type the profile allows, which rules out `hostPath`.
 This applies to the volumes you add through `podOptions.volumes` and to `spec.dataStorage.ephemeral.hostPath`, which the operator will still create if you ask for it.
 * **ZooKeeper** is not covered.
-A `provided` ensemble's pods are created by the ZooKeeper operator, whose `zookeeperPodPolicy` exposes only a pod-level `securityContext`, so they cannot be made to satisfy the profile from the SolrCloud resource.
-The `zookeeper-operator` deployment that the Solr Operator Helm chart installs as a dependency is likewise configured by its own chart.
-Use an `external` ZooKeeper ensemble if the namespace enforces the profile.
+A `provided` ensemble's pods are created by the ZooKeeper operator, whose `zookeeperPodPolicy` exposes only a pod-level `securityContext`, and the `zookeeper-operator` chart dependency is configured by its own chart.
+Use an `external` ensemble if the namespace enforces the profile.
 
 === Overriding the defaults
 
@@ -140,9 +139,8 @@ spec:
         runAsNonRoot: false
 ----
 
-The `defaultInitContainerSecurityContext` is needed as well here, because the `setup-zk` and `gen-pkcs12-keystore` init containers run the Solr image too.
-Without it the kubelet refuses to start them, since they would still be asked to run as non-root.
-Note that `defaultInitContainerSecurityContext` covers every init container the operator generates, not just one of them.
+The `defaultInitContainerSecurityContext` is needed as well, because the `setup-zk` and `gen-pkcs12-keystore` init containers run the Solr image too, and the kubelet refuses to start a root image as non-root.
+It covers every init container the operator generates.
 
 Asking for `runAsUser: 0` also turns off the `runAsNonRoot` and `capabilities.drop` defaults for that container, since neither can hold for a container that is meant to run as root.
 The `seccompProfile` still applies, and so does `allowPrivilegeEscalation: false`, except on a container asked to run `privileged` or to add `CAP_SYS_ADMIN`, since Kubernetes rejects that combination.
@@ -168,11 +166,8 @@ An empty `capabilities: {}` is how you keep the container's default capabilities
 [#openshift]
 === OpenShift and other platforms that assign the IDs
 
-Some platforms assign the user and group IDs of a pod themselves and reject any other.
-OpenShift is the common case: its default `restricted-v2` SecurityContextConstraints only allow a `runAsUser` from the namespace's `openshift.io/sa.scc.uid-range` and an `fsGroup` from its `openshift.io/sa.scc.supplemental-groups`, and fill both in when they are left unset.
-Everything else the operator sets, the `seccompProfile`, `runAsNonRoot`, `allowPrivilegeEscalation: false` and `capabilities.drop: [ALL]`, is accepted as is.
-
-Two of the operator's defaults are numeric IDs, and are rejected on such a platform: `fsGroup: 8983` on the pod (`8080` for the Prometheus exporter), and `runAsUser: 8983` on the init containers that use the `busyBoxImage`.
+OpenShift's default `restricted-v2` SecurityContextConstraints accept everything above, but only allow a `runAsUser` and `fsGroup` from the namespace's own ID ranges, which they fill in when the fields are left unset.
+Two of the operator's defaults are numeric IDs that such a platform rejects: `fsGroup: 8983` on the pod (`8080` for the Prometheus exporter), and `runAsUser: 8983` on the init containers that use the `busyBoxImage`.
 Since overrides are merged field by field, an empty `podSecurityContext` does not unset the `fsGroup`.
 Set `omitDefaultIDs` instead, which leaves both out and lets the platform assign them:
 
@@ -186,7 +181,7 @@ spec:
 
 The `SolrPrometheusExporter` has the same option under `customKubeOptions.podOptions`.
 IDs that you give explicitly in a security context are still used.
+The official Solr image runs as any user in group `0`, as OpenShift requires.
 
-The official Solr image is built to run as any user in group `0`, as OpenShift requires, and the volumes are made writable through the `fsGroup` the platform assigns, as they otherwise are through the operator's default.
 Only use the option on a platform that does assign the IDs.
-Elsewhere, an init container that uses the `busyBoxImage` would be asked to run as non-root without a user to run as, and the kubelet would refuse to start it.
+Elsewhere, the init containers that use the `busyBoxImage` would have no user to run as, and the kubelet refuses to start them as non-root.

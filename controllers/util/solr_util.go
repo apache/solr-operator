@@ -733,9 +733,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
-	// This container runs as a non-root user by default, which the Pod Security Standards
-	// "restricted" profile requires, so it can only check that the backup directories are writable.
-	// Running it as root, which the user has to ask for, lets it take ownership of them instead.
+	// As non-root, the default, this container can only check that the backup directories are
+	// writable. As root, which the user has to ask for, it takes ownership of them instead.
 	runAsRoot := operatorInitContainersRunAsRoot(customPodOptions)
 
 	// Add prep for backup-restore Repositories
@@ -747,9 +746,8 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 				volumeMounts = append(volumeMounts, *volumeMount)
 
 				if runAsRoot {
-					// Check writability as the user Solr runs as, which needs that user to exist in
-					// this container. Nothing to add when Solr runs as root, which can write anyway,
-					// or when its group is root, which already exists in the busybox image.
+					// Check writability as the Solr user, which has to be added to this container
+					// first, unless Solr runs as root or in the root group, which busybox has already.
 					testDirCommand := "test -w " + volumeMount.MountPath
 					if solrUser != 0 && solrFSGroup != 0 {
 						if !solrUserAdded {
