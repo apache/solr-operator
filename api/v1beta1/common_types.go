@@ -89,6 +89,12 @@ type PodOptions struct {
 	// +optional
 	OmitDefaultIDs bool `json:"omitDefaultIDs,omitempty"`
 
+	// ReadOnlyRootFilesystem runs the main container with a read-only root filesystem, with emptyDir
+	// volumes mounted where it writes: /tmp, and /var/solr/logs for Solr. A volume of your own at one
+	// of those paths is used instead. A custom image that writes elsewhere needs a volume there too.
+	// +optional
+	ReadOnlyRootFilesystem bool `json:"readOnlyRootFilesystem,omitempty"`
+
 	// Additional environment variables to pass to the default container.
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`

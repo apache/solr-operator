@@ -377,11 +377,129 @@ func TestDefaultSecurityContextsAreOverridable(t *testing.T) {
 		assert.True(t, *securityContext.AllowPrivilegeEscalation, "The provided allowPrivilegeEscalation should be kept")
 	})
 
-	t.Run("readOnlyRootFilesystem is kept for the containers that had it", func(t *testing.T) {
-		statefulSet := testStatefulSet(testSolrCloudForSecurityContext(), nil, nil)
-		setupZk := findContainer(t, statefulSet.Spec.Template.Spec.InitContainers, SetupZkInitContainer)
-		assert.True(t, *setupZk.SecurityContext.ReadOnlyRootFilesystem, "The setup-zk init container should keep its read-only root filesystem")
+	t.Run("every init container gets a read-only root filesystem, the Solr container does not", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.BackupRepositories = []solr.SolrBackupRepository{
+			{Name: "test-repo", Volume: &solr.VolumeRepository{Source: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}},
+		}
+		solrCloud.Spec.SolrTLS = &solr.SolrTLSOptions{
+			PKCS12Secret:           &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"}, Key: "keystore.p12"},
+			KeyStorePasswordSecret: &corev1.SecretKeySelector{LocalObjectReference: corev1.LocalObjectReference{Name: "tls-secret"}, Key: "password"},
+		}
+		tls := TLSCertsForSolrCloud(solrCloud)
+		tls.ServerConfig.NeedsPkcs12InitContainer = true
+		statefulSet := testStatefulSet(solrCloud, tls, nil)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		initContainerNames := containerNames(podSpec.InitContainers)
+		assert.ElementsMatch(t, []string{VolumePrepInitContainer, SetupZkInitContainer, Pkcs12InitContainer}, initContainerNames, "Unexpected set of init containers")
+		for _, initContainer := range podSpec.InitContainers {
+			assert.True(t, *initContainer.SecurityContext.ReadOnlyRootFilesystem, "The %s init container never writes outside its volumes, so its root filesystem should be read-only", initContainer.Name)
+		}
+		solrContainer := findContainer(t, podSpec.Containers, SolrNodeContainer)
+		assert.Nil(t, solrContainer.SecurityContext.ReadOnlyRootFilesystem, "The Solr container writes to its root filesystem unless the user opts in")
 	})
+}
+
+func TestReadOnlyRootFilesystemIsAnOptInForTheMainContainers(t *testing.T) {
+	t.Run("the Solr container gets a read-only root and writable emptyDirs", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{ReadOnlyRootFilesystem: true}
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		solrContainer := findContainer(t, podSpec.Containers, SolrNodeContainer)
+		assert.True(t, *solrContainer.SecurityContext.ReadOnlyRootFilesystem, "The Solr container should get a read-only root filesystem")
+		assert.Equal(t, map[string]string{"tmp": "/tmp", "solr-logs": SolrLogsDir}, mountsByName(solrContainer.VolumeMounts, "tmp", "solr-logs"), "Solr and the JVM need writable /tmp and logs directories")
+		assert.Contains(t, volumeNames(podSpec.Volumes), "solr-logs", "An emptyDir for the logs should be added to the pod")
+		assert.Equal(t, 1, countVolumes(podSpec.Volumes, "tmp"), "The tmp emptyDir of the setup-zk init container should be shared, not duplicated")
+		expectRestrictedProfile(t, &statefulSet.Spec.Template, "A read-only Solr pod")
+	})
+
+	t.Run("a volume of the user's own at the logs path is used instead", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+			ReadOnlyRootFilesystem: true,
+			Volumes: []solr.AdditionalVolume{{
+				Name:                  "my-logs",
+				Source:                corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+				DefaultContainerMount: &corev1.VolumeMount{MountPath: SolrLogsDir},
+			}},
+		}
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+		podSpec := statefulSet.Spec.Template.Spec
+
+		assert.NotContains(t, volumeNames(podSpec.Volumes), "solr-logs", "No logs emptyDir should be added when the user mounts their own volume there")
+		solrContainer := findContainer(t, podSpec.Containers, SolrNodeContainer)
+		assert.Equal(t, map[string]string{"tmp": "/tmp", "my-logs": SolrLogsDir}, mountsByName(solrContainer.VolumeMounts, "tmp", "my-logs", "solr-logs"), "The user's logs volume should be the only one at the logs path")
+	})
+
+	t.Run("an explicit containerSecurityContext still wins", func(t *testing.T) {
+		solrCloud := testSolrCloudForSecurityContext()
+		solrCloud.Spec.CustomSolrKubeOptions.PodOptions = &solr.PodOptions{
+			ReadOnlyRootFilesystem:   true,
+			ContainerSecurityContext: &corev1.SecurityContext{ReadOnlyRootFilesystem: ptr.To(false)},
+		}
+		statefulSet := testStatefulSet(solrCloud, nil, nil)
+		solrContainer := findContainer(t, statefulSet.Spec.Template.Spec.Containers, SolrNodeContainer)
+		assert.False(t, *solrContainer.SecurityContext.ReadOnlyRootFilesystem, "An explicit readOnlyRootFilesystem should override the option")
+	})
+
+	t.Run("the Prometheus exporter container", func(t *testing.T) {
+		exporter := &solr.SolrPrometheusExporter{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+		exporter.Spec.CustomKubeOptions.PodOptions = &solr.PodOptions{ReadOnlyRootFilesystem: true}
+		exporter.WithDefaults()
+		deployment := GenerateSolrPrometheusExporterDeployment(exporter, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", nil, "")
+		podSpec := deployment.Spec.Template.Spec
+
+		exporterContainer := findContainer(t, podSpec.Containers, SolrPrometheusExporterContainer)
+		assert.True(t, *exporterContainer.SecurityContext.ReadOnlyRootFilesystem, "The exporter container should get a read-only root filesystem")
+		assert.Equal(t, map[string]string{"tmp": "/tmp"}, mountsByName(exporterContainer.VolumeMounts, "tmp"), "The JVM needs a writable /tmp")
+		assert.Contains(t, volumeNames(podSpec.Volumes), "tmp", "An emptyDir for /tmp should be added to the pod")
+		expectRestrictedProfile(t, &deployment.Spec.Template, "A read-only Prometheus exporter pod")
+	})
+
+	t.Run("the exporter container is writable by default", func(t *testing.T) {
+		exporter := &solr.SolrPrometheusExporter{ObjectMeta: metav1.ObjectMeta{Name: "foo", Namespace: "default"}}
+		exporter.WithDefaults()
+		deployment := GenerateSolrPrometheusExporterDeployment(exporter, SolrConnectionInfo{StandaloneAddress: "http://localhost:8983/solr"}, nil, "", nil, "")
+		exporterContainer := findContainer(t, deployment.Spec.Template.Spec.Containers, SolrPrometheusExporterContainer)
+		assert.Nil(t, exporterContainer.SecurityContext.ReadOnlyRootFilesystem, "The exporter container should not be read-only unless asked for")
+		assert.NotContains(t, volumeNames(deployment.Spec.Template.Spec.Volumes), "tmp", "No tmp emptyDir should be added unless asked for")
+	})
+}
+
+// mountsByName returns the mount path of each of the given volume names that the container mounts
+func mountsByName(mounts []corev1.VolumeMount, names ...string) map[string]string {
+	wanted := make(map[string]bool, len(names))
+	for _, name := range names {
+		wanted[name] = true
+	}
+	found := make(map[string]string)
+	for _, mount := range mounts {
+		if wanted[mount.Name] {
+			found[mount.Name] = mount.MountPath
+		}
+	}
+	return found
+}
+
+func volumeNames(volumes []corev1.Volume) []string {
+	names := make([]string, 0, len(volumes))
+	for _, volume := range volumes {
+		names = append(names, volume.Name)
+	}
+	return names
+}
+
+func countVolumes(volumes []corev1.Volume, name string) int {
+	count := 0
+	for _, volume := range volumes {
+		if volume.Name == name {
+			count++
+		}
+	}
+	return count
 }
 
 func TestBackupRepositoryPreparationRunsAsSolrByDefault(t *testing.T) {

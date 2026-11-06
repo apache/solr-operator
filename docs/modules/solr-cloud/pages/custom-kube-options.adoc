@@ -185,3 +185,23 @@ The official Solr image runs as any user in group `0`, as OpenShift requires.
 
 Only use the option on a platform that does assign the IDs.
 Elsewhere, the init containers that use the `busyBoxImage` would have no user to run as, and the kubelet refuses to start them as non-root.
+
+[#read-only-root-filesystem]
+=== Read-only root filesystem
+
+Every init container the operator generates runs with `readOnlyRootFilesystem: true`, as none of them writes outside its mounted volumes.
+The Solr and Prometheus exporter containers do not by default: Solr writes its logs to `/var/solr/logs`, the JVM writes to `/tmp`, and a custom image may write elsewhere.
+Opt in with:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      readOnlyRootFilesystem: true
+----
+
+The operator then sets `readOnlyRootFilesystem: true` on the Solr container and mounts `emptyDir` volumes at `/tmp` and `/var/solr/logs`, unless you mount a volume of your own at one of those paths through `podOptions.volumes`.
+Log files in the `emptyDir` are lost with the pod; Solr also logs to its standard output, which `kubectl logs` shows.
+For the `SolrPrometheusExporter`, the same option under `customKubeOptions.podOptions` mounts an `emptyDir` at `/tmp`.
+A custom image that writes anywhere else needs a volume there as well, or `containerSecurityContext.readOnlyRootFilesystem: false`, which overrides the option.

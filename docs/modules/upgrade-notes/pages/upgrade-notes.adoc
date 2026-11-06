@@ -168,6 +168,10 @@ Set `defaultInitContainerSecurityContext.runAsUser: 0` to have it take ownership
 An empty `podSecurityContext` no longer does this.
 See xref:solr-cloud:custom-kube-options.adoc#openshift[OpenShift].
 
+* Every initContainer the operator generates now runs with `readOnlyRootFilesystem: true`.
+The new `podOptions.readOnlyRootFilesystem` opts the Solr and Prometheus exporter containers in as well, with `emptyDir` volumes mounted where they write.
+See xref:solr-cloud:custom-kube-options.adoc#read-only-root-filesystem[Read-only root filesystem].
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*

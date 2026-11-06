@@ -258,6 +258,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		{Name: "solr-xml", MountPath: "/var/solr/data/" + SolrXmlFile, SubPath: SolrXmlFile, ReadOnly: true},
 	}
 
+	if usesReadOnlyRootFilesystem(customPodOptions) {
+		// The "tmp" emptyDir exists for the setup-zk init container, the Solr container shares it
+		if _, tmpMount := emptyDirForReadOnlyRoot(customPodOptions, "tmp", "/tmp"); tmpMount != nil {
+			volumeMounts = append(volumeMounts, *tmpMount)
+		}
+		if logsVolume, logsMount := emptyDirForReadOnlyRoot(customPodOptions, "solr-logs", SolrLogsDir); logsVolume != nil {
+			solrVolumes = append(solrVolumes, *logsVolume)
+			volumeMounts = append(volumeMounts, *logsMount)
+		}
+	}
+
 	// Add necessary specs for backupRepos
 	backupEnvVars := make([]corev1.EnvVar, 0)
 	for _, repo := range solrCloud.Spec.BackupRepositories {

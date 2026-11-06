@@ -184,6 +184,13 @@ annotations:
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/466
+    - kind: changed
+      description: Every initContainer the operator generates now runs with readOnlyRootFilesystem true. The new `podOptions.readOnlyRootFilesystem` option opts the Solr and Prometheus exporter containers in as well, mounting emptyDir volumes where they write
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/884
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/801
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
