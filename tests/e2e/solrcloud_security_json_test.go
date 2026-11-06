@@ -54,7 +54,7 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 		createAndQueryCollection(ctx, solrCloud, "basic", 2, 1)
 	})
 
-	FContext("Provided Security JSON", func() {
+	FContext("Provided Security JSON", Label("pr"), func() {
 		BeforeEach(func(ctx context.Context) {
 			solrCloud.Spec.ZookeeperRef = &solrv1beta1.ZookeeperRef{
 				ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
