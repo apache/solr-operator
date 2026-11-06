@@ -11098,6 +11098,118 @@ spec:
                           For the LoadBalancer method, this field is optional and will only be used when useExternalAddress=true.
                           If used with the LoadBalancer method, you will need DNS routing to the LoadBalancer IP address through the url template given above.
                         type: string
+                      gateway:
+                        description: |-
+                          Gateway defines settings for Kubernetes Gateway API routing.
+
+                          This option is only available when Method=Gateway.
+                          The referenced Gateway must already exist and be managed by your platform team.
+                          The Solr Operator only manages the HTTPRoute resources.
+                        properties:
+                          additionalHostnames:
+                            description: |-
+                              AdditionalHostnames specifies extra hostnames to include in the common HTTPRoute.
+                              These are appended to the auto-generated hostnames derived from DomainName and AdditionalDomainNames.
+                              This is useful for adding alias hostnames that should also route to the common Solr service.
+                            items:
+                              type: string
+                            maxItems: 16
+                            type: array
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Annotations to add to HTTPRoute resources
+                            type: object
+                          backendTLSPolicy:
+                            description: |-
+                              BackendTLSPolicy optionally overrides how the operator configures TLS for backend connections
+                              from the Gateway to Solr pods.
+
+                              When Solr pods are running with TLS enabled (spec.solrTLS), the operator automatically creates
+                              BackendTLSPolicy resources so the Gateway can establish secure connections to the backend services.
+                              This field is only needed to override the defaults (CA trust source or validation hostname).
+                            properties:
+                              caCertificateRefs:
+                                description: |-
+                                  CACertificateRefs overrides the CA trust anchor(s) used to validate the certificate presented by the
+                                  backend. If unset, the operator derives the CA from the `ca.crt` entry of the Solr TLS keystore secret.
+
+                                  Mutually exclusive with WellKnownCACertificates.
+                                items:
+                                  description: GatewayCertificateReference identifies
+                                    a certificate object in Kubernetes
+                                  properties:
+                                    group:
+                                      description: Group of the resource
+                                      type: string
+                                    kind:
+                                      default: ConfigMap
+                                      description: Kind of the resource (e.g., "ConfigMap"
+                                        or "Secret")
+                                      type: string
+                                    name:
+                                      description: Name of the Kubernetes resource
+                                        (e.g., ConfigMap or Secret)
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                maxItems: 8
+                                type: array
+                              hostname:
+                                description: |-
+                                  Hostname overrides the hostname the Gateway validates against the certificate presented by the Solr
+                                  backend (also sent as SNI). It must match a Subject Alternative Name in the Solr server certificate.
+
+                                  If unset, defaults to the internal Solr service address.
+                                type: string
+                              wellKnownCACertificates:
+                                description: |-
+                                  WellKnownCACertificates configures the Gateway to use system CA certificates (e.g. "System") to
+                                  validate the certificate presented by the backend.
+
+                                  Mutually exclusive with CACertificateRefs.
+                                enum:
+                                - System
+                                type: string
+                            type: object
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Labels to add to HTTPRoute resources
+                            type: object
+                          parentRefs:
+                            description: |-
+                              ParentRefs specifies the Gateway(s) to attach HTTPRoutes to.
+                              This is required when using method=Gateway.
+
+                              The referenced Gateway must already exist and be managed by your platform team.
+                              The Solr Operator only manages the HTTPRoute resources.
+                            items:
+                              description: GatewayParentReference identifies a parent
+                                Gateway resource to attach HTTPRoutes to
+                              properties:
+                                name:
+                                  description: Name of the Gateway resource
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the Gateway resource.
+                                    If not specified, defaults to the HTTPRoute's namespace.
+                                  type: string
+                                sectionName:
+                                  description: |-
+                                    SectionName refers to a specific listener on the Gateway.
+                                    For example, "https" or "http".
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            minItems: 1
+                            type: array
+                        required:
+                        - parentRefs
+                        type: object
                       hideCommon:
                         description: |-
                           Do not expose the common Solr service externally. This affects a single service.
@@ -11137,6 +11249,7 @@ spec:
                         enum:
                         - Ingress
                         - ExternalDNS
+                        - Gateway
                         type: string
                       nodePortOverride:
                         description: |-

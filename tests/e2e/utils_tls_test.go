@@ -43,7 +43,14 @@ const (
 
 func generateBaseSolrCloudWithSecretTLS(ctx context.Context, replicas int, includeClientTLS bool, createKeyStore bool) (solrCloud *solrv1beta1.SolrCloud) {
 	solrCloud = generateBaseSolrCloud(replicas)
+	configureSolrCloudWithSecretTLS(ctx, solrCloud, includeClientTLS, createKeyStore)
+	return
+}
 
+// configureSolrCloudWithSecretTLS provisions cert-manager Certificates for the given SolrCloud and sets
+// spec.solrTLS (and spec.solrClientTLS when includeClientTLS is true) to reference the resulting secrets. This
+// lets callers add TLS to an already-configured SolrCloud (e.g. one with Gateway addressability) in place.
+func configureSolrCloudWithSecretTLS(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, includeClientTLS bool, createKeyStore bool) {
 	solrCertSecret, tlsPasswordSecret, clientCertSecret, clientTlsPasswordSecret := generateSolrCert(ctx, solrCloud, includeClientTLS, createKeyStore)
 
 	solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{

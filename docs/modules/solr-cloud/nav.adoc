@@ -19,6 +19,7 @@
 * xref:index.adoc[Overview]
 * xref:solr-cloud-crd.adoc[]
 ** xref:addressability.adoc[]
+*** xref:gateway-api.adoc[Gateway API]
 ** xref:zookeeper.adoc[]
 ** xref:custom-solr-config.adoc[Custom Solr Configuration]
 ** xref:tls.adoc[]

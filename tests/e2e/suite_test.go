@@ -50,6 +50,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -117,6 +118,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(gatewayv1.AddToScheme(scheme.Scheme)).To(Succeed())
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
 
@@ -162,6 +164,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	Expect(solrv1beta1.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
 	Expect(certManagerApi.AddToScheme(scheme.Scheme)).To(Succeed())
+	Expect(gatewayv1.AddToScheme(scheme.Scheme)).To(Succeed())
 
 	k8sClient, err = client.New(k8sConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred(), "Could not create controllerRuntime Kubernetes client")
@@ -389,6 +392,39 @@ func writeAllSolrInfoToFiles(ctx context.Context, directory string, namespace st
 			&secret,
 		)
 	}
+
+	// Gateway API resources created by the operator (HTTPRoutes and BackendTLSPolicies) also carry the
+	// solr-cloud label, so reuse the same selector. Their status conditions (Accepted/ResolvedRefs, written by
+	// the Gateway implementation) are the most useful signal when a Gateway test fails.
+	foundHTTPRoutes := &gatewayv1.HTTPRouteList{}
+	Expect(k8sClient.List(ctx, foundHTTPRoutes, listOps)).To(Succeed(), "Could not fetch Solr HTTPRoutes")
+	for _, httpRoute := range foundHTTPRoutes.Items {
+		writeAllHTTPRouteInfoToFiles(
+			directory+httpRoute.Name+".httproute",
+			&httpRoute,
+		)
+	}
+
+	foundBackendTLSPolicies := &gatewayv1.BackendTLSPolicyList{}
+	Expect(k8sClient.List(ctx, foundBackendTLSPolicies, listOps)).To(Succeed(), "Could not fetch Solr BackendTLSPolicies")
+	for _, backendTLSPolicy := range foundBackendTLSPolicies.Items {
+		writeAllBackendTLSPolicyInfoToFiles(
+			directory+backendTLSPolicy.Name+".backendtlspolicy",
+			&backendTLSPolicy,
+		)
+	}
+
+	// Gateways are not operator-owned (and not solr-cloud labeled), but a Gateway that never becomes Programmed is
+	// a common cause of Gateway-test failures, so capture any in the namespace. Its status conditions carry the
+	// reason (e.g. AddressNotAssigned).
+	foundGateways := &gatewayv1.GatewayList{}
+	Expect(k8sClient.List(ctx, foundGateways, &client.ListOptions{Namespace: namespace})).To(Succeed(), "Could not fetch Gateways")
+	for _, gateway := range foundGateways.Items {
+		writeAllGatewayInfoToFiles(
+			directory+gateway.Name+".gateway",
+			&gateway,
+		)
+	}
 }
 
 // writeSolrClusterStatusInfoToFile writes the following each to a separate file with the given base name & directory.
@@ -468,6 +504,84 @@ func writeAllServiceInfoToFiles(baseFilename string, service *corev1.Service) {
 	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize service json")
 	_, writeErr := statusFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write service json to file")
+}
+
+// writeAllHTTPRouteInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - HTTPRoute Spec/Status (including the Gateway-written Accepted/ResolvedRefs conditions)
+//   - HTTPRoute Events
+func writeAllHTTPRouteInfoToFiles(baseFilename string, httpRoute *gatewayv1.HTTPRoute) {
+	// Write HTTPRoute to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save HTTPRoute status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(httpRoute, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize HTTPRoute json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write HTTPRoute json to file")
+
+	// Write events for HTTPRoute to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save HTTPRoute events: %s", baseFilename+".events.json")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(httpRoute.Namespace).Search(scheme.Scheme, httpRoute)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for HTTPRoute: %s", httpRoute.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize HTTPRoute events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write HTTPRoute events json to file")
+}
+
+// writeAllBackendTLSPolicyInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - BackendTLSPolicy Spec/Status (including the Gateway-written Accepted ancestor conditions)
+//   - BackendTLSPolicy Events
+func writeAllBackendTLSPolicyInfoToFiles(baseFilename string, backendTLSPolicy *gatewayv1.BackendTLSPolicy) {
+	// Write BackendTLSPolicy to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save BackendTLSPolicy status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(backendTLSPolicy, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize BackendTLSPolicy json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write BackendTLSPolicy json to file")
+
+	// Write events for BackendTLSPolicy to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save BackendTLSPolicy events: %s", baseFilename+".events.json")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(backendTLSPolicy.Namespace).Search(scheme.Scheme, backendTLSPolicy)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for BackendTLSPolicy: %s", backendTLSPolicy.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize BackendTLSPolicy events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write BackendTLSPolicy events json to file")
+}
+
+// writeAllGatewayInfoToFiles writes the following each to a separate file with the given base name & directory.
+//   - Gateway Spec/Status (including the Gateway implementation's Accepted/Programmed conditions and address)
+//   - Gateway Events
+func writeAllGatewayInfoToFiles(baseFilename string, gateway *gatewayv1.Gateway) {
+	// Write Gateway to a file
+	statusFile, err := os.Create(baseFilename + ".status.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save Gateway status: %s", baseFilename+".status.json")
+	defer statusFile.Close()
+	jsonBytes, marshErr := json.MarshalIndent(gateway, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize Gateway json")
+	_, writeErr := statusFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write Gateway json to file")
+
+	// Write events for Gateway to a file
+	eventsFile, err := os.Create(baseFilename + ".events.json")
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save Gateway events: %s", baseFilename+".events.json")
+	defer eventsFile.Close()
+
+	eventList, err := rawK8sClient.CoreV1().Events(gateway.Namespace).Search(scheme.Scheme, gateway)
+	Expect(err).ToNot(HaveOccurred(), "Could not find events for Gateway: %s", gateway.Name)
+	jsonBytes, marshErr = json.MarshalIndent(eventList, "", "\t")
+	Expect(marshErr).ToNot(HaveOccurred(), "Could not serialize Gateway events json")
+	_, writeErr = eventsFile.Write(jsonBytes)
+	Expect(writeErr).ToNot(HaveOccurred(), "Could not write Gateway events json to file")
 }
 
 // writeAllSecretInfoToFiles writes the following each to a separate file with the given base name & directory.

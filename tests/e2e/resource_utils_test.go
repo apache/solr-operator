@@ -32,11 +32,13 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 )
 
 // Add one to an optional offset
@@ -500,6 +502,112 @@ func eventuallyExpectNoIngress(ctx context.Context, parentResource client.Object
 	}).Should(MatchError("ingresses.networking.k8s.io \""+ingressName+"\" not found"), "Ingress exists when it should not")
 }
 
+func expectHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) *gatewayv1.HTTPRoute {
+	return expectHTTPRouteWithChecks(ctx, parentResource, httpRouteName, nil, resolveOffset(additionalOffset))
+}
+
+func expectHTTPRouteWithChecks(ctx context.Context, parentResource client.Object, httpRouteName string, additionalChecks func(Gomega, *gatewayv1.HTTPRoute), additionalOffset ...int) *gatewayv1.HTTPRoute {
+	httpRoute := &gatewayv1.HTTPRoute{}
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), httpRoute)).To(Succeed(), "Expected HTTPRoute does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, httpRoute)
+		}
+	}).Should(Succeed())
+	return httpRoute
+}
+
+func expectHTTPRouteWithConsistentChecks(ctx context.Context, parentResource client.Object, httpRouteName string, additionalChecks func(Gomega, *gatewayv1.HTTPRoute), additionalOffset ...int) *gatewayv1.HTTPRoute {
+	httpRoute := &gatewayv1.HTTPRoute{}
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), httpRoute)).To(Succeed(), "Expected HTTPRoute does not exist")
+
+		if additionalChecks != nil {
+			additionalChecks(g, httpRoute)
+		}
+	}).Should(Succeed())
+
+	return httpRoute
+}
+
+func expectNoHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) {
+	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), &gatewayv1.HTTPRoute{})
+	}).Should(MatchError("httproutes.gateway.networking.k8s.io \""+httpRouteName+"\" not found"), "HTTPRoute exists when it should not")
+}
+
+func eventuallyExpectNoHTTPRoute(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), &gatewayv1.HTTPRoute{})
+	}).Should(MatchError("httproutes.gateway.networking.k8s.io \""+httpRouteName+"\" not found"), "HTTPRoute exists when it should not")
+}
+
+// expectHTTPRouteToBeAccepted waits until the Gateway implementation has accepted the HTTPRoute and resolved its
+// backend references, i.e. a real controller programmed the route the operator produced.
+func expectHTTPRouteToBeAccepted(ctx context.Context, parentResource client.Object, httpRouteName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		route := &gatewayv1.HTTPRoute{}
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, httpRouteName), route)).To(Succeed(), "Expected HTTPRoute does not exist")
+		g.Expect(route.Status.Parents).ToNot(BeEmpty(), "HTTPRoute has no parent status yet (no controller has processed it)")
+		for _, parent := range route.Status.Parents {
+			g.Expect(meta.IsStatusConditionTrue(parent.Conditions, string(gatewayv1.RouteConditionAccepted))).
+				To(BeTrue(), "HTTPRoute %s was not Accepted by the Gateway", httpRouteName)
+			g.Expect(meta.IsStatusConditionTrue(parent.Conditions, string(gatewayv1.RouteConditionResolvedRefs))).
+				To(BeTrue(), "HTTPRoute %s backend refs were not resolved by the Gateway", httpRouteName)
+		}
+	}).Should(Succeed())
+}
+
+// expectBackendTLSPolicyToBeAccepted waits until the Gateway implementation has accepted the BackendTLSPolicy,
+// i.e. it consumed the operator-generated policy for backend re-encryption.
+func expectBackendTLSPolicyToBeAccepted(ctx context.Context, parentResource client.Object, policyName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func(g Gomega) {
+		policy := &gatewayv1.BackendTLSPolicy{}
+		g.Expect(k8sClient.Get(ctx, resourceKey(parentResource, policyName), policy)).To(Succeed(), "Expected BackendTLSPolicy does not exist")
+		g.Expect(policy.Status.Ancestors).ToNot(BeEmpty(), "BackendTLSPolicy has no ancestor status yet (no controller has processed it)")
+		for _, ancestor := range policy.Status.Ancestors {
+			g.Expect(meta.IsStatusConditionTrue(ancestor.Conditions, string(gatewayv1.PolicyConditionAccepted))).
+				To(BeTrue(), "BackendTLSPolicy %s was not Accepted by the Gateway", policyName)
+		}
+	}).Should(Succeed())
+}
+
+// createGatewayForCloud creates a Gateway (of the Envoy Gateway class) that the operator's HTTPRoutes attach to,
+// with an HTTP listener that accepts routes from the same namespace. It registers cleanup of the Gateway, which
+// is not owned by the SolrCloud and therefore not removed by cleanupTest.
+func createGatewayForCloud(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, gatewayName string) {
+	sameNamespace := gatewayv1.NamespacesFromSame
+	gateway := &gatewayv1.Gateway{
+		ObjectMeta: metav1.ObjectMeta{Name: gatewayName, Namespace: solrCloud.Namespace},
+		Spec: gatewayv1.GatewaySpec{
+			GatewayClassName: "eg",
+			Listeners: []gatewayv1.Listener{
+				{
+					Name:     "http",
+					Protocol: gatewayv1.HTTPProtocolType,
+					Port:     gatewayv1.PortNumber(80),
+					AllowedRoutes: &gatewayv1.AllowedRoutes{
+						Namespaces: &gatewayv1.RouteNamespaces{From: &sameNamespace},
+					},
+				},
+			},
+		},
+	}
+	ExpectWithOffset(1, k8sClient.Create(ctx, gateway)).To(Succeed(), "Failed to create the test Gateway")
+	DeferCleanup(func(ctx context.Context) {
+		_ = k8sClient.Delete(ctx, gateway)
+	})
+
+	By("waiting for the Gateway to be programmed by Envoy Gateway")
+	EventuallyWithOffset(1, func(g Gomega) {
+		found := &gatewayv1.Gateway{}
+		g.Expect(k8sClient.Get(ctx, resourceKey(solrCloud, gatewayName), found)).To(Succeed())
+		g.Expect(meta.IsStatusConditionTrue(found.Status.Conditions, string(gatewayv1.GatewayConditionProgrammed))).
+			To(BeTrue(), "Gateway was not Programmed by Envoy Gateway")
+	}).Should(Succeed())
+}
+
 func expectPodDisruptionBudget(ctx context.Context, parentResource client.Object, podDisruptionBudgetName string, selector *metav1.LabelSelector, maxUnavailable intstr.IntOrString, additionalOffset ...int) *policyv1.PodDisruptionBudget {
 	return expectPodDisruptionBudgetWithChecks(ctx, parentResource, podDisruptionBudgetName, selector, maxUnavailable, nil, resolveOffset(additionalOffset))
 }
@@ -557,6 +665,12 @@ func expectConfigMapWithConsistentChecks(ctx context.Context, parentResource cli
 
 func expectNoConfigMap(ctx context.Context, parentResource client.Object, configMapName string, additionalOffset ...int) {
 	ConsistentlyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, configMapName), &corev1.ConfigMap{})
+	}).Should(MatchError("configmaps \""+configMapName+"\" not found"), "ConfigMap exists when it should not")
+}
+
+func eventuallyExpectNoConfigMap(ctx context.Context, parentResource client.Object, configMapName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
 		return k8sClient.Get(ctx, resourceKey(parentResource, configMapName), &corev1.ConfigMap{})
 	}).Should(MatchError("configmaps \""+configMapName+"\" not found"), "ConfigMap exists when it should not")
 }

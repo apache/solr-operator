@@ -84,7 +84,9 @@ if [[ "${SOLR_IMAGE}" != *":"* ]]; then
 fi
 IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 
-CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
+CLUSTER_NAME_PREFIX="solr-op-e2e"
+CLUSTER_NAME="$(echo "${CLUSTER_NAME_PREFIX}-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
+export CLUSTER_NAME_PREFIX
 export CLUSTER_NAME
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
 export KUBERNETES_VERSION
@@ -98,6 +100,11 @@ export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # Th
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
 export RAWFILE_LOCAL_PV_VERSION=0.13.1
+# Envoy Gateway serves the Gateway API (Gateway, HTTPRoute, and BackendTLSPolicy) and installs the matching
+# Gateway API CRDs. Pin a version whose bundled CRDs include BackendTLSPolicy v1 (Gateway API >= 1.4), which the
+# operator requires. Verify against the sigs.k8s.io/gateway-api version in go.mod when bumping.
+export ENVOY_GATEWAY_VERSION=1.8.3
+
 # The cert-manager charts version their releases with a "v" prefix; without it Helm warns and falls back.
 export CERT_MANAGER_VERSION=v1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=v0.5.0
@@ -128,6 +135,7 @@ ERR
     exit 1
   fi
 }
+
 
 # These gingko params are customized via the following envVars
 GINKGO_PARAM_NAMES=(--seed    --procs          --focus-file --label-filter --focus      --skip)
@@ -218,6 +226,45 @@ function setup_cluster() {
   helm repo add cert-manager https://charts.jetstack.io --force-update
   helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set crds.enabled=true
   helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
+  echo ""
+
+  printf "Installing Envoy Gateway (Gateway API implementation + CRDs)\n"
+  # Envoy Gateway installs the Gateway API CRDs (including BackendTLSPolicy v1) and reconciles Gateways of class
+  # "eg" into Envoy proxies, honoring HTTPRoute and BackendTLSPolicy. Tests reach the proxy in-cluster (ClusterIP),
+  # so no LoadBalancer provider is required.
+  helm upgrade -i eg oci://docker.io/envoyproxy/gateway-helm \
+    --version "v${ENVOY_GATEWAY_VERSION}" \
+    -n envoy-gateway-system --create-namespace
+  kubectl wait --timeout=300s -n envoy-gateway-system deployment/envoy-gateway --for=condition=Available
+  # Use a ClusterIP proxy Service (via an EnvoyProxy referenced by the GatewayClass) instead of the default
+  # LoadBalancer. There is no LoadBalancer provider in this cluster, so a LoadBalancer Service would never get an
+  # address and Envoy Gateway would hold the Gateway at Programmed=False (AddressNotAssigned). Tests reach the
+  # proxy in-cluster via its ClusterIP, so a LoadBalancer is not needed.
+  kubectl apply -f - <<'EOF'
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: eg-clusterip
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: eg-clusterip
+    namespace: envoy-gateway-system
+EOF
   echo ""
 }
 
