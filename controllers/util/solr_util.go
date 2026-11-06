@@ -31,7 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
-	"k8s.io/utils/ptr"
 )
 
 const (
@@ -259,6 +258,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		{Name: "solr-xml", MountPath: "/var/solr/data/" + SolrXmlFile, SubPath: SolrXmlFile, ReadOnly: true},
 	}
 
+	if usesReadOnlyRootFilesystem(customPodOptions) {
+		// The "tmp" emptyDir exists for the setup-zk init container, the Solr container shares it
+		if _, tmpMount := emptyDirForReadOnlyRoot(customPodOptions, "tmp", "/tmp"); tmpMount != nil {
+			volumeMounts = append(volumeMounts, *tmpMount)
+		}
+		if logsVolume, logsMount := emptyDirForReadOnlyRoot(customPodOptions, "solr-logs", SolrLogsDir); logsVolume != nil {
+			solrVolumes = append(solrVolumes, *logsVolume)
+			volumeMounts = append(volumeMounts, *logsMount)
+		}
+	}
+
 	// Add necessary specs for backupRepos
 	backupEnvVars := make([]corev1.EnvVar, 0)
 	for _, repo := range solrCloud.Spec.BackupRepositories {
@@ -470,11 +480,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		initContainers = append(initContainers, customPodOptions.InitContainers...)
 	}
 
-	var containerSecurityContext *corev1.SecurityContext
-	if customPodOptions != nil {
-		containerSecurityContext = customPodOptions.ContainerSecurityContext
-	}
-
 	containers := []corev1.Container{
 		{
 			Name:            SolrNodeContainer,
@@ -517,7 +522,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: preStop,
 			},
-			SecurityContext: containerSecurityContext,
 		},
 	}
 
@@ -567,14 +571,12 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					TerminationGracePeriodSeconds: &terminationGracePeriod,
 					ShareProcessNamespace:         &shareProcessNamespace,
 					EnableServiceLinks:            enableServiceLinks,
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &defaultFSGroup,
-					},
-					Volumes:        solrVolumes,
-					InitContainers: initContainers,
-					HostAliases:    hostAliases,
-					Containers:     containers,
-					ReadinessGates: podReadinessGates,
+					SecurityContext:               defaultPodSecurityContext(customPodOptions, defaultFSGroup),
+					Volumes:                       solrVolumes,
+					InitContainers:                initContainers,
+					HostAliases:                   hostAliases,
+					Containers:                    containers,
+					ReadinessGates:                podReadinessGates,
 				},
 			},
 			VolumeClaimTemplates: pvcs,
@@ -612,13 +614,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
 			solrContainer.Resources = customPodOptions.Resources
-		}
-
-		if customPodOptions.PodSecurityContext != nil {
-			stateful.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
-			if stateful.Spec.Template.Spec.SecurityContext.FSGroup == nil {
-				stateful.Spec.Template.Spec.SecurityContext.FSGroup = &defaultFSGroup
-			}
 		}
 
 		if customPodOptions.Lifecycle != nil {
@@ -680,6 +675,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		setHostHeaderForProbesOnSolrCloudStatefulSet(solrCloud, stateful)
 	}
 
+	// Harden every container the operator generated, now that they have all been added
+	setSecurityContextOnOperatorContainers(&stateful.Spec.Template.Spec, customPodOptions)
+
 	return stateful
 }
 
@@ -734,28 +732,21 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	var setupCommands []string
 
 	// Figure out the solrUser and solrGroup to use
+	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
 	solrUser := DefaultSolrUser
 	solrFSGroup := DefaultSolrGroup
-
-	// Only add a user to the initContainer if one isn't provided in the podSecurityContext
-	// This is so that we can check if the backupDir is writable given the default user (since no user is provided)
-	addUserToInitContainer := true
-	if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil {
-		solrPodSecurityContext := solrCloud.Spec.CustomSolrKubeOptions.PodOptions.PodSecurityContext
-
-		if solrPodSecurityContext != nil {
-			if solrPodSecurityContext.RunAsUser != nil {
-				solrUser = int(*solrPodSecurityContext.RunAsUser)
-				addUserToInitContainer = false
-			} else if solrPodSecurityContext.RunAsNonRoot != nil && *solrPodSecurityContext.RunAsNonRoot {
-				// we can't add users to the initContainer, even if we want to, since we cannot run as root.
-				addUserToInitContainer = false
-			}
-			if solrPodSecurityContext.FSGroup != nil {
-				solrFSGroup = int(*solrPodSecurityContext.FSGroup)
-			}
+	if customPodOptions != nil && customPodOptions.PodSecurityContext != nil {
+		if customPodOptions.PodSecurityContext.RunAsUser != nil {
+			solrUser = int(*customPodOptions.PodSecurityContext.RunAsUser)
+		}
+		if customPodOptions.PodSecurityContext.FSGroup != nil {
+			solrFSGroup = int(*customPodOptions.PodSecurityContext.FSGroup)
 		}
 	}
+
+	// As non-root, the default, this container can only check that the backup directories are
+	// writable. As root, which the user has to ask for, it takes ownership of them instead.
+	runAsRoot := operatorInitContainersRunAsRoot(customPodOptions)
 
 	// Add prep for backup-restore Repositories
 	// This entails setting the correct permissions for the directory
@@ -765,22 +756,35 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 			if _, volumeMount := RepoVolumeSourceAndMount(&repo, solrCloud.Name); volumeMount != nil {
 				volumeMounts = append(volumeMounts, *volumeMount)
 
-				if addUserToInitContainer && !solrUserAdded {
-					setupCommands = append(setupCommands, fmt.Sprintf("addgroup -g %d solr", solrFSGroup))
-					setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", DefaultSolrUser))
-					// Only add users once even if there are many backup repos
-					solrUserAdded = true
+				if runAsRoot {
+					// Check writability as the Solr user, which has to be added to this container
+					// first, unless Solr runs as root or in the root group, which busybox has already.
+					testDirCommand := "test -w " + volumeMount.MountPath
+					if solrUser != 0 && solrFSGroup != 0 {
+						if !solrUserAdded {
+							setupCommands = append(setupCommands, fmt.Sprintf("addgroup -g %d solr", solrFSGroup))
+							setupCommands = append(setupCommands, fmt.Sprintf("adduser -u %d -G solr -H -D solr", solrUser))
+							// Only add users once even if there are many backup repos
+							solrUserAdded = true
+						}
+						testDirCommand = fmt.Sprintf("su solr -c '%s'", testDirCommand)
+					}
+					setupCommands = append(setupCommands, fmt.Sprintf(
+						"(%s || chown -R %d:%d %s)",
+						testDirCommand,
+						solrUser,
+						solrFSGroup,
+						volumeMount.MountPath))
+				} else {
+					setupCommands = append(setupCommands, fmt.Sprintf(
+						"if ! test -w %s; then echo \"%s\" >&2; exit 1; fi",
+						volumeMount.MountPath,
+						// The user and groups are looked up at runtime, as the platform may assign them
+						fmt.Sprintf("Backup repository directory %s is not writable by the user the pod runs as "+
+							"(uid $(id -u), groups $(id -G)). Either make the volume writable by that user or one "+
+							"of its groups, or set podOptions.defaultInitContainerSecurityContext.runAsUser to 0 "+
+							"to have this container take ownership of it.", volumeMount.MountPath)))
 				}
-				testDirCommand := "test -w " + volumeMount.MountPath
-				if addUserToInitContainer {
-					testDirCommand = fmt.Sprintf("su solr -c '%s'", testDirCommand)
-				}
-				setupCommands = append(setupCommands, fmt.Sprintf(
-					"(%s || chown -R %d:%d %s)",
-					testDirCommand,
-					solrUser,
-					solrFSGroup,
-					volumeMount.MountPath))
 			}
 		}
 	}
@@ -791,11 +795,14 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 			corev1.ResourceMemory: *DefaultSolrVolumePrepInitContainerMemory,
 		}
 		volumePrepInitContainer := corev1.Container{
-			Name:            "volume-prep",
+			Name:            VolumePrepInitContainer,
 			Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
 			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
 			Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
 			VolumeMounts:    volumeMounts,
+			// So that the reason a backup repository directory was rejected shows up in the pod
+			// status, rather than only in this container's log
+			TerminationMessagePolicy: corev1.TerminationMessageFallbackToLogsOnError,
 			Resources: corev1.ResourceRequirements{
 				Requests: volumePrepResources,
 				Limits:   volumePrepResources,
@@ -809,19 +816,13 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		containers = append(containers, zkSetupContainer)
 	}
 
-	// If the user has provided custom resources or security context for the default init containers, use them
-	customPodOptions := solrCloud.Spec.CustomSolrKubeOptions.PodOptions
+	// If the user has provided custom resources for the default init containers, use them.
+	// Their securityContext is set in GenerateStatefulSet, once every container has been added.
 	if nil != customPodOptions {
 		resources := customPodOptions.DefaultInitContainerResources
-		securityContext := customPodOptions.DefaultInitContainerSecurityContext
-		if resources.Limits != nil || resources.Requests != nil || securityContext != nil {
+		if resources.Limits != nil || resources.Requests != nil {
 			for i := range containers {
-				if resources.Limits != nil || resources.Requests != nil {
-					containers[i].Resources = resources
-				}
-				if securityContext != nil {
-					containers[i].SecurityContext = securityContext
-				}
+				containers[i].Resources = resources
 			}
 		}
 	}
@@ -1318,7 +1319,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 			},
 		}
 		return true, corev1.Container{
-			Name:                     "setup-zk",
+			Name:                     SetupZkInitContainer,
 			Image:                    solrCloud.Spec.SolrImage.ToImageName(),
 			ImagePullPolicy:          solrCloud.Spec.SolrImage.PullPolicy,
 			TerminationMessagePath:   "/dev/termination-log",
@@ -1328,9 +1329,6 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 			Resources: corev1.ResourceRequirements{
 				Requests: zkSetupResources,
 				Limits:   zkSetupResources,
-			},
-			SecurityContext: &corev1.SecurityContext{
-				ReadOnlyRootFilesystem: ptr.To(true),
 			},
 			VolumeMounts: volumeMounts,
 		}
