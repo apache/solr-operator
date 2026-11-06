@@ -143,6 +143,10 @@ Note that a Solr `>=9.10` node refuses to start if its `major.minor` version is 
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
+* The operator now exposes metrics about the resources it manages, cluster operations, backups, reconciles and Solr API requests, see xref:getting-started:operator-metrics.adoc[].
+The helm chart now adds `prometheus.io/port` and `prometheus.io/path` annotations next to `prometheus.io/scrape` on the operator pods, only when `metrics.enable` is `true`, and `prometheus.scrapeAnnotations.enable` can turn them off.
+Set `prometheus.podMonitor.enable` to have the chart create a PodMonitor for the operator pods instead.
+
 * The `cp-solr-xml` initContainer has been removed.
 The `solr.xml` is now mounted read-only into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount, instead of being copied there before Solr starts.
 ** This changes the Solr pod spec, so the Solr pods are restarted when the operator is upgraded.

@@ -18,3 +18,4 @@
 .Getting Started
 * xref:local-tutorial.adoc[]
 * xref:running-the-operator.adoc[]
+* xref:operator-metrics.adoc[]

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/metrics"
 	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
@@ -39,6 +40,7 @@ type SolrRebalanceRequest struct {
 }
 
 func CallCollectionsApiV2(ctx context.Context, cloud *solr.SolrCloud, urlMethod string, urlPath string, urlParams url.Values, body interface{}, response interface{}) (err error) {
+	defer func() { metrics.RecordSolrAPIRequest(cloud.Namespace, cloud.Name, err) }()
 	client := noVerifyTLSHttpClient
 	if mTLSHttpClient != nil {
 		client = mTLSHttpClient

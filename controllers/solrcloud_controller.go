@@ -31,6 +31,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/metrics"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
@@ -540,6 +541,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				if err == nil {
 					r.Recorder.Eventf(instance, corev1.EventTypeNormal, "ClusterOperationComplete",
 						"Completed cluster operation %q on the SolrCloud", string(clusterOp.Operation))
+					metrics.RecordClusterOperation(instance.Namespace, instance.Name, string(clusterOp.Operation), metrics.ClusterOperationCompleted)
 				}
 			} else if !requestInProgress {
 				// If the cluster operation is in a stoppable place (not currently doing an async operation), and either:
@@ -551,8 +553,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
 				queueForLaterReason := ""
+				queueForLaterResult := metrics.ClusterOperationPaused
 				if clusterOpError != nil && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "hit an error during operation"
+					queueForLaterResult = metrics.ClusterOperationFailed
 				} else if shortTimeoutForRequeue && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "timed out during operation (1 minutes)"
 				} else if clusterOpRuntime > time.Minute*10 {
@@ -568,6 +572,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					}
 					if err == nil {
 						err = enqueueCurrentClusterOpForRetryWithPatch(ctx, r, statefulSet, string(clusterOp.Operation)+" "+queueForLaterReason, logger)
+					}
+					if err == nil {
+						metrics.RecordClusterOperation(instance.Namespace, instance.Name, string(clusterOp.Operation), queueForLaterResult)
 					}
 
 					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationRetry",
@@ -1404,7 +1411,7 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		ctrlBuilder = ctrlBuilder.Owns(&zkApi.ZookeeperCluster{})
 	}
 
-	return ctrlBuilder.Complete(r)
+	return ctrlBuilder.Complete(metrics.InstrumentReconciler("SolrCloud", r.Client, &solrv1beta1.SolrCloud{}, r))
 }
 
 func (r *SolrCloudReconciler) indexAndWatchForProvidedConfigMaps(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {

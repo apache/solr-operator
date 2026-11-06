@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"time"
 
+	"github.com/apache/solr-operator/controllers/metrics"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -142,7 +143,10 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			now := metav1.Now()
 			backup.Status.IndividualSolrBackupStatus.FinishTime = &now
 
-			if successful := backup.Status.IndividualSolrBackupStatus.Successful; successful != nil && *successful {
+			successful := backup.Status.IndividualSolrBackupStatus.Successful
+			backupSucceeded := successful != nil && *successful
+			metrics.RecordBackupRun(backup.Namespace, backup.Name, backup.Spec.SolrCloud, backupSucceeded)
+			if backupSucceeded {
 				r.Recorder.Eventf(backup, corev1.EventTypeNormal, "BackupSucceeded",
 					"The backup of SolrCloud %q completed successfully", backup.Spec.SolrCloud)
 			} else {
@@ -345,7 +349,7 @@ func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
 		return err
 	}
 
-	return ctrlBuilder.Complete(r)
+	return ctrlBuilder.Complete(metrics.InstrumentReconciler("SolrBackup", r.Client, &solrv1beta1.SolrBackup{}, r))
 }
 
 func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {

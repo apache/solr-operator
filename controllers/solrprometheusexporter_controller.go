@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"github.com/apache/solr-operator/controllers/metrics"
 	"github.com/apache/solr-operator/controllers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -387,7 +388,7 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) er
 		return err
 	}
 
-	return ctrlBuilder.Complete(r)
+	return ctrlBuilder.Complete(metrics.InstrumentReconciler("SolrPrometheusExporter", r.Client, &solrv1beta1.SolrPrometheusExporter{}, r))
 }
 
 func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
