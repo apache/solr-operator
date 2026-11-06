@@ -15,41 +15,69 @@
 
 name: E2E / Integration Tests
 
+# The full e2e suite is too heavy for GitHub-hosted runners (4 vCPU / 16 GB for public repos), so pull
+# requests run the reduced "pr" profile: the specs labelled Label("pr") in tests/e2e, one cheap and
+# representative spec per feature area. See dev-docs/e2e-testing.md#continuous-integration.
+#
+# The job only runs for pull requests that change something the e2e suite actually exercises: the
+# operator code and its image, the CRDs and dependencies installed into the cluster, the solr-operator
+# Helm chart used to deploy it, and the e2e harness itself. Docs, examples, release tooling and the
+# "solr" Helm chart (not used by the suite) do not trigger it.
 on:
   pull_request:
     branches:
       - 'main'
       - 'release-*'
-    paths-ignore:
-      - '.github/workflows/**'
-      - '!.github/workflows/e2e-tests.yaml'
-      - '.run/**'
-      - 'config/**'
-      - 'dev-docs/**'
-      - 'docs/**'
-      - 'example/**'
-      - 'hack/**'
-      - '.gitignore'
-      - '.asf.yaml'
-      - 'README.md'
-      - 'CONTRIBUTING.md'
-      - 'LICENSE'
-      - 'NOTICE'
+    paths:
+      - 'api/**'
+      - 'controllers/**'
+      - 'main.go'
+      - 'go.mod'
+      - 'go.sum'
+      - 'build/**'
+      - 'config/crd/**'
+      - 'config/dependencies/**'
+      - 'helm/solr-operator/**'
+      - 'tests/e2e/**'
+      - 'tests/scripts/**'
+      - 'Makefile'
+      - '.github/workflows/e2e-tests.yaml'
+  # Manual runs, e.g. for the full suite or another Solr/Kubernetes version.
+  workflow_dispatch:
+    inputs:
+      test-labels:
+        description: 'Ginkgo label filter (TEST_LABELS). Leave empty to run the full suite.'
+        type: string
+        default: 'pr'
+      solr-version:
+        description: 'Solr image tag to test with (SOLR_IMAGE=solr:<tag>)'
+        type: string
+        default: '9.11.0'
+      kube-version:
+        description: 'Kubernetes version for the KinD cluster (kindest/node tag)'
+        type: string
+        default: 'v1.33.7'
+
+permissions:
+  contents: read
+
+# A new push to the same pull request supersedes the running job.
+concurrency:
+  group: e2e-tests-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   e2eTests:
     name: Run E2E / Integration Tests
 
-    # Github runners do not currently have the resources to run these tests
-    if: false
-
     runs-on: ubuntu-latest
+    timeout-minutes: 90
 
     strategy:
       matrix:
-        go-version: [ '1.26' ]
-        kube-version: [ 'v1.26.6' ]
-        solr-version: [ '9' ] # [ '8', '9' ]
+        go-version: [ '1.27' ]
+        kube-version: [ "${{ inputs.kube-version || 'v1.33.7' }}" ]
+        solr-version: [ "${{ inputs.solr-version || '9.11.0' }}" ]
 
     steps:
       # Setup
@@ -61,7 +89,7 @@ jobs:
 
       - run: make clean
 
-      - name: Install dev dependencies
+      - name: Cache dev dependencies
         id: cache-bin
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -72,5 +100,36 @@ jobs:
         if: steps.cache-bin.outputs.cache-hit != 'true'
         run: make install-dependencies
 
-      # Build
-      - run: make e2e-tests SOLR_IMAGE="solr:${{ matrix.solr-version }}" KUBERNETES_VERSION="${{ matrix.kube-version }}" TEST_PARALLELISM=1
+      - name: Cache go modules
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-modules-${{ hashFiles('go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-modules
+
+      # Test
+      - name: Run the e2e tests
+        run: |
+          # Pull requests always run the reduced profile. Manual runs use the given filter, where an
+          # empty filter means the whole suite.
+          TEST_LABELS="pr"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TEST_LABELS="${{ inputs.test-labels }}"
+          fi
+          make e2e-tests \
+            SOLR_IMAGE="solr:${{ matrix.solr-version }}" \
+            KUBERNETES_VERSION="${{ matrix.kube-version }}" \
+            TEST_PARALLELISM=2 \
+            TEST_LABELS="${TEST_LABELS}"
+
+      # The suite writes pod logs, resource dumps and the operator log for every spec, plus junit.xml and
+      # report.json, to tests/e2e/output. Keep them when something fails.
+      - name: Upload e2e test output
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-test-output-solr-${{ matrix.solr-version }}-k8s-${{ matrix.kube-version }}
+          path: tests/e2e/output/
+          if-no-files-found: ignore
+          retention-days: 14

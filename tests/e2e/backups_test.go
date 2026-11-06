@@ -148,7 +148,7 @@ var _ = FDescribe("E2E - Backups", Ordered, func() {
 		})
 	})
 
-	FContext("Local Directory - Single", func() {
+	FContext("Local Directory - Single", Label("pr"), func() {
 		BeforeEach(func() {
 			solrBackup.Spec.RepositoryName = localBackupRepository
 			solrBackup.Spec.Recurrence = nil
