@@ -251,7 +251,13 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		})
 	}
 
-	volumeMounts := []corev1.VolumeMount{{Name: solrDataVolumeName, MountPath: "/var/solr/data"}}
+	volumeMounts := []corev1.VolumeMount{
+		{Name: solrDataVolumeName, MountPath: "/var/solr/data"},
+		// Only the solr.xml file is mounted into the Solr home directory, via a subPath, so that
+		// the rest of the directory is untouched. subPath mounts do not see ConfigMap updates,
+		// instead the solr.xml MD5 pod annotation set below restarts the pods.
+		{Name: "solr-xml", MountPath: "/var/solr/data/" + SolrXmlFile, SubPath: SolrXmlFile, ReadOnly: true},
+	}
 
 	// Add necessary specs for backupRepos
 	backupEnvVars := make([]corev1.EnvVar, 0)
@@ -457,7 +463,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		Value: strings.Join(allSolrOpts, " "),
 	})
 
-	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, solrDataVolumeName, security)
+	initContainers := generateSolrSetupInitContainers(solrCloud, solrCloudStatus, security)
 
 	// Add user defined additional init containers
 	if customPodOptions != nil && len(customPodOptions.InitContainers) > 0 {
@@ -721,19 +727,11 @@ func MaintainPreservedStatefulSetFields(expected, found *appsv1.StatefulSet) {
 	expected.Spec.Replicas = found.Spec.Replicas
 }
 
-func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, solrDataVolumeName string, security *SecurityConfig) (containers []corev1.Container) {
-	// The setup of the solr.xml will always be necessary
-	volumeMounts := []corev1.VolumeMount{
-		{
-			Name:      "solr-xml",
-			MountPath: "/tmp",
-		},
-		{
-			Name:      solrDataVolumeName,
-			MountPath: "/tmp-config",
-		},
-	}
-	setupCommands := []string{"cp /tmp/solr.xml /tmp-config/solr.xml"}
+func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCloudStatus, security *SecurityConfig) (containers []corev1.Container) {
+	// The solr.xml is mounted into the Solr home directory, so the only thing left to prepare is
+	// the permissions of backup repository volumes.
+	var volumeMounts []corev1.VolumeMount
+	var setupCommands []string
 
 	// Figure out the solrUser and solrGroup to use
 	solrUser := DefaultSolrUser
@@ -787,23 +785,25 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 		}
 	}
 
-	volumePrepResources := corev1.ResourceList{
-		corev1.ResourceCPU:    *DefaultSolrVolumePrepInitContainerCPU,
-		corev1.ResourceMemory: *DefaultSolrVolumePrepInitContainerMemory,
-	}
-	volumePrepInitContainer := corev1.Container{
-		Name:            "cp-solr-xml",
-		Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
-		ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
-		Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
-		VolumeMounts:    volumeMounts,
-		Resources: corev1.ResourceRequirements{
-			Requests: volumePrepResources,
-			Limits:   volumePrepResources,
-		},
-	}
+	if len(setupCommands) > 0 {
+		volumePrepResources := corev1.ResourceList{
+			corev1.ResourceCPU:    *DefaultSolrVolumePrepInitContainerCPU,
+			corev1.ResourceMemory: *DefaultSolrVolumePrepInitContainerMemory,
+		}
+		volumePrepInitContainer := corev1.Container{
+			Name:            "volume-prep",
+			Image:           solrCloud.Spec.BusyBoxImage.ToImageName(),
+			ImagePullPolicy: solrCloud.Spec.BusyBoxImage.PullPolicy,
+			Command:         []string{"sh", "-c", strings.Join(setupCommands, " && ")},
+			VolumeMounts:    volumeMounts,
+			Resources: corev1.ResourceRequirements{
+				Requests: volumePrepResources,
+				Limits:   volumePrepResources,
+			},
+		}
 
-	containers = append(containers, volumePrepInitContainer)
+		containers = append(containers, volumePrepInitContainer)
+	}
 
 	if hasZKSetupContainer, zkSetupContainer := generateZKInteractionInitContainer(solrCloud, solrCloudStatus, security); hasZKSetupContainer {
 		containers = append(containers, zkSetupContainer)

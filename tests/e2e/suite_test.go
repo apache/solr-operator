@@ -69,6 +69,14 @@ const (
 	interval = time.Millisecond * 250
 )
 
+// Ginkgo labels used to select a subset of the suite.
+//
+// "pr" marks the reduced profile that CI runs on pull requests (see .github/workflows/e2e-tests.yaml),
+// selected with TEST_LABELS=pr. GitHub-hosted runners cannot run the full suite in a reasonable time, so
+// this profile holds one cheap, representative spec per feature area. Add the label to a new spec only if
+// it exercises an operator feature not already covered by the profile, and prefer specs that need at most
+// three Solr pods. Everything else only runs in the full suite (make e2e-tests without TEST_LABELS).
+
 var (
 	k8sClient    client.Client
 	rawK8sClient *kubernetes.Clientset
@@ -76,7 +84,7 @@ var (
 	logger       logr.Logger
 
 	defaultOperatorImage = "apache/solr-operator:" + version.FullVersion()
-	defaultSolrImage     = "solr:9.10.0"
+	defaultSolrImage     = "solr:9.11.0"
 
 	operatorImage = getEnvWithDefault(operatorImageEnv, defaultOperatorImage)
 	solrImage     = getEnvWithDefault(solrImageEnv, defaultSolrImage)
@@ -501,17 +509,39 @@ func writeAllPodInfoToFiles(ctx context.Context, baseFilename string, pod *corev
 	_, writeErr = eventsFile.Write(jsonBytes)
 	Expect(writeErr).ToNot(HaveOccurred(), "Could not write pod events json to file")
 
-	// Write pod logs to a file
-	if len(pod.Status.ContainerStatuses) > 0 && pod.Status.ContainerStatuses[0].Started != nil && *pod.Status.ContainerStatuses[0].Started {
-		writePodLogsToFile(
-			ctx,
-			baseFilename+".log",
-			pod.Name,
-			pod.Namespace,
-			nil,
-			"",
-		)
+	// Write logs for every container that has run, including init containers and containers that crashed.
+	// A crash-looping container is in the "waiting" state, so we can't rely on it currently running.
+	allContainerStatuses := append(append([]corev1.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...)
+	for _, containerStatus := range allContainerStatuses {
+		containerBaseFilename := baseFilename + "." + containerStatus.Name
+		if containerStatus.State.Running != nil || containerStatus.State.Terminated != nil || containerStatus.RestartCount > 0 {
+			writeContainerLogsToFile(ctx, containerBaseFilename+".log", pod, containerStatus.Name, false)
+		}
+		// The logs of the last crashed instance are only available via the "previous" option
+		if containerStatus.RestartCount > 0 || containerStatus.LastTerminationState.Terminated != nil {
+			writeContainerLogsToFile(ctx, containerBaseFilename+".previous.log", pod, containerStatus.Name, true)
+		}
 	}
+}
+
+// writeContainerLogsToFile saves the logs of a single container to the given file.
+// Failing to fetch the logs does not fail the test, since this is only used to collect debugging information.
+// The error is written to the file instead, so that it is clear why the logs are empty.
+func writeContainerLogsToFile(ctx context.Context, filename string, pod *corev1.Pod, containerName string, previous bool) {
+	logFile, err := os.Create(filename)
+	Expect(err).ToNot(HaveOccurred(), "Could not open file to save logs: %s", filename)
+	defer logFile.Close()
+
+	podLogOpts := corev1.PodLogOptions{Container: containerName, Previous: previous}
+	podLogs, logsErr := rawK8sClient.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &podLogOpts).Stream(ctx)
+	if logsErr != nil {
+		_, _ = fmt.Fprintf(logFile, "Could not fetch logs for container %q (previous=%t) of pod %q: %v\n", containerName, previous, pod.Name, logsErr)
+		return
+	}
+	defer podLogs.Close()
+
+	_, err = io.Copy(logFile, podLogs)
+	Expect(err).ToNot(HaveOccurred(), "Could not write container logs to file: %s", filename)
 }
 
 func writePodLogsToFile(ctx context.Context, filename string, podName string, podNamespace string, startTimeRaw *time.Time, filterLinesWithString string) {
