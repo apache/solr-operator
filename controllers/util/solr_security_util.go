@@ -498,13 +498,20 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	// mount the secret in a file so it gets updated; env vars do not see:
 	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
 	javaToolOptions := make([]string, 0)
+	credentialsArg := ""
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		javaToolOptions = append(javaToolOptions,
-			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
-		)
+		if solrCloud.SolrVersionAtLeast(10) {
+			// Solr 10 removed the PreemptiveBasicAuthClientBuilderFactory used with JAVA_TOOL_OPTIONS below, so pass the credentials as an argument.
+			// This makes them visible in the process arguments inside the pod.
+			credentialsArg = fmt.Sprintf(` --credentials "$(cat %s):$(cat %s)"`, usernameFile, passwordFile)
+		} else {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+			)
+		}
 	}
 
 	// construct the probe command to invoke the SolrCLI "api" action
@@ -520,7 +527,11 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsOutputFilter = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
+	apiUrlFlag := "-get"
+	if solrCloud.SolrVersionAtLeast(10) {
+		apiUrlFlag = "--solr-url"
+	}
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, credentialsArg, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET
