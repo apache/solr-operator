@@ -91,6 +91,9 @@ If you are trying to run tests locally in IntelliJ/GoLand, refer to [the IDEA te
 Please refer to the [E2E/Integration Testing guide](dev-docs/e2e-testing.md) for information on how to run full integration tests
 for your changes.
 
+When you open a PR, an automated, advisory comment may point out a missing changelog entry, docs or tests; see
+[LLM-assisted PR triage](dev-docs/pr-triage-llm.md) for how it works and how to run it locally.
+
 ## License
 
 Please read the [LICENSE](LICENSE) file here.
