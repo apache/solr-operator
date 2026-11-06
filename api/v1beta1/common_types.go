@@ -70,12 +70,24 @@ type PodOptions struct {
 	Volumes []AdditionalVolume `json:"volumes,omitempty"`
 
 	// PodSecurityContext is the security context for the pod.
+	//
+	// Merged field by field over the Pod Security Standards "restricted" profile defaults that the
+	// operator sets, so one field overrides one default.
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 
 	// ContainerSecurityContext the container-level security context used by the pod's primary container
+	//
+	// Merged over the "restricted" profile defaults the operator sets, field by field.
 	// +optional
 	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
+
+	// OmitDefaultIDs leaves the default fsGroup of the pod and runAsUser of the busybox init containers
+	// unset, for platforms that assign user and group IDs from a namespace range and reject any other,
+	// such as OpenShift. IDs given explicitly are still used. Elsewhere, the busybox init containers
+	// cannot start as non-root without a user.
+	// +optional
+	OmitDefaultIDs bool `json:"omitDefaultIDs,omitempty"`
 
 	// Additional environment variables to pass to the default container.
 	// +optional
@@ -167,6 +179,9 @@ type PodOptions struct {
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
 
 	// DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+	//
+	// Merged field by field over the "restricted" profile defaults the operator sets. "runAsUser: 0"
+	// also lets these containers take ownership of a backup repository volume.
 	// +optional
 	DefaultInitContainerSecurityContext *corev1.SecurityContext `json:"defaultInitContainerSecurityContext,omitempty"`
 }
