@@ -311,7 +311,6 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
 	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 		// initContainers
-		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "The Solr Pod template requires an init container to bootstrap the security.json")
 		var expInitContainer *corev1.Container = nil
 		for _, cnt := range podTemplate.Spec.InitContainers {
 			if cnt.Name == "setup-zk" {
@@ -321,6 +320,7 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		}
 
 		if expectBootstrapSecret || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
+			g.Expect(expInitContainer).To(Not(BeNil()), "The Solr Pod template requires a setup-zk init container to bootstrap the security.json")
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {

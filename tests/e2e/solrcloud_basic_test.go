@@ -49,7 +49,7 @@ var _ = FDescribe("E2E - SolrCloud - Basic", func() {
 		createAndQueryCollection(ctx, solrCloud, "basic", 1, 1)
 	})
 
-	FContext("Provided Zookeeper", func() {
+	FContext("Provided Zookeeper", Label("pr"), func() {
 		BeforeEach(func() {
 			solrCloud.Spec.ZookeeperRef = &solrv1beta1.ZookeeperRef{
 				ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{

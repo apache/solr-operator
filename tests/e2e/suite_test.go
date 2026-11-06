@@ -70,6 +70,14 @@ const (
 	interval = time.Millisecond * 250
 )
 
+// Ginkgo labels used to select a subset of the suite.
+//
+// "pr" marks the reduced profile that CI runs on pull requests (see .github/workflows/e2e-tests.yaml),
+// selected with TEST_LABELS=pr. GitHub-hosted runners cannot run the full suite in a reasonable time, so
+// this profile holds one cheap, representative spec per feature area. Add the label to a new spec only if
+// it exercises an operator feature not already covered by the profile, and prefer specs that need at most
+// three Solr pods. Everything else only runs in the full suite (make e2e-tests without TEST_LABELS).
+
 var (
 	k8sClient    client.Client
 	rawK8sClient *kubernetes.Clientset

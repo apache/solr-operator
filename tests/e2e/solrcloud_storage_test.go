@@ -64,7 +64,7 @@ var _ = FDescribe("E2E - SolrCloud - Storage", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection2, 2, 1)
 	})
 
-	FContext("Persistent Data - Expansion", func() {
+	FContext("Persistent Data - Expansion", Label("pr"), func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
 				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
