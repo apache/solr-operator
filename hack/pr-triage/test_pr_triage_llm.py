@@ -364,7 +364,27 @@ class TriageTest(unittest.TestCase):
         result, _, _ = self.run_main([])
         self.assertFalse(result["results"]["version_compat"]["mismatch"])
         self.assertEqual(0, result["mismatches"])
-        self.assertIn("✅ Compat", result["comment"])
+        self.assertIn("✅ All 1 checks agree", result["comment"])
+
+    def test_all_green_collapses_to_one_line(self):
+        self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
+        self.answers["version_compat"] = {"verdict": False, "confidence": "medium", "reason": "Neutral."}
+        result, _, _ = self.run_main([changed_file("docs/modules/solr-cloud/pages/tls.adoc")])
+        comment = result["comment"]
+        self.assertIn("✅ All 2 checks agree with what this PR includes (Documentation, Compat).", comment)
+        self.assertNotIn("| Warranted?", comment)
+        self.assertNotIn("Neutral", comment)
+        self.assertIn("Assessed commit", comment)
+        self.assertEqual(2, len(result["results"]))  # the verdicts are still in the JSON
+
+    def test_table_is_kept_unless_every_row_agrees(self):
+        self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
+        self.answers["version_compat"] = {"verdict": True, "confidence": "low", "reason": "Maybe."}
+        result, _, _ = self.run_main([changed_file("docs/modules/solr-cloud/pages/tls.adoc")])
+        self.assertEqual(0, result["mismatches"])
+        self.assertIn("| Warranted?", result["comment"])
+        self.assertIn("❔ Compat", result["comment"])
+        self.assertIn("✅ Documentation", result["comment"])
 
     def test_flag_judgement_low_confidence_is_uncertain(self):
         self.cfg["judgements"] = [{"id": "version_compat", "title": "Compat", "question": "Compat?"}]

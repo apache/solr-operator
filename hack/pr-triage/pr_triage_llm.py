@@ -392,6 +392,24 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
         headline += f" **{unanswered} unanswered judgement(s) need human review.**"
     head_sha = (pr.get("head") or {}).get("sha", "")
     revision = f" Assessed commit `{head_sha}`." if re.fullmatch(r"[0-9a-f]{40}", head_sha) else ""
+    all_green = rows and all(row.startswith("| ✅ ") for row in rows)
+    if all_green:
+        # Nothing to act on: one line instead of a table of agreements.
+        titles = ", ".join(j["title"] for j in cfg["judgements"] if j["id"] in results)
+        body = [f"✅ All {len(rows)} checks agree with what this PR includes ({titles}).",
+                "",
+                "_Matching changelog, docs and test files were hidden from the model; "
+                "file presence does not establish adequacy._" + revision]
+    else:
+        body = [headline,
+                "",
+                "| | Warranted? | In PR? | Confidence | Why |",
+                "|---|---|---|---|---|",
+                *rows,
+                "",
+                "_⚠️ mismatch, ❔ uncertain or unanswered, ✅ agrees. Matching changelog, docs and test "
+                "files were hidden from the model; the PR description may still mention them. "
+                "File presence does not establish adequacy._" + revision]
     comment = "\n".join(
         [
             COMMENT_MARKER,
@@ -400,15 +418,7 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
             "",
             *metadata_notices(pr, cfg),
             "",
-            headline,
-            "",
-            "| | Warranted? | In PR? | Confidence | Why |",
-            "|---|---|---|---|---|",
-            *rows,
-            "",
-            "_⚠️ mismatch, ❔ uncertain or unanswered, ✅ agrees. Matching changelog, docs and test "
-            "files were hidden from the model; the PR description may still mention them. "
-            "File presence does not establish adequacy._" + revision,
+            *body,
         ]
     )
     return {"results": results, "mismatches": mismatches, "unanswered": unanswered, "comment": comment}
