@@ -118,8 +118,8 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 			// Check Volumes
 			extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+2), "Container has wrong number of volumeMounts")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
@@ -182,8 +182,8 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Check that no additional volumes have been added
 				extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+1), "Container has wrong number of volumeMounts")
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+2), "Container has wrong number of volumeMounts")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+3), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal(extraVolumes[0].Name), "Additional Volume from podOptions not loaded into pod properly.")
 				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
@@ -241,11 +241,11 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 
 				// Check that no additional volumes have been added
 				extraVolumes[0].DefaultContainerMount.Name = extraVolumes[0].Name
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+2), "Container has wrong number of volumeMounts")
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volumeMount has wrong name.")
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].MountPath).To(Equal("/var/solr/data/backup-restore/test-repo/s3credential"), "S3Credentials file volumeMount has wrong mount path.")
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1].ReadOnly).To(BeTrue(), "S3Credentials file volumeMount must be read-only.")
-				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts).To(HaveLen(len(extraVolumes)+3), "Container has wrong number of volumeMounts")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volumeMount has wrong name.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2].MountPath).To(Equal("/var/solr/data/backup-restore/test-repo/s3credential"), "S3Credentials file volumeMount has wrong mount path.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[2].ReadOnly).To(BeTrue(), "S3Credentials file volumeMount must be read-only.")
+				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[3]).To(Equal(*extraVolumes[0].DefaultContainerMount), "Additional Volume from podOptions not mounted into container properly.")
 				g.Expect(found.Spec.Template.Spec.Volumes).To(HaveLen(len(extraVolumes)+4), "Pod has wrong number of volumes")
 				g.Expect(found.Spec.Template.Spec.Volumes[3].Name).To(Equal("backup-repository-test-repo"), "S3Credentials file volume has wrong name.")
 				g.Expect(found.Spec.Template.Spec.Volumes[3].VolumeSource.Secret).To(Not(BeNil()), "S3Credentials file has to be loaded via a secret volume.")
@@ -275,6 +275,41 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, updateSolrXmlMd5), "Custom solr.xml MD5 annotation should be updated on the pod template.")
 			})
+		})
+	})
+
+	FContext("Volume Repository", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				BackupRepositories: []solrv1beta1.SolrBackupRepository{
+					{
+						Name: "volume-repo",
+						Volume: &solrv1beta1.VolumeRepository{
+							Source: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("making sure an initContainer is still created to fix the permissions of the backup volume")
+			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(1), "A volume backup repository requires an initContainer to set up the volume permissions")
+			volumePrepContainer := statefulSet.Spec.Template.Spec.InitContainers[0]
+			Expect(volumePrepContainer.Name).To(Equal("volume-prep"), "Wrong name for the volume prep initContainer")
+			Expect(volumePrepContainer.Command[2]).To(Not(ContainSubstring("solr.xml")), "The volume prep initContainer should no longer copy the solr.xml, it is mounted directly into the Solr home directory")
+			Expect(volumePrepContainer.Command[2]).To(ContainSubstring(util.VolumeRepoVolumeMountPath(&solrCloud.Spec.BackupRepositories[0])), "The volume prep initContainer should set up the permissions of the backup volume")
+			Expect(volumePrepContainer.VolumeMounts).To(HaveLen(1), "The volume prep initContainer only needs the backup volume mounted")
+			Expect(volumePrepContainer.VolumeMounts[0].Name).To(Equal(util.RepoVolumeName(&solrCloud.Spec.BackupRepositories[0])), "Wrong volume mounted in the volume prep initContainer")
 		})
 	})
 
