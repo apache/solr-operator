@@ -296,6 +296,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.podSecurityContext | object |  | Security context for the Solr pod, merged over the Pod Security Standards "restricted" profile defaults |
 | podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod, merged over the Pod Security Standards "restricted" profile defaults |
 | podOptions.omitDefaultIDs | boolean | `false` | Leave the default `fsGroup` and init container `runAsUser` out of the generated security contexts, for platforms that assign the user and group IDs themselves, such as OpenShift. IDs given explicitly are still used. |
+| podOptions.readOnlyRootFilesystem | boolean | `false` | Run the Solr container with a read-only root filesystem, with `emptyDir` volumes mounted at `/tmp` and `/var/solr/logs` unless you mount your own there. |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |
 | podOptions.livenessProbe | object |  | Custom liveness probe for the Solr container |
 | podOptions.readinessProbe | object |  | Custom readiness probe for the Solr container |

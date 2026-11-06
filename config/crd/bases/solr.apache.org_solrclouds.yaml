@@ -6359,6 +6359,12 @@ spec:
                       priorityClassName:
                         description: PriorityClassName for the pod
                         type: string
+                      readOnlyRootFilesystem:
+                        description: |-
+                          ReadOnlyRootFilesystem runs the main container with a read-only root filesystem, with emptyDir
+                          volumes mounted where it writes: /tmp, and /var/solr/logs for Solr. A volume of your own at one
+                          of those paths is used instead. A custom image that writes elsewhere needs a volume there too.
+                        type: boolean
                       readinessProbe:
                         description: Readiness probe parameters
                         properties:

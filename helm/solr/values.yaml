@@ -305,6 +305,8 @@ podOptions:
   # Leave the default fsGroup and busybox init container runAsUser out, for platforms that assign the
   # user and group IDs themselves, such as OpenShift. IDs given explicitly above are still used.
   omitDefaultIDs: false
+  # Run the Solr container with a read-only root filesystem, with emptyDirs mounted at /tmp and /var/solr/logs
+  readOnlyRootFilesystem: false
   terminationGracePeriodSeconds: null
 
   # Set Solr service account individually instead of the global "serviceAccount.name"
