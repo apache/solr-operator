@@ -98,8 +98,9 @@ export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # Th
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
 export RAWFILE_LOCAL_PV_VERSION=0.13.1
-export CERT_MANAGER_VERSION=1.17.4
-export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
+# The cert-manager charts version their releases with a "v" prefix; without it Helm warns and falls back.
+export CERT_MANAGER_VERSION=v1.17.4
+export CERT_MANAGER_CSI_DRIVER_VERSION=v0.5.0
 
 # Load a locally built image into the Kind cluster. Images that come from a registry are
 # never loaded; the Kind nodes pull those themselves.
@@ -145,6 +146,10 @@ function run_tests() {
   if [[ -n "${RAW_GINKGO:-}" ]]; then
     GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
   fi
+
+  # Write machine-readable reports next to the per-test debug output (tests/e2e/output is gitignored and
+  # recreated by the suite before the specs run, so the reports are written once the suite has finished)
+  GINKGO_PARAMS+=(--output-dir "${REPO_DIR}/tests/e2e/output" --junit-report junit.xml --json-report report.json)
 
   GINKGO_EDITOR_INTEGRATION=true ginkgo --randomize-all "${GINKGO_PARAMS[@]}" "${REPO_DIR}"/tests/e2e/...
 
@@ -211,7 +216,7 @@ function setup_cluster() {
 
   printf "Installing Cert Manager\n"
   helm repo add cert-manager https://charts.jetstack.io --force-update
-  helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set installCRDs=true
+  helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set crds.enabled=true
   helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
   echo ""
 }

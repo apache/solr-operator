@@ -155,6 +155,18 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: changed
+      description: The `solr.xml` is now mounted into the Solr home directory from the ConfigMap, via a subPath volumeMount, instead of being copied there by the `cp-solr-xml` initContainer. That initContainer is only created for `volume` backupRepositories now, renamed to `volume-prep`
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/161
+    - kind: fixed
+      description: A cluster operation (scale up/down, rolling update, replica balancing, PVC expansion) that fails, e.g. because Solr is temporarily unreachable, is now always retried instead of stalling the SolrCloud until something else triggers a reconcile
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/707
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/876
     - kind: added
       description: Support for Solr 10. See the upgrade notes before upgrading a SolrCloud to Solr 10.
       links:
