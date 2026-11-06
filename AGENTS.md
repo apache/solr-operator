@@ -30,6 +30,7 @@ tasks by hand, read its `SKILL.md`:
 
 | Skill | Use it for |
 |---|---|
+| `solr-version-support` | Adopting a new Apache Solr release: the default version, the compatibility matrix, and whether the release needs operator work. |
 | `dependency-upgrade` | Upgrading Go modules and pinned tool versions in one sweeping pass, including CRD/RBAC regeneration, the dependency license list, and the Helm chart changelogs. |
 
 To see what has moved before starting an upgrade, run `make list-upgrades`. It reports the Go
