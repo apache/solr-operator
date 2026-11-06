@@ -3980,9 +3980,8 @@ spec:
                         description: |-
                           DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
 
-                          Merged over the "restricted" profile defaults the operator sets, field by field. Setting
-                          "runAsUser: 0" additionally lets these containers do work that a non-root user cannot, such as
-                          taking ownership of a backup repository volume.
+                          Merged field by field over the "restricted" profile defaults the operator sets. "runAsUser: 0"
+                          also lets these containers take ownership of a backup repository volume.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -6376,21 +6375,17 @@ spec:
                         type: object
                       omitDefaultIDs:
                         description: |-
-                          OmitDefaultIDs leaves the numeric user and group IDs out of the security contexts the operator
-                          generates: no fsGroup on the pod, and no runAsUser on the init containers whose image has no
-                          non-root user of its own. For platforms that assign these IDs from a per-namespace range and
-                          reject any other, such as OpenShift with its restricted SecurityContextConstraints. The rest of
-                          the "restricted" profile defaults still apply, and IDs given explicitly in a security context
-                          are still used. Only use this where the platform does assign the IDs: elsewhere, an init
-                          container without a user of its own cannot start as non-root.
+                          OmitDefaultIDs leaves the default fsGroup of the pod and runAsUser of the busybox init containers
+                          unset, for platforms that assign user and group IDs from a namespace range and reject any other,
+                          such as OpenShift. IDs given explicitly are still used. Elsewhere, the busybox init containers
+                          cannot start as non-root without a user.
                         type: boolean
                       podSecurityContext:
                         description: |-
                           PodSecurityContext is the security context for the pod.
 
-                          The operator generates pods that satisfy the Kubernetes Pod Security Standards "restricted"
-                          profile. Fields given here are merged over those defaults, field by field, so setting one
-                          field overrides one default and leaves the rest in place.
+                          Merged field by field over the Pod Security Standards "restricted" profile defaults that the
+                          operator sets, so one field overrides one default.
                         properties:
                           appArmorProfile:
                             description: |-
@@ -21033,9 +21028,8 @@ spec:
                         description: |-
                           DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
 
-                          Merged over the "restricted" profile defaults the operator sets, field by field. Setting
-                          "runAsUser: 0" additionally lets these containers do work that a non-root user cannot, such as
-                          taking ownership of a backup repository volume.
+                          Merged field by field over the "restricted" profile defaults the operator sets. "runAsUser: 0"
+                          also lets these containers take ownership of a backup repository volume.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -23429,21 +23423,17 @@ spec:
                         type: object
                       omitDefaultIDs:
                         description: |-
-                          OmitDefaultIDs leaves the numeric user and group IDs out of the security contexts the operator
-                          generates: no fsGroup on the pod, and no runAsUser on the init containers whose image has no
-                          non-root user of its own. For platforms that assign these IDs from a per-namespace range and
-                          reject any other, such as OpenShift with its restricted SecurityContextConstraints. The rest of
-                          the "restricted" profile defaults still apply, and IDs given explicitly in a security context
-                          are still used. Only use this where the platform does assign the IDs: elsewhere, an init
-                          container without a user of its own cannot start as non-root.
+                          OmitDefaultIDs leaves the default fsGroup of the pod and runAsUser of the busybox init containers
+                          unset, for platforms that assign user and group IDs from a namespace range and reject any other,
+                          such as OpenShift. IDs given explicitly are still used. Elsewhere, the busybox init containers
+                          cannot start as non-root without a user.
                         type: boolean
                       podSecurityContext:
                         description: |-
                           PodSecurityContext is the security context for the pod.
 
-                          The operator generates pods that satisfy the Kubernetes Pod Security Standards "restricted"
-                          profile. Fields given here are merged over those defaults, field by field, so setting one
-                          field overrides one default and leaves the rest in place.
+                          Merged field by field over the Pod Security Standards "restricted" profile defaults that the
+                          operator sets, so one field overrides one default.
                         properties:
                           appArmorProfile:
                             description: |-
