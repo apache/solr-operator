@@ -40,22 +40,13 @@ type operatorContainerOptions struct {
 	imageRunsAsRoot bool
 
 	// readOnlyRootFilesystem is true if the container is known not to write to its root filesystem.
-	// This is not part of the "restricted" profile and is not applied to containers that did not
-	// already have it, see https://github.com/apache/solr-operator/issues/801.
+	// Not part of the "restricted" profile, see https://github.com/apache/solr-operator/issues/884.
 	readOnlyRootFilesystem bool
 }
 
-// operatorContainers lists every container and init container that the operator generates, and is
-// therefore responsible for hardening, along with the options that container needs. Containers the
-// user supplies through podOptions are not listed: their security context is the user's to set.
-//
-// A container missing from this map gets no security context, which makes the pod fail "restricted"
-// evaluation. The unit tests evaluate the generated pods against the profile, so a new operator
-// container that is not listed here fails the build.
-//
-// A name in this map is not on its own proof that the operator generated the container, since a
-// user can give a container of their own the same name. setSecurityContextOnOperatorContainers
-// therefore excludes the user's containers by name before consulting this map.
+// operatorContainers lists every container and init container that the operator generates, with the
+// options each needs. A container missing here gets no security context and fails the "restricted"
+// evaluation in the unit tests, so a new operator container that is not listed fails the build.
 var operatorContainers = map[string]operatorContainerOptions{
 	SolrNodeContainer:               {},
 	SolrPrometheusExporterContainer: {},
@@ -66,14 +57,10 @@ var operatorContainers = map[string]operatorContainerOptions{
 	TLSWrapperScriptInitContainer:   {imageRunsAsRoot: true},
 }
 
-// defaultPodSecurityContext builds the pod-level security context, starting from the one the user
-// provided in the podOptions, if any, and filling in every field they left unset. User-provided
-// fields always win.
-//
-// The "restricted" profile asks for a seccomp profile, which is set once here rather than on every
-// container. fsGroup is not part of the profile, it is a long-standing operator default that makes
-// the volumes writable for Solr. It is left out when the user asks for omitDefaultIDs, for platforms
-// that assign the group themselves and reject any other.
+// defaultPodSecurityContext builds the pod-level security context, filling in every field the user
+// left unset in the podOptions. The seccomp profile is set once here rather than on every container.
+// fsGroup is not part of the profile, it is the long-standing default that makes the volumes writable
+// for Solr, left out when the user asks for omitDefaultIDs.
 func defaultPodSecurityContext(podOptions *solr.PodOptions, defaultFSGroup int64) *corev1.PodSecurityContext {
 	securityContext := &corev1.PodSecurityContext{}
 	if podOptions != nil && podOptions.PodSecurityContext != nil {
@@ -90,29 +77,23 @@ func defaultPodSecurityContext(podOptions *solr.PodOptions, defaultFSGroup int64
 	return securityContext
 }
 
-// omitsDefaultIDs reports whether the user asked for the numeric ID defaults to be left out, so that
-// the platform can assign the IDs instead.
+// omitsDefaultIDs reports whether the user asked for the numeric ID defaults to be left out.
 func omitsDefaultIDs(podOptions *solr.PodOptions) bool {
 	return podOptions != nil && podOptions.OmitDefaultIDs
 }
 
 // defaultContainerSecurityContext builds the security context for one operator-generated container,
-// starting from the one the user provided, if any, and filling in every field they left unset.
-// User-provided fields always win, so a single field is enough to opt out of a single default.
-//
-// podRunAsUser is the pod-level runAsUser, which containers inherit when they do not set their own.
-// omitDefaultIDs leaves out the runAsUser that an image without a non-root user would otherwise get,
-// for platforms that assign the user themselves.
+// filling in every field the user left unset, so a single field is enough to opt out of a single
+// default. podRunAsUser is the pod-level runAsUser, which containers inherit when they do not set
+// their own. omitDefaultIDs leaves out the runAsUser that an image without a non-root user gets.
 func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, options operatorContainerOptions, podRunAsUser *int64, omitDefaultIDs bool) *corev1.SecurityContext {
 	securityContext := &corev1.SecurityContext{}
 	if userProvided != nil {
 		securityContext = userProvided.DeepCopy()
 	}
 
-	// The user can ask for a container to run as root, which some setups need (see the backup
-	// repository preparation in generateSolrSetupInitContainers). Such a container cannot also run
-	// as non-root, and dropping all capabilities would leave it unable to do the work root was
-	// asked for, so neither default is applied to it.
+	// A container asked to run as root cannot run as non-root, and would be useless with every
+	// capability dropped, so it gets neither default.
 	effectiveRunAsUser := securityContext.RunAsUser
 	if effectiveRunAsUser == nil {
 		effectiveRunAsUser = podRunAsUser
@@ -120,8 +101,7 @@ func defaultContainerSecurityContext(userProvided *corev1.SecurityContext, optio
 	runsAsRoot := effectiveRunAsUser != nil && *effectiveRunAsUser == 0
 
 	// Kubernetes rejects allowPrivilegeEscalation: false alongside privileged: true or an added
-	// CAP_SYS_ADMIN, so the default is not applied when the user asked for either of those. An
-	// explicitly provided value is always kept, even an invalid one, so the user sees the error.
+	// CAP_SYS_ADMIN. An explicitly provided value is kept even then, so the user sees the error.
 	if securityContext.AllowPrivilegeEscalation == nil && !securityContextRequiresPrivilegeEscalation(securityContext) {
 		securityContext.AllowPrivilegeEscalation = ptr.To(false)
 	}
@@ -160,11 +140,8 @@ func securityContextRequiresPrivilegeEscalation(securityContext *corev1.Security
 }
 
 // setSecurityContextOnOperatorContainers sets the security context on every container and init
-// container that the operator generated for the given pod, leaving user-supplied containers alone.
-//
-// Containers the user supplied through podOptions are matched by name and skipped, so a sidecar or
-// init container of theirs keeps the security context they gave it even when it is named after one
-// of the operator's own containers.
+// container that the operator generated for the pod. Containers the user supplied through podOptions
+// are skipped by name, so they keep their own security context even when named after one of ours.
 //
 // Call this once the pod spec is otherwise complete, so that containers added along the way (for
 // TLS, for example) are covered too.
@@ -207,8 +184,8 @@ func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions 
 	}
 }
 
-// operatorInitContainersRunAsRoot reports whether the user has asked the operator's init containers
-// to run as root, which is the opt-in for init container work that non-root users cannot do.
+// operatorInitContainersRunAsRoot reports whether the user asked the operator's init containers to
+// run as root.
 func operatorInitContainersRunAsRoot(podOptions *solr.PodOptions) bool {
 	if podOptions == nil {
 		return false
