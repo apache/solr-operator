@@ -30,6 +30,9 @@ const (
 	Pkcs12InitContainer           = "gen-pkcs12-keystore"
 	TLSWrapperScriptInitContainer = "create-tls-wrapper-script"
 	// InitdbInitContainer is defined in solr_tls_util.go
+
+	// SolrLogsDir is where the Solr image writes its logs, outside the data volume
+	SolrLogsDir = "/var/solr/logs"
 )
 
 // operatorContainerOptions describes a container that the operator generates.
@@ -39,8 +42,9 @@ type operatorContainerOptions struct {
 	// an image unless a runAsUser is also given, so these containers get one.
 	imageRunsAsRoot bool
 
-	// readOnlyRootFilesystem is true if the container is known not to write to its root filesystem.
-	// Not part of the "restricted" profile, see https://github.com/apache/solr-operator/issues/884.
+	// readOnlyRootFilesystem is true if the container never writes outside its mounted volumes. The
+	// main containers only get it when the user opts in through podOptions.readOnlyRootFilesystem,
+	// which also mounts emptyDirs where they write.
 	readOnlyRootFilesystem bool
 }
 
@@ -51,10 +55,10 @@ var operatorContainers = map[string]operatorContainerOptions{
 	SolrNodeContainer:               {},
 	SolrPrometheusExporterContainer: {},
 	SetupZkInitContainer:            {readOnlyRootFilesystem: true},
-	Pkcs12InitContainer:             {},
-	VolumePrepInitContainer:         {imageRunsAsRoot: true},
-	InitdbInitContainer:             {imageRunsAsRoot: true},
-	TLSWrapperScriptInitContainer:   {imageRunsAsRoot: true},
+	Pkcs12InitContainer:             {readOnlyRootFilesystem: true},
+	VolumePrepInitContainer:         {imageRunsAsRoot: true, readOnlyRootFilesystem: true},
+	InitdbInitContainer:             {imageRunsAsRoot: true, readOnlyRootFilesystem: true},
+	TLSWrapperScriptInitContainer:   {imageRunsAsRoot: true, readOnlyRootFilesystem: true},
 }
 
 // defaultPodSecurityContext builds the pod-level security context, filling in every field the user
@@ -171,6 +175,9 @@ func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions 
 			continue
 		}
 		if options, isOperatorContainer := operatorContainers[container.Name]; isOperatorContainer {
+			// The main containers only get a read-only root filesystem when asked for, as the
+			// volumes they then need are only mounted on that condition
+			options.readOnlyRootFilesystem = options.readOnlyRootFilesystem || usesReadOnlyRootFilesystem(podOptions)
 			podSpec.Containers[i].SecurityContext = defaultContainerSecurityContext(containerSecurityContext, options, podRunAsUser, omitDefaultIDs)
 		}
 	}
@@ -182,6 +189,25 @@ func setSecurityContextOnOperatorContainers(podSpec *corev1.PodSpec, podOptions 
 			podSpec.InitContainers[i].SecurityContext = defaultContainerSecurityContext(initContainerSecurityContext, options, podRunAsUser, omitDefaultIDs)
 		}
 	}
+}
+
+// usesReadOnlyRootFilesystem reports whether the user asked for the main container to run with a
+// read-only root filesystem.
+func usesReadOnlyRootFilesystem(podOptions *solr.PodOptions) bool {
+	return podOptions != nil && podOptions.ReadOnlyRootFilesystem
+}
+
+// emptyDirForReadOnlyRoot returns an emptyDir volume and a mount for a directory that the main
+// container writes to, which a read-only root filesystem would otherwise forbid. Nothing is returned
+// when the user already mounts a volume of their own at that path.
+func emptyDirForReadOnlyRoot(podOptions *solr.PodOptions, volumeName string, mountPath string) (*corev1.Volume, *corev1.VolumeMount) {
+	for _, volume := range podOptions.Volumes {
+		if volume.DefaultContainerMount != nil && volume.DefaultContainerMount.MountPath == mountPath {
+			return nil, nil
+		}
+	}
+	volume := &corev1.Volume{Name: volumeName, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}}
+	return volume, &corev1.VolumeMount{Name: volumeName, MountPath: mountPath}
 }
 
 // operatorInitContainersRunAsRoot reports whether the user asked the operator's init containers to

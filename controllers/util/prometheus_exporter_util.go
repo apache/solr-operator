@@ -214,6 +214,13 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		},
 	}
 
+	if usesReadOnlyRootFilesystem(customPodOptions) {
+		if tmpVolume, tmpMount := emptyDirForReadOnlyRoot(customPodOptions, "tmp", "/tmp"); tmpVolume != nil {
+			solrVolumes = append(solrVolumes, *tmpVolume)
+			volumeMounts = append(volumeMounts, *tmpMount)
+		}
+	}
+
 	containers := []corev1.Container{
 		{
 			Name:            SolrPrometheusExporterContainer,
