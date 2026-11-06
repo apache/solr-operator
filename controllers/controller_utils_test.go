@@ -923,6 +923,13 @@ var (
 			},
 		},
 	}
+	extraEnvFrom = []corev1.EnvFromSource{
+		{
+			ConfigMapRef: &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{Name: "extra-config"},
+			},
+		},
+	}
 	one                    = int64(1)
 	two                    = int64(2)
 	three                  = int64(3)

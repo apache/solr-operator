@@ -601,6 +601,12 @@ func CopyPodContainers(fromPtr, toPtr *[]corev1.Container, basePath string, logg
 				to[i].Env = from[i].Env
 			}
 
+			if !DeepEqualWithNils(to[i].EnvFrom, from[i].EnvFrom) {
+				requireUpdate = true
+				logger.Info("Update required because field changed", "field", containerBasePath+"EnvFrom", "from", to[i].EnvFrom, "to", from[i].EnvFrom)
+				to[i].EnvFrom = from[i].EnvFrom
+			}
+
 			requireUpdate = CopyResources(&from[i].Resources, &to[i].Resources, containerBasePath+"Resources.", logger) || requireUpdate
 
 			if !DeepEqualWithNils(to[i].VolumeMounts, from[i].VolumeMounts) {

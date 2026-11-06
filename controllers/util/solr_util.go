@@ -327,6 +327,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Environment Variables
+	var envFrom []corev1.EnvFromSource
 	envVars := []corev1.EnvVar{
 		{
 			Name:  "SOLR_JAVA_MEM",
@@ -426,9 +427,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	// Add Custom EnvironmentVariables to the solr container
+	// Add Custom EnvironmentVariables and EnvFrom to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
+		envFrom = append(envFrom, customPodOptions.EnvFrom...)
 	}
 
 	// Did the user provide a custom log config?
@@ -514,6 +516,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
+			EnvFrom:      envFrom,
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: preStop,
 			},
