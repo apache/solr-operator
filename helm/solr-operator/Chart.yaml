@@ -167,6 +167,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/707
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/876
+    - kind: fixed
+      description: A SolrCloud that is being deleted no longer gets stuck when its providedConfigMap has already been removed, e.g. by Helm in the same uninstall
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/828
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/888
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
