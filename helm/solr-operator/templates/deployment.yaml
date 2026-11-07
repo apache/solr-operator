@@ -65,7 +65,7 @@ spec:
         {{- else }}
         - -zk-operator=false
         {{- end }}
-        {{- if include "solr-operator.usePrometheusOperator" . }}
+        {{- if include "solr-operator.prometheusCRDsInstalled" . }}
         - --prometheus-operator=true
         {{- end }}
         {{- if .Values.watchNamespaces }}

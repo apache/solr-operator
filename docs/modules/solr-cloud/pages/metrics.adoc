@@ -61,7 +61,7 @@ Set the value explicitly to decide for yourself, e.g. after installing the Prome
 
 [source,bash]
 ----
-helm upgrade solr-operator apache-solr/solr-operator --set prometheusOperator.use=true
+helm upgrade solr-operator apache-solr/solr-operator --set prometheus.crdsInstalled=true
 ----
 
 A SolrCloud that asks for a PodMonitor from an operator that does not manage them gets a `MissingPrometheusCRD` warning event, and is otherwise managed as usual.
