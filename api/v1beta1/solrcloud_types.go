@@ -100,6 +100,10 @@ type SolrCloudSpec struct {
 	// +optional
 	Scaling SolrScalingOptions `json:"scaling,omitempty"`
 
+	// Configure how Prometheus should scrape the metrics endpoint of the Solr nodes.
+	// +optional
+	Prometheus SolrPrometheusOptions `json:"prometheus,omitempty"`
+
 	// +optional
 	BusyBoxImage *ContainerImage `json:"busyBoxImage,omitempty"`
 
@@ -746,6 +750,91 @@ type SolrScalingOptions struct {
 	PopulatePodsOnScaleUp *bool `json:"populatePodsOnScaleUp,omitempty"`
 }
 
+// SolrPrometheusOptions defines how Prometheus should scrape the metrics endpoint of the Solr nodes.
+// Requires Solr 10 or later, which serves prometheus-format metrics at /solr/admin/metrics.
+type SolrPrometheusOptions struct {
+	// Put prometheus.io/* annotations on the Solr pods, for a Prometheus that discovers pods to scrape
+	// through annotations.
+	// +optional
+	ScrapeAnnotations *SolrPrometheusScrapeAnnotationsOptions `json:"scrapeAnnotations,omitempty"`
+
+	// Have the Solr Operator manage a PodMonitor for this SolrCloud. Requires the monitoring.coreos.com
+	// CRDs, and the Solr Operator to be started with `--prometheus-operator=true`.
+	// +optional
+	PodMonitor *SolrPodMonitorOptions `json:"podMonitor,omitempty"`
+}
+
+// SolrPrometheusScrapeAnnotationsOptions defines the prometheus.io/* annotations put on the Solr pods.
+type SolrPrometheusScrapeAnnotationsOptions struct {
+	// Enable the prometheus.io/* annotations on the Solr pods.
+	//
+	// +kubebuilder:default=true
+	// +optional
+	Enable *bool `json:"enable,omitempty"`
+}
+
+// SolrPodMonitorOptions defines the PodMonitor that the Solr Operator manages for a SolrCloud.
+type SolrPodMonitorOptions struct {
+	// Enable the management of a PodMonitor for this SolrCloud.
+	//
+	// +kubebuilder:default=true
+	// +optional
+	Enable *bool `json:"enable,omitempty"`
+
+	// Labels to put on the PodMonitor, matched by the podMonitorSelector of the Prometheus instance that
+	// should scrape this SolrCloud.
+	// +optional
+	Labels map[string]string `json:"labels,omitempty"`
+
+	// How often Prometheus should scrape each Solr pod, e.g. "30s". Defaults to the interval of the
+	// Prometheus instance.
+	//
+	// +kubebuilder:validation:Pattern:="^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$"
+	// +optional
+	Interval string `json:"interval,omitempty"`
+
+	// Timeout for scraping a Solr pod, e.g. "10s". Must not be longer than the interval.
+	//
+	// +kubebuilder:validation:Pattern:="^(0|(([0-9]+)y)?(([0-9]+)w)?(([0-9]+)d)?(([0-9]+)h)?(([0-9]+)m)?(([0-9]+)s)?(([0-9]+)ms)?)$"
+	// +optional
+	ScrapeTimeout string `json:"scrapeTimeout,omitempty"`
+
+	// Secret holding the username and password that Prometheus should authenticate with, when the
+	// SolrCloud uses basic authentication. Defaults to the basic auth secret of the SolrCloud.
+	// +optional
+	BasicAuthSecret string `json:"basicAuthSecret,omitempty"`
+
+	// How Prometheus should trust the Solr certificates, when the SolrCloud uses TLS.
+	// +optional
+	TLSConfig *SolrPodMonitorTLSConfig `json:"tlsConfig,omitempty"`
+}
+
+// SolrPodMonitorTLSConfig defines how Prometheus verifies the certificates of a TLS-enabled SolrCloud.
+type SolrPodMonitorTLSConfig struct {
+	// Secret key with the PEM-formatted CA certificate to verify the Solr certificates with, in the
+	// namespace of the SolrCloud.
+	// +optional
+	CASecret *corev1.SecretKeySelector `json:"caSecret,omitempty"`
+
+	// Secret key with the PEM-formatted client certificate that Prometheus presents to Solr, needed when
+	// the SolrCloud requires client authentication (`spec.solrTLS.clientAuth: Need`). Solr itself reads
+	// PKCS12 keystores, so this is a separate PEM copy; a cert-manager certificate secret holds both.
+	// +optional
+	CertSecret *corev1.SecretKeySelector `json:"certSecret,omitempty"`
+
+	// Secret key with the PEM-formatted private key of the client certificate.
+	// +optional
+	KeySecret *corev1.SecretKeySelector `json:"keySecret,omitempty"`
+
+	// ServerName to expect in the Solr certificates, if it differs from the address scraped.
+	// +optional
+	ServerName string `json:"serverName,omitempty"`
+
+	// Do not verify the Solr certificates at all. Not recommended.
+	// +optional
+	InsecureSkipVerify bool `json:"insecureSkipVerify,omitempty"`
+}
+
 // ZookeeperRef defines the zookeeper ensemble for solr to connect to
 // If no ConnectionString is provided, the solr-cloud controller will create and manage an internal ensemble
 type ZookeeperRef struct {
@@ -1290,6 +1379,23 @@ func InternalURLForCloud(sc *SolrCloud) string {
 // HeadlessServiceName returns the name of the headless service for the cloud
 func (sc *SolrCloud) HeadlessServiceName() string {
 	return fmt.Sprintf("%s-solrcloud-headless", sc.GetName())
+}
+
+// PodMonitorName returns the name of the PodMonitor for the cloud
+func (sc *SolrCloud) PodMonitorName() string {
+	return fmt.Sprintf("%s-solrcloud-metrics", sc.GetName())
+}
+
+// UsesPodMonitor returns whether the Solr Operator should manage a PodMonitor for the cloud
+func (sc *SolrCloud) UsesPodMonitor() bool {
+	podMonitor := sc.Spec.Prometheus.PodMonitor
+	return podMonitor != nil && (podMonitor.Enable == nil || *podMonitor.Enable)
+}
+
+// UsesPrometheusScrapeAnnotations returns whether the Solr pods should carry prometheus.io/* annotations
+func (sc *SolrCloud) UsesPrometheusScrapeAnnotations() bool {
+	scrapeAnnotations := sc.Spec.Prometheus.ScrapeAnnotations
+	return scrapeAnnotations != nil && (scrapeAnnotations.Enable == nil || *scrapeAnnotations.Enable)
 }
 
 // CommonIngressName returns the name of the common ingress for the cloud

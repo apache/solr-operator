@@ -24,6 +24,7 @@
 ** xref:tls.adoc[]
 ** xref:authentication-and-authorization.adoc[]
 ** xref:custom-kube-options.adoc[]
+* xref:metrics.adoc[]
 * xref:cluster-operations.adoc[]
 * xref:managed-updates.adoc[]
 * xref:scaling.adoc[]
