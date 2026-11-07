@@ -169,6 +169,58 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 		})
 	})
 
+	FContext("Persistent Data - PVC Delete on Reclaim with a deleted provided ConfigMap", func() {
+		var providedConfigMap *corev1.ConfigMap
+
+		BeforeEach(func(ctx context.Context) {
+			providedConfigMap = &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "provided-config-deleted-first",
+					Namespace: solrCloud.Namespace,
+				},
+				Data: map[string]string{
+					util.SolrXmlFile: "<solr><int name=\"hostPort\">${solr.port.advertise:80}</int></solr>",
+				},
+			}
+			Expect(k8sClient.Create(ctx, providedConfigMap)).To(Succeed())
+
+			solrCloud.Spec.CustomSolrKubeOptions.ConfigMapOptions = &solrv1beta1.ConfigMapOptions{
+				ProvidedConfigMap: providedConfigMap.Name,
+			}
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
+					VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyDelete,
+					PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
+						Spec: corev1.PersistentVolumeClaimSpec{
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			}
+		})
+		FIt("removes the finalizer even though the provided ConfigMap no longer exists", func(ctx context.Context) {
+			By("waiting for the storage finalizer to be added")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(ContainElement(util.SolrStorageFinalizer), "Storage finalizer was not added")
+			})
+			expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			By("deleting the provided ConfigMap before the SolrCloud, as Helm can do")
+			Expect(k8sClient.Delete(ctx, providedConfigMap)).To(Succeed())
+
+			By("deleting the SolrCloud")
+			Expect(k8sClient.Delete(ctx, solrCloud)).To(Succeed(), "Could not delete solrCloud")
+
+			Eventually(func() error {
+				return k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), &solrv1beta1.SolrCloud{})
+			}).Should(MatchError("solrclouds.solr.apache.org \""+solrCloud.Name+"\" not found"), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
+		})
+	})
+
 	FContext("Ephemeral Data - Default", func() {
 		BeforeEach(func() {
 			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
