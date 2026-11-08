@@ -51,7 +51,6 @@ import urllib.error
 import urllib.request
 
 CONFIDENCE = {"low": 0, "medium": 1, "high": 2}
-COMMENT_MARKER = "<!-- llm-pr-triage -->"
 DEFAULT_BASE_URL = "https://llm.apache.org/v1"
 BASE_BRANCH = r"(?:[^/]+/)?(?:main|release-[0-9]+\.[0-9]+(?:\.[0-9]+)?)"
 
@@ -322,7 +321,7 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
         if j["id"] in skipped:
             results[j["id"]] = {"warranted": None, "included": True, "mismatch": None,
                                 "confidence": "n/a", "reason": "Already present; not judged."}
-            rows.append(f"| ✅ {name} | — | yes | — | Already present; not judged. |")
+            rows.append(f"- ✅ {name}: already present")
             continue
         v = verdicts.get(j["id"])
         if isinstance(v, dict) and not j.get("choices") and isinstance(v.get("verdict"), str):
@@ -376,49 +375,52 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
             note = " **— please check**"
         elif mismatch:
             note = " **— missing**" if warranted else " **— probably not needed**"
-        reason = plain_text(v["reason"]) if valid else "No valid answer; needs human review."
+        reason = plain_text(v["reason"]) if valid else "Unclear; please assess."
         results[j["id"]] = {"warranted": warranted, "included": included,
                             "mismatch": mismatch, "confidence": conf, "reason": reason}
-        in_pr = "—" if included is None else ("yes" if included else "no")
         if j.get("choices"):
             in_pr = ", ".join(plain_text(a, 40) for a in actual) or "no entry"
-        answer = "unknown" if warranted is None else (
-            warranted if j.get("choices") else ("yes" if warranted else "no"))
-        rows.append(f"| {mark} {name}{note} | {answer} | {in_pr} | {conf} | {reason} |")
+            answer = ("unknown" if warranted is None else
+                      "not needed" if warranted == j.get("absent_choice") else warranted)
+        else:
+            in_pr = "n/a" if included is None else ("included" if included else "not included")
+            answer = "unknown" if warranted is None else ("needed" if warranted else "not needed")
+        if mark == "✅":
+            # The reason is only in the Markdown source when the verdict agrees.
+            if j.get("choices"):
+                state = answer
+            elif included is None:
+                state = "no concern"  # a flag judgement that found nothing
+            else:
+                state = "included" if included else "not needed"
+            rows.append(f"- ✅ {name}: {state} <!-- {reason} -->")
+        else:
+            parts = []
+            if valid and j.get("choices"):
+                if warranted != j.get("absent_choice"):
+                    parts.append(f"suggest {warranted}")
+                if actual:
+                    parts.append(f"PR has {in_pr}")
+            if valid and conf != "high":
+                parts.append(f"confidence: {conf}")
+            detail = f" ({'; '.join(parts)})" if parts else ""
+            rows.append(f"- {mark} {name}{note}{detail}: {reason}")
 
-    headline = (f"**{mismatches} possible mismatch(es)** between what this change warrants and what the PR includes."
-                if mismatches else "No clear mismatches in the answered judgements.")
-    if unanswered:
-        headline += f" **{unanswered} unanswered judgement(s) need human review.**"
     head_sha = (pr.get("head") or {}).get("sha", "")
-    revision = f" Assessed commit `{head_sha}`." if re.fullmatch(r"[0-9a-f]{40}", head_sha) else ""
-    all_green = rows and all(row.startswith("| ✅ ") for row in rows)
-    if all_green:
-        # Nothing to act on: one line instead of a table of agreements.
+    revision = f"<!-- Assessed commit {head_sha} -->" if re.fullmatch(r"[0-9a-f]{40}", head_sha) else ""
+    if rows and all(row.startswith("- ✅ ") for row in rows):
+        # Nothing to act on: one line instead of a list of agreements.
         titles = ", ".join(j["title"] for j in cfg["judgements"] if j["id"] in results)
-        body = [f"✅ All {len(rows)} checks agree with what this PR includes ({titles}).",
-                "",
-                "_Matching changelog, docs and test files were hidden from the model; "
-                "file presence does not establish adequacy._" + revision]
+        body = [f"✅ All {len(rows)} checks agree with what this PR includes ({titles})."]
     else:
-        body = [headline,
-                "",
-                "| | Warranted? | In PR? | Confidence | Why |",
-                "|---|---|---|---|---|",
-                *rows,
-                "",
-                "_⚠️ mismatch, ❔ uncertain or unanswered, ✅ agrees. Matching changelog, docs and test "
-                "files were hidden from the model; the PR description may still mention them. "
-                "File presence does not establish adequacy._" + revision]
+        body = rows
     comment = "\n".join(
         [
-            COMMENT_MARKER,
-            "**Automated PR triage** (LLM-generated; may be wrong). "
-            "Checked once, when the PR was opened or marked ready; not updated on later pushes.",
+            "**Automated PR readiness judgements** (LLM-generated; may be wrong; not updated on later pushes).",
             "",
-            *metadata_notices(pr, cfg),
-            "",
+            *[line for n in metadata_notices(pr, cfg) for line in (n, "")],
             *body,
+            *(["", revision] if revision else []),
         ]
     )
     return {"results": results, "mismatches": mismatches, "unanswered": unanswered, "comment": comment}

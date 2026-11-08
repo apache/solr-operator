@@ -127,8 +127,8 @@ class TriageTest(unittest.TestCase):
         row = result["results"]["needs_docs"]
         self.assertIsNone(row["warranted"])
         self.assertIsNone(row["mismatch"])
-        self.assertIn("unknown", result["comment"])
-        self.assertIn("human review", result["comment"])
+        self.assertIn("❔", result["comment"])
+        self.assertIn("please assess", result["comment"])
 
     def test_invalid_answer_fields_are_unknown(self):
         for patch in ({"verdict": "maybe"}, {"verdict": 0}, {"confidence": "certain"},
@@ -228,11 +228,11 @@ class TriageTest(unittest.TestCase):
         self.assertIn("❔", result["comment"])
         self.assertIn("probably not needed", result["comment"])
 
-    def test_non_main_notice_precedes_model_table(self):
+    def test_non_main_notice_precedes_judgements(self):
         self.pr["base"]["ref"] = "release-0.9"
         result, _, _ = self.run_main([])
         self.assertIn("Prefer PRs against `main`", result["comment"])
-        self.assertLess(result["comment"].index("Prefer PRs"), result["comment"].index("Warranted?"))
+        self.assertLess(result["comment"].index("Prefer PRs"), result["comment"].index("- "))
 
     def test_main_does_not_warn(self):
         result, _, _ = self.run_main([])
@@ -301,7 +301,7 @@ class TriageTest(unittest.TestCase):
         result, model, _ = self.run_main([])
         self.assertNotIn("needs_issue", self.prompt(model))
         self.assertEqual(0, result["unanswered"])
-        self.assertIn("Already present; not judged.", result["comment"])
+        self.assertIn(": already present", result["comment"])
         self.pr["body"] = "No issue."
         result, model, _ = self.run_main([])
         self.assertIn("needs_issue", self.prompt(model))
@@ -355,8 +355,7 @@ class TriageTest(unittest.TestCase):
         self.assertIsNone(row["included"])
         self.assertTrue(row["mismatch"])
         self.assertEqual(1, result["mismatches"])
-        self.assertIn("please check", result["comment"])
-        self.assertIn("| yes | — |", result["comment"])
+        self.assertIn("- ⚠️ Compat **— please check**: Uses solr zk flags", result["comment"])
 
     def test_flag_judgement_false_agrees(self):
         self.cfg["judgements"] = [{"id": "version_compat", "title": "Compat", "question": "Compat?"}]
@@ -372,19 +371,60 @@ class TriageTest(unittest.TestCase):
         result, _, _ = self.run_main([changed_file("docs/modules/solr-cloud/pages/tls.adoc")])
         comment = result["comment"]
         self.assertIn("✅ All 2 checks agree with what this PR includes (Documentation, Compat).", comment)
-        self.assertNotIn("| Warranted?", comment)
+        self.assertNotIn("- ✅", comment)
         self.assertNotIn("Neutral", comment)
-        self.assertIn("Assessed commit", comment)
+        self.assertIn("<!-- Assessed commit", comment)
         self.assertEqual(2, len(result["results"]))  # the verdicts are still in the JSON
 
-    def test_table_is_kept_unless_every_row_agrees(self):
+    def test_bullets_are_kept_unless_every_row_agrees(self):
         self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
         self.answers["version_compat"] = {"verdict": True, "confidence": "low", "reason": "Maybe."}
         result, _, _ = self.run_main([changed_file("docs/modules/solr-cloud/pages/tls.adoc")])
         self.assertEqual(0, result["mismatches"])
-        self.assertIn("| Warranted?", result["comment"])
-        self.assertIn("❔ Compat", result["comment"])
-        self.assertIn("✅ Documentation", result["comment"])
+        self.assertNotIn("checks agree", result["comment"])
+        self.assertIn("- ❔ Compat **— please check** (confidence: low): Maybe", result["comment"])
+        self.assertIn("- ✅ Documentation: included <!-- Changes a documented option", result["comment"])
+
+    def test_agreeing_flag_row_says_no_concern(self):
+        self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
+        self.answers["version_compat"] = {"verdict": False, "confidence": "high", "reason": "Neutral."}
+        result, _, _ = self.run_main([])  # the docs row mismatches, so the list is kept
+        self.assertIn("- ✅ Compat: no concern <!-- Neutral", result["comment"])
+
+    def test_agreeing_reason_is_hidden_and_high_confidence_is_not_shown(self):
+        self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
+        self.answers["version_compat"] = {"verdict": True, "confidence": "high", "reason": "Flagged."}
+        result, _, _ = self.run_main([changed_file("docs/modules/solr-cloud/pages/tls.adoc")])
+        visible = "".join(part.split("-->", 1)[-1] for part in result["comment"].split("<!--"))
+        self.assertIn("<!-- Changes a documented option", result["comment"])
+        self.assertNotIn("Changes a documented option", visible)
+        self.assertIn("**— please check**: Flagged", visible)
+        self.assertNotIn("confidence", result["comment"])
+
+    def test_agreeing_row_states_what_the_pr_has(self):
+        self.cfg["judgements"] = [j for j in load_config()["judgements"] if j["id"] == "needs_tests"]
+        self.cfg["judgements"].append({"id": "other", "title": "Other", "question": "Other?"})  # unanswered
+        test_file = changed_file("controllers/foo_test.go", "added")
+        for verdict, files, expected in ((True, [test_file], "#testing): included <!--"),
+                                         (False, [], "#testing): not needed <!--")):
+            with self.subTest(verdict=verdict):
+                answer = {"verdict": verdict, "confidence": "high", "reason": "Because."}
+                result, _, _ = self.run_main(files, json.dumps({"needs_tests": answer}))
+                self.assertIn(expected, result["comment"])
+
+    def test_mismatch_shows_reason_and_non_high_confidence(self):
+        answer = dict(self.answers["needs_docs"], confidence="medium")
+        result, _, _ = self.run_main([], json.dumps({"needs_docs": answer}))
+        self.assertIn("**— missing** (confidence: medium): Changes a documented option", result["comment"])
+
+    def test_hidden_reason_cannot_close_the_html_comment(self):
+        self.cfg["judgements"].append({"id": "version_compat", "title": "Compat", "question": "Compat?"})
+        self.answers["version_compat"] = {"verdict": False, "confidence": "high", "reason": "x --> **escaped**"}
+        result, _, _ = self.run_main([])
+        row = next(line for line in result["comment"].splitlines() if "Compat" in line)
+        self.assertEqual(1, row.count("-->"))
+        self.assertTrue(row.endswith("-->"))
+        self.assertNotIn("**escaped**", row)
 
     def test_flag_judgement_low_confidence_is_uncertain(self):
         self.cfg["judgements"] = [{"id": "version_compat", "title": "Compat", "question": "Compat?"}]
@@ -393,10 +433,12 @@ class TriageTest(unittest.TestCase):
         self.assertEqual(0, result["mismatches"])
         self.assertIn("❔ Compat", result["comment"])
 
-    def changelog_kind(self, suggested, entry_kind=None, chart="solr-operator"):
+    def changelog_kind(self, suggested, entry_kind=None, chart="solr-operator", keep_list=False):
         cfg = load_config()
         judgement_id = "needs_changelog" if chart == "solr-operator" else "needs_solr_chart_changelog"
         self.cfg["judgements"] = [judgement(cfg, judgement_id)]
+        if keep_list:  # an unanswered row stops an agreeing changelog row from collapsing
+            self.cfg["judgements"].append({"id": "other", "title": "Other", "question": "Other?"})
         self.answers = {judgement_id: {
             "verdict": suggested, "confidence": "high", "reason": "Because."}}
         files = []
@@ -415,29 +457,31 @@ class TriageTest(unittest.TestCase):
         self.assertTrue(row["mismatch"])
         self.assertEqual(1, result["mismatches"])
         self.assertIn("differs from the entry", result["comment"])
-        self.assertIn("| added | fixed |", result["comment"])
+        self.assertIn("**— differs from the entry** (suggest added; PR has fixed): Because", result["comment"])
         prompt = self.prompt(model)
         self.assertIn("exactly one of: added, changed, fixed", prompt)
         self.assertNotIn("kind: fixed", prompt)
 
     def test_changelog_kind_agreeing_with_entry(self):
-        result, _, jid = self.changelog_kind("fixed", "fixed")
+        result, _, jid = self.changelog_kind("fixed", "fixed", keep_list=True)
         self.assertFalse(result["results"][jid]["mismatch"])
         self.assertEqual(0, result["mismatches"])
+        self.assertIn("): fixed <!-- Because", result["comment"])
 
     def test_changelog_kind_without_entry_is_missing(self):
         result, _, jid = self.changelog_kind("changed")
         self.assertTrue(result["results"][jid]["mismatch"])
-        self.assertIn("| changed | no entry |", result["comment"])
-        self.assertIn("missing", result["comment"])
+        self.assertIn("**— missing** (suggest changed): Because", result["comment"])
 
     def test_changelog_not_worthy(self):
-        result, _, jid = self.changelog_kind("(not-worthy)")
+        result, _, jid = self.changelog_kind("(not-worthy)", keep_list=True)
         self.assertFalse(result["results"][jid]["mismatch"])
         self.assertEqual(0, result["mismatches"])
+        self.assertIn("): not needed <!--", result["comment"])
+        self.assertNotIn("(not-worthy)", result["comment"])
         result, _, jid = self.changelog_kind("(not-worthy)", "security")
         self.assertTrue(result["results"][jid]["mismatch"])
-        self.assertIn("probably not needed", result["comment"])
+        self.assertIn("**— probably not needed** (PR has security): Because", result["comment"])
 
     def test_changelog_kind_outside_choices_is_unknown(self):
         result, _, jid = self.changelog_kind("bugfix", "fixed")
@@ -490,7 +534,7 @@ class TriageTest(unittest.TestCase):
 
     def test_exact_revision_is_reported(self):
         result, _, _ = self.run_main([])
-        self.assertIn("Assessed commit `" + "a" * 40 + "`", result["comment"])
+        self.assertIn("<!-- Assessed commit " + "a" * 40 + " -->", result["comment"])
 
     def test_configured_evidence_families(self):
         cfg = load_config()
@@ -580,8 +624,9 @@ class TriageTest(unittest.TestCase):
         self.assertEqual("https://example.invalid/v1/chat/completions", request.full_url)
         self.assertEqual({"type": "json_object"}, json.loads(request.data)["response_format"])
 
-    def test_response_header_says_checked_once(self):
+    def test_response_header_disclaims(self):
         result, _, _ = self.run_main([])
+        self.assertTrue(result["comment"].startswith("**Automated PR readiness judgements** (LLM-generated"))
         self.assertIn("not updated on later pushes", result["comment"])
 
     def test_verdicts_file_replaces_model(self):

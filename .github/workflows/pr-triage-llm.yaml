@@ -15,12 +15,13 @@
 
 name: PR Triage (LLM)
 
-# Once per PR, asks an LLM (via the ASF gateway, llm.apache.org) the questions in
-# .github/pr-triage/judgements.json (does this change warrant a changelog entry in the
-# chart, a README row, docs, upgrade notes, tests, ...?) and posts one comment comparing
-# each verdict with what the PR actually includes, highlighting mismatches. Advisory only:
-# it never fails the PR (no comment is posted if the model gives no usable answer), and it
-# does not run again on later pushes. See dev-docs/pr-triage-llm.md.
+# When a PR is opened or marked ready for review, asks an LLM (via the ASF gateway,
+# llm.apache.org) the questions in .github/pr-triage/judgements.json (does this change
+# warrant a changelog entry in the chart, a README row, docs, upgrade notes, tests, ...?)
+# and posts one comment comparing each verdict with what the PR actually includes,
+# highlighting mismatches. Advisory only: it never fails the PR (no comment is posted if
+# the model gives no usable answer), and it does not run again on later pushes. See
+# dev-docs/pr-triage-llm.md.
 #
 # Why pull_request_target: PRs from forks get no secrets under 'pull_request', and the
 # gateway key is a secret. pull_request_target runs this file and the script from the
@@ -35,7 +36,8 @@ name: PR Triage (LLM)
 # workflow skips quietly, so forks are unaffected.
 on:
   pull_request_target:
-    # 'ready_for_review' covers PRs opened as drafts; drafts themselves are skipped.
+    # 'ready_for_review' covers PRs opened as drafts; drafts themselves are skipped. A PR
+    # toggled draft -> ready more than once is judged again and gets a fresh comment.
     types:
       - opened
       - ready_for_review
@@ -57,7 +59,6 @@ jobs:
 
     permissions:
       contents: read
-      issues: read         # earlier triage comment
       pull-requests: read  # the PR and its changed files
 
     outputs:
@@ -69,9 +70,8 @@ jobs:
       PR_NUMBER: ${{ github.event.pull_request.number }}
 
     steps:
-      # A PR toggled draft -> ready -> draft -> ready would otherwise be triaged twice.
-      # Every triaged PR gets a comment, so the comment is the record that it ran.
-      - name: Check for the key and an earlier triage comment
+      # Secrets cannot be read in a job-level 'if', hence a step.
+      - name: Check for the key
         id: guard
         env:
           HAS_KEY: ${{ secrets.ASF_LLM_API_KEY != '' }}
@@ -79,16 +79,6 @@ jobs:
           set -euo pipefail
           if [ "$HAS_KEY" != "true" ]; then
             echo "::notice::ASF_LLM_API_KEY is not set in this repository; skipping"
-            echo "done=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          marker='<!-- llm-pr-triage -->'
-          # The triage comment is posted seconds after open/ready, so it is on the first page.
-          n=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=100" \
-            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"${marker}\")))] | length" \
-            | awk '{s+=$1} END {print s+0}')
-          if [ "$n" -gt 0 ]; then
-            echo "::notice::PR#${PR_NUMBER} was already triaged; skipping"
             echo "done=true" >> "$GITHUB_OUTPUT"
           fi
 

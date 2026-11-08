@@ -23,7 +23,8 @@ When a pull request is opened (or a draft is marked ready for review), the
 `PR Triage (LLM)` workflow (`.github/workflows/pr-triage-llm.yaml`) asks a language model,
 through the ASF LLM gateway at `llm.apache.org`, a fixed list of questions about the change and
 posts **one advisory comment** comparing each answer with what the PR actually contains.
-It runs once per PR, never blocks merging, and posts nothing if the model gives no usable answer.
+It runs when the PR is opened and each time a draft is marked ready for review (not on later
+pushes), never blocks merging, and posts nothing if the model gives no usable answer.
 
 The idea and the script are borrowed from the Apache Solr project
 (`dev-tools/scripts/pr-triage-llm.py` and `.github/pr-triage/judgements.json` in apache/solr),
@@ -51,6 +52,13 @@ Files that count as evidence (changelog, docs, tests, READMEs) are hidden from t
 judges what the change *warrants* rather than noticing what the author included. Generated
 files (CRDs, deepcopy, `go.sum`, the license list) are listed by name only; `make lint` already
 checks that they are current.
+
+The comment has one bullet per judgement. A bullet that agrees with the PR just says what the
+PR has (`included`, `not needed`, the changelog `kind`, or `no concern` for the checks that have
+nothing to compare with); the model's reasoning is kept in an HTML comment, visible only in the
+Markdown source. A bullet that disagrees is marked ⚠️ (or ❔ when the model was unsure or gave no
+usable answer) and shows what the model suggests, what the PR has, and why. When every judgement
+agrees, the comment collapses to a single line.
 
 The comment also points out PRs not targeting `main`, and PRs from personal forks with
 "Allow edits from maintainers" turned off, since maintainers often add the changelog entry
