@@ -228,6 +228,34 @@ class TriageTest(unittest.TestCase):
         self.assertIn("❔", result["comment"])
         self.assertIn("probably not needed", result["comment"])
 
+    def test_surplus_evidence_is_not_a_mismatch(self):
+        self.cfg["judgements"][0]["surplus_ok"] = True
+        self.answers["needs_docs"].update(verdict=False)
+        docs = changed_file("docs/modules/solr-cloud/pages/tls.adoc")
+        result, _, _ = self.run_main([docs])
+        row = result["results"]["needs_docs"]
+        self.assertFalse(row["warranted"])
+        self.assertTrue(row["included"])
+        self.assertFalse(row["mismatch"])
+        self.assertEqual(0, result["mismatches"])
+        result, _, _ = self.run_main([])  # absent evidence is still judged as usual
+        self.assertFalse(result["results"]["needs_docs"]["mismatch"])
+        self.answers["needs_docs"].update(verdict=True)
+        result, _, _ = self.run_main([])
+        self.assertTrue(result["results"]["needs_docs"]["mismatch"])
+
+    def test_stale_branch_notice(self):
+        self.cfg["stale_after_commits"] = 50
+        for behind, expected in ((120, True), (49, False), (None, False)):
+            with self.subTest(behind=behind):
+                self.pr["behind_by"] = behind
+                result, _, _ = self.run_main([])
+                self.assertEqual(expected, "120 commits behind `main`" in result["comment"])
+        self.pr["behind_by"] = 120
+        del self.cfg["stale_after_commits"]
+        result, _, _ = self.run_main([])
+        self.assertNotIn("commits behind", result["comment"])
+
     def test_non_main_notice_precedes_judgements(self):
         self.pr["base"]["ref"] = "release-0.9"
         result, _, _ = self.run_main([])
@@ -483,6 +511,14 @@ class TriageTest(unittest.TestCase):
         self.assertTrue(result["results"][jid]["mismatch"])
         self.assertIn("**— probably not needed** (PR has security): Because", result["comment"])
 
+    def test_choice_verdict_spellings_are_normalised(self):
+        for spelling, expected in (("not-worthy", "(not-worthy)"), ("Fixed", "fixed"), ('"added"', "added"),
+                                   (" (NOT-WORTHY) ", "(not-worthy)")):
+            with self.subTest(spelling=spelling):
+                result, _, jid = self.changelog_kind(spelling, "fixed")
+                self.assertEqual(0, result["unanswered"])
+                self.assertEqual(expected, result["results"][jid]["warranted"])
+
     def test_changelog_kind_outside_choices_is_unknown(self):
         result, _, jid = self.changelog_kind("bugfix", "fixed")
         self.assertEqual(1, result["unanswered"])
@@ -558,6 +594,15 @@ class TriageTest(unittest.TestCase):
             self.assertTrue(TRIAGE.evidence_included({}, [changed_file(name)], tests))
         self.assertFalse(TRIAGE.evidence_included({}, [changed_file("controllers/util/solr_util.go")], tests))
 
+    def test_configured_legacy_docs_are_hidden_but_do_not_count(self):
+        self.cfg = load_config()
+        legacy = changed_file("docs/solr-cloud/solr-cloud-crd.md")
+        self.answers = {"needs_docs": {"verdict": True, "confidence": "high", "reason": "New CRD field."}}
+        result, model, _ = self.run_main([legacy])
+        self.assertNotIn("solr-cloud-crd.md", self.prompt(model))
+        self.assertFalse(result["results"]["needs_docs"]["included"])
+        self.assertTrue(result["results"]["needs_docs"]["mismatch"])
+
     def test_configured_applies_to(self):
         cfg = load_config()
         api = [changed_file("api/v1beta1/solrcloud_types.go")]
@@ -572,6 +617,12 @@ class TriageTest(unittest.TestCase):
         ):
             with self.subTest(judgement=jid, files=[f["filename"] for f in files]):
                 self.assertIs(expected, TRIAGE.applies(judgement(cfg, jid), files))
+
+    def test_configured_presence_judgements_tolerate_surplus(self):
+        cfg = load_config()
+        for jid in ("needs_helm_readme", "needs_docs", "needs_upgrade_notes", "needs_tests"):
+            self.assertTrue(judgement(cfg, jid).get("surplus_ok"), jid)
+        self.assertFalse(judgement(cfg, "needs_changelog").get("surplus_ok"))
 
     def test_configured_flags_have_no_evidence(self):
         cfg = load_config()

@@ -101,6 +101,11 @@ jobs:
           set -euo pipefail
           gh api "repos/${REPO}/pulls/${PR_NUMBER}" \
             --jq '{title, body, head, base, maintainer_can_modify, changed_files}' > "$RUNNER_TEMP/pr.json"
+          # How far the branch is behind its base (the PR object's base.sha is not kept current).
+          behind=$(gh api "repos/${REPO}/compare/$(jq -r .base.ref "$RUNNER_TEMP/pr.json")...$(jq -r .head.sha "$RUNNER_TEMP/pr.json")" \
+            --jq '.behind_by' || echo null)
+          jq --argjson behind "${behind:-null}" '. + {behind_by: $behind}' "$RUNNER_TEMP/pr.json" > "$RUNNER_TEMP/pr-tmp.json" \
+            && mv "$RUNNER_TEMP/pr-tmp.json" "$RUNNER_TEMP/pr.json"
           gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" \
             --jq '.[] | {filename, status, additions, deletions, patch}' \
             | jq -s . > "$RUNNER_TEMP/files.json"
@@ -124,7 +129,8 @@ jobs:
             --config .github/pr-triage/judgements.json \
             --pr "$RUNNER_TEMP/pr.json" \
             --files "$RUNNER_TEMP/files.json" \
-            --out "$RUNNER_TEMP/result.json"
+            --out "$RUNNER_TEMP/result.json" \
+            --debug  # the raw reply in the job log explains any "Unclear" row
           # No result file when the model gave no usable answer or nothing was judgeable.
           [ -f "$RUNNER_TEMP/result.json" ] || exit 0
           echo "result=$(base64 -w0 < "$RUNNER_TEMP/result.json")" >> "$GITHUB_OUTPUT"

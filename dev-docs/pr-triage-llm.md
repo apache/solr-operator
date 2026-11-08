@@ -60,9 +60,14 @@ Markdown source. A bullet that disagrees is marked ⚠️ (or ❔ when the model
 usable answer) and shows what the model suggests, what the PR has, and why. When every judgement
 agrees, the comment collapses to a single line.
 
-The comment also points out PRs not targeting `main`, and PRs from personal forks with
-"Allow edits from maintainers" turned off, since maintainers often add the changelog entry
-themselves before merging.
+For docs, upgrade notes, README rows and tests, only a *missing* item is flagged: when the
+author included one the model deems unnecessary, nothing is said (`surplus_ok` in the config),
+because extra tests or notes never hurt. The changelog is the exception, since a wrong `kind` or
+an entry for a change not worth one is worth a look.
+
+The comment also points out PRs not targeting `main`, branches far behind `main` (files may have
+moved since the branch was made), and PRs from personal forks with "Allow edits from maintainers"
+turned off, since maintainers often add the changelog entry themselves before merging.
 
 ## Running it locally
 
@@ -85,6 +90,9 @@ python3 hack/pr-triage/pr_triage_llm.py --config .github/pr-triage/judgements.js
     --from-git --out result.json
 jq -r .comment result.json
 ```
+
+Add `--debug` to see the model's raw reply and token usage on stderr; the workflow always passes
+it, so the job log explains any row that came back "Unclear".
 
 The offline tests run with:
 

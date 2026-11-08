@@ -29,6 +29,7 @@ Usage:
   pr_triage_llm.py --config judgements.json --pr pr.json --files files.json --out result.json
   ... --dry-run          print the prompt, don't call the model
   ... --verdicts v.json  use answers from a file instead of the model
+  ... --debug            print the model's raw reply and token usage to stderr
 --from-git [BASE] replaces --pr and --files: it triages the work since the branch diverged
 from BASE (commits, staged, unstaged and untracked files; commit messages stand in for the
 title and description). Without BASE, it is the main or release-* branch closest to HEAD.
@@ -103,7 +104,9 @@ def pr_from_git(base):
             "additions": patch.count("\n+") if "@@" in patch else 0,
             "patch": patch[patch.find("@@"):] if "@@" in patch else None,
         })
-    return {"title": title, "body": log}, files
+    behind = git("rev-list", "--count", f"HEAD..{base}").strip()
+    return {"title": title, "body": log, "base": {"ref": base.split("/")[-1]},
+            "behind_by": int(behind) if behind.isdigit() else None}, files
 
 
 def actual_values(files, spec):
@@ -120,6 +123,22 @@ def verdict_ok(value, judgement):
     if choices:
         return isinstance(value, str) and value in choices
     return type(value) is bool
+
+
+def normalise_verdict(value, judgement):
+    """Accept the spellings small models use: "true"/"no" for booleans, "not-worthy" or
+    "Fixed" for a choice; anything else is left for verdict_ok to reject."""
+    if not isinstance(value, str):
+        return value
+    word = value.strip().strip("\"'`").strip()
+    if judgement.get("choices"):
+        bare = lambda c: c.strip("()").lower()  # noqa: E731
+        return next((c for c in judgement["choices"] if bare(c) == bare(word)), value)
+    if word.lower() in ("true", "yes"):
+        return True
+    if word.lower() in ("false", "no"):
+        return False
+    return value
 
 
 def matches_any(path, globs):
@@ -278,6 +297,13 @@ def metadata_notices(pr, cfg):
         notices.append(
             f"⚠️ Prefer PRs against `main`. This PR targets {plain_text(base['ref'])}."
         )
+    stale, behind = cfg.get("stale_after_commits"), pr.get("behind_by")
+    if stale and isinstance(behind, int) and behind >= stale:
+        notices.append(
+            f"⚠️ This branch is {behind} commits behind `{plain_text(base.get('ref') or 'main')}`. "
+            "Consider rebasing or merging it: files may have moved, and these judgements "
+            "are made against the current layout."
+        )
     head_repo, base_repo = head.get("repo") or {}, base.get("repo") or {}
     if head_repo.get("full_name") and base_repo.get("full_name"):
         if head_repo["full_name"] != base_repo["full_name"]:
@@ -324,10 +350,8 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
             rows.append(f"- ✅ {name}: already present")
             continue
         v = verdicts.get(j["id"])
-        if isinstance(v, dict) and not j.get("choices") and isinstance(v.get("verdict"), str):
-            word = v["verdict"].strip().lower()  # small models answer "true" or "no" as text
-            if word in ("true", "yes", "false", "no"):
-                v = {**v, "verdict": word in ("true", "yes")}
+        if isinstance(v, dict):
+            v = {**v, "verdict": normalise_verdict(v.get("verdict"), j)}
         valid = (
             isinstance(v, dict)
             and verdict_ok(v.get("verdict"), j)
@@ -355,6 +379,8 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
                 mismatch = warranted if valid else None
             else:
                 mismatch = included != warranted if valid else None
+                if mismatch and included and j.get("surplus_ok"):
+                    mismatch = False  # present but deemed unwarranted: not worth a flag
         if not valid:
             mark, unanswered = "❔", unanswered + 1
         elif mismatch and CONFIDENCE[conf] >= min_conf:
@@ -436,6 +462,7 @@ def main():
     ap.add_argument("--verdicts", help="JSON file of answers to use instead of calling the model")
     ap.add_argument("--out", required=True)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--debug", action="store_true", help="print the raw reply and usage to stderr")
     args = ap.parse_args()
 
     with open(args.config, encoding="utf-8") as fh:
@@ -484,6 +511,8 @@ def main():
                 content, usage = fh.read(), {}
         else:
             content, usage = call_model(messages, cfg)
+        if args.debug:
+            print(f"===== raw reply (usage: {json.dumps(usage)}) =====\n{content}\n=====", file=sys.stderr)
         verdicts = parse_verdicts(content)
         if not verdicts:
             raise NoAnswer("reply is not a JSON object of verdicts")

@@ -1,5 +1,5 @@
 {
-  "_doc": "Each judgement is a question about what the change warrants on its merits, whatever the author included; the comment compares the verdict with what the PR includes. Read by hack/pr-triage/pr_triage_llm.py, run by .github/workflows/pr-triage-llm.yaml.\nJudgement keys: id, title, question, help_url (the title links there).\nWhat the PR includes: evidence_files (globs; a changed file counts unless removed) minus evidence_exclude, or evidence_title (regex on the PR title), or evidence_text (regex on title and description). Matching evidence files are hidden from the model. skip_when_included: the model is not asked when the evidence is present. applies_to (globs): the judgement is only asked, and only shown in the comment, when a visible changed file matches.\nChoice questions: choices (the verdict is one of these strings); evidence_value {files, pattern} gives the values the PR provides (group 1 of pattern, matched on added lines); absent_choice is the choice meaning nothing is warranted.\nFlag questions have no evidence at all: a true verdict is itself the finding (shown as a mismatch, 'please check').\nTop level: project {description, context, maintainers}: text for the system prompt and the comment; model_defaults; max_diff_chars; show_first (globs shown first in the diff, so truncation hits the rest); exclude_patches (patches listed by name only); min_confidence (below it a mismatch is a weak signal); summary_from {files, pattern}: text given to every judgement as the author's own summary (the changelog entry description).",
+  "_doc": "Each judgement is a question about what the change warrants on its merits, whatever the author included; the comment compares the verdict with what the PR includes. Read by hack/pr-triage/pr_triage_llm.py, run by .github/workflows/pr-triage-llm.yaml.\nJudgement keys: id, title, question, help_url (the title links there).\nWhat the PR includes: evidence_files (globs; a changed file counts unless removed) minus evidence_exclude (a file matching both is hidden from the model but does not count, e.g. docs at a path that no longer exists on main), or evidence_title (regex on the PR title), or evidence_text (regex on title and description). Matching evidence files are hidden from the model. skip_when_included: the model is not asked when the evidence is present. surplus_ok: evidence the model deems unwarranted is not a mismatch (extra tests or notes never hurt). applies_to (globs): the judgement is only asked, and only shown in the comment, when a visible changed file matches.\nChoice questions: choices (the verdict is one of these strings); evidence_value {files, pattern} gives the values the PR provides (group 1 of pattern, matched on added lines); absent_choice is the choice meaning nothing is warranted.\nFlag questions have no evidence at all: a true verdict is itself the finding (shown as a mismatch, 'please check').\nTop level: project {description, context, maintainers}: text for the system prompt and the comment; model_defaults; max_diff_chars; show_first (globs shown first in the diff, so truncation hits the rest); exclude_patches (patches listed by name only); min_confidence (below it a mismatch is a weak signal); stale_after_commits: a branch at least this many commits behind its base gets a rebase notice; summary_from {files, pattern}: text given to every judgement as the author's own summary (the changelog entry description).",
   "project": {
     "description": "You review pull requests for the Apache Solr Operator, a Kubernetes operator written in Go that manages Apache Solr clusters, together with its Helm charts and documentation.",
     "context": "Project layout: api/v1beta1 holds the CRD types (SolrCloud, SolrPrometheusExporter, SolrBackup) with their kubebuilder markers and field doc comments, which become the CRD schema. controllers/ holds the reconcilers and controllers/util the code that turns a CRD into StatefulSets, Services, Ingresses, ConfigMaps, PodDisruptionBudgets and init containers; controllers/*_test.go are envtest unit tests and tests/e2e are Ginkgo end-to-end tests on a KinD cluster. helm/solr-operator is the Helm chart that installs the operator; its Chart.yaml carries the release changelog under the artifacthub.io/changes annotation, and its README.md has a hand-maintained table of chart values. helm/solr is a convenience chart that creates a SolrCloud from values; it has the same Chart.yaml changelog and README table, and new SolrCloud spec options are normally exposed there too. docs/modules is the Antora documentation (solr-cloud/pages/solr-cloud-crd.adoc and siblings document CRD options; upgrade-notes/pages/upgrade-notes.adoc has per-version upgrade warnings). example/ has sample resources, hack/ build and release scripts, config/ the kustomize manifests. CRDs (config/crd, helm/solr-operator/crds), RBAC (config/rbac, copied into the chart), zz_generated.deepcopy.go and dependency_licenses.csv are generated by `make prepare` and their freshness is checked by CI, so never flag stale generated files. The oldest supported Solr version is 8.11 and the oldest Kubernetes version is 1.22; operator upgrades must not change a running SolrCloud unless the upgrade notes say so.",
@@ -30,6 +30,7 @@
     "**/*.jpg"
   ],
   "min_confidence": "medium",
+  "stale_after_commits": 50,
   "summary_from": {
     "files": ["helm/solr-operator/Chart.yaml", "helm/solr/Chart.yaml"],
     "pattern": "^\\+[ \\t]{4,}description:[ \\t]*(\\S.*)"
@@ -37,7 +38,7 @@
   "judgements": [
     {
       "id": "needs_changelog",
-      "title": "Changelog entry (solr-operator chart)",
+      "title": "Operator chart changelog",
       "help_url": "https://github.com/apache/solr-operator/blob/main/helm/solr-operator/Chart.yaml",
       "choices": [
         "added",
@@ -57,7 +58,7 @@
     },
     {
       "id": "needs_solr_chart_changelog",
-      "title": "Changelog entry (solr chart)",
+      "title": "Solr chart changelog",
       "help_url": "https://github.com/apache/solr-operator/blob/main/helm/solr/Chart.yaml",
       "applies_to": ["helm/solr/values.yaml", "helm/solr/templates/**"],
       "choices": [
@@ -78,7 +79,8 @@
     },
     {
       "id": "needs_helm_readme",
-      "title": "Helm chart README values table",
+      "surplus_ok": true,
+      "title": "Chart README values table",
       "help_url": "https://github.com/apache/solr-operator/blob/main/helm/solr-operator/README.md#chart-values",
       "applies_to": ["helm/solr-operator/values.yaml", "helm/solr-operator/templates/**", "helm/solr/values.yaml", "helm/solr/templates/**"],
       "evidence_files": ["helm/solr-operator/README.md", "helm/solr/README.md"],
@@ -86,14 +88,16 @@
     },
     {
       "id": "needs_docs",
-      "title": "Documentation (docs/modules)",
+      "surplus_ok": true,
+      "title": "User documentation",
       "help_url": "https://github.com/apache/solr-operator/tree/main/docs/modules",
-      "evidence_files": ["docs/modules/**"],
-      "evidence_exclude": ["docs/modules/upgrade-notes/**"],
+      "evidence_files": ["docs/modules/**", "docs/**/*.md"],
+      "evidence_exclude": ["docs/modules/upgrade-notes/**", "docs/**/*.md"],
       "question": "Does this PR add, change or remove something documented, or that ought to be documented, in the user documentation under docs/modules, such as a CRD field or its behaviour, a backup repository option, TLS or authentication behaviour, scaling or update behaviour, an operator command line flag, or a user-facing default? Helm chart values are documented in the chart README instead and do not count here; neither do internal changes, tests, CI or developer tooling."
     },
     {
       "id": "needs_upgrade_notes",
+      "surplus_ok": true,
       "title": "Upgrade notes",
       "help_url": "https://github.com/apache/solr-operator/blob/main/docs/modules/upgrade-notes/pages/upgrade-notes.adoc",
       "evidence_files": ["docs/modules/upgrade-notes/**"],
@@ -101,27 +105,28 @@
     },
     {
       "id": "needs_tests",
+      "surplus_ok": true,
       "title": "Tests",
       "help_url": "https://github.com/apache/solr-operator/blob/main/docs/modules/development/pages/development.adoc#testing",
       "evidence_files": ["**/*_test.go", "tests/e2e/**", "hack/pr-triage/test_*.py"],
-      "question": "Does this PR change non-trivial Go logic in api/, controllers/ or main.go (beyond refactoring, renames, logging, comments or kubebuilder markers) such that it should come with new or changed tests, whether or not the diff already includes some? Controller changes are normally covered by the envtest unit tests in controllers/*_test.go, and behaviour that needs a running Solr by the Ginkgo e2e tests in tests/e2e. Helm templates, init container shell scripts, documentation, CI workflows and scripts under hack/ have no test harness here: the verdict is false for changes only to those."
+      "question": "Does this PR change non-trivial Go logic in api/, controllers/ or main.go (beyond refactoring, renames, logging, comments or kubebuilder markers) such that it should come with new or changed tests? Judge the code change itself: whether the diff already includes tests, or the description says tests were run, is irrelevant to whether tests are warranted. Controller changes are normally covered by the envtest unit tests in controllers/*_test.go, and behaviour that needs a running Solr by the Ginkgo e2e tests in tests/e2e. Helm templates, init container shell scripts, documentation, CI workflows and shell scripts under hack/ have no test harness here: the verdict is false for changes only to those. The exception under hack/ is the Python PR triage script hack/pr-triage/pr_triage_llm.py, which has unittest tests (hack/pr-triage/test_*.py): a logic change to it warrants a test too."
     },
     {
       "id": "api_change_complete",
-      "title": "New CRD option complete",
+      "title": "CRD option completeness",
       "help_url": "https://github.com/apache/solr-operator/blob/main/docs/modules/solr-cloud/pages/solr-cloud-crd.adoc",
       "applies_to": ["api/v1beta1/*_types.go"],
       "question": "The PR changes the CRD types in api/v1beta1. Is a new or changed option incomplete? Look for: a field that is declared in the types but never read by the controllers to affect a generated resource (declared but not wired through); a field missing a doc comment or the usual kubebuilder markers (+optional, default or enum validation) that comparable fields have; a new field lacking a pointer or omitempty where the controllers need to tell 'unset' from 'zero'; or a new SolrCloud spec option that the `solr` Helm chart (helm/solr/values.yaml and templates, which you can see) ought to expose too but does not. Answer true only when something concrete is missing, and name it; answer false for complete options and for changes that only touch comments or markers."
     },
     {
       "id": "version_compat",
-      "title": "Solr / Kubernetes version compatibility",
+      "title": "Version compatibility",
       "help_url": "https://github.com/apache/solr-operator/blob/main/docs/modules/upgrade-notes/pages/upgrade-notes.adoc#version-compatibility-matrixes",
       "question": "Does this change depend on behaviour that is not available across the whole supported range: a Solr CLI command, flag, API, system property, env var or Docker image layout that differs between Solr 8.11 and the latest 9.x (the `solr zk` CLI flags, `bin/solr` options, the prometheus exporter location, SOLR_TOOL_OPTS, health endpoints and security.json handling are known examples), or a Kubernetes API field, resource version or feature gate newer than Kubernetes 1.22? Also answer true when the change hardcodes a Solr version or image tag outside tests and examples. Answer false when the change is version-neutral or already guards on the Solr or Kubernetes version."
     },
     {
       "id": "testing_notes",
-      "title": "Manual testing described",
+      "title": "Testing notes",
       "question": "Is this a change whose correctness can only be shown against a running cluster, such as a Helm template change, an init container or shell script change, a change to how the operator calls Solr or ZooKeeper, or TLS, authentication, ingress or backup handling, and the PR description does not say how it was tested (which Solr version, Kubernetes flavour, scenario, or that e2e tests were run)? Answer false when the description does describe the testing, when the change is fully covered by unit tests, or when it is a documentation, CI or tooling change."
     }
   ]
