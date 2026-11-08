@@ -16,24 +16,17 @@
 name: PR Triage (LLM)
 
 # When a PR is opened or marked ready for review, asks an LLM (via the ASF gateway,
-# llm.apache.org) the questions in .github/pr-triage/judgements.json (does this change
-# warrant a changelog entry in the chart, a README row, docs, upgrade notes, tests, ...?)
-# and posts one comment comparing each verdict with what the PR actually includes,
-# highlighting mismatches. Advisory only: it never fails the PR (no comment is posted if
-# the model gives no usable answer), and it does not run again on later pushes. See
-# dev-docs/pr-triage-llm.md.
+# llm.apache.org) the questions in .github/pr-triage/judgements.json and posts one advisory
+# comment comparing each verdict with what the PR includes. Never fails the PR, posts nothing
+# without a usable answer, does not re-run on later pushes. See dev-docs/pr-triage-llm.md.
 #
-# Why pull_request_target: PRs from forks get no secrets under 'pull_request', and the
-# gateway key is a secret. pull_request_target runs this file and the script from the
-# trusted workflow commit. PR content is only ever fetched through the API and handed to
-# the model as text; no PR code is checked out or executed.
-#
-# Two jobs, so the one holding the LLM key has a read-only token, and the one that can
-# comment never sees the key or talks to the model.
+# pull_request_target, because PRs from forks get no secrets under 'pull_request'. The
+# workflow and script run from the trusted commit; PR content is fetched through the API as
+# text, never checked out or executed. Two jobs, so the one holding the key has a read-only
+# token and the one that can comment never sees the key.
 #
 # Setup: repository secret ASF_LLM_API_KEY (an automation key from llm.apache.org, requested
-# from ASF Infra), and optionally repository variable LLM_MODEL. Without the secret the
-# workflow skips quietly, so forks are unaffected.
+# from ASF Infra), optionally repository variable LLM_MODEL. Without the secret it skips.
 on:
   pull_request_target:
     # 'ready_for_review' covers PRs opened as drafts; drafts themselves are skipped. A PR
