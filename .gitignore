@@ -36,6 +36,9 @@ release-artifacts
 
 # editor and IDE paraphernalia
 .idea
+
+# Local AI assistant config. Skills live in .agents/, see dev-docs/dependency-upgrades.md
+.claude/
 *.swp
 *.swo
 *~
