@@ -56,6 +56,11 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
+      description: New SolrCloud option 'replicaPlacementFactory', which sets the cluster-wide replica placement plugin and its config through Solr's cluster plugin API. Requires Solr 9+
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/691
+    - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
         - name: Github Issue

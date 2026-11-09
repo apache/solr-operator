@@ -64,6 +64,14 @@ solrOptions:
   solrModules: []
   additionalLibs: []
 
+  # Cluster-wide replica placement plugin, applied by the operator through Solr's cluster plugin API.
+  # Requires Solr 9+. Example:
+  #   replicaPlacementFactory:
+  #     class: org.apache.solr.cluster.placement.plugins.AffinityPlacementFactory
+  #     config:
+  #       minimalFreeDiskGB: 10
+  replicaPlacementFactory: {}
+
   # Enable authentication for the Solr Cloud
   # More information can be found at:
   # https://solr.apache.org/guide/operator/latest/solr-cloud/authentication-and-authorization.html

@@ -725,6 +725,22 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, serviceCleanupError
 	}
 
+	// Keep the replica placement plugin in sync with the spec, once there is a pod to talk to
+	newStatus.AppliedReplicaPlacementFactory = instance.Status.AppliedReplicaPlacementFactory
+	if instance.Spec.ReplicaPlacementFactory != nil && !instance.SolrVersionAtLeast(util.MinSolrVersionForClusterPlugins) {
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginUnsupported",
+			"Ignoring replicaPlacementFactory, which requires Solr %d or later", util.MinSolrVersionForClusterPlugins)
+	} else if hasReadyPod {
+		appliedHash, placementErr := util.ReconcileReplicaPlacementPlugin(ctx, instance, instance.Status.AppliedReplicaPlacementFactory, logger)
+		newStatus.AppliedReplicaPlacementFactory = appliedHash
+		if placementErr != nil {
+			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginError",
+				"Could not apply the replica placement plugin: %s", placementErr)
+			logger.Error(placementErr, "Could not apply the replica placement plugin")
+			updateRequeueAfter(&requeueOrNot, time.Second*15)
+		}
+	}
+
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
 		oldInstance := instance.DeepCopy()

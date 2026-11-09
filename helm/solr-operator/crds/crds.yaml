@@ -11303,6 +11303,31 @@ spec:
                         type: string
                     type: object
                 type: object
+              replicaPlacementFactory:
+                description: |-
+                  ReplicaPlacementFactory sets the cluster-wide replica placement plugin that Solr uses to decide
+                  which nodes new replicas are placed on.
+
+                  The operator applies this through Solr's /api/cluster/plugin API once the cloud has a ready pod,
+                  and re-applies it whenever this section changes. Removing the section removes the plugin from the
+                  cluster, which returns Solr to its default placement behaviour.
+
+                  Requires Solr 9 or later.
+                properties:
+                  class:
+                    description: |-
+                      Class is the fully qualified name of a class implementing Solr's PlacementPluginFactory,
+                      e.g. "org.apache.solr.cluster.placement.plugins.AffinityPlacementFactory".
+                    type: string
+                  config:
+                    description: |-
+                      Config is the plugin's configuration, passed to Solr unchanged. The accepted options are
+                      specific to the plugin named in "class"; see the Solr Reference Guide's replica placement
+                      plugins page.
+                    x-kubernetes-preserve-unknown-fields: true
+                required:
+                - class
+                type: object
               replicas:
                 description: The number of solr nodes to run
                 format: int32
@@ -19528,6 +19553,12 @@ spec:
           status:
             description: SolrCloudStatus defines the observed state of SolrCloud
             properties:
+              appliedReplicaPlacementFactory:
+                description: |-
+                  AppliedReplicaPlacementFactory is a hash of the replicaPlacementFactory section that the operator
+                  last applied to the cluster, used to detect when it needs to be re-applied. Empty when no
+                  placement plugin is managed by the operator.
+                type: string
               backupRepositoriesAvailable:
                 additionalProperties:
                   type: boolean

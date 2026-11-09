@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"math/rand"
 	"regexp"
 	"strconv"
@@ -155,6 +156,32 @@ type SolrCloudSpec struct {
 	//
 	//+optional
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
+
+	// ReplicaPlacementFactory sets the cluster-wide replica placement plugin that Solr uses to decide
+	// which nodes new replicas are placed on.
+	//
+	// The operator applies this through Solr's /api/cluster/plugin API once the cloud has a ready pod,
+	// and re-applies it whenever this section changes. Removing the section removes the plugin from the
+	// cluster, which returns Solr to its default placement behaviour.
+	//
+	// Requires Solr 9 or later.
+	//
+	//+optional
+	ReplicaPlacementFactory *SolrReplicaPlacementFactory `json:"replicaPlacementFactory,omitempty"`
+}
+
+type SolrReplicaPlacementFactory struct {
+	// Class is the fully qualified name of a class implementing Solr's PlacementPluginFactory,
+	// e.g. "org.apache.solr.cluster.placement.plugins.AffinityPlacementFactory".
+	Class string `json:"class"`
+
+	// Config is the plugin's configuration, passed to Solr unchanged. The accepted options are
+	// specific to the plugin named in "class"; see the Solr Reference Guide's replica placement
+	// plugins page.
+	//
+	//+optional
+	//+kubebuilder:pruning:PreserveUnknownFields
+	Config *apiextensionsv1.JSON `json:"config,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {
@@ -1153,6 +1180,12 @@ type SolrCloudStatus struct {
 
 	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
 	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
+
+	// AppliedReplicaPlacementFactory is a hash of the replicaPlacementFactory section that the operator
+	// last applied to the cluster, used to detect when it needs to be re-applied. Empty when no
+	// placement plugin is managed by the operator.
+	// +optional
+	AppliedReplicaPlacementFactory string `json:"appliedReplicaPlacementFactory,omitempty"`
 
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
