@@ -725,13 +725,18 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, serviceCleanupError
 	}
 
-	// Keep the replica placement plugin in sync with the spec, once there is a pod to talk to
+	// Keep the replica placement plugin in sync with the spec, once there is a pod to talk to.
+	// The cluster plugin API only exists on newer Solr versions, so neither applying nor removing a
+	// plugin is attempted below that floor. The applied hash is kept in that case, so that a cloud
+	// moved back onto a supported version still has its plugin corrected.
 	newStatus.AppliedReplicaPlacementFactory = instance.Status.AppliedReplicaPlacementFactory
-	if instance.Spec.ReplicaPlacementFactory != nil && !instance.SolrVersionAtLeast(util.MinSolrVersionForClusterPlugins) {
+	supportsClusterPlugins := instance.SolrVersionAtLeast(util.MinSolrVersionForClusterPlugins)
+	if instance.Spec.ReplicaPlacementFactory != nil && !supportsClusterPlugins {
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginUnsupported",
 			"Ignoring replicaPlacementFactory, which requires Solr %d or later", util.MinSolrVersionForClusterPlugins)
-	} else if hasReadyPod {
-		appliedHash, placementErr := util.ReconcileReplicaPlacementPlugin(ctx, instance, instance.Status.AppliedReplicaPlacementFactory, logger)
+	} else if hasReadyPod && supportsClusterPlugins {
+		appliedHash, placementErr := util.ReconcileReplicaPlacementPlugin(
+			ctx, instance, newStatus.ZookeeperConnectionInfo.ZkConnectionString(), instance.Status.AppliedReplicaPlacementFactory, logger)
 		newStatus.AppliedReplicaPlacementFactory = appliedHash
 		if placementErr != nil {
 			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginError",

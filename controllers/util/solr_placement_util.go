@@ -18,6 +18,7 @@ limitations under the License.
 package util
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/json"
@@ -33,7 +34,11 @@ const MinSolrVersionForClusterPlugins = 9
 
 // DesiredReplicaPlacementPlugin returns the cluster plugin that the SolrCloud's spec asks for, and a
 // hash identifying it. Both are empty when the SolrCloud configures no placement plugin.
-func DesiredReplicaPlacementPlugin(solrCloud *solr.SolrCloud) (plugin *solr_api.SolrClusterPlugin, hash string, err error) {
+//
+// zkTarget identifies the ZooKeeper ensemble and chroot that the plugin would be applied to. It is
+// part of the hash because cluster plugins live in ZooKeeper, so pointing the SolrCloud at a
+// different target means the plugin has to be applied again.
+func DesiredReplicaPlacementPlugin(solrCloud *solr.SolrCloud, zkTarget string) (plugin *solr_api.SolrClusterPlugin, hash string, err error) {
 	if solrCloud.Spec.ReplicaPlacementFactory == nil {
 		return nil, "", nil
 	}
@@ -43,24 +48,41 @@ func DesiredReplicaPlacementPlugin(solrCloud *solr.SolrCloud) (plugin *solr_api.
 		Class: solrCloud.Spec.ReplicaPlacementFactory.Class,
 	}
 	if config := solrCloud.Spec.ReplicaPlacementFactory.Config; config != nil && len(config.Raw) > 0 {
-		// Round-trip the config so that the hash does not change with insignificant formatting
-		var normalized interface{}
-		if err = json.Unmarshal(config.Raw, &normalized); err != nil {
-			return nil, "", fmt.Errorf("replicaPlacementFactory.config is not valid JSON: %w", err)
-		}
-		var raw []byte
-		if raw, err = json.Marshal(normalized); err != nil {
+		var normalized []byte
+		if normalized, err = normalizeConfigJson(config.Raw); err != nil {
 			return nil, "", err
 		}
-		rawMessage := json.RawMessage(raw)
+		rawMessage := json.RawMessage(normalized)
 		plugin.Config = &rawMessage
 	}
 
+	identity := struct {
+		Plugin   *solr_api.SolrClusterPlugin `json:"plugin"`
+		ZkTarget string                      `json:"zkTarget"`
+	}{plugin, zkTarget}
+
 	var encoded []byte
-	if encoded, err = json.Marshal(plugin); err != nil {
+	if encoded, err = json.Marshal(identity); err != nil {
 		return nil, "", err
 	}
 	return plugin, fmt.Sprintf("%x", md5.Sum(encoded)), nil
+}
+
+// normalizeConfigJson re-encodes the config so that the hash does not change with insignificant
+// formatting or key ordering. Numbers keep their original literal, so values that a float64 cannot
+// hold exactly reach Solr unchanged.
+func normalizeConfigJson(raw []byte) (normalized []byte, err error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+
+	var value interface{}
+	if err = decoder.Decode(&value); err != nil {
+		return nil, fmt.Errorf("replicaPlacementFactory.config is not valid JSON: %w", err)
+	}
+	if decoder.More() {
+		return nil, fmt.Errorf("replicaPlacementFactory.config is not valid JSON: unexpected data after the JSON value")
+	}
+	return json.Marshal(value)
 }
 
 // ReconcileReplicaPlacementPlugin brings the SolrCloud's replica placement plugin in line with its
@@ -71,8 +93,8 @@ func DesiredReplicaPlacementPlugin(solrCloud *solr.SolrCloud) (plugin *solr_api.
 // The caller must ensure the cloud is reachable and runs at least
 // MinSolrVersionForClusterPlugins. The returned hash is what should be stored for the next
 // comparison.
-func ReconcileReplicaPlacementPlugin(ctx context.Context, solrCloud *solr.SolrCloud, appliedHash string, logger logr.Logger) (newHash string, err error) {
-	desiredPlugin, desiredHash, err := DesiredReplicaPlacementPlugin(solrCloud)
+func ReconcileReplicaPlacementPlugin(ctx context.Context, solrCloud *solr.SolrCloud, zkTarget string, appliedHash string, logger logr.Logger) (newHash string, err error) {
+	desiredPlugin, desiredHash, err := DesiredReplicaPlacementPlugin(solrCloud, zkTarget)
 	if err != nil {
 		return appliedHash, err
 	}
