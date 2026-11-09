@@ -105,7 +105,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
@@ -184,7 +184,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
@@ -256,7 +256,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
@@ -327,7 +327,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
@@ -396,7 +396,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			hostnameAnnotation := solrCloud.Namespace + "." + testDomain
 			for _, domain := range testAdditionalDomains {
@@ -477,7 +477,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)
@@ -543,7 +543,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the Solr Common Service")
 			commonService := expectService(ctx, solrCloud, solrCloud.CommonServiceName(), statefulSet.Spec.Selector.MatchLabels, false)

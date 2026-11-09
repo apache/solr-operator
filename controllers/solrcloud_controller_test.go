@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	"strconv"
 	"strings"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -137,7 +136,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-3], foundEnv[len(foundEnv)-1]))
 
 			// Other Pod Options Checks
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 			Expect(statefulSet.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
@@ -307,7 +306,6 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT_ADVERTISE": "8983",
 				"GC_TUNE":             "gc Options",
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
-				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/test"}
@@ -419,7 +417,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Incorrect statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 
 			// PodDisruptionBudget creation should be enabled by default

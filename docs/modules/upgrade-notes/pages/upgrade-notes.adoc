@@ -140,6 +140,9 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 This only affects newly created resources, since the operator writes the resolved Solr version into the resource's spec on the first reconcile, so an operator upgrade never changes the Solr version of a running cluster.
 Note that a Solr `>=9.10` node refuses to start if its `major.minor` version is lower than the highest version already running in the same Solr cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
 
+* The `preStop` hook running `solr stop` has been removed, along with the `SOLR_STOP_WAIT` envVar that only served it, so pod deletions no longer emit a `FailedPreStopHook` warning event.
+This changes the Solr pod spec, so Solr pods are restarted when the operator is upgraded.
+
 * Operator logs now default to `json` encoding at `info` level.
 Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the previous `console` encoding at `debug` level.
 
