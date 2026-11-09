@@ -34,6 +34,9 @@ spec:
   podMetricsEndpoints:
     - port: metrics
       path: /metrics
+      # Keep the namespace label of the scraped metrics, which names the namespace of the Solr resource the metric is
+      # about, rather than letting Prometheus Operator overwrite it with the namespace of the operator pod.
+      honorLabels: true
       {{- with .Values.prometheus.podMonitor.interval }}
       interval: {{ . }}
       {{- end }}

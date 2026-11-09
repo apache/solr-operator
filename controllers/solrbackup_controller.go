@@ -95,6 +95,10 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	requeueOrNot := reconcile.Result{}
 
+	// Whether this reconcile saw the backup finish, and whether it succeeded, for the metrics below
+	runFinished := false
+	runSucceeded := false
+
 	// Backup work needs to be done by default if the current backup is not finished
 	doBackupWork := !backup.Status.IndividualSolrBackupStatus.Finished
 
@@ -145,7 +149,9 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 			successful := backup.Status.IndividualSolrBackupStatus.Successful
 			backupSucceeded := successful != nil && *successful
-			metrics.RecordBackupRun(backup.Namespace, backup.Name, backup.Spec.SolrCloud, backupSucceeded)
+			// The counter is only incremented once the finish is persisted, so that a failed status patch does not
+			// count the same run again on the retry.
+			runFinished, runSucceeded = true, backupSucceeded
 			if backupSucceeded {
 				r.Recorder.Eventf(backup, corev1.EventTypeNormal, "BackupSucceeded",
 					"The backup of SolrCloud %q completed successfully", backup.Spec.SolrCloud)
@@ -182,6 +188,10 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if !reflect.DeepEqual(unmodifiedBackupResource.Status, backup.Status) {
 		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", unmodifiedBackupResource.Status)
 		err = r.Status().Patch(ctx, backup, client.MergeFrom(unmodifiedBackupResource))
+	}
+
+	if runFinished && err == nil {
+		metrics.RecordBackupRun(backup.Namespace, backup.Name, backup.Spec.SolrCloud, runSucceeded)
 	}
 
 	return requeueOrNot, err

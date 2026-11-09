@@ -49,6 +49,7 @@ prometheus:
 A Prometheus only picks up the PodMonitors that its `podMonitorSelector` matches, so the `labels` have to be the ones it selects on, e.g. `release: <helm release name of Prometheus>` for the `kube-prometheus-stack` chart.
 A Prometheus in another namespace than the operator also needs a `podMonitorNamespaceSelector` that includes the operator's namespace, which is a setting on the Prometheus resource.
 The PodMonitor requires the `monitoring.coreos.com` CRDs to be installed before the chart.
+It sets `honorLabels: true`, so that the `namespace` label of the metrics keeps naming the namespace of the Solr resource the metric is about instead of the namespace of the operator pod.
 
 When running several operator replicas, every replica serves metrics, but only the leader runs the controllers.
 The gauges about managed resources are reported by every replica, since they are read from each replica's cache, while the counters only move on the leader.

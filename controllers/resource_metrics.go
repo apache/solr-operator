@@ -151,7 +151,8 @@ func (c *ResourceMetricsCollector) collectSolrClouds(ctx context.Context, ch cha
 		count("SolrCloud", solrCloud.Namespace)
 		labels := []string{solrCloud.Namespace, solrCloud.Name}
 
-		desiredReplicas := int32(0)
+		// spec.replicas is only nil until the controller has persisted the defaults, an explicit 0 is honored.
+		desiredReplicas := solrv1beta1.DefaultSolrReplicas
 		if solrCloud.Spec.Replicas != nil {
 			desiredReplicas = *solrCloud.Spec.Replicas
 		}

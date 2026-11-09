@@ -60,10 +60,10 @@ func TestResourceMetricsCollectorReportsManagedResources(t *testing.T) {
 			Status:     solrv1beta1.SolrCloudStatus{Version: "9.8.0", ReadyReplicas: 3, UpToDateNodes: 1},
 		},
 		&appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Namespace: "ns-a", Name: "updating-solrcloud", Annotations: runningUpdate}},
-		// A SolrCloud in another namespace whose StatefulSet does not exist yet
+		// A SolrCloud in another namespace whose StatefulSet does not exist yet, and whose defaults are not
+		// persisted yet, so that spec.replicas falls back to the API default
 		&solrv1beta1.SolrCloud{
 			ObjectMeta: metav1.ObjectMeta{Namespace: "ns-b", Name: "new"},
-			Spec:       solrv1beta1.SolrCloudSpec{Replicas: pointer.Int32(1)},
 		},
 		// Backups in every state
 		&solrv1beta1.SolrBackup{
@@ -108,7 +108,7 @@ func TestResourceMetricsCollectorReportsManagedResources(t *testing.T) {
 
 		`solr_operator_solrcloud_desired_replicas{name="healthy",namespace="ns-a"}`:  3,
 		`solr_operator_solrcloud_desired_replicas{name="updating",namespace="ns-a"}`: 4,
-		`solr_operator_solrcloud_desired_replicas{name="new",namespace="ns-b"}`:      1,
+		`solr_operator_solrcloud_desired_replicas{name="new",namespace="ns-b"}`:      3,
 
 		`solr_operator_solrcloud_ready_replicas{name="healthy",namespace="ns-a"}`:  3,
 		`solr_operator_solrcloud_ready_replicas{name="updating",namespace="ns-a"}`: 3,
