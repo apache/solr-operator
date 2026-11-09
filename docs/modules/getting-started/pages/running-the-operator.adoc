@@ -151,6 +151,7 @@ The final image will only contain the solr-operator binary and necessary License
 
 * *--metrics-bind-address* The address to bind the metrics servlet on.
   If only a port is provided (e.g. `:8080`), then the metrics server will respond to requests with any Host header.
+  See xref:operator-metrics.adoc[] for the metrics that are served.
   (defaults to _:8080_)
 
 * *--health-probe-bind-address=* The address to bind the health probe servlet on.

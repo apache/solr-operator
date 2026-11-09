@@ -181,6 +181,12 @@ func main() {
 
 	controllers.UseZkCRD(useZookeeperCRD)
 
+	// Gauges about the managed Solr resources, read from the operator's cache at scrape time
+	if err = controllers.RegisterResourceMetrics(mgr.GetCache()); err != nil {
+		setupLog.Error(err, "unable to register the operator metrics")
+		os.Exit(1)
+	}
+
 	// watch TLS files for update
 	if clientCertPath != "" {
 		var watcher *fsnotify.Watcher

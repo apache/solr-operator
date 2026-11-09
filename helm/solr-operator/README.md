@@ -31,6 +31,17 @@ If you do not wish to use the Zookeeper Operator, set:
 - `zookeeper-operator.use: false`
 
 
+### Monitoring the Solr Operator
+
+The Solr Operator serves Prometheus metrics about itself and the resources it manages on the `metrics` (8080) port of its pods, under `/metrics`. By default the pods carry `prometheus.io/*` scrape annotations, controlled by `prometheus.scrapeAnnotations.enable`. Set `prometheus.podMonitor.enable` to `true` to create a PodMonitor for a Prometheus run by the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator), with the labels its `podMonitorSelector` looks for:
+
+```bash
+helm install solr-operator apache-solr/solr-operator --set prometheus.podMonitor.enable=true --set prometheus.podMonitor.labels.release=mon
+```
+
+See the [Solr Operator Metrics documentation](https://solr.apache.org/guide/operator/latest/getting-started/operator-metrics.html) for the metrics that are exposed.
+
+
 ### Adding the Solr Operator Helm Chart Repository
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
@@ -161,6 +172,11 @@ The command removes all the Kubernetes components associated with the chart and 
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |
 | leaderElection.enable | boolean | `true` | Enable leader election for the Solr Operator. Will work across multiple `watchNamespaces`, as long as all deployments have the same list for `watchNamespaces`. |
 | metrics.enable | boolean | `true` | Enable metrics for the Solr Operator. Will be available via the "metrics"/8080 port on the solr operator pods under the "/metrics" path. |
+| prometheus.scrapeAnnotations.enable | boolean | `true` | Put `prometheus.io/scrape`, `prometheus.io/port` and `prometheus.io/path` annotations on the Solr Operator pods, for a Prometheus that discovers pods to scrape through annotations. |
+| prometheus.podMonitor.enable | boolean | `false` | Create a PodMonitor for the Solr Operator pods, for a Prometheus run by the Prometheus Operator. Requires the `monitoring.coreos.com` CRDs. |
+| prometheus.podMonitor.labels | map[string]string | `{}` | Labels to put on the PodMonitor, matched by the `podMonitorSelector` of your Prometheus, e.g. `release: mon`. |
+| prometheus.podMonitor.interval | string | `""` | How often Prometheus should scrape the Solr Operator, e.g. `30s`. Defaults to the interval of the Prometheus. |
+| prometheus.podMonitor.scrapeTimeout | string | `""` | Timeout for scraping the Solr Operator, e.g. `10s`. Must not be longer than the interval. |
 | mTLS.clientCertSecret | string | `""` | Name of a Kubernetes TLS secret, in the same namespace, that contains a Client certificate to load into the operator. If provided, this is used when communicating with Solr. |
 | mTLS.caCertSecretKey | string | `""` | Name of a Kubernetes secret, in the same namespace, that contains PEM encoded Root CA Certificate to use when connecting to Solr with Client Auth. |
 | mTLS.caCertSecret | string | `""` | Name of the key in the `caCertSecret` that contains the Root CA Cert as a value. |

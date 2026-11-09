@@ -167,6 +167,16 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/707
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/876
+    - kind: added
+      description: The operator exposes metrics about the resources it manages (counts, SolrCloud readiness and replicas, cluster operations, backup states, exporter readiness), per-resource reconcile results and requests to the Solr API, next to the controller-runtime metrics. The operator pods now carry prometheus.io/port and prometheus.io/path annotations next to prometheus.io/scrape, all of them controlled by the new prometheus.scrapeAnnotations.enable value and only set when metrics.enable is true
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/690
+    - kind: added
+      description: The chart can create a PodMonitor for the operator pods via prometheus.podMonitor, for a Prometheus run by the Prometheus Operator
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/690
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

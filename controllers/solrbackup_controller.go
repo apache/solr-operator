@@ -27,6 +27,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"time"
 
+	"github.com/apache/solr-operator/controllers/metrics"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -94,6 +95,10 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	requeueOrNot := reconcile.Result{}
 
+	// Whether this reconcile saw the backup finish, and whether it succeeded, for the metrics below
+	runFinished := false
+	runSucceeded := false
+
 	// Backup work needs to be done by default if the current backup is not finished
 	doBackupWork := !backup.Status.IndividualSolrBackupStatus.Finished
 
@@ -142,7 +147,12 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			now := metav1.Now()
 			backup.Status.IndividualSolrBackupStatus.FinishTime = &now
 
-			if successful := backup.Status.IndividualSolrBackupStatus.Successful; successful != nil && *successful {
+			successful := backup.Status.IndividualSolrBackupStatus.Successful
+			backupSucceeded := successful != nil && *successful
+			// The counter is only incremented once the finish is persisted, so that a failed status patch does not
+			// count the same run again on the retry.
+			runFinished, runSucceeded = true, backupSucceeded
+			if backupSucceeded {
 				r.Recorder.Eventf(backup, corev1.EventTypeNormal, "BackupSucceeded",
 					"The backup of SolrCloud %q completed successfully", backup.Spec.SolrCloud)
 			} else {
@@ -178,6 +188,10 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if !reflect.DeepEqual(unmodifiedBackupResource.Status, backup.Status) {
 		logger.Info("Updating status for solr-backup", "newStatus", backup.Status, "oldStatus", unmodifiedBackupResource.Status)
 		err = r.Status().Patch(ctx, backup, client.MergeFrom(unmodifiedBackupResource))
+	}
+
+	if runFinished && err == nil {
+		metrics.RecordBackupRun(backup.Namespace, backup.Name, backup.Spec.SolrCloud, runSucceeded)
 	}
 
 	return requeueOrNot, err
@@ -345,7 +359,7 @@ func (r *SolrBackupReconciler) SetupWithManager(mgr ctrl.Manager) (err error) {
 		return err
 	}
 
-	return ctrlBuilder.Complete(r)
+	return ctrlBuilder.Complete(metrics.InstrumentReconciler("SolrBackup", r.Client, &solrv1beta1.SolrBackup{}, r))
 }
 
 func (r *SolrBackupReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
