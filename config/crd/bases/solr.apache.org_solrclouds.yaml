@@ -3464,8 +3464,10 @@ spec:
                         description: Annotations to be added for pods.
                         type: object
                       containerSecurityContext:
-                        description: ContainerSecurityContext the container-level
-                          security context used by the pod's primary container
+                        description: |-
+                          ContainerSecurityContext the container-level security context used by the pod's primary container
+
+                          Merged over the "restricted" profile defaults the operator sets, field by field.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -3717,9 +3719,11 @@ spec:
                             type: object
                         type: object
                       defaultInitContainerSecurityContext:
-                        description: DefaultInitContainerSecurityContext is the security
-                          context for the default init container(s) created by the
-                          Solr Operator, if any are created.
+                        description: |-
+                          DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+
+                          Merged field by field over the "restricted" profile defaults the operator sets. "runAsUser: 0"
+                          also lets these containers take ownership of a backup repository volume.
                         properties:
                           allowPrivilegeEscalation:
                             description: |-
@@ -6111,9 +6115,19 @@ spec:
                           type: string
                         description: Node Selector to be added for the StatefulSet.
                         type: object
+                      omitDefaultIDs:
+                        description: |-
+                          OmitDefaultIDs leaves the default fsGroup of the pod and runAsUser of the busybox init containers
+                          unset, for platforms that assign user and group IDs from a namespace range and reject any other,
+                          such as OpenShift. IDs given explicitly are still used. Elsewhere, the busybox init containers
+                          cannot start as non-root without a user.
+                        type: boolean
                       podSecurityContext:
-                        description: PodSecurityContext is the security context for
-                          the pod.
+                        description: |-
+                          PodSecurityContext is the security context for the pod.
+
+                          Merged field by field over the Pod Security Standards "restricted" profile defaults that the
+                          operator sets, so one field overrides one default.
                         properties:
                           appArmorProfile:
                             description: |-
@@ -6345,6 +6359,12 @@ spec:
                       priorityClassName:
                         description: PriorityClassName for the pod
                         type: string
+                      readOnlyRootFilesystem:
+                        description: |-
+                          ReadOnlyRootFilesystem runs the main container with a read-only root filesystem, with emptyDir
+                          volumes mounted where it writes: /tmp, and /var/solr/logs for Solr. A volume of your own at one
+                          of those paths is used instead. A custom image that writes elsewhere needs a volume there too.
+                        type: boolean
                       readinessProbe:
                         description: Readiness probe parameters
                         properties:
