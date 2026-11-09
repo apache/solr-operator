@@ -216,8 +216,9 @@ else
 fi
 printf "The Kind nodes will pull the Solr image \"${SOLR_IMAGE}\" from its registry.\n\n"
 
-# Add a temporary directory for backups
-docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup"
+# Add a temporary directory for backups. hostPath volumes get no fsGroup from the kubelet, so the
+# directory has to be owned by the Solr user for the volume-prep initContainer to accept it.
+docker exec "${CLUSTER_NAME}-control-plane" bash -c "mkdir -p /tmp/backup && chown 8983:8983 /tmp/backup"
 
 echo "Import Solr Keys"
 curl -sL0 "https://dist.apache.org/repos/dist/release/solr/KEYS" | gpg --import --quiet
