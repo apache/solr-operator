@@ -411,10 +411,11 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
         else:
             in_pr = "n/a" if included is None else ("included" if included else "not included")
             answer = "unknown" if warranted is None else ("needed" if warranted else "not needed")
+        label = f"{j['choice_label']}: " if j.get("choices") and j.get("choice_label") else ""
         if mark == "✅":
             # The reason is only in the Markdown source when the verdict agrees.
             if j.get("choices"):
-                state = answer
+                state = f"{label}{answer}" if actual else answer
             elif included is None:
                 state = "no concern"  # a flag judgement that found nothing
             else:
@@ -424,9 +425,9 @@ def format_result(pr, files, cfg, verdicts, skipped=(), not_applicable=()):
             parts = []
             if valid and j.get("choices"):
                 if warranted != j.get("absent_choice"):
-                    parts.append(f"suggest {warranted}")
+                    parts.append(f"suggest {label}{warranted}")
                 if actual:
-                    parts.append(f"PR has {in_pr}")
+                    parts.append(f"PR has {label}{in_pr}")
             if valid and conf != "high":
                 parts.append(f"confidence: {conf}")
             detail = f" ({'; '.join(parts)})" if parts else ""

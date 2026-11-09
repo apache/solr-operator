@@ -485,7 +485,8 @@ class TriageTest(unittest.TestCase):
         self.assertTrue(row["mismatch"])
         self.assertEqual(1, result["mismatches"])
         self.assertIn("differs from the entry", result["comment"])
-        self.assertIn("**— differs from the entry** (suggest added; PR has fixed): Because", result["comment"])
+        self.assertIn("**— differs from the entry** (suggest kind: added; PR has kind: fixed): Because",
+                      result["comment"])
         prompt = self.prompt(model)
         self.assertIn("exactly one of: added, changed, fixed", prompt)
         self.assertNotIn("kind: fixed", prompt)
@@ -494,22 +495,22 @@ class TriageTest(unittest.TestCase):
         result, _, jid = self.changelog_kind("fixed", "fixed", keep_list=True)
         self.assertFalse(result["results"][jid]["mismatch"])
         self.assertEqual(0, result["mismatches"])
-        self.assertIn("): fixed <!-- Because", result["comment"])
+        self.assertIn("): kind: fixed <!-- Because", result["comment"])
 
     def test_changelog_kind_without_entry_is_missing(self):
         result, _, jid = self.changelog_kind("changed")
         self.assertTrue(result["results"][jid]["mismatch"])
-        self.assertIn("**— missing** (suggest changed): Because", result["comment"])
+        self.assertIn("**— missing** (suggest kind: changed): Because", result["comment"])
 
     def test_changelog_not_worthy(self):
         result, _, jid = self.changelog_kind("(not-worthy)", keep_list=True)
         self.assertFalse(result["results"][jid]["mismatch"])
         self.assertEqual(0, result["mismatches"])
-        self.assertIn("): not needed <!--", result["comment"])
+        self.assertIn("): not needed <!--", result["comment"])  # no label without an entry
         self.assertNotIn("(not-worthy)", result["comment"])
         result, _, jid = self.changelog_kind("(not-worthy)", "security")
         self.assertTrue(result["results"][jid]["mismatch"])
-        self.assertIn("**— probably not needed** (PR has security): Because", result["comment"])
+        self.assertIn("**— probably not needed** (PR has kind: security): Because", result["comment"])
 
     def test_choice_verdict_spellings_are_normalised(self):
         for spelling, expected in (("not-worthy", "(not-worthy)"), ("Fixed", "fixed"), ('"added"', "added"),
@@ -617,6 +618,16 @@ class TriageTest(unittest.TestCase):
         ):
             with self.subTest(judgement=jid, files=[f["filename"] for f in files]):
                 self.assertIs(expected, TRIAGE.applies(judgement(cfg, jid), files))
+
+    def test_choice_label_is_optional(self):
+        cfg = load_config()
+        self.assertEqual("kind", judgement(cfg, "needs_changelog")["choice_label"])
+        self.cfg["judgements"] = [{k: v for k, v in judgement(cfg, "needs_changelog").items()
+                                   if k != "choice_label"}]
+        self.answers = {"needs_changelog": {"verdict": "added", "confidence": "high", "reason": "Because."}}
+        patch = "@@ -1,0 +2,2 @@\n+    - kind: fixed\n+      description: Did a thing"
+        result, _, _ = self.run_main([changed_file("helm/solr-operator/Chart.yaml", "modified", patch)])
+        self.assertIn("(suggest added; PR has fixed): ", result["comment"])
 
     def test_configured_presence_judgements_tolerate_surplus(self):
         cfg = load_config()
