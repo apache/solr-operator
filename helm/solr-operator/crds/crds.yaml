@@ -372,6 +372,15 @@ spec:
                     - enabled
                     type: object
                 type: object
+              availabilityZoneFromNodeLabel:
+                description: |-
+                  AvailabilityZoneFromNodeLabel exposes the "topology.kubernetes.io/zone" label of the Kubernetes node
+                  that each Solr pod runs on as the "availability_zone" system property, which Solr's
+                  AffinityPlacementFactory uses to spread replicas across availability zones.
+
+                  Requires Kubernetes v1.33+ with the PodTopologyLabels feature enabled, which is the default since v1.35.
+                  On clusters without it the system property is set to an empty value.
+                type: boolean
               backupRepositories:
                 description: Allows specification of multiple different "repositories"
                   for Solr to use when backing up data.

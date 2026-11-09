@@ -154,6 +154,16 @@ type SolrCloudSpec struct {
 	//
 	//+optional
 	AdditionalLibs []string `json:"additionalLibs,omitempty"`
+
+	// AvailabilityZoneFromNodeLabel exposes the "topology.kubernetes.io/zone" label of the Kubernetes node
+	// that each Solr pod runs on as the "availability_zone" system property, which Solr's
+	// AffinityPlacementFactory uses to spread replicas across availability zones.
+	//
+	// Requires Kubernetes v1.33+ with the PodTopologyLabels feature enabled, which is the default since v1.35.
+	// On clusters without it the system property is set to an empty value.
+	//
+	//+optional
+	AvailabilityZoneFromNodeLabel *bool `json:"availabilityZoneFromNodeLabel,omitempty"`
 }
 
 func (spec *SolrCloudSpec) withDefaults(logger logr.Logger) (changed bool) {

@@ -64,6 +64,11 @@ solrOptions:
   solrModules: []
   additionalLibs: []
 
+  # Expose the Kubernetes node's "topology.kubernetes.io/zone" label to Solr as the
+  # "availability_zone" system property, for use by Solr's AffinityPlacementFactory.
+  # Requires Kubernetes v1.33+ with the PodTopologyLabels feature, the default since v1.35.
+  availabilityZoneFromNodeLabel: false
+
   # Enable authentication for the Solr Cloud
   # More information can be found at:
   # https://solr.apache.org/guide/operator/latest/solr-cloud/authentication-and-authorization.html

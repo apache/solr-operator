@@ -56,6 +56,11 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
+      description: New SolrCloud option 'availabilityZoneFromNodeLabel', which exposes the Kubernetes node's topology.kubernetes.io/zone label to Solr as the availability_zone system property used by AffinityPlacementFactory
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/556
+    - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
         - name: Github Issue

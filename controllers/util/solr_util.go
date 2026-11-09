@@ -453,6 +453,18 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
 	}
 
+	if solrCloud.Spec.AvailabilityZoneFromNodeLabel != nil && *solrCloud.Spec.AvailabilityZoneFromNodeLabel {
+		envVars = append(envVars, corev1.EnvVar{
+			Name: "SOLR_AVAILABILITY_ZONE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath: fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+				},
+			},
+		})
+		allSolrOpts = append(allSolrOpts, "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)")
+	}
+
 	if solrCloud.Spec.SolrOpts != "" {
 		allSolrOpts = append(allSolrOpts, solrCloud.Spec.SolrOpts)
 	}

@@ -45,6 +45,21 @@ Use the **`SolrCloud.spec.solrModules`** property to add a list of module names,
 However, users might want to include custom code that is not an official Solr Module.
 In order to facilitate this, the **`SolrCloud.spec.additionalLibs`** property takes a list of paths to folders, containing jars to load in the classpath of the SolrCloud.
 
+=== Availability Zone Awareness
+
+Solr's https://solr.apache.org/guide/solr/latest/configuration-guide/replica-placement-plugins.html#affinityplacementfactory[AffinityPlacementFactory] spreads replicas across availability zones, using the `availability_zone` system property of each Solr node.
+
+Set **`SolrCloud.spec.availabilityZoneFromNodeLabel`** to `true` to have the operator set that system property from the `topology.kubernetes.io/zone` label of the Kubernetes node each pod runs on.
+
+[source,yaml]
+----
+spec:
+  availabilityZoneFromNodeLabel: true
+----
+
+This requires Kubernetes `v1.33`+ with the `PodTopologyLabels` feature enabled, which is the default since `v1.35`.
+On clusters without it the system property is set to an empty value, and Solr places replicas as if all nodes were in one zone.
+
 == Data Storage
 
 The SolrCloud CRD gives the option for users to use either

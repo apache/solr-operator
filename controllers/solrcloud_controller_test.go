@@ -542,6 +542,37 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
+	FContext("Solr Cloud with availabilityZoneFromNodeLabel", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+				AvailabilityZoneFromNodeLabel: newBoolPtr(true),
+			}
+		})
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			testPodEnvVariables(map[string]string{
+				"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
+			}, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+			var zoneEnvVar *corev1.EnvVar
+			for _, envVar := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+				if envVar.Name == "SOLR_AVAILABILITY_ZONE" {
+					zoneEnvVar = &envVar
+					break
+				}
+			}
+			Expect(zoneEnvVar).To(Not(BeNil()), "SOLR_AVAILABILITY_ZONE env var should be set")
+			Expect(zoneEnvVar.ValueFrom.FieldRef.FieldPath).To(Equal("metadata.labels['topology.kubernetes.io/zone']"), "Wrong fieldRef for the availability zone env var")
+		})
+	})
+
 	FContext("Solr Cloud with changing generated SolrXML", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
