@@ -322,12 +322,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrHostName := solrCloud.AdvertisedNodeHost("$(POD_NAME)")
 	solrAdressingPort := solrCloud.NodePort()
 
-	// Solr can take longer than SOLR_STOP_WAIT to run solr stop, give it a few extra seconds before forcefully killing the pod.
-	solrStopWait := terminationGracePeriod - 5
-	if solrStopWait < 0 {
-		solrStopWait = 0
-	}
-
 	// Environment Variables
 	var envFrom []corev1.EnvFromSource
 	envVars := []corev1.EnvVar{
@@ -425,10 +419,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name:  "GC_TUNE",
 			Value: solrCloud.Spec.SolrGCTune,
 		},
-		{
-			Name:  "SOLR_STOP_WAIT",
-			Value: strconv.FormatInt(solrStopWait, 10),
-		},
 	}
 
 	// Add all necessary information for connection to Zookeeper
@@ -441,13 +431,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Add envVars for backupRepos if any are needed
 	if len(backupEnvVars) > 0 {
 		envVars = append(envVars, backupEnvVars...)
-	}
-
-	// Default preStop hook
-	preStop := &corev1.LifecycleHandler{
-		Exec: &corev1.ExecAction{
-			Command: []string{"solr", "stop", "-p", strconv.Itoa(solrPodPort)},
-		},
 	}
 
 	// Add Custom EnvironmentVariables and EnvFrom to the solr container
@@ -537,12 +520,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 				PeriodSeconds:    10,
 				ProbeHandler:     defaultReadinessProbe,
 			},
-			VolumeMounts: volumeMounts,
-			Env:          envVars,
-			EnvFrom:      envFrom,
-			Lifecycle: &corev1.Lifecycle{
-				PreStop: preStop,
-			},
+			VolumeMounts:    volumeMounts,
+			Env:             envVars,
+			EnvFrom:         envFrom,
 			SecurityContext: containerSecurityContext,
 		},
 	}

@@ -55,6 +55,11 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: removed
+      description: The preStop hook running 'solr stop' has been removed from the Solr container, along with the SOLR_STOP_WAIT envVar that only served it. Solr shuts down on SIGTERM, so pod deletions no longer emit a FailedPreStopHook warning event
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/871
     - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
