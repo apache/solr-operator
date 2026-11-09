@@ -1222,8 +1222,10 @@ func (r *SolrCloudReconciler) reconcileDeletion(ctx context.Context, cloud *solr
 	err := r.Get(ctx, types.NamespacedName{Name: cloud.StatefulSetName(), Namespace: cloud.Namespace}, statefulSet)
 	if errors.IsNotFound(err) {
 		// The StatefulSet may already be gone, e.g. with foreground deletion.
-		// Its PVCs still carry the selector labels the operator always generates.
-		statefulSet.Spec.Selector = &metav1.LabelSelector{MatchLabels: cloud.SharedLabels()}
+		// Its PVCs still carry the selector labels the operator always generates, as in GenerateStatefulSet.
+		selectorLabels := cloud.SharedLabels()
+		selectorLabels["technology"] = solrv1beta1.SolrTechnologyLabel
+		statefulSet.Spec.Selector = &metav1.LabelSelector{MatchLabels: selectorLabels}
 	} else if err != nil {
 		return reconcile.Result{}, err
 	}
