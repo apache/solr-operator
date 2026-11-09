@@ -458,7 +458,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			Name: "SOLR_AVAILABILITY_ZONE",
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath: fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+					FieldPath:  fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+					APIVersion: "v1",
 				},
 			},
 		})
