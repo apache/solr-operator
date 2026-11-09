@@ -34,6 +34,9 @@ prometheus.io/port: "8080"
 prometheus.io/path: "/metrics"
 ----
 
+The operator metrics carry a `namespace` label naming the namespace of the Solr resource each metric is about, which clashes with the `namespace` target label that Kubernetes service discovery usually adds.
+Set `honor_labels: true` on the scrape job, otherwise Prometheus renames the operator's label to `exported_namespace`.
+
 For a Prometheus run by the https://github.com/prometheus-operator/prometheus-operator[Prometheus Operator], the chart can create a PodMonitor for the operator pods instead:
 
 [source,yaml]
