@@ -25,6 +25,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -202,22 +203,89 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				},
 			}
 		})
-		FIt("removes the finalizer even though the provided ConfigMap no longer exists", func(ctx context.Context) {
-			By("waiting for the storage finalizer to be added")
-			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
-				g.Expect(found.GetFinalizers()).To(ContainElement(util.SolrStorageFinalizer), "Storage finalizer was not added")
-			})
-			expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+		// dataClaim carries the StatefulSet selector labels; otherClaim only shares the cloud label and must survive.
+		createClaims := func(ctx context.Context) (dataClaim, otherClaim *corev1.PersistentVolumeClaim) {
+			claim := func(name string, labels map[string]string) *corev1.PersistentVolumeClaim {
+				pvc := &corev1.PersistentVolumeClaim{
+					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: solrCloud.Namespace, Labels: labels},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+						},
+					},
+				}
+				Expect(k8sClient.Create(ctx, pvc)).To(Succeed())
+				// envtest has no controller to drop the pvc-protection finalizer, so clear it to really remove the PVC.
+				DeferCleanup(func(ctx context.Context) {
+					found := &corev1.PersistentVolumeClaim{}
+					if err := k8sClient.Get(ctx, resourceKey(solrCloud, name), found); errors.IsNotFound(err) {
+						return
+					}
+					found.Finalizers = nil
+					Expect(k8sClient.Update(ctx, found)).To(Succeed())
+					_ = k8sClient.Delete(ctx, found)
+				})
+				return pvc
+			}
+			dataLabels := solrCloud.SharedLabels()
+			dataLabels["technology"] = solrv1beta1.SolrTechnologyLabel
+			return claim("data-"+solrCloud.StatefulSetName()+"-0", dataLabels), claim(solrCloud.Name+"-other-claim", solrCloud.SharedLabels())
+		}
 
-			By("deleting the provided ConfigMap before the SolrCloud, as Helm can do")
-			Expect(k8sClient.Delete(ctx, providedConfigMap)).To(Succeed())
-
+		deleteCloudAndCheckClaims := func(ctx context.Context, dataClaim, otherClaim *corev1.PersistentVolumeClaim) {
 			By("deleting the SolrCloud")
 			Expect(k8sClient.Delete(ctx, solrCloud)).To(Succeed(), "Could not delete solrCloud")
 
 			Eventually(func() error {
 				return k8sClient.Get(ctx, resourceKey(solrCloud, solrCloud.Name), &solrv1beta1.SolrCloud{})
 			}).Should(MatchError("solrclouds.solr.apache.org \""+solrCloud.Name+"\" not found"), "Cloud has not been deleted, thus the finalizers have not been removed from the object.")
+
+			// envtest runs no controller manager, so a deleted PVC may linger with only the pvc-protection finalizer.
+			found := &corev1.PersistentVolumeClaim{}
+			err := k8sClient.Get(ctx, resourceKey(solrCloud, dataClaim.Name), found)
+			if err == nil {
+				Expect(found.DeletionTimestamp).ToNot(BeNil(), "The Solr data PVC was not deleted")
+			} else {
+				Expect(errors.IsNotFound(err)).To(BeTrue(), "Unexpected error getting the Solr data PVC: %v", err)
+			}
+
+			Expect(k8sClient.Get(ctx, resourceKey(solrCloud, otherClaim.Name), found)).To(Succeed(), "A PVC outside the StatefulSet selector was deleted")
+			Expect(found.DeletionTimestamp).To(BeNil(), "A PVC outside the StatefulSet selector was deleted")
+		}
+
+		FIt("removes the finalizer and the data PVCs even though the provided ConfigMap no longer exists", func(ctx context.Context) {
+			By("waiting for the storage finalizer to be added")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(ContainElement(util.SolrStorageFinalizer), "Storage finalizer was not added")
+			})
+			expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			dataClaim, otherClaim := createClaims(ctx)
+
+			By("deleting the provided ConfigMap before the SolrCloud, as Helm can do")
+			Expect(k8sClient.Delete(ctx, providedConfigMap)).To(Succeed())
+
+			deleteCloudAndCheckClaims(ctx, dataClaim, otherClaim)
+		})
+
+		FIt("removes only the Solr data PVCs when the StatefulSet is already gone", func(ctx context.Context) {
+			By("waiting for the storage finalizer to be added")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(ContainElement(util.SolrStorageFinalizer), "Storage finalizer was not added")
+			})
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			dataClaim, otherClaim := createClaims(ctx)
+
+			By("deleting the provided ConfigMap, so the reconcile cannot recreate the StatefulSet")
+			Expect(k8sClient.Delete(ctx, providedConfigMap)).To(Succeed())
+
+			By("deleting the StatefulSet before the SolrCloud, as foreground deletion can do")
+			Expect(k8sClient.Delete(ctx, statefulSet)).To(Succeed())
+			Eventually(func() bool {
+				return errors.IsNotFound(k8sClient.Get(ctx, resourceKey(solrCloud, statefulSet.Name), &appsv1.StatefulSet{}))
+			}).Should(BeTrue(), "The StatefulSet was not deleted")
+
+			deleteCloudAndCheckClaims(ctx, dataClaim, otherClaim)
 		})
 	})
 
