@@ -60,6 +60,10 @@ Kubernetes only makes the node's zone label available to the pod through the htt
 On older versions, or when the plugin is disabled or the node has no zone label, the system property is empty.
 Solr then places replicas as if all nodes were in one zone, which is the same as when no availability zones are used at all.
 
+The operator also sets the `spread_domain` system property to the name of the Kubernetes node each Solr pod runs on.
+When `spreadAcrossDomains` is enabled in the `AffinityPlacementFactory` configuration, Solr places the replicas of a shard on different Kubernetes nodes within each zone, so that losing a single Kubernetes node does not take down all replicas of a shard.
+Unlike the zone, the node name is always available, on every Kubernetes version.
+
 == Data Storage
 
 The SolrCloud CRD gives the option for users to use either

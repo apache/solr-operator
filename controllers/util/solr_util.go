@@ -153,8 +153,9 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	// The "availability_zone" system property is used by Solr's AffinityPlacementFactory to spread replicas across zones
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)"}
+	// The "availability_zone" and "spread_domain" system properties are used by Solr's AffinityPlacementFactory
+	// to spread replicas across zones, and across Kubernetes nodes within a zone
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -397,6 +398,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			ValueFrom: &corev1.EnvVarSource{
 				FieldRef: &corev1.ObjectFieldSelector{
 					FieldPath:  fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			// The Kubernetes node, so that replicas of a shard can be spread across nodes within a zone
+			Name: "SOLR_SPREAD_DOMAIN",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "spec.nodeName",
 					APIVersion: "v1",
 				},
 			},

@@ -156,7 +156,8 @@ All other Solr pods now start without any volume prep initContainer.
 
 * Solr pods now get the `availability_zone` system property, set from the `topology.kubernetes.io/zone` label of the node they run on, for Solr's xref:solr-cloud:solr-cloud-crd.adoc#availability-zone-awareness[AffinityPlacementFactory].
 The label is only copied onto pods by Kubernetes `v1.35`+, and the property is empty on older versions, which leaves replica placement unchanged.
-This is part of the same pod spec change that restarts the Solr pods during this upgrade, so it does not cause an additional restart.
+Solr pods also get the `spread_domain` system property, set to the name of their Kubernetes node, which Solr only uses when `spreadAcrossDomains` is enabled in the `AffinityPlacementFactory` configuration.
+These are part of the same pod spec change that restarts the Solr pods during this upgrade, so they do not cause an additional restart.
 
 === v0.8.0
 

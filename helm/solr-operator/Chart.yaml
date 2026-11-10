@@ -56,7 +56,7 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
-      description: Solr pods now get the availability_zone system property, used by Solr's AffinityPlacementFactory, from the topology.kubernetes.io/zone label of their Kubernetes node. The label is copied onto pods by Kubernetes v1.35+, and the property is empty on older versions
+      description: Solr pods now get the availability_zone system property, used by Solr's AffinityPlacementFactory, from the topology.kubernetes.io/zone label of their Kubernetes node. The label is copied onto pods by Kubernetes v1.35+, and the property is empty on older versions. Solr pods also get the spread_domain system property, set to the name of their Kubernetes node
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/556

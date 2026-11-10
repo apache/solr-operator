@@ -108,7 +108,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				"SOLR_PORT":           "8983",
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 
@@ -158,7 +158,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 					"SOLR_NODE_PORT":      "8983",
 					"SOLR_PORT_ADVERTISE": "8983",
 					"SOLR_LOG_LEVEL":      "INFO",
-					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -213,7 +213,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 					"SOLR_NODE_PORT":      "8983",
 					"SOLR_PORT_ADVERTISE": "8983",
 					"SOLR_LOG_LEVEL":      "INFO",
-					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
