@@ -97,6 +97,9 @@ export RAW_GINKGO
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
+# Must match the extraMounts in e2e-kind-config.yaml and backupDirHostPath in the e2e suite
+export BACKUP_DIR_HOST_PATH="${BACKUP_DIR_HOST_PATH:-/tmp/backup}"
+
 export RAWFILE_LOCAL_PV_VERSION=0.13.1
 # The cert-manager charts version their releases with a "v" prefix; without it Helm warns and falls back.
 export CERT_MANAGER_VERSION=v1.17.4
@@ -170,7 +173,20 @@ function delete_cluster() {
   kind delete clusters "${CLUSTER_NAME}"
 }
 
+# The Kind config shares one directory with every node, for the "volume" backupRepository specs.
+# Each repository is mounted at a subPath, which the kubelet creates owned by root with the mode of
+# this directory, so only a permissive mode here makes them writable for the Solr user that the
+# volume-prep initContainer runs as. Without it that container rejects them and the pods never start.
+function prepare_backup_dir() {
+  mkdir -p "${BACKUP_DIR_HOST_PATH}"
+  if ! chmod 777 "${BACKUP_DIR_HOST_PATH}" 2>/dev/null; then
+    printf "Could not make %s writable. Remove it and re-run if the backup specs fail.\n\n" "${BACKUP_DIR_HOST_PATH}"
+  fi
+}
+
 function start_cluster() {
+  prepare_backup_dir
+
   if (kind get clusters | grep "^${CLUSTER_NAME}$"); then
     if [[ "${REUSE_KIND_CLUSTER_IF_EXISTS}" = true ]]; then
       printf "KinD cluster exists and REUSE_KIND_CLUSTER_IF_EXISTS = true, so using existing KinD cluster.\n\n"
