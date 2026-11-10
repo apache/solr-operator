@@ -154,6 +154,16 @@ Mount the `solr.xml` ConfigMap into such a container if it needs the current con
 ** The permission fixing that `cp-solr-xml` also did for `volume` `backupRepositories` has moved to a new `volume-prep` initContainer, which is only created for SolrClouds that have a `volume` `backupRepository`.
 All other Solr pods now start without any volume prep initContainer.
 
+* *Authenticated probes now actually fail when authentication fails*
++
+When `solrSecurity.probesRequireAuth` is enabled, the generated liveness/readiness/startup probe command used to
+discard the exit code of the Solr request, so the probes reported success no matter what Solr answered.
+The probes now exit with the status of the Solr request.
++
+If a SolrCloud is running with credentials that the probe endpoints reject, its pods were previously reported as
+healthy and will now correctly go un-ready and be restarted.
+Check that the basic auth secret is valid, and that the probe paths are authorized for that user, before upgrading.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*
