@@ -174,9 +174,9 @@ function delete_cluster() {
 }
 
 # The Kind config shares one directory with every node, for the "volume" backupRepository specs.
-# Create it before Kind does, which would leave it owned by root, and make it writable for the Solr
-# user: the kubelet applies no fsGroup to hostPath volumes, so the volume-prep initContainer would
-# otherwise reject it and the Solr pods would never start.
+# Each repository is mounted at a subPath, which the kubelet creates owned by root with the mode of
+# this directory, so only a permissive mode here makes them writable for the Solr user that the
+# volume-prep initContainer runs as. Without it that container rejects them and the pods never start.
 function prepare_backup_dir() {
   mkdir -p "${BACKUP_DIR_HOST_PATH}"
   if ! chmod 777 "${BACKUP_DIR_HOST_PATH}" 2>/dev/null; then

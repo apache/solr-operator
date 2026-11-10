@@ -162,6 +162,8 @@ See xref:solr-cloud:custom-kube-options.adoc#pod-security-standards[Pod Security
 ** A custom Solr image that starts as root needs `containerSecurityContext.runAsNonRoot: false`, and `defaultInitContainerSecurityContext.runAsNonRoot: false` as well, since the `setup-zk` and `gen-pkcs12-keystore` initContainers run that same image.
 ** The `volume-prep` initContainer now runs as the Solr user and only checks that the backup repository directories are writable, failing the pod if they are not.
 Set `defaultInitContainerSecurityContext.runAsUser: 0` to have it take ownership of them as before.
+A `hostPath` repository, or any other volume the kubelet applies no `fsGroup` to, has to be group- or world-writable: each repository is mounted at a subPath that the kubelet creates owned by root, with the mode of the directory above it, so changing that directory's owner does not make the repository writable.
+`emptyDir` and PersistentVolume repositories need no preparation.
 ** The exporter pod now gets the `fsGroup` default even when given a `podSecurityContext` without one, as Solr pods always did.
 ** Containers and volumes that you add yourself are unchanged, and are yours to bring in line with the profile.
 ** On OpenShift, and other platforms that assign the user and group IDs from a namespace range, set `podOptions.omitDefaultIDs: true` to leave the `fsGroup` and init container `runAsUser` defaults out.

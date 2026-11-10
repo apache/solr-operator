@@ -770,9 +770,11 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 						volumeMount.MountPath,
 						// The user and groups are looked up at runtime, as the platform may assign them
 						fmt.Sprintf("Backup repository directory %s is not writable by the user the pod runs as "+
-							"(uid $(id -u), groups $(id -G)). Either make the volume writable by that user or one "+
-							"of its groups, or set podOptions.defaultInitContainerSecurityContext.runAsUser to 0 "+
-							"to have this container take ownership of it.", volumeMount.MountPath)))
+							"(uid $(id -u), groups $(id -G)). The repository is mounted at a subPath, which the "+
+							"kubelet creates owned by root with the mode of the directory above it, so changing "+
+							"that directory's owner does not make this one writable: make it group- or "+
+							"world-writable instead, or set podOptions.defaultInitContainerSecurityContext.runAsUser "+
+							"to 0 to have this container take ownership of it.", volumeMount.MountPath)))
 				}
 			}
 		}
