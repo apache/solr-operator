@@ -127,7 +127,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_LOG_LEVEL":      "DEBUG",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -306,7 +306,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"GC_TUNE":             "gc Options",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
 				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
@@ -511,7 +511,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")
@@ -542,7 +542,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 	})
 
-	FContext("Solr Cloud with availabilityZoneFromNodeLabel", func() {
+	FContext("Solr Cloud availability zone", func() {
 		BeforeEach(func() {
 			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
 				ZookeeperRef: &solrv1beta1.ZookeeperRef{
@@ -550,7 +550,6 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						InternalConnectionString: "host:7271",
 					},
 				},
-				AvailabilityZoneFromNodeLabel: newBoolPtr(true),
 			}
 		})
 		FIt("has the correct resources", func(ctx context.Context) {

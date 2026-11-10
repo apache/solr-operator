@@ -53,16 +53,12 @@ See xref:custom-solr-config.adoc#solr-xml-managed-elements[Elements the operator
 
 Solr's https://solr.apache.org/guide/solr/latest/configuration-guide/replica-placement-plugins.html#affinityplacementfactory[AffinityPlacementFactory] spreads replicas across availability zones, using the `availability_zone` system property of each Solr node.
 
-Set **`SolrCloud.spec.availabilityZoneFromNodeLabel`** to `true` to have the operator set that system property from the `topology.kubernetes.io/zone` label of the Kubernetes node each pod runs on.
+The operator always sets this system property, from the `topology.kubernetes.io/zone` label of the Kubernetes node each Solr pod runs on.
+There is nothing to configure in the SolrCloud resource, but the `AffinityPlacementFactory` still has to be enabled in Solr to make use of it.
 
-[source,yaml]
-----
-spec:
-  availabilityZoneFromNodeLabel: true
-----
-
-This requires Kubernetes `v1.33`+ with the `PodTopologyLabels` feature enabled, which is the default since `v1.35`.
-On clusters without it the system property is set to an empty value, and Solr places replicas as if all nodes were in one zone.
+Kubernetes only makes the node's zone label available to the pod through the https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#podtopologylabels[PodTopologyLabels] admission plugin, which is enabled by default since `v1.35`.
+On older versions, or when the plugin is disabled or the node has no zone label, the system property is empty.
+Solr then places replicas as if all nodes were in one zone, which is the same as when no availability zones are used at all.
 
 == Data Storage
 

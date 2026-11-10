@@ -153,7 +153,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+	// The "availability_zone" system property is used by Solr's AffinityPlacementFactory to spread replicas across zones
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -390,6 +391,17 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 		},
 		{
+			// The PodTopologyLabels admission plugin (beta and enabled by default since Kubernetes v1.35) copies the
+			// node's zone label onto the pod. Without it the label is missing, which resolves to an empty value.
+			Name: "SOLR_AVAILABILITY_ZONE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
 			Name:  "SOLR_HOST",
 			Value: solrHostName,
 		},
@@ -451,19 +463,6 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// so we get a rolling restart when the configMap changes
 	if reconcileConfigInfo[SolrXmlMd5Annotation] != "" {
 		podAnnotations[SolrXmlMd5Annotation] = reconcileConfigInfo[SolrXmlMd5Annotation]
-	}
-
-	if solrCloud.Spec.AvailabilityZoneFromNodeLabel != nil && *solrCloud.Spec.AvailabilityZoneFromNodeLabel {
-		envVars = append(envVars, corev1.EnvVar{
-			Name: "SOLR_AVAILABILITY_ZONE",
-			ValueFrom: &corev1.EnvVarSource{
-				FieldRef: &corev1.ObjectFieldSelector{
-					FieldPath:  fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
-					APIVersion: "v1",
-				},
-			},
-		})
-		allSolrOpts = append(allSolrOpts, "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)")
 	}
 
 	if solrCloud.Spec.SolrOpts != "" {

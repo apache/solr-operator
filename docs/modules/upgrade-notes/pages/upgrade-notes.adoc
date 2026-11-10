@@ -154,6 +154,10 @@ Mount the `solr.xml` ConfigMap into such a container if it needs the current con
 ** The permission fixing that `cp-solr-xml` also did for `volume` `backupRepositories` has moved to a new `volume-prep` initContainer, which is only created for SolrClouds that have a `volume` `backupRepository`.
 All other Solr pods now start without any volume prep initContainer.
 
+* Solr pods now get the `availability_zone` system property, set from the `topology.kubernetes.io/zone` label of the node they run on, for Solr's xref:solr-cloud:solr-cloud-crd.adoc#availability-zone-awareness[AffinityPlacementFactory].
+The label is only copied onto pods by Kubernetes `v1.35`+, and the property is empty on older versions, which leaves replica placement unchanged.
+This is part of the same pod spec change that restarts the Solr pods during this upgrade, so it does not cause an additional restart.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*

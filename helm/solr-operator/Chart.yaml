@@ -56,7 +56,7 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
-      description: New SolrCloud option 'availabilityZoneFromNodeLabel', which exposes the Kubernetes node's topology.kubernetes.io/zone label to Solr as the availability_zone system property used by AffinityPlacementFactory
+      description: Solr pods now get the availability_zone system property, used by Solr's AffinityPlacementFactory, from the topology.kubernetes.io/zone label of their Kubernetes node. The label is copied onto pods by Kubernetes v1.35+, and the property is empty on older versions
       links:
         - name: Github Issue
           url: https://github.com/apache/solr-operator/issues/556
