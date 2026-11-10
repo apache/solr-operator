@@ -19,7 +19,6 @@ package controllers
 
 import (
 	"context"
-	"strconv"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -117,7 +116,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			testPodEnvVariables(expectedEnvVars, foundEnv)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 		})
 	})
 
@@ -183,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			testPodEnvVariables(expectedEnvVars, foundEnv)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing that no ZookeeperCluster is created when using a connection String")
 			expectNoZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
@@ -268,7 +267,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(util.MergeLabelsOrAnnotations(testSSAnnotations, expectedStatefulSetAnnotations)), "Wrong statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers).To(HaveLen(1), "Solr StatefulSet requires 1 init container, for ZK.")
 			Expect(statefulSet.Spec.Template.Spec.InitContainers[0].Command).To(Equal([]string{"sh", "-c", "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER}; "}), "Wrong command for the ZK init container")
@@ -377,7 +376,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Wrong statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "No post-start command should be provided when no Chroot is used")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 
 			// Check the update strategy
@@ -467,7 +466,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			testPodEnvVariables(expectedEnvVars, foundEnv)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the created ZookeeperCluster")
 			expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
@@ -543,7 +542,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			testPodEnvVariables(expectedEnvVars, foundEnv)
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "8983"}), "Incorrect pre-stop command")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 
 			By("testing the created ZookeeperCluster")
 			expectZookeeperCluster(ctx, solrCloud, solrCloud.ProvidedZookeeperName())
@@ -578,7 +577,6 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_ZK_OPTS":        testSolrZKOpts,
 				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) $(SOLR_ZK_OPTS) " + testSolrOpts,
-				"SOLR_STOP_WAIT":      strconv.FormatInt(60-5, 10),
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 

@@ -155,9 +155,9 @@ There are various runtime parameters that allow you to customize the running of 
 
 === Time to wait for Solr to be killed gracefully
 
-The Solr Operator manages the Solr StatefulSet in a way that when a Solr pod needs to be stopped, or deleted, Kubernetes and Solr are on the same page for how long to wait for the process to die gracefully.
+When a Solr pod needs to be stopped, or deleted, Kubernetes sends `SIGTERM` to the Solr process, which shuts Solr down gracefully.
 
-The default time given is 60 seconds, before Solr or Kubernetes tries to forcefully stop the Solr process.
+The default time given is 60 seconds, before Kubernetes tries to forcefully stop the Solr process.
 You can override this default with the field:
 
 [source,yaml]
