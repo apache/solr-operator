@@ -276,6 +276,22 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	return requeueOrNot, err
 }
 
+// referencedSolrCloud returns the name and namespace of the SolrCloud that the given
+// SolrPrometheusExporter references, or nil if it does not reference a SolrCloud by name.
+// The namespace of the reference is normally filled in by WithDefaults(), but it is not guaranteed
+// to be set, e.g. when indexing an exporter that has not been defaulted yet.
+func referencedSolrCloud(prometheusExporter *solrv1beta1.SolrPrometheusExporter) *types.NamespacedName {
+	cloudRef := prometheusExporter.Spec.SolrReference.Cloud
+	if cloudRef == nil || cloudRef.Name == "" {
+		return nil
+	}
+	namespace := cloudRef.Namespace
+	if namespace == "" {
+		namespace = prometheusExporter.Namespace
+	}
+	return &types.NamespacedName{Name: cloudRef.Name, Namespace: namespace}
+}
+
 func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, solrCloudImage *solrv1beta1.ContainerImage, err error) {
 	solrConnectionInfo = util.SolrConnectionInfo{}
 
@@ -286,13 +302,9 @@ func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconci
 		cloudRef := prometheusExporter.Spec.SolrReference.Cloud
 		if cloudRef.ZookeeperConnectionInfo != nil {
 			solrConnectionInfo.CloudZkConnnectionInfo = cloudRef.ZookeeperConnectionInfo
-		} else if cloudRef.Name != "" {
+		} else if cloudName := referencedSolrCloud(prometheusExporter); cloudName != nil {
 			solrCloud := &solrv1beta1.SolrCloud{}
-			solrNamespace := prometheusExporter.Spec.SolrReference.Cloud.Namespace
-			if solrNamespace == "" {
-				solrNamespace = prometheusExporter.Namespace
-			}
-			err = r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: solrNamespace}, solrCloud)
+			err = r.Get(ctx, *cloudName, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
 				solrCloudImage = solrCloud.Spec.SolrImage
@@ -391,19 +403,18 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) er
 }
 
 func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
-	solrCloudField := ".spec.solrReference.cloud.name"
+	// An exporter can reference a SolrCloud in any namespace, so index the full namespaced name of the
+	// referenced cloud. Indexing the name alone would only ever match clouds in the exporter's own namespace.
+	solrCloudField := ".spec.solrReference.cloud"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, solrCloudField, func(rawObj client.Object) []string {
 		// grab the SolrPrometheusExporter object, extract the used SolrCloud...
-		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
-		if exporter.Spec.SolrReference.Cloud == nil {
-			return nil
-		}
-		if exporter.Spec.SolrReference.Cloud.Name == "" {
+		cloudName := referencedSolrCloud(rawObj.(*solrv1beta1.SolrPrometheusExporter))
+		if cloudName == nil {
 			return nil
 		}
 		// ...and if so, return it
-		return []string{exporter.Spec.SolrReference.Cloud.Name}
+		return []string{cloudName.String()}
 	}); err != nil {
 		return ctrlBuilder, err
 	}
@@ -412,9 +423,9 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.M
 		&solrv1beta1.SolrCloud{},
 		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+			// No namespace is given, since exporters in any namespace can reference this SolrCloud.
 			listOps := &client.ListOptions{
-				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
-				Namespace:     obj.GetNamespace(),
+				FieldSelector: fields.OneTermEqualSelector(solrCloudField, client.ObjectKeyFromObject(obj).String()),
 			}
 			err := r.List(ctx, foundExporters, listOps)
 			if err != nil {
