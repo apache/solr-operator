@@ -31,6 +31,7 @@ tasks by hand, read its `SKILL.md`:
 | Skill | Use it for |
 |---|---|
 | `dependency-upgrade` | Upgrading Go modules and pinned tool versions in one sweeping pass, including CRD/RBAC regeneration, the dependency license list, and the Helm chart changelogs. |
+| `triage-and-reproduce` | Triaging an incoming bug report: classifying it as an operator, Helm chart, Solr or configuration problem, reproducing it at the cheapest level, and routing it. |
 
 To see what has moved before starting an upgrade, run `make list-upgrades`. It reports the Go
 modules, pinned tool versions and envtest assets that the skill owns, and lists the image tags no
