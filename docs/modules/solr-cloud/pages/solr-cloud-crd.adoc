@@ -45,6 +45,10 @@ Use the **`SolrCloud.spec.solrModules`** property to add a list of module names,
 However, users might want to include custom code that is not an official Solr Module.
 In order to facilitate this, the **`SolrCloud.spec.additionalLibs`** property takes a list of paths to folders, containing jars to load in the classpath of the SolrCloud.
 
+NOTE: Both properties work by adding a `sharedLib` element to the `solr.xml` that the operator generates.
+If you provide your own `solr.xml` through `providedConfigMap`, they have no effect, and you must list the library directories in your custom `solr.xml` yourself.
+See xref:custom-solr-config.adoc#solr-xml-managed-elements[Elements the operator normally generates for you].
+
 === Availability Zone Awareness
 
 Solr's https://solr.apache.org/guide/solr/latest/configuration-guide/replica-placement-plugins.html#affinityplacementfactory[AffinityPlacementFactory] spreads replicas across availability zones, using the `availability_zone` system property of each Solr node.
