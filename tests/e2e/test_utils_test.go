@@ -602,6 +602,15 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 	}
 }
 
+func generateBaseSolrCloudWithNodeRoles(replicas int, overseers int, coordinators int) *solrv1beta1.SolrCloud {
+	solrCloud := generateBaseSolrCloud(replicas)
+	solrCloud.Spec.NodeRoleDistribution = &solrv1beta1.NodeRoleDistribution{
+		Overseers:    pointer.Int32(int32(overseers)),
+		Coordinators: pointer.Int32(int32(coordinators)),
+	}
+	return solrCloud
+}
+
 // Uses default password from docs : SolrRocks
 // The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
 // See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
