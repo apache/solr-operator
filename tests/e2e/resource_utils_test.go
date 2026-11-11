@@ -18,13 +18,17 @@
 package e2e
 
 import (
+	"encoding/json"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/apache/solr-operator/controllers/util/solr_api"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	policyv1 "k8s.io/api/policy/v1"
-	"regexp"
-	"time"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -165,6 +169,43 @@ func expectSolrCloudStatusConsistentWithChecks(ctx context.Context, solrCloud *s
 	}).Should(Succeed())
 
 	return &foundSolrCloud.Status
+}
+
+// expectNonDataStatefulSetsReady waits for every pod in each overseer/coordinator StatefulSet to be Ready.
+func expectNonDataStatefulSetsReady(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) {
+	for _, group := range solrCloud.GetNonDataNodeGroups() {
+		expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetNameForRole(group.Role), time.Minute*3, time.Second*5,
+			func(g Gomega, sts *appsv1.StatefulSet) {
+				g.Expect(sts.Status.ReadyReplicas).To(Equal(group.Replicas), "Not all %s pods are ready", group.Role)
+			}, resolveOffset(additionalOffset))
+	}
+}
+
+func eventuallyExpectNoStatefulSet(ctx context.Context, parentResource client.Object, statefulSetName string, additionalOffset ...int) {
+	EventuallyWithOffset(resolveOffset(additionalOffset), func() error {
+		return k8sClient.Get(ctx, resourceKey(parentResource, statefulSetName), &appsv1.StatefulSet{})
+	}).Within(time.Minute).Should(MatchError("statefulsets.apps \""+statefulSetName+"\" not found"), "StatefulSet exists when it should not")
+}
+
+// solrNodePattern matches Solr node names (e.g. "foo-solrcloud-overseer-0.foo-solrcloud-headless.ns:8983_solr")
+// for one role's pods. The data StatefulSet name is a prefix of the others, so the pod ordinal must follow it directly.
+func solrNodePattern(solrCloud *solrv1beta1.SolrCloud, role solrv1beta1.SolrNodeRole) *regexp.Regexp {
+	return regexp.MustCompile("^" + regexp.QuoteMeta(solrCloud.StatefulSetNameForRole(role)) + `-\d+\.`)
+}
+
+func podNameFromSolrNode(solrNode string) string {
+	return strings.SplitN(solrNode, ".", 2)[0]
+}
+
+func fetchOverseerLeader(ctx context.Context, g Gomega, solrCloud *solrv1beta1.SolrCloud) string {
+	response, err := callSolrApiInPod(ctx, solrCloud, "get", "/solr/admin/collections",
+		map[string]string{"action": "OVERSEERSTATUS", "wt": "json"})
+	g.Expect(err).ToNot(HaveOccurred(), "Could not fetch overseer status")
+
+	overseerStatus := solr_api.SolrOverseerStatusResponse{}
+	g.Expect(json.Unmarshal([]byte(response), &overseerStatus)).To(Succeed(), "Could not parse overseer status: %s", response)
+	g.Expect(overseerStatus.Leader).ToNot(BeEmpty(), "No overseer leader elected")
+	return overseerStatus.Leader
 }
 
 func expectSolrPrometheusExporter(ctx context.Context, solrPrometheusExporter *solrv1beta1.SolrPrometheusExporter, additionalOffset ...int) *solrv1beta1.SolrPrometheusExporter {
