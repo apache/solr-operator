@@ -109,6 +109,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		Client:   k8sManager.GetClient(),
 		Scheme:   k8sManager.GetScheme(),
 		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
+		IsOpenShift: false,
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
 	Expect((&SolrPrometheusExporterReconciler{
