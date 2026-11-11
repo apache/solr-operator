@@ -117,6 +117,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	if !instance.ObjectMeta.DeletionTimestamp.IsZero() {
+		// Owned resources are garbage collected by Kubernetes, so only the storage finalizer needs handling.
+		// Skipping the full reconcile keeps a missing dependency, e.g. a deleted providedConfigMap, from blocking deletion.
+		return r.reconcileDeletion(ctx, instance, logger)
+	}
+
 	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
 	requeueOrNot := reconcile.Result{}
 
@@ -1204,6 +1210,36 @@ func (r *SolrCloudReconciler) storageClassAllowsExpansion(ctx context.Context, c
 	}
 	allowed = storageClass.AllowVolumeExpansion != nil && *storageClass.AllowVolumeExpansion
 	return allowed, className, nil
+}
+
+// reconcileDeletion handles a SolrCloud that is being deleted, by running the storage finalizer logic.
+func (r *SolrCloudReconciler) reconcileDeletion(ctx context.Context, cloud *solrv1beta1.SolrCloud, logger logr.Logger) (ctrl.Result, error) {
+	if !util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
+		return reconcile.Result{}, nil
+	}
+
+	statefulSet := &appsv1.StatefulSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: cloud.StatefulSetName(), Namespace: cloud.Namespace}, statefulSet)
+	if errors.IsNotFound(err) {
+		// The StatefulSet may already be gone, e.g. with foreground deletion.
+		// Its PVCs still carry the selector labels the operator always generates, as in GenerateStatefulSet.
+		selectorLabels := cloud.SharedLabels()
+		selectorLabels["technology"] = solrv1beta1.SolrTechnologyLabel
+		statefulSet.Spec.Selector = &metav1.LabelSelector{MatchLabels: selectorLabels}
+	} else if err != nil {
+		return reconcile.Result{}, err
+	}
+
+	// Do not reconcile the storage finalizer unless we have PVC Labels that we know the Solr data PVCs are using.
+	// Otherwise it will delete all PVCs possibly
+	if statefulSet.Spec.Selector == nil || len(statefulSet.Spec.Selector.MatchLabels) == 0 {
+		return reconcile.Result{}, nil
+	}
+	if err = r.reconcileStorageFinalizer(ctx, cloud, statefulSet, logger); err != nil {
+		logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
+		return reconcile.Result{RequeueAfter: time.Second * 15}, nil
+	}
+	return reconcile.Result{}, nil
 }
 
 // Logic derived from:
