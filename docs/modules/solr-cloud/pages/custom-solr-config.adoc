@@ -110,6 +110,29 @@ NOTE: The format of `solr.xml` differs between Solr major versions, e.g. Solr 9 
 When upgrading a SolrCloud to a new Solr major version, create a new ConfigMap with a `solr.xml` for that version, and change `spec.solrImage.tag` and `providedConfigMap` in the same update.
 The `solr.xml` that ships with the new Solr version (`server/solr/solr.xml`) is a good starting point.
 
+[#solr-xml-managed-elements]
+=== Elements the operator normally generates for you
+
+Some SolrCloud settings only work by adding elements to the `solr.xml` that the operator generates:
+`spec.solrModules` and `spec.additionalLibs` are written into the `sharedLib` element, and `spec.backupRepositories` into the `<backup>` element.
+The operator never modifies a user-provided `solr.xml`, so with a custom `solr.xml` these settings have no effect and you must add the elements yourself.
+
+The simplest approach is to configure these settings first, then copy the generated `solr.xml` as described above and customize from there.
+The relevant elements look like this for one module and one S3 repository:
+
+[source,xml]
+----
+<str name="sharedLib">${solr.sharedLib:},/opt/solr/contrib/analysis-extras/lib,/opt/solr/contrib/s3-repository/lib,/opt/solr/dist</str>
+<backup>
+  <repository name="s3-backups" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">my-bucket</str>
+    <str name="s3.region">us-east-1</str>
+  </repository>
+</backup>
+----
+
+Keeping the `${solr.sharedLib:}` placeholder lets you set the library paths with `-Dsolr.sharedLib=...` in `solrOpts` instead of editing the XML.
+
 === Changes to Custom Config Trigger Rolling Restarts
 
 The Solr operator stores the MD5 hash of your custom XML in the StatefulSet's pod spec annotations (`spec.template.metadata.annotations`). To see the current annotations for your Solr pods, you can do:

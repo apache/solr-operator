@@ -253,9 +253,12 @@ Treat any failure as unfinished work. Add `make smoke-test` if packaging could b
 Docker, kind and network, unpacks the source release and runs `make check` inside it.
 
 CI coverage: build-and-check runs on every PR; smoke-test skips doc-only paths but runs for
-`go.mod`, `go.sum`, `Makefile`, the license CSV and `helm/`. **The e2e workflow is permanently
-disabled** and reports as skipped, so it is evidence of nothing — if runtime behaviour could be
-affected, run `make e2e-tests` locally and say so in the PR.
+`go.mod`, `go.sum`, `Makefile`, the license CSV and `helm/`. The e2e workflow runs on a sweep's PR
+too — its path filter includes `go.mod`, `go.sum`, `Makefile`, `config/crd/`,
+`config/dependencies/` and `helm/solr-operator/` — but only the `Label("pr")` specs, on one
+Kubernetes and Solr version. That makes a green e2e job partial evidence: after a Kubernetes-set
+bump, run the full suite with `make e2e-tests` locally, or dispatch `e2e-tests.yaml` with an empty
+label filter, and say which one in the PR.
 
 ## Commit, then ask before pushing
 

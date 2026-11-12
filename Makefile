@@ -50,6 +50,8 @@ GO_LICENSES_VERSION=v2.0.1
 # matter which platform a developer generates it on (e.g. darwin/arm64 would
 # otherwise omit Linux-only deps such as github.com/prometheus/procfs).
 GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
+# Report template that keeps the dependency license list deterministic, see the file's own comment.
+LICENSE_REPORT_TEMPLATE=hack/licenses/dependency_licenses.csv.tmpl
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.33.0
 YQ_VERSION=v4.54.1
@@ -138,7 +140,7 @@ fmt: ## Run go fmt against code.
 .PHONY: fetch-licenses-list
 # Ignore non-Go code warnings when it is supported natively: https://github.com/google/go-licenses/issues/120
 fetch-licenses-list: mod-tidy go-licenses ## Fetch the list of license types
-	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator > dependency_licenses.csv
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator --template $(LICENSE_REPORT_TEMPLATE) > dependency_licenses.csv
 
 .PHONY: fetch-licenses-full
 fetch-licenses-full: go-licenses ## Fetch all licenses
@@ -259,7 +261,7 @@ check-licenses: go-licenses ## Ensure the licenses for dependencies are valid an
 	@echo "Check list of dependency licenses"
 	$(GO_LICENSES_ENV) $(GO_LICENSES) check . \
 		--allowed_licenses=Apache-2.0,Apache-1.1,MIT,BSD-3-Clause,BSD-2-Clause,ISC,ICU,X11,NCSA,W3C,AFL-3.0,MS-PL,CC0-1.0,BSL-1.0,WTFPL,Unicode-DFS-2015,Unicode-DFS-2016,ZPL-2.0,UPL-1.0,Unlicense,MPL-2.0
-	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator 2>/dev/null | diff dependency_licenses.csv -
+	$(GO_LICENSES_ENV) $(GO_LICENSES) report . --ignore github.com/apache/solr-operator --template $(LICENSE_REPORT_TEMPLATE) 2>/dev/null | diff dependency_licenses.csv -
 
 .PHONY: check-zk-op-version
 check-zk-op-version: export PATH:=$(LOCALBIN):${PATH}
