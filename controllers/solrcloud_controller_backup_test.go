@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -108,7 +109,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 				"SOLR_PORT":           "8983",
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 
@@ -158,7 +159,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 					"SOLR_NODE_PORT":      "8983",
 					"SOLR_PORT_ADVERTISE": "8983",
 					"SOLR_LOG_LEVEL":      "INFO",
-					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 
@@ -213,7 +214,7 @@ var _ = FDescribe("SolrCloud controller - Backup Repositories", func() {
 					"SOLR_NODE_PORT":      "8983",
 					"SOLR_PORT_ADVERTISE": "8983",
 					"SOLR_LOG_LEVEL":      "INFO",
-					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+					"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 				}
 				foundEnv := found.Spec.Template.Spec.Containers[0].Env
 

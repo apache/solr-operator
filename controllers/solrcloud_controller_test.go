@@ -127,7 +127,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_LOG_LEVEL":      "DEBUG",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -285,10 +285,10 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"GC_TUNE":             "gc Options",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
-			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
+			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology, "solr-node-role": string(solrv1beta1.SolrNodeRoleData)})
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/test"}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Labels).To(Equal(util.MergeLabelsOrAnnotations(expectedStatefulSetLabels, testSSLabels)), "Incorrect statefulSet labels")
@@ -495,7 +495,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")

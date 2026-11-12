@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -102,7 +103,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -181,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
@@ -253,7 +254,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -324,7 +325,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -393,7 +394,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "3000"}), "Incorrect pre-stop command")
@@ -474,7 +475,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
@@ -540,7 +541,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PreStop.Exec.Command).To(Equal([]string{"solr", "stop", "-p", "2000"}), "Incorrect pre-stop command")
