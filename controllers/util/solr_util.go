@@ -110,7 +110,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 	// Add node role label. We default to data node roles if no overseer or coordinator are specified.
 	labels[solr.SolrNodeRoleLabel] = string(group.Role)
-	// TODO - Figure out if this is needed?
+	// TODO - Figure out if this is recommended
+	// Reasoning; To me it made sense to have selector labels of the node roles for the sts
+	// to be safer at selecting, however, this requires a bit of changes to the tests
+	// and wanted to get recommendation before going down that rabbit hole
 	//selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
 
 	annotations := map[string]string{

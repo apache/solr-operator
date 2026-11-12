@@ -127,6 +127,22 @@ So although Kubernetes might just take down 25% of a Cloud's nodes, that might r
 This is ongoing work, and hopefully something the Solr Operator can protect against in the future.
 See https://github.com/apache/solr-operator/issues/471[this discussion] for more information.
 
+== Node Roles
+
+Node roles can be configured which the Solr Operator uses to create a stateful set for each role. Please note, for compatability reasons, not specifying will default to `data:on,overseer:allowed,coordinator:off`.
+The data node role is inherited by the replicas field.
+
+[source,yaml]
+----
+spec:
+  replicas: 3
+  nodeRoleDistribution:
+    overseers: 2
+    coordinators: 1
+----
+
+More information on node roles can be found in the https://solr.apache.org/guide/solr/latest/deployment-guide/node-roles.html[Ref Guide].
+
 == Backups
 
 Solr Backups are enabled via the Solr Operator.
