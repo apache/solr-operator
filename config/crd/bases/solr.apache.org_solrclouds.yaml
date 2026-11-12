@@ -11045,6 +11045,21 @@ spec:
                         type: string
                     type: object
                 type: object
+              nodeRoleDistribution:
+                description: Distribution of node roles
+                properties:
+                  coordinators:
+                    description: Number of dedicated coordinator nodes (data:off,
+                      coordinator:on).
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  overseers:
+                    description: Number of dedicated overseer nodes (data:off, overseer:preferred).
+                    format: int32
+                    minimum: 0
+                    type: integer
+                type: object
               replicas:
                 description: The number of solr nodes to run
                 format: int32

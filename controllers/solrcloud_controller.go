@@ -29,6 +29,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
@@ -154,7 +155,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, err
 	}
 
-	solrNodeNames := instance.GetAllSolrPodNames()
+	solrNodeNames := append(instance.GetAllSolrPodNames(), instance.GetNonDataPodNames()...)
 
 	hostNameIpMap := make(map[string]string)
 	// Generate a service for every Node
@@ -341,7 +342,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var statefulSet *appsv1.StatefulSet
 	if !blockReconciliationOfStatefulSet {
 		// Generate StatefulSet that should exist
-		expectedStatefulSet := util.GenerateStatefulSet(instance, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
+		expectedStatefulSet := util.GenerateStatefulSet(instance, instance.GetDataNodeGroup(), &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
 
 		// Check if the StatefulSet already exists
 		statefulSetLogger := logger.WithValues("statefulSet", expectedStatefulSet.Name)
@@ -407,6 +408,30 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 	if statefulSet != nil && statefulSet.Spec.Replicas != nil {
 		solrNodeNames = instance.GetSolrPodNames(int(*statefulSet.Spec.Replicas))
+	}
+
+	// Overseer & Coordinator StatefulSets.
+	var nonDataStatefulSets []*appsv1.StatefulSet
+	if !blockReconciliationOfStatefulSet {
+		for _, group := range instance.GetNonDataNodeGroups() {
+			expected := util.GenerateStatefulSet(instance, group, &newStatus, hostNameIpMap, reconcileConfigInfo, tls, security)
+			found, e := r.reconcileNonDataStatefulSet(ctx, instance, expected, logger)
+			if e != nil {
+				return requeueOrNot, e
+			}
+
+			// Possible it has just been created, so pick it up on the next reconciliation loop
+			if found == nil {
+				continue
+			}
+			nonDataStatefulSets = append(nonDataStatefulSets, found)
+			for i := range *found.Spec.Replicas {
+				solrNodeNames = append(solrNodeNames, fmt.Sprintf("%s-%d", found.Name, i))
+			}
+		}
+		if err = r.deleteRemovedNonDataStatefulSets(ctx, instance, logger); err != nil {
+			return requeueOrNot, err
+		}
 	}
 
 	extAddressabilityOpts := instance.Spec.SolrAddressability.External
@@ -786,6 +811,39 @@ func (r *SolrCloudReconciler) deleteService(ctx context.Context, service *corev1
 	return nil
 }
 
+// deleteRemovedNonDataStatefulSets deletes overseer/coordinator StatefulSets whose role is no longer in the spec.
+func (r *SolrCloudReconciler) deleteRemovedNonDataStatefulSets(ctx context.Context, cloud *solrv1beta1.SolrCloud, logger logr.Logger) error {
+	// Discover which node role groups we want to keep
+	wanted := map[string]bool{}
+	for _, group := range cloud.GetNonDataNodeGroups() {
+		wanted[cloud.StatefulSetNameForRole(group.Role)] = true
+	}
+
+	// Find StatefulSets that exist that are not the default StatefulSet (data node group)
+	var filteredRoles = []string{string(solrv1beta1.SolrNodeRoleOverseer), string(solrv1beta1.SolrNodeRoleCoordinator)}
+	hasRole, _ := labels.NewRequirement(solrv1beta1.SolrNodeRoleLabel, selection.In, filteredRoles)
+	found := &appsv1.StatefulSetList{}
+	if err := r.List(ctx, found, &client.ListOptions{
+		Namespace:     cloud.Namespace,
+		LabelSelector: labels.SelectorFromSet(cloud.SharedLabels()).Add(*hasRole),
+	}); err != nil {
+		return err
+	}
+
+	// Delete the StatefulSet if it is not wanted
+	for i := range found.Items {
+		statefulSet := &found.Items[i]
+		if wanted[statefulSet.Name] || !metav1.IsControlledBy(statefulSet, cloud) {
+			continue
+		}
+		logger.Info("Deleting StatefulSet for removed node role", "statefulSet", statefulSet.Name)
+		if err := r.Delete(ctx, statefulSet); err != nil && !errors.IsNotFound(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 // initializePods Ensure that all SolrCloud Pods are initialized
 func (r *SolrCloudReconciler) initializePods(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) (podSelector labels.Selector, podList []corev1.Pod, err error) {
 	foundPods := &corev1.PodList{}
@@ -1066,6 +1124,36 @@ func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logge
 		return errors.NewBadRequest("No Zookeeper reference information provided.")
 	}
 	return nil
+}
+
+// reconcileNonDataStatefulSet creates or updates StatefulSets belonging to node roles that are not data, i.e. overseer,
+// coordinator. Unlike the data StatefulSet (the main StatefulSet), it has no scheduled restarts or managed cluster
+// operations.
+func (r *SolrCloudReconciler) reconcileNonDataStatefulSet(ctx context.Context, cloud *solrv1beta1.SolrCloud, expected *appsv1.StatefulSet, logger logr.Logger) (*appsv1.StatefulSet, error) {
+	statefulSetLogger := logger.WithValues("statefulset", expected.Name)
+
+	found := &appsv1.StatefulSet{}
+	err := r.Get(ctx, types.NamespacedName{Name: expected.Name, Namespace: expected.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		statefulSetLogger.Info("Creating StatefulSet")
+		if err = controllerutil.SetControllerReference(cloud, expected, r.Scheme); err == nil {
+			err = r.Create(ctx, expected)
+		}
+		return nil, err
+	} else if err != nil {
+		return nil, err
+	}
+
+	util.MaintainPreservedStatefulSetFields(expected, found)
+
+	needsUpdate, err := util.OvertakeControllerRef(cloud, found, r.Scheme)
+	needsUpdate = util.CopyStatefulSetFields(expected, found, statefulSetLogger) || needsUpdate
+
+	if needsUpdate && err == nil {
+		statefulSetLogger.Info("Updating StatefulSet")
+		err = r.Update(ctx, found)
+	}
+	return found, err
 }
 
 func (r *SolrCloudReconciler) expandPVCs(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string, newSize resource.Quantity, logger logr.Logger) (expansionComplete bool, resizeInfeasible bool, err error) {
