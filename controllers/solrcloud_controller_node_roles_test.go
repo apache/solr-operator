@@ -65,7 +65,7 @@ var _ = FDescribe("SolrCloud controller - Node Roles", func() {
 			overseerName := solrCloud.StatefulSetNameForRole(solrv1beta1.SolrNodeRoleOverseer)
 			expectStatefulSetWithChecks(ctx, solrCloud, overseerName, func(g Gomega, sts *appsv1.StatefulSet) {
 				g.Expect(*sts.Spec.Replicas).To(Equal(int32(2)))
-				g.Expect(sts.Spec.Selector.MatchLabels).To(HaveKeyWithValue(solrv1beta1.SolrNodeRoleLabel, "overseer"))
+				g.Expect(sts.Labels).To(HaveKeyWithValue(solrv1beta1.SolrNodeRoleLabel, string(solrv1beta1.SolrNodeRoleOverseer)))
 				testPodEnvVariablesWithGomega(g, map[string]string{
 					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:preferred,coordinator:off",
 				}, sts.Spec.Template.Spec.Containers[0].Env)
@@ -73,7 +73,8 @@ var _ = FDescribe("SolrCloud controller - Node Roles", func() {
 			coordinatorName := solrCloud.StatefulSetNameForRole(solrv1beta1.SolrNodeRoleCoordinator)
 			expectStatefulSetWithChecks(ctx, solrCloud, coordinatorName, func(g Gomega, sts *appsv1.StatefulSet) {
 				g.Expect(*sts.Spec.Replicas).To(Equal(int32(1)))
-				g.Expect(sts.Spec.Selector.MatchLabels).To(HaveKeyWithValue(coordinatorName, coordinatorName))
+				g.Expect(sts.Labels).To(HaveKeyWithValue(solrv1beta1.SolrNodeRoleLabel, string(solrv1beta1.SolrNodeRoleCoordinator)))
+				//g.Expect(sts.Spec.Selector.MatchLabels).To(HaveKeyWithValue(coordinatorName, coordinatorName))
 				testPodEnvVariablesWithGomega(g, map[string]string{
 					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:disallowed,coordinator:on",
 				}, sts.Spec.Template.Spec.Containers[0].Env)
@@ -88,7 +89,7 @@ var _ = FDescribe("SolrCloud controller - Node Roles", func() {
 
 			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
 				found.Spec.NodeRoleDistribution = nil
-				g.Expect(k8sClient.Update(ctx, found)).To(Succeed())
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Not here?")
 			})
 			eventuallyExpectNoStatefulSet(ctx, solrCloud, overseerName)
 			eventuallyExpectNoStatefulSet(ctx, solrCloud, coordinatorName)

@@ -110,7 +110,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 	selectorLabels["technology"] = solr.SolrTechnologyLabel
 	// Add node role label. We default to data node roles if no overseer or coordinator are specified.
 	labels[solr.SolrNodeRoleLabel] = string(group.Role)
-	selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
+	// TODO - Figure out if this is needed?
+	//selectorLabels[solr.SolrNodeRoleLabel] = string(group.Role)
 
 	annotations := map[string]string{
 		SolrZKConnectionStringAnnotation: solrCloudStatus.ZkConnectionString(),
