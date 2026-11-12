@@ -19295,12 +19295,14 @@ spec:
           status:
             description: SolrCloudStatus defines the observed state of SolrCloud
             properties:
-              appliedReplicaPlacementFactory:
+              appliedSettings:
+                additionalProperties:
+                  type: string
                 description: |-
-                  AppliedReplicaPlacementFactory is a hash of the replicaPlacementFactory section that the operator
-                  last applied to the cluster, used to detect when it needs to be re-applied. Empty when no
-                  placement plugin is managed by the operator.
-                type: string
+                  AppliedSettings holds a hash of each cluster-wide Solr setting that the operator has applied
+                  through Solr's APIs, keyed by the spec section it comes from. It is used to detect when a
+                  setting needs to be re-applied. Settings that the operator does not manage are absent.
+                type: object
               backupRepositoriesAvailable:
                 additionalProperties:
                   type: boolean

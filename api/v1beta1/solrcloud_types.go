@@ -1181,11 +1181,11 @@ type SolrCloudStatus struct {
 	// ZookeeperConnectionInfo is the information on how to connect to the used Zookeeper
 	ZookeeperConnectionInfo ZookeeperConnectionInfo `json:"zookeeperConnectionInfo"`
 
-	// AppliedReplicaPlacementFactory is a hash of the replicaPlacementFactory section that the operator
-	// last applied to the cluster, used to detect when it needs to be re-applied. Empty when no
-	// placement plugin is managed by the operator.
+	// AppliedSettings holds a hash of each cluster-wide Solr setting that the operator has applied
+	// through Solr's APIs, keyed by the spec section it comes from. It is used to detect when a
+	// setting needs to be re-applied. Settings that the operator does not manage are absent.
 	// +optional
-	AppliedReplicaPlacementFactory string `json:"appliedReplicaPlacementFactory,omitempty"`
+	AppliedSettings map[string]string `json:"appliedSettings,omitempty"`
 
 	// BackupRestoreReady announces whether the solrCloud has the backupRestorePVC mounted to all pods
 	// and therefore is ready for backups and restores.
@@ -1355,6 +1355,28 @@ func (scs SolrCloudStatus) DissectZkInfo() (zkConnectionString string, zkServer 
 	zkChRoot = "/" + zkParts[1]
 
 	return zkConnectionString, zkServer, zkChRoot
+}
+
+// ReplicaPlacementFactorySetting is the Status.AppliedSettings key for the replicaPlacementFactory section.
+const ReplicaPlacementFactorySetting = "replicaPlacementFactory"
+
+// SetAppliedSetting records the hash of a cluster-wide Solr setting that the operator has applied.
+// An empty hash removes the entry, for a setting that the operator no longer manages.
+// The map is replaced rather than modified, so a status that shares it with another copy is unaffected.
+func (scs *SolrCloudStatus) SetAppliedSetting(setting string, hash string) {
+	applied := make(map[string]string, len(scs.AppliedSettings)+1)
+	for name, appliedHash := range scs.AppliedSettings {
+		applied[name] = appliedHash
+	}
+	if hash == "" {
+		delete(applied, setting)
+	} else {
+		applied[setting] = hash
+	}
+	if len(applied) == 0 {
+		applied = nil
+	}
+	scs.AppliedSettings = applied
 }
 
 func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {

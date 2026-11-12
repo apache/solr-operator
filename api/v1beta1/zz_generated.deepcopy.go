@@ -991,6 +991,13 @@ func (in *SolrCloudStatus) DeepCopyInto(out *SolrCloudStatus) {
 		**out = **in
 	}
 	in.ZookeeperConnectionInfo.DeepCopyInto(&out.ZookeeperConnectionInfo)
+	if in.AppliedSettings != nil {
+		in, out := &in.AppliedSettings, &out.AppliedSettings
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.BackupRepositoriesAvailable != nil {
 		in, out := &in.BackupRepositoriesAvailable, &out.BackupRepositoriesAvailable
 		*out = make(map[string]bool, len(*in))
