@@ -31,6 +31,7 @@ tasks by hand, read its `SKILL.md`:
 | Skill | Use it for |
 |---|---|
 | `dependency-upgrade` | Upgrading Go modules and pinned tool versions in one sweeping pass, including CRD/RBAC regeneration, the dependency license list, and the Helm chart changelogs. |
+| `add-crd-field` | Making something configurable through the SolrCloud or SolrPrometheusExporter CRD, including the Helm value mapping, the regenerated CRDs and the chart changelog. |
 
 To see what has moved before starting an upgrade, run `make list-upgrades`. It reports the Go
 modules, pinned tool versions and envtest assets that the skill owns, and lists the image tags no
