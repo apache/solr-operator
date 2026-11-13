@@ -56,6 +56,11 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: added
+      description: New SolrCloud option 'replicaPlacementFactory', which sets the cluster-wide replica placement plugin and its config through Solr's cluster plugin API. Requires Solr 9+
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/691
+    - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
         - name: Github Issue
@@ -167,6 +172,25 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/707
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/876
+    - kind: added
+      description: Support for Solr 10. See the upgrade notes before upgrading a SolrCloud to Solr 10.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/821
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The operator no longer reconciles a SolrPrometheusExporter that uses a Solr 10 image or refers to a Solr 10 SolrCloud, as Solr 10 removed the Prometheus exporter. It emits an UnsupportedSolrVersion Warning event instead.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/820
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The SolrCloud image tag must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). SolrClouds with other tags, such as `latest`, are no longer reconciled; see the upgrade notes before upgrading the operator.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

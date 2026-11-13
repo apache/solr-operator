@@ -277,7 +277,14 @@ func (c *ContainerImage) ToImageName() (name string) {
 	return c.Repository + ":" + c.Tag
 }
 
+// Version returns the version part of the image's tag, without a digest, e.g. "10.0.0" for "10.0.0@sha256:...".
+func (c *ContainerImage) Version() string {
+	return ImageVersion(c.ToImageName())
+}
+
 func ImageVersion(image string) (version string) {
+	// Ignore a digest, e.g. "solr:10.0.0@sha256:..."
+	image, _, _ = strings.Cut(image, "@")
 	split := strings.Split(image, ":")
 	if len(split) < 2 {
 		return ""

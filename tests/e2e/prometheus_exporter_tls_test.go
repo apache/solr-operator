@@ -44,6 +44,8 @@ var _ = FDescribe("E2E - Prometheus Exporter - TLS ", Ordered, func() {
 		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
 	*/
 	BeforeAll(func(ctx context.Context) {
+		skipIfPrometheusExporterUnavailable()
+
 		installSolrIssuer(ctx, testNamespace())
 		solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
