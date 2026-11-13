@@ -22,11 +22,17 @@ nodes:
       - hostPath: /tmp/backup
         containerPath: /tmp/backup
   - role: worker
+    # Each worker is in its own zone, so tests can check that Solr is given the zone of its node
+    labels:
+      topology.kubernetes.io/zone: e2e-zone-a
     # add a mount from /path/to/my/files on the host to /files on the node
     extraMounts:
       - hostPath: /tmp/backup
         containerPath: /tmp/backup
   - role: worker
+    # Each worker is in its own zone, so tests can check that Solr is given the zone of its node
+    labels:
+      topology.kubernetes.io/zone: e2e-zone-b
     # add a mount from /path/to/my/files on the host to /files on the node
     extraMounts:
       - hostPath: /tmp/backup

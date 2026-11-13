@@ -59,7 +59,9 @@ var _ = FDescribe("E2E - SolrCloud - Basic", func() {
 			}
 		})
 
-		// All testing will be done in the "JustBeforeEach" logic, no additional tests required here
-		FIt("Starts correctly", func(ctx context.Context) {})
+		FIt("Starts correctly", func(ctx context.Context) {
+			By("checking that Solr was given its node and, if Kubernetes supports it, its node's zone for replica placement")
+			expectPlacementSystemProperties(ctx, solrCloud)
+		})
 	})
 })
