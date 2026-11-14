@@ -144,6 +144,16 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 	podAnnotations[ServiceTypeAnnotation] = serviceType
 
+	// Added last, so that a user-provided annotation of the same name wins.
+	//
+	// TODO: Gate these on Solr 10 too, once #827 has landed. There is no event to emit from here, so
+	// the warning belongs in the SolrCloud reconcile, next to the one for the PodMonitor:
+	//
+	//	if major, err := solrCloud.SolrMajorVersion(); err == nil && major >= 10 {
+	if solrCloud.UsesPrometheusScrapeAnnotations() {
+		podAnnotations = MergeLabelsOrAnnotations(podAnnotations, PrometheusScrapeAnnotations(solrCloud))
+	}
+
 	// The isNotStopped readiness gate will always be used for managedUpdates
 	podReadinessGates := []corev1.PodReadinessGate{
 		{

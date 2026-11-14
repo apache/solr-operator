@@ -26,6 +26,7 @@ import (
 	"github.com/apache/solr-operator/version"
 	"github.com/fsnotify/fsnotify"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -62,7 +63,8 @@ var (
 	watchNamespaces string
 
 	// External Operator dependencies
-	useZookeeperCRD bool
+	useZookeeperCRD  bool
+	usePrometheusCRD bool
 
 	// mTLS information
 	clientSkipVerify  bool
@@ -86,9 +88,12 @@ func init() {
 	utilruntime.Must(solrv1beta1.AddToScheme(scheme))
 
 	utilruntime.Must(zkApi.AddToScheme(scheme))
+
+	utilruntime.Must(monitoringv1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 
 	flag.BoolVar(&useZookeeperCRD, "zk-operator", true, "The operator will not use the zk operator & crd when this flag is set to false.")
+	flag.BoolVar(&usePrometheusCRD, "prometheus-operator", false, "The operator will manage PodMonitors for SolrClouds when this flag is set to true, which requires the Prometheus operator & crds to be installed in the cluster.")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "", "The comma-separated list of namespaces to watch. If an empty string (default) is provided, the operator will watch the entire Kubernetes cluster.")
 
 	flag.BoolVar(&clientSkipVerify, "tls-skip-verify-server", true, "Controls whether a client verifies the server's certificate chain and host name. If true (insecure), TLS accepts any certificate presented by the server and any host name in that certificate.")
@@ -180,6 +185,7 @@ func main() {
 	}
 
 	controllers.UseZkCRD(useZookeeperCRD)
+	controllers.UsePrometheusCRD(usePrometheusCRD && controllers.PrometheusCRDInstalled(mgr.GetRESTMapper(), setupLog))
 
 	// watch TLS files for update
 	if clientCertPath != "" {

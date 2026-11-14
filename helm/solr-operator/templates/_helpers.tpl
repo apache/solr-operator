@@ -83,6 +83,21 @@ What namespace to do leader election in
 {{- end -}}
 
 {{/*
+Whether the Prometheus Operator CRDs are installed in the cluster, so that the Solr Operator can manage PodMonitors for SolrClouds.
+If .Values.prometheus.crdsInstalled is set, that wins.
+If it is not set, this detects whether the CRDs are installed in the cluster.
+*/}}
+{{- define "solr-operator.prometheusCRDsInstalled" -}}
+{{- $installed := (.Values.prometheus | default dict).crdsInstalled -}}
+{{- if kindIs "invalid" $installed -}}
+{{- $installed = .Capabilities.APIVersions.Has "monitoring.coreos.com/v1" -}}
+{{- end -}}
+{{- if $installed -}}
+true
+{{- end -}}
+{{- end -}}
+
+{{/*
 Determine whether to use ClusterRoles or Roles
 */}}
 {{- define "solr-operator.roleType" -}}

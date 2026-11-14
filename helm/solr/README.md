@@ -112,6 +112,13 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | backupRepositories | []object | | A list of BackupRepositories to connect your SolrCloud to. Visit the [SolrBackup docs](https://solr.apache.org/guide/operator/latest/solr-backup/index.html) or run `kubectl explain solrcloud.spec.backupRepositories` to see the available options. |
 | scaling.vacatePodsOnScaleDown | boolean | `true` | While scaling down the SolrCloud, move replicas off of Solr Pods before they are deleted. This only affects pods that will not exist after the scaleDown operation.  |
 | scaling.populatePodsOnScaleUp | boolean | `true` | While scaling up the SolrCloud, migrate replicas onto the new Solr Pods after they are created. This uses the Balance Replicas API in Solr that is only available in Solr 9.3+. This option will be ignored if using an unsupported version of Solr.  |
+| prometheus.scrapeAnnotations.enable | boolean | `false` | Put `prometheus.io/*` annotations on the Solr pods, for a Prometheus that discovers pods to scrape through annotations. Requires Solr 10. |
+| prometheus.podMonitor.enable | boolean | `false` | Have the Solr Operator manage a PodMonitor for this SolrCloud, so that Prometheus scrapes the metrics endpoint of every Solr pod. Requires Solr 10, and a Solr Operator using the Prometheus Operator CRDs. |
+| prometheus.podMonitor.labels | map[string]string | | Labels to put on the PodMonitor, matched by the `podMonitorSelector` of your Prometheus, e.g. `release: mon`. |
+| prometheus.podMonitor.interval | string | | How often Prometheus should scrape each Solr pod, e.g. `30s`. |
+| prometheus.podMonitor.scrapeTimeout | string | | Timeout for scraping a Solr pod, e.g. `10s`. Must not be longer than the interval. |
+| prometheus.podMonitor.basicAuthSecret | string | | Secret with the username/password that Prometheus authenticates with. Defaults to the SolrCloud's basic auth secret. |
+| prometheus.podMonitor.tlsConfig | object | | How Prometheus should trust the Solr certificates. Accepts `caSecret` (`name`/`key`), `certSecret` and `keySecret` (PEM client certificate and key, when `solrTLS.clientAuth` is `Need`), `serverName` and `insecureSkipVerify`. |
 
 ### Data Storage Options
 

@@ -34,11 +34,13 @@ import (
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
 	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
@@ -67,6 +69,25 @@ func UseZkCRD(useCRD bool) {
 	useZkCRD = useCRD
 }
 
+var usePrometheusCRD bool
+
+func UsePrometheusCRD(useCRD bool) {
+	usePrometheusCRD = useCRD
+}
+
+// PrometheusCRDInstalled returns whether the PodMonitor CRD exists in the cluster. Watching a kind
+// that the cluster does not have makes the manager give up after its cache sync timeout, which would
+// crash loop the operator instead of merely not managing PodMonitors.
+func PrometheusCRDInstalled(restMapper meta.RESTMapper, logger logr.Logger) bool {
+	podMonitor := monitoringv1.SchemeGroupVersion.WithKind(monitoringv1.PodMonitorsKind)
+	if _, err := restMapper.RESTMapping(podMonitor.GroupKind(), podMonitor.Version); err != nil {
+		logger.Error(err, "Not managing PodMonitors for SolrClouds, as the Prometheus Operator CRDs are not installed in this cluster. "+
+			"Install them, or start the Solr Operator without --prometheus-operator=true.")
+		return false
+	}
+	return true
+}
+
 //+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;delete
 //+kubebuilder:rbac:groups="",resources=pods/status,verbs=get;patch
 //+kubebuilder:rbac:groups="",resources=events,verbs=create;patch
@@ -81,6 +102,7 @@ func UseZkCRD(useCRD bool) {
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update;patch;delete
 //+kubebuilder:rbac:groups=storage.k8s.io,resources=storageclasses,verbs=get;list;watch
 //+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=podmonitors,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=zookeeper.pravega.io,resources=zookeeperclusters/status,verbs=get
 //+kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update;patch;delete
@@ -211,6 +233,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			return requeueOrNot, err
 		}
 	}
+
+	r.reconcilePodMonitorBestEffort(ctx, instance, logger, &requeueOrNot)
 
 	// Use a map to hold additional config info that gets determined during reconcile
 	// needed for creating the STS and supporting objects (secrets, config maps, and so on)
@@ -1014,6 +1038,101 @@ func (r *SolrCloudReconciler) reconcileNodeService(ctx context.Context, logger l
 
 	return nil, ip
 }
+
+// reconcilePodMonitorBestEffort manages the PodMonitor of the cloud without ever failing the reconcile:
+// metrics are not worth stalling a Solr cluster over. A PodMonitor that cannot be managed, e.g. because
+// the API server rejects a user-given label, is reported as a warning event and retried later, while the
+// rest of the SolrCloud is reconciled as usual.
+func (r *SolrCloudReconciler) reconcilePodMonitorBestEffort(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger, requeueOrNot *reconcile.Result) {
+	if err := r.reconcilePodMonitor(ctx, instance, logger); err != nil {
+		logger.Error(err, "Could not reconcile the PodMonitor, continuing with the rest of the SolrCloud", "podMonitor", instance.PodMonitorName())
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodMonitorError",
+			"Could not reconcile PodMonitor %q, will retry: %v", instance.PodMonitorName(), err)
+		updateRequeueAfter(requeueOrNot, time.Second*30)
+	}
+}
+
+// reconcilePodMonitor creates, updates or deletes the PodMonitor for the cloud.
+func (r *SolrCloudReconciler) reconcilePodMonitor(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger) error {
+	if !instance.UsesPodMonitor() {
+		return r.deletePodMonitor(ctx, instance, logger)
+	}
+
+	// Keep managing the rest of the SolrCloud: metrics are not worth stalling a Solr cluster over.
+	if !usePrometheusCRD {
+		msg := "Cannot create a PodMonitor, as the Solr Operator is not configured to use the Prometheus Operator CRDs. Install the Solr Operator with `--prometheus-operator=true` to enable this."
+		logger.Error(nil, msg)
+		r.Recorder.Event(instance, corev1.EventTypeWarning, "MissingPrometheusCRD", msg)
+		return nil
+	}
+
+	// TODO: Gate this on Solr 10, once #827 has landed and the operator can parse the Solr version.
+	// Solr 9 serves no prometheus-format metrics, so scraping it only produces errors. Deleting rather
+	// than skipping also covers a SolrCloud downgraded from Solr 10 back to Solr 9.
+	//
+	//	if major, err := instance.SolrMajorVersion(); err != nil {
+	//		return err
+	//	} else if major < 10 {
+	//		msg := fmt.Sprintf("Not creating a PodMonitor: Solr %d does not serve prometheus-format metrics at %s. Use a SolrPrometheusExporter instead.", major, util.SolrMetricsPath)
+	//		logger.Error(nil, msg)
+	//		r.Recorder.Event(instance, corev1.EventTypeWarning, "UnsupportedSolrVersion", msg)
+	//		return r.deletePodMonitor(ctx, instance, logger)
+	//	}
+
+	podMonitor := util.GeneratePodMonitor(instance)
+	podMonitorLogger := logger.WithValues("podMonitor", podMonitor.Name)
+
+	foundPodMonitor := &monitoringv1.PodMonitor{}
+	err := r.Get(ctx, types.NamespacedName{Name: podMonitor.Name, Namespace: podMonitor.Namespace}, foundPodMonitor)
+	if err != nil && errors.IsNotFound(err) {
+		podMonitorLogger.Info("Creating PodMonitor")
+		if err = controllerutil.SetControllerReference(instance, podMonitor, r.Scheme); err == nil {
+			err = r.Create(ctx, podMonitor)
+		}
+	} else if err == nil {
+		var needsUpdate bool
+		needsUpdate, err = util.OvertakeControllerRef(instance, foundPodMonitor, r.Scheme)
+		needsUpdate = util.CopyPodMonitorFields(podMonitor, foundPodMonitor, podMonitorLogger) || needsUpdate
+
+		// Update the found PodMonitor and write the result back if there are any changes
+		if needsUpdate && err == nil {
+			podMonitorLogger.Info("Updating PodMonitor")
+			err = r.Update(ctx, foundPodMonitor)
+		}
+	}
+	return err
+}
+
+// deletePodMonitor removes a PodMonitor that the cloud no longer wants. The operator cannot have
+// created one without the Prometheus Operator CRDs, so there is nothing to look for in that case.
+// A PodMonitor of the same name that the SolrCloud does not control is left alone, as it is not ours.
+func (r *SolrCloudReconciler) deletePodMonitor(ctx context.Context, instance *solrv1beta1.SolrCloud, logger logr.Logger) error {
+	if !usePrometheusCRD {
+		return nil
+	}
+
+	podMonitor := &monitoringv1.PodMonitor{}
+	err := r.Get(ctx, types.NamespacedName{Name: instance.PodMonitorName(), Namespace: instance.Namespace}, podMonitor)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if !metav1.IsControlledBy(podMonitor, instance) {
+		logger.Info("Not deleting PodMonitor, as it is not controlled by the SolrCloud", "podMonitor", podMonitor.Name)
+		return nil
+	}
+
+	logger.Info("Deleting PodMonitor, as it is no longer enabled for the SolrCloud", "podMonitor", podMonitor.Name)
+	err = r.Delete(ctx, podMonitor)
+	if err != nil && errors.IsNotFound(err) {
+		return nil
+	}
+	return err
+}
+
 func (r *SolrCloudReconciler) reconcileZk(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud, newStatus *solrv1beta1.SolrCloudStatus) error {
 	zkRef := instance.Spec.ZookeeperRef
 
@@ -1402,6 +1521,10 @@ func (r *SolrCloudReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	if useZkCRD {
 		ctrlBuilder = ctrlBuilder.Owns(&zkApi.ZookeeperCluster{})
+	}
+
+	if usePrometheusCRD {
+		ctrlBuilder = ctrlBuilder.Owns(&monitoringv1.PodMonitor{})
 	}
 
 	return ctrlBuilder.Complete(r)

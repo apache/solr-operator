@@ -4,7 +4,7 @@ github.com/davecgh/go-spew/spew,v1.1.2-0.20180830191138-d8f796af33cc,ISC
 github.com/emicklei/go-restful/v3,v3.13.0,MIT
 github.com/evanphx/json-patch/v5,v5.9.11,BSD-3-Clause
 github.com/fsnotify/fsnotify,v1.10.1,BSD-3-Clause
-github.com/fxamacker/cbor/v2,v2.9.2,MIT
+github.com/fxamacker/cbor/v2,v2.9.3,MIT
 github.com/go-logr/logr,v1.4.4,Apache-2.0
 github.com/go-logr/zapr,v1.3.0,Apache-2.0
 github.com/go-openapi/jsonpointer,v1.0.0,Apache-2.0
@@ -32,6 +32,7 @@ github.com/modern-go/reflect2,v1.0.3-0.20250322232337-35a7c28c31ee,Apache-2.0
 github.com/munnerz/goautoneg,v0.0.0-20191010083416-a7dc8b61c822,BSD-3-Clause
 github.com/pmezard/go-difflib/difflib,v1.0.1-0.20181226105442-5d4384ee4fb2,BSD-3-Clause
 github.com/pravega/zookeeper-operator/api/v1beta1,v0.2.15,Apache-2.0
+github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring,v0.94.2,Apache-2.0
 github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil,v1.24.0,BSD-3-Clause
 github.com/prometheus/client_golang/prometheus,v1.24.0,Apache-2.0
 github.com/prometheus/client_model/go,v0.6.2,Apache-2.0
@@ -61,9 +62,9 @@ k8s.io/apimachinery/pkg,v0.37.1,Apache-2.0
 k8s.io/apimachinery/third_party/forked/golang,v0.37.1,BSD-3-Clause
 k8s.io/client-go,v0.37.1,Apache-2.0
 k8s.io/klog/v2,v2.140.0,Apache-2.0
-k8s.io/kube-openapi/pkg,v0.0.0-20260721132016-d427ff9ee9ad,Apache-2.0
-k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,v0.0.0-20260721132016-d427ff9ee9ad,BSD-3-Clause
-k8s.io/kube-openapi/pkg/validation/spec,v0.0.0-20260721132016-d427ff9ee9ad,Apache-2.0
+k8s.io/kube-openapi/pkg,v0.0.0-20260821135717-be32def86098,Apache-2.0
+k8s.io/kube-openapi/pkg/internal/third_party/go-json-experiment/json,v0.0.0-20260821135717-be32def86098,BSD-3-Clause
+k8s.io/kube-openapi/pkg/validation/spec,v0.0.0-20260821135717-be32def86098,Apache-2.0
 k8s.io/streaming/pkg,v0.37.1,Apache-2.0
 k8s.io/utils,v0.0.0-20261023123148-ca04ba58ecab,Apache-2.0
 k8s.io/utils/internal/third_party/forked/golang,v0.0.0-20261023123148-ca04ba58ecab,BSD-3-Clause

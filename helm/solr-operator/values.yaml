@@ -62,6 +62,12 @@ zookeeper-operator:
   crd:
     create: false
 
+# How the Solr Operator works with Prometheus.
+prometheus: {}
+  # Whether the Prometheus Operator CRDs (monitoring.coreos.com) are installed in the cluster, which lets the
+  # Solr Operator manage PodMonitors for SolrClouds. Helm detects this when unset.
+  # crdsInstalled: true
+
 # A comma-separated list of namespaces that the operator should watch.
 # If empty, the solr operator will watch all namespaces in the cluster.
 watchNamespaces: ""
