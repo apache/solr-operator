@@ -23,6 +23,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
@@ -126,4 +127,31 @@ func TestDesiredReplicaPlacementPluginUnsetIgnoresZkTarget(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, hash1)
 	assert.Equal(t, hash1, hash2, "With no plugin configured the hash stays empty, so Solr is never called")
+}
+
+// podWithZkTarget returns a Solr pod started with the given ZooKeeper ensemble and chroot
+func podWithZkTarget(zkTarget string) corev1.Pod {
+	return corev1.Pod{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "sidecar", Env: []corev1.EnvVar{{Name: ZkHostEnvVar, Value: "sidecar-zk:2181"}}},
+				{Name: SolrNodeContainer, Env: []corev1.EnvVar{{Name: "SOLR_OPTS", Value: "-Dfoo=bar"}, {Name: ZkHostEnvVar, Value: zkTarget}}},
+			},
+		},
+	}
+}
+
+func TestAllPodsUseZkTarget(t *testing.T) {
+	assert.True(t, AllPodsUseZkTarget([]corev1.Pod{podWithZkTarget(testZkTarget), podWithZkTarget(testZkTarget)}, testZkTarget),
+		"Pods that all connect to the ZooKeeper target of the spec must be recognized as such")
+
+	// A pod that has not been restarted onto the new ensemble or chroot yet still serves the common
+	// Service, so a plugin applied now could land in the cluster that is being left behind
+	assert.False(t, AllPodsUseZkTarget([]corev1.Pod{podWithZkTarget(testZkTarget), podWithZkTarget("old-zk:2181/my-chroot")}, testZkTarget),
+		"A pod on another ZooKeeper ensemble must be noticed")
+	assert.False(t, AllPodsUseZkTarget([]corev1.Pod{podWithZkTarget(testZkTarget), podWithZkTarget("zk-0:2181,zk-1:2181/old-chroot")}, testZkTarget),
+		"A pod on another chroot must be noticed")
+
+	assert.True(t, AllPodsUseZkTarget(nil, testZkTarget), "A cloud without pods has none that are out of date")
+	assert.False(t, AllPodsUseZkTarget([]corev1.Pod{{}}, testZkTarget), "A pod without a Solr container cannot be known to use the target")
 }

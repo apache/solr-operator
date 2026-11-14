@@ -735,15 +735,27 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginUnsupported",
 			"Ignoring replicaPlacementFactory, which requires Solr %d or later", util.MinSolrVersionForClusterPlugins)
 	} else if hasReadyPod && supportsClusterPlugins {
-		appliedHash, placementErr := util.ReconcileReplicaPlacementPlugin(
-			ctx, instance, newStatus.ZookeeperConnectionInfo.ZkConnectionString(),
-			instance.Status.AppliedSettings[solrv1beta1.ReplicaPlacementFactorySetting], logger)
-		newStatus.SetAppliedSetting(solrv1beta1.ReplicaPlacementFactorySetting, appliedHash)
-		if placementErr != nil {
-			r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginError",
-				"Could not apply the replica placement plugin: %s", placementErr)
-			logger.Error(placementErr, "Could not apply the replica placement plugin")
-			updateRequeueAfter(&requeueOrNot, time.Second*15)
+		zkTarget := newStatus.ZookeeperConnectionInfo.ZkConnectionString()
+		appliedPlacementHash := instance.Status.AppliedSettings[solrv1beta1.ReplicaPlacementFactorySetting]
+		managesPlacementPlugin := instance.Spec.ReplicaPlacementFactory != nil || appliedPlacementHash != ""
+
+		// The plugin is applied through the common Service, which routes to any ready pod, so hold off
+		// while the pods are still moving to another ZooKeeper ensemble or chroot. The plugin would
+		// otherwise be written to the cluster being left behind, and recorded against the new target.
+		if !util.AllPodsUseZkTarget(podList, zkTarget) {
+			if managesPlacementPlugin {
+				logger.Info("Waiting for all Solr pods to use the ZooKeeper target of the spec before managing the replica placement plugin", "zkTarget", zkTarget)
+				updateRequeueAfter(&requeueOrNot, time.Second*15)
+			}
+		} else {
+			appliedHash, placementErr := util.ReconcileReplicaPlacementPlugin(ctx, instance, zkTarget, appliedPlacementHash, logger)
+			newStatus.SetAppliedSetting(solrv1beta1.ReplicaPlacementFactorySetting, appliedHash)
+			if placementErr != nil {
+				r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ReplicaPlacementPluginError",
+					"Could not apply the replica placement plugin: %s", placementErr)
+				logger.Error(placementErr, "Could not apply the replica placement plugin")
+				updateRequeueAfter(&requeueOrNot, time.Second*15)
+			}
 		}
 	}
 

@@ -27,10 +27,44 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // MinSolrVersionForClusterPlugins is the first Solr major version with the /api/cluster/plugin API.
 const MinSolrVersionForClusterPlugins = 9
+
+// AllPodsUseZkTarget reports whether every given pod is configured for the given ZooKeeper ensemble
+// and chroot, which is how a Solr pod finds the cluster it belongs to.
+//
+// Cluster plugins live in ZooKeeper, and a plugin request goes through the common Service, which can
+// route it to any ready pod. So a plugin must not be applied while the pods are still rolling onto a
+// new target: the request would reach a pod of the cluster being left behind, and the plugin would be
+// recorded as applied to the cluster that the spec now asks for.
+func AllPodsUseZkTarget(pods []corev1.Pod, zkTarget string) bool {
+	for _, pod := range pods {
+		if podZkTarget(&pod) != zkTarget {
+			return false
+		}
+	}
+	return true
+}
+
+// podZkTarget returns the ZooKeeper ensemble and chroot that the pod's Solr container is started
+// with, which is empty for a pod that has no Solr container.
+func podZkTarget(pod *corev1.Pod) (zkTarget string) {
+	for _, container := range pod.Spec.Containers {
+		if container.Name != SolrNodeContainer {
+			continue
+		}
+		// The last value wins, as it does for the container itself
+		for _, envVar := range container.Env {
+			if envVar.Name == ZkHostEnvVar {
+				zkTarget = envVar.Value
+			}
+		}
+	}
+	return zkTarget
+}
 
 // DesiredReplicaPlacementPlugin returns the cluster plugin that the SolrCloud's spec asks for, and a
 // hash identifying it. Both are empty when the SolrCloud configures no placement plugin.

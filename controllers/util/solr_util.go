@@ -60,6 +60,9 @@ const (
 	PerNodeServiceType               = "external"
 	CommonServiceType                = "common"
 
+	// ZkHostEnvVar is how a Solr pod is told the ZooKeeper ensemble and chroot of its cluster
+	ZkHostEnvVar = "ZK_HOST"
+
 	// Protected StatefulSet annotations
 	// These are to be saved on a statefulSet update
 	ClusterOpsLockAnnotation       = "solr.apache.org/clusterOpsLock"
@@ -1429,7 +1432,7 @@ func createZkConnectionEnvVars(solrCloud *solr.SolrCloud, solrCloudStatus *solr.
 	zkConnectionStr, zkServer, zkChroot := solrCloudStatus.DissectZkInfo()
 	envVars = []corev1.EnvVar{
 		{
-			Name:  "ZK_HOST",
+			Name:  ZkHostEnvVar,
 			Value: zkConnectionStr,
 		},
 		{
