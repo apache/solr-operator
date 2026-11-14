@@ -146,6 +146,7 @@ Set the new helm value `development` to `true` (CLI flag `--zap-devel`) for the 
 * Prometheus can scrape the metrics endpoint that Solr 10 serves on every node, through the new `SolrCloud.spec.prometheus` section.
 Managing PodMonitors also needs the operator to run with `--prometheus-operator=true`, which the helm chart sets when the Prometheus Operator CRDs are installed; the new `prometheus.crdsInstalled` value overrides that.
 See xref:solr-cloud:metrics.adoc[SolrCloud Metrics].
+
 * The `cp-solr-xml` initContainer has been removed.
 The `solr.xml` is now mounted read-only into `/var/solr/data/solr.xml` from the ConfigMap, via a `subPath` volumeMount, instead of being copied there before Solr starts.
 ** This changes the Solr pod spec, so the Solr pods are restarted when the operator is upgraded.
