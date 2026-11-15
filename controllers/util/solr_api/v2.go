@@ -56,15 +56,18 @@ func CallCollectionsApiV2(ctx context.Context, cloud *solr.SolrCloud, urlMethod 
 
 	resp := &http.Response{}
 
-	var b *bytes.Buffer
+	// Must stay a nil io.Reader when there is no body: a nil *bytes.Buffer would be a non-nil
+	// io.Reader, which http.NewRequestWithContext panics on.
+	var bodyReader io.Reader
 	if body != nil {
-		b = new(bytes.Buffer)
+		b := new(bytes.Buffer)
 		if err = json.NewEncoder(b).Encode(body); err != nil {
 			return
 		}
+		bodyReader = b
 	}
 	var req *http.Request
-	if req, err = http.NewRequestWithContext(ctx, urlMethod, cloudUrl, b); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, urlMethod, cloudUrl, bodyReader); err != nil {
 		return err
 	}
 

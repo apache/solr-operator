@@ -49,6 +49,32 @@ NOTE: Both properties work by adding a `sharedLib` element to the `solr.xml` tha
 If you provide your own `solr.xml` through `providedConfigMap`, they have no effect, and you must list the library directories in your custom `solr.xml` yourself.
 See xref:custom-solr-config.adoc#solr-xml-managed-elements[Elements the operator normally generates for you].
 
+=== Replica Placement
+
+Solr decides which nodes new replicas go on using a cluster-wide https://solr.apache.org/guide/solr/latest/configuration-guide/replica-placement-plugins.html[replica placement plugin], and defaults to `SimplePlacementFactory` when none is configured.
+
+Set **`SolrCloud.spec.replicaPlacementFactory`** to choose a plugin and configure it:
+
+[source,yaml]
+----
+spec:
+  replicaPlacementFactory:
+    class: org.apache.solr.cluster.placement.plugins.AffinityPlacementFactory
+    config:
+      minimalFreeDiskGB: 10
+      prioritizedFreeDiskGB: 200
+----
+
+The `config` section is passed to Solr unchanged, so the options it accepts are whichever ones the chosen plugin documents.
+
+The operator applies this through Solr's cluster plugin API once the SolrCloud has a ready pod, and re-applies it whenever the section changes.
+Removing the section removes the plugin, returning Solr to its default placement behaviour.
+Changes take effect without restarting any pods.
+
+This requires Solr `9`+. On older versions the operator ignores the setting and emits a warning event.
+
+NOTE: Solr allows only one cluster-wide placement plugin. If you configure one through the `/api/cluster/plugin` API yourself, the operator will overwrite it the next time this section changes.
+
 == Data Storage
 
 The SolrCloud CRD gives the option for users to use either

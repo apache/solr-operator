@@ -17,6 +17,9 @@
 // under the License.
 
 Solr metrics can be collected from solr clouds/standalone solr both residing within the kubernetes cluster and outside.
+
+NOTE: The Prometheus exporter was removed from Solr in Solr 10, so a `SolrPrometheusExporter` only works with Solr 9 and earlier images.
+Solr 10 nodes expose their metrics in Prometheus format at `/solr/admin/metrics`, which Prometheus can scrape directly.
 To use the Prometheus exporter, the easiest thing to do is just provide a reference to a Solr instance. That can be any of the following:
 
 * The name and namespace of the Solr Cloud CRD

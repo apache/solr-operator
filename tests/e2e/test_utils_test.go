@@ -477,6 +477,14 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		queryParamsString = "?" + queryParamsString
 	}
 
+	if solrCloud.SolrVersionAtLeast(10) {
+		// Solr 10's `solr api` only supports GET (--solr-url URL). The legacy
+		// `-get/-post URL` flags were removed. Fail loudly if a non-GET caller
+		// is added, instead of silently turning the request into a GET.
+		Expect(strings.ToLower(httpMethod)).To(Equal("get"), "callSolrApiInPod against Solr 10 only supports GET")
+	}
+
+	credentials := ""
 	toolOpts := ""
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solrv1beta1.Basic {
 		basicAuthSecretName := solrCloud.BasicAuthSecretName()
@@ -484,25 +492,32 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		if err = k8sClient.Get(ctx, resourceKey(solrCloud, basicAuthSecretName), basicAuthSecret); err != nil {
 			return "", err
 		}
-		toolOpts =
-			"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" +
-				string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) +
-				" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+		credentials = string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+		if !solrCloud.SolrVersionAtLeast(10) {
+			toolOpts =
+				"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" + credentials +
+					" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+		}
 	}
 	GinkgoLogr.Info(toolOpts)
 
-	command := []string{
-		"solr",
-		"api",
-		"-verbose",
-		"-" + strings.ToLower(httpMethod),
-		fmt.Sprintf(
-			"\"%s://%s%s%s%s\"",
-			solrCloud.UrlScheme(false),
-			hostname,
-			solrCloud.NodePortSuffix(false),
-			apiPath,
-			queryParamsString),
+	solrUrl := fmt.Sprintf(
+		"\"%s://%s%s%s%s\"",
+		solrCloud.UrlScheme(false),
+		hostname,
+		solrCloud.NodePortSuffix(false),
+		apiPath,
+		queryParamsString)
+
+	var command []string
+	if solrCloud.SolrVersionAtLeast(10) {
+		command = []string{"solr", "api", "--solr-url", solrUrl, "-v"}
+		if credentials != "" {
+			// The command is run via 'sh -c', and generated passwords can contain shell characters such as '('
+			command = append(command, "--credentials", "'"+strings.ReplaceAll(credentials, "'", `'\''`)+"'")
+		}
+	} else {
+		command = []string{"solr", "api", "-verbose", "-" + strings.ToLower(httpMethod), solrUrl}
 	}
 	if toolOpts != "" {
 		commandString := fmt.Sprintf("%s %s", toolOpts, strings.Join(command, " "))
@@ -599,6 +614,14 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 				},
 			},
 		},
+	}
+}
+
+// skipIfPrometheusExporterUnavailable skips the current tests if the Solr image under test is Solr 10 or later,
+// which no longer ships the Prometheus exporter.
+func skipIfPrometheusExporterUnavailable() {
+	if generateBaseSolrCloud(1).SolrVersionAtLeast(10) {
+		Skip("The Prometheus exporter was removed in Solr 10")
 	}
 }
 

@@ -756,8 +756,13 @@ func mountedTLSPath(dir *solr.MountedTLSDirectory, fileName string, defaultName 
 	return fmt.Sprintf("%s/%s", dir.Path, fileName)
 }
 
-// Command to set the urlScheme cluster prop to "https"
-func setUrlSchemeClusterPropCmd() string {
+// Command to set the urlScheme cluster prop to "https".
+// Solr 10 removed zkcli.sh; the equivalent is the `solr cluster --property` CLI.
+func setUrlSchemeClusterPropCmd(isSolr10 bool) string {
+	if isSolr10 {
+		return "solr cluster --property urlScheme --value https -z ${ZK_HOST}" +
+			"; solr zk cp zk:/clusterprops.json /dev/stdout -z ${ZK_HOST};"
+	}
 	return "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https" +
 		"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json;"
 }
