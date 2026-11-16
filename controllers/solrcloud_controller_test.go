@@ -84,6 +84,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						EnvVariables:       extraVars,
+						EnvFrom:            extraEnvFrom,
 						PodSecurityContext: &testPodSecurityContext,
 						Volumes:            extraVolumes,
 						Affinity:           testAffinity,
@@ -138,6 +139,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			// Other Pod Options Checks
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].EnvFrom).To(Equal(extraEnvFrom), "EnvFrom is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")

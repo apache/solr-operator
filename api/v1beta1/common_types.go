@@ -81,6 +81,11 @@ type PodOptions struct {
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`
 
+	// Additional environment variables to load into the default container from
+	// ConfigMaps or Secrets.
+	// +optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+
 	// Annotations to be added for pods.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
