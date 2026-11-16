@@ -49,6 +49,21 @@ NOTE: Both properties work by adding a `sharedLib` element to the `solr.xml` tha
 If you provide your own `solr.xml` through `providedConfigMap`, they have no effect, and you must list the library directories in your custom `solr.xml` yourself.
 See xref:custom-solr-config.adoc#solr-xml-managed-elements[Elements the operator normally generates for you].
 
+=== Availability Zone Awareness
+
+Solr's https://solr.apache.org/guide/solr/latest/configuration-guide/replica-placement-plugins.html#affinityplacementfactory[AffinityPlacementFactory] spreads replicas across availability zones, using the `availability_zone` system property of each Solr node.
+
+The operator always sets this system property, from the `topology.kubernetes.io/zone` label of the Kubernetes node each Solr pod runs on.
+There is nothing to configure in the SolrCloud resource, but the `AffinityPlacementFactory` still has to be enabled in Solr to make use of it.
+
+Kubernetes only makes the node's zone label available to the pod through the https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#podtopologylabels[PodTopologyLabels] admission plugin, which is enabled by default since `v1.35`.
+On older versions, or when the plugin is disabled or the node has no zone label, the system property is empty.
+Solr then places replicas as if all nodes were in one zone, which is the same as when no availability zones are used at all.
+
+The operator also sets the `spread_domain` system property to the name of the Kubernetes node each Solr pod runs on.
+When `spreadAcrossDomains` is enabled in the `AffinityPlacementFactory` configuration, Solr places the replicas of a shard on different Kubernetes nodes within each zone, so that losing a single Kubernetes node does not take down all replicas of a shard.
+Unlike the zone, the node name is always available, on every Kubernetes version.
+
 == Data Storage
 
 The SolrCloud CRD gives the option for users to use either

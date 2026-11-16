@@ -47,6 +47,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -511,6 +512,54 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		command = []string{"sh", "-c", fmt.Sprintf("%q", commandString)}
 	}
 	return runExecForContainer(ctx, util.SolrNodeContainer, solrCloud.GetRandomSolrPodName(), solrCloud.Namespace, command)
+}
+
+// podTopologyLabelsMinVersion is the first Kubernetes version with the PodTopologyLabels admission plugin enabled by
+// default (beta). It copies the node's topology labels, including the zone, onto each pod when it is scheduled.
+var podTopologyLabelsMinVersion = utilversion.MajorMinor(1, 35)
+
+// expectPlacementSystemProperties checks the system properties that every Solr node reports for Solr's
+// AffinityPlacementFactory. The "availability_zone" must match the Kubernetes version under test: the zone label of the
+// node the pod runs on when the cluster copies node topology labels onto pods, and an empty value otherwise.
+// The "spread_domain" is always the name of the node the pod runs on.
+func expectPlacementSystemProperties(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) {
+	offset := resolveOffset(additionalOffset)
+
+	serverVersion, err := rawK8sClient.Discovery().ServerVersion()
+	ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not fetch the Kubernetes server version")
+	parsedVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
+	ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not parse the Kubernetes server version %s", serverVersion.GitVersion)
+	podTopologyLabelsEnabled := parsedVersion.AtLeast(podTopologyLabelsMinVersion)
+
+	for _, podName := range solrCloud.GetAllSolrPodNames() {
+		pod := expectPodNow(ctx, solrCloud, podName, offset)
+		node, err := rawK8sClient.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+		ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not fetch node %s of pod %s", pod.Spec.NodeName, podName)
+
+		expectedZone := ""
+		if podTopologyLabelsEnabled {
+			expectedZone = node.Labels[corev1.LabelTopologyZone]
+		}
+		ExpectWithOffset(offset, pod.Labels[corev1.LabelTopologyZone]).To(Equal(expectedZone),
+			"Pod %s has the wrong zone label for Kubernetes %s (node %s is in zone %q)", podName, serverVersion.GitVersion, node.Name, node.Labels[corev1.LabelTopologyZone])
+
+		EventuallyWithOffset(offset, func(g Gomega) {
+			response, err := runExecForContainer(ctx, util.SolrNodeContainer, podName, solrCloud.Namespace, []string{
+				"curl", "-sSk",
+				fmt.Sprintf("\"%s://localhost:${SOLR_PORT}/solr/admin/info/properties?wt=json\"", solrCloud.UrlScheme(false)),
+			})
+			g.Expect(err).ToNot(HaveOccurred(), "Could not fetch the system properties of Solr pod %s", podName)
+
+			properties := &struct {
+				SystemProperties map[string]string `json:"system.properties"`
+			}{}
+			g.Expect(json.Unmarshal([]byte(response), properties)).To(Succeed(), "Could not parse the system properties response: %s", response)
+			g.Expect(properties.SystemProperties).To(HaveKeyWithValue("availability_zone", expectedZone),
+				"Solr pod %s has the wrong availability_zone for Kubernetes %s", podName, serverVersion.GitVersion)
+			g.Expect(properties.SystemProperties).To(HaveKeyWithValue("spread_domain", pod.Spec.NodeName),
+				"Solr pod %s should have its node as the spread_domain", podName)
+		}).Should(Succeed())
+	}
 }
 
 func runExecForContainer(ctx context.Context, container string, podName string, namespace string, command []string) (response string, err error) {

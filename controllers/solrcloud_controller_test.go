@@ -127,7 +127,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_LOG_LEVEL":      "DEBUG",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -306,7 +306,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"GC_TUNE":             "gc Options",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
@@ -511,7 +511,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")
@@ -539,6 +539,46 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
 			})
+		})
+	})
+
+	FContext("Solr Cloud availability zone and spread domain", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			testPodEnvVariables(map[string]string{
+				"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+			}, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+			var zoneEnvVar *corev1.EnvVar
+			for _, envVar := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+				if envVar.Name == "SOLR_AVAILABILITY_ZONE" {
+					zoneEnvVar = &envVar
+					break
+				}
+			}
+			Expect(zoneEnvVar).To(Not(BeNil()), "SOLR_AVAILABILITY_ZONE env var should be set")
+			Expect(zoneEnvVar.ValueFrom.FieldRef.FieldPath).To(Equal("metadata.labels['topology.kubernetes.io/zone']"), "Wrong fieldRef for the availability zone env var")
+
+			var spreadDomainEnvVar *corev1.EnvVar
+			for _, envVar := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+				if envVar.Name == "SOLR_SPREAD_DOMAIN" {
+					spreadDomainEnvVar = &envVar
+					break
+				}
+			}
+			Expect(spreadDomainEnvVar).To(Not(BeNil()), "SOLR_SPREAD_DOMAIN env var should be set")
+			Expect(spreadDomainEnvVar.ValueFrom.FieldRef.FieldPath).To(Equal("spec.nodeName"), "Wrong fieldRef for the spread domain env var")
 		})
 	})
 
