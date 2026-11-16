@@ -57,7 +57,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection, 1, 2)
 	})
 
-	FContext("No Client TLS", func() {
+	FContext("No Client TLS", Label("pr"), func() {
 
 		BeforeEach(func(ctx context.Context) {
 			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, false, true)
@@ -176,7 +176,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Secrets", func() {
 		})
 	})
 
-	FContext("With Client TLS - Client Auth Need", func() {
+	FContext("With Client TLS - Client Auth Need", Label("pr"), func() {
 
 		BeforeEach(func(ctx context.Context) {
 			solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
@@ -235,7 +235,7 @@ var _ = FDescribe("E2E - SolrCloud - TLS - Mounted Dir", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection, 1, 2)
 	})
 
-	FContext("ClientAuth - Want", func() {
+	FContext("ClientAuth - Want", Label("pr"), func() {
 
 		BeforeEach(func(ctx context.Context) {
 			solrCloud = generateBaseSolrCloudWithCSITLS(1, false, false)

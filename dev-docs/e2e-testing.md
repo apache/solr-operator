@@ -67,7 +67,8 @@ There are a number of ways to filter the tests that are run, and each can be spe
   See below for more information.
 - **TEST_LABELS** - Equivalent to Ginkgo's `--label-filter`.
   If set, only specs with labels that match the label-filter will be run.
-  Note: A test has to have labels for this to be effective.  
+  Note: A test has to have labels for this to be effective.
+  The only label in use today is `pr`, which selects the [reduced profile run in CI](#continuous-integration).  
   The passed-in expression can include boolean operations (`!`, `&&`, `||`, `,`),
   groupings via `()`, and regular expressions `/regexp/`.  e.g. `(cat || dog) && !fruit`
 - **TEST_SKIP** - Equivalent to Ginkgo's `--skip`.
@@ -122,6 +123,35 @@ instead of reusing the existing one.
 Debugging output for each spec (pod logs, events, resource status and the operator log) is written to `tests/e2e/output/`.
 Ginkgo also writes `junit.xml` and `report.json` to that directory, containing the failure messages of the whole run.
 Since the directory is recreated at the start of every run, copy these files elsewhere if you need to keep them.
+
+## Continuous Integration
+
+The full suite is too heavy for the GitHub-hosted runners available to the project (4 vCPU and 16 GB of memory),
+so pull requests do not run all of it.
+Instead, the [e2e workflow](../.github/workflows/e2e-tests.yaml) runs the **`pr` profile**: the specs that carry
+the Ginkgo label `pr`, selected with `TEST_LABELS=pr`.
+The profile holds one cheap, representative spec per feature area (basic startup, security.json, TLS via secrets
+and via a mounted directory, scale up and scale down with replica migration, backups, the Prometheus exporter,
+persistent storage expansion and ingress/addressability).
+Slow specs, such as the rolling upgrade, and the many variants of the same feature only run in the full suite.
+
+The workflow only runs for pull requests that touch something the suite exercises: the Go code and the operator
+image, the CRDs and dependencies installed into the test cluster, the `solr-operator` Helm chart, and the e2e
+harness itself.
+Changes to documentation, examples, release tooling or the `solr` Helm chart do not trigger it.
+
+The workflow can also be started manually from the GitHub Actions UI.
+Leave the label filter empty to run the full suite, or pick another Solr or Kubernetes version.
+
+To run exactly what CI runs:
+
+```bash
+$ make e2e-tests TEST_LABELS=pr TEST_PARALLELISM=2
+```
+
+When adding a spec, give it the `pr` label only if it exercises an operator feature the profile does not cover
+yet, and prefer specs that need at most three Solr pods.
+Labels go on the `Context` (or `It`) as a decorator, e.g. `FContext("Provided Zookeeper", Label("pr"), func() {`.
 
 # IntelliJ & GoLand Testing
 
