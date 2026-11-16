@@ -68,6 +68,39 @@ spec:
 
 A complete, runnable example (including the backing `ConfigMap`) is available in https://github.com/apache/solr-operator/blob/main/example/test_solrcloud_additional_volume.yaml[`example/test_solrcloud_additional_volume.yaml`].
 
+== Environment Variables
+
+Additional environment variables can be added to the Solr container in two ways, both under `SolrCloud.spec.customSolrKubeOptions.podOptions`:
+
+* **`envVars`** - A list of individual https://kubernetes.io/docs/tasks/inject-data-application/define-environment-variable-container/[environment variables], each either a literal `value` or a `valueFrom` reference to a single key.
+* **`envFrom`** - A list of https://kubernetes.io/docs/tasks/configure-pod-container/configure-pod-configmap/#configure-all-key-value-pairs-in-a-configmap-as-container-environment-variables[`envFrom` sources], each loading every key of a `ConfigMap` (`configMapRef`) or `Secret` (`secretRef`) as an environment variable.
+An optional `prefix` is prepended to each variable name, and `optional: true` lets the pod start even if the referenced resource does not exist.
+
+Variables set by the operator and by `envVars` take precedence over those loaded via `envFrom`, since Kubernetes gives `env` priority over `envFrom` when the same name is defined in both.
+This means `envFrom` cannot be used to override the environment variables the operator sets, such as `SOLR_JAVA_MEM` or `ZK_HOST`.
+
+Kubernetes only reads the referenced `ConfigMaps` and `Secrets` when a container starts.
+Changing their contents does not restart the Solr pods, so the new values are only picked up once the pods are restarted for another reason.
+
+The following example sets a single variable directly, and loads all keys of a `ConfigMap`, and all keys of a `Secret` with a `SOLR_` prefix, into the Solr container:
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      envVars:
+        - name: SOLR_LOG_LEVEL
+          value: WARN
+      envFrom:
+        - configMapRef:
+            name: solr-env-config
+        - prefix: SOLR_
+          secretRef:
+            name: solr-env-secrets
+            optional: true
+----
+
 == Service Session Affinity
 
 The Services that the operator creates for a SolrCloud (`commonServiceOptions`, `headlessServiceOptions`, and `nodeServiceOptions`) can be configured with https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity[session affinity].

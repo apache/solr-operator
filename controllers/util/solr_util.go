@@ -162,8 +162,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Keep track of the SolrOpts that the Solr Operator needs to set
 	// These will be added to the SolrOpts given by the user.
-	// The hostPort sysprop is deprecated in favor of SOLR_PORT_ADVERTISE, but custom solr.xml files may still use it
-	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)"}
+	// The hostPort sysprop is deprecated in favor of SOLR_PORT_ADVERTISE, but custom solr.xml files may still use it.
+	// The "availability_zone" and "spread_domain" system properties are used by Solr's AffinityPlacementFactory
+	// to spread replicas across zones, and across Kubernetes nodes within a zone
+	allSolrOpts := []string{"-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)"}
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
@@ -337,6 +339,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Environment Variables
+	var envFrom []corev1.EnvFromSource
 	envVars := []corev1.EnvVar{
 		{
 			Name:  "SOLR_JAVA_MEM",
@@ -400,6 +403,27 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 		},
 		{
+			// The PodTopologyLabels admission plugin (beta and enabled by default since Kubernetes v1.35) copies the
+			// node's zone label onto the pod. Without it the label is missing, which resolves to an empty value.
+			Name: "SOLR_AVAILABILITY_ZONE",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  fmt.Sprintf("metadata.labels['%s']", corev1.LabelTopologyZone),
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
+			// The Kubernetes node, so that replicas of a shard can be spread across nodes within a zone
+			Name: "SOLR_SPREAD_DOMAIN",
+			ValueFrom: &corev1.EnvVarSource{
+				FieldRef: &corev1.ObjectFieldSelector{
+					FieldPath:  "spec.nodeName",
+					APIVersion: "v1",
+				},
+			},
+		},
+		{
 			Name:  "SOLR_HOST",
 			Value: solrHostName,
 		},
@@ -449,9 +473,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 		},
 	}
 
-	// Add Custom EnvironmentVariables to the solr container
+	// Add Custom EnvironmentVariables and EnvFrom to the solr container
 	if nil != customPodOptions {
 		envVars = append(envVars, customPodOptions.EnvVariables...)
+		envFrom = append(envFrom, customPodOptions.EnvFrom...)
 	}
 
 	// Did the user provide a custom log config?
@@ -537,6 +562,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			},
 			VolumeMounts: volumeMounts,
 			Env:          envVars,
+			EnvFrom:      envFrom,
 			Lifecycle: &corev1.Lifecycle{
 				PreStop: preStop,
 			},
