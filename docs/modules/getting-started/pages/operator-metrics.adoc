@@ -1,0 +1,190 @@
+= Solr Operator Metrics
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+The Solr Operator serves metrics about itself and the resources it manages in the Prometheus format, so that you can build a dashboard of operator health and alert on SolrClouds, backups and operations that are not doing well.
+
+This page is about the metrics of the operator.
+The metrics of Solr itself come from a xref:solr-prometheus-exporter:index.adoc[SolrPrometheusExporter].
+
+== Scraping the operator
+
+The metrics are served on the address given by the `--metrics-bind-address` xref:running-the-operator.adoc[input arg], `:8080` by default, under the `/metrics` path.
+The Helm chart enables this through the `metrics.enable` value (default `true`) and names the port `metrics` on the operator pods.
+Unless `prometheus.scrapeAnnotations.enable` is set to `false`, it also puts these annotations on the pods, for a Prometheus that discovers its targets through pod annotations:
+
+[source,yaml]
+----
+prometheus.io/scrape: "true"
+prometheus.io/port: "8080"
+prometheus.io/path: "/metrics"
+----
+
+The operator metrics carry a `namespace` label naming the namespace of the Solr resource each metric is about, which clashes with the `namespace` target label that Kubernetes service discovery usually adds.
+Set `honor_labels: true` on the scrape job, otherwise Prometheus renames the operator's label to `exported_namespace`.
+
+For a Prometheus run by the https://github.com/prometheus-operator/prometheus-operator[Prometheus Operator], the chart can create a PodMonitor for the operator pods instead:
+
+[source,yaml]
+----
+prometheus:
+  podMonitor:
+    enable: true
+    labels:
+      release: mon
+    interval: 30s
+----
+
+A Prometheus only picks up the PodMonitors that its `podMonitorSelector` matches, so the `labels` have to be the ones it selects on, e.g. `release: <helm release name of Prometheus>` for the `kube-prometheus-stack` chart.
+A Prometheus in another namespace than the operator also needs a `podMonitorNamespaceSelector` that includes the operator's namespace, which is a setting on the Prometheus resource.
+The PodMonitor requires the `monitoring.coreos.com` CRDs to be installed before the chart.
+It sets `honorLabels: true`, so that the `namespace` label of the metrics keeps naming the namespace of the Solr resource the metric is about instead of the namespace of the operator pod.
+
+When running several operator replicas, every replica serves metrics, but only the leader runs the controllers.
+The gauges about managed resources are reported by every replica, since they are read from each replica's cache, while the counters only move on the leader.
+Use `leader_election_master_status` to tell the replicas apart.
+
+== Solr Operator metrics
+
+All metrics specific to the Solr Operator are prefixed `solr_operator_`.
+
+=== Managed resources
+
+These gauges describe what the operator sees in its cache at scrape time, so they always reflect the current set of resources, and disappear when a resource is deleted.
+
+[cols="3,2,4",options="header"]
+|===
+| Metric | Labels | Description
+
+| `solr_operator_managed_resources`
+| `kind`, `namespace`
+| Number of resources of each kind (`SolrCloud`, `SolrBackup`, `SolrPrometheusExporter`) the operator manages, per namespace.
+
+| `solr_operator_solrcloud_info`
+| `namespace`, `name`, `version`
+| One series per SolrCloud, always `1`, with the Solr `version` it is running.
+
+| `solr_operator_solrcloud_desired_replicas`
+| `namespace`, `name`
+| Number of Solr pods the SolrCloud asks for (`spec.replicas`).
+
+| `solr_operator_solrcloud_ready_replicas`
+| `namespace`, `name`
+| Number of Solr pods of the SolrCloud that are ready.
+
+| `solr_operator_solrcloud_up_to_date_replicas`
+| `namespace`, `name`
+| Number of Solr pods of the SolrCloud that run the latest pod spec.
+Lower than the desired replicas while a rolling update is pending or in progress.
+
+| `solr_operator_solrcloud_ready`
+| `namespace`, `name`
+| `1` when all the Solr pods the SolrCloud asks for are ready, `0` otherwise.
+
+| `solr_operator_solrcloud_cluster_operations`
+| `namespace`, `name`, `operation`, `state`
+| Number of xref:solr-cloud:cluster-operations.adoc[cluster operations] on the SolrCloud, by `operation` (`RollingUpdate`, `ScalingUp`, `ScalingDown`, `BalanceReplicas`, `PVCExpansion`) and `state`: `running` for the operation holding the cluster operation lock, `queued` for operations waiting to be retried.
+Only present while such operations exist.
+
+| `solr_operator_solrbackup_state`
+| `namespace`, `name`, `solrcloud`, `state`
+| State of the latest run of the SolrBackup: `1` for its current `state` out of `running`, `succeeded` and `failed`, `0` for the other two.
+
+| `solr_operator_solrprometheusexporter_ready`
+| `namespace`, `name`, `solrcloud`
+| `1` when the SolrPrometheusExporter is ready, `0` otherwise.
+The `solrcloud` label is empty for an exporter of a standalone Solr.
+|===
+
+=== Operations
+
+These counters are incremented as the operator does its work, so they tell what has happened, and when.
+Like every Prometheus counter they are reset when the operator restarts, so use them through `rate()` or `increase()`.
+The series of a resource are removed when the operator sees that the resource has been deleted.
+
+[cols="3,2,4",options="header"]
+|===
+| Metric | Labels | Description
+
+| `solr_operator_reconciles_total`
+| `kind`, `namespace`, `name`, `result`
+| Number of reconciles of each resource, by `result`: `success`, `error` (the reconcile failed and is retried with backoff), `requeue` or `requeue_after` (the reconcile asked to be run again).
+The `controller_runtime_reconcile_total` metric counts the same per controller, this tells which resource it was.
+
+| `solr_operator_solrcloud_cluster_operations_total`
+| `namespace`, `name`, `operation`, `result`
+| Number of cluster operations that have ended on each SolrCloud, by `result`: `completed` operations finished their work, `failed` operations hit an error and were queued to be retried later, `paused` operations ran out of time and were queued to be continued later, so that other operations get a turn.
+
+| `solr_operator_solrbackup_runs_total`
+| `namespace`, `name`, `solrcloud`, `result`
+| Number of finished backup runs of each SolrBackup, by `result` (`succeeded` or `failed`).
+A recurring SolrBackup has many runs, a one-off SolrBackup has one.
+
+| `solr_operator_solr_api_requests_total`
+| `namespace`, `solrcloud`, `result`
+| Number of requests the operator has made to the Solr API of each SolrCloud, for cluster operations and backups, by `result`.
+An `error` is a failed connection, a 4xx or 5xx response or an unreadable response.
+|===
+
+== Generic metrics
+
+The operator is built on https://github.com/kubernetes-sigs/controller-runtime[controller-runtime], which exposes its own metrics about the controllers, their work queues and the Kubernetes API client, along with the standard Go runtime and process metrics.
+The most useful ones are:
+
+* `controller_runtime_reconcile_total` and `controller_runtime_reconcile_errors_total`, by `controller` (`solrcloud`, `solrbackup`, `solrprometheusexporter`), and the `controller_runtime_reconcile_time_seconds` histogram.
+* `workqueue_depth`, the number of resources waiting to be reconciled by each controller, and the `workqueue_queue_duration_seconds` histogram of how long they waited.
+* `leader_election_master_status`, `1` on the operator replica that is the leader.
+* `rest_client_requests_total`, requests to the Kubernetes API by `method` and status `code`.
+* `go_memstats_*`, `go_goroutines` and `process_*` for the resource usage of the operator.
+
+== Example queries
+
+SolrClouds that have not had all their pods ready for 10 minutes:
+
+[source,promql]
+----
+min_over_time(solr_operator_solrcloud_ready[10m]) == 0
+----
+
+SolrClouds whose cluster operations keep failing:
+
+[source,promql]
+----
+increase(solr_operator_solrcloud_cluster_operations_total{result="failed"}[1h]) > 0
+----
+
+The last run of a SolrBackup failed:
+
+[source,promql]
+----
+solr_operator_solrbackup_state{state="failed"} == 1
+----
+
+Resources the operator fails to reconcile:
+
+[source,promql]
+----
+sum by (kind, namespace, name) (rate(solr_operator_reconciles_total{result="error"}[15m])) > 0
+----
+
+SolrClouds the operator cannot talk to:
+
+[source,promql]
+----
+sum by (namespace, solrcloud) (rate(solr_operator_solr_api_requests_total{result="error"}[15m]))
+  / sum by (namespace, solrcloud) (rate(solr_operator_solr_api_requests_total[15m])) > 0.5
+----

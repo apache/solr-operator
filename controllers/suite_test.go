@@ -123,6 +123,9 @@ var _ = BeforeSuite(func(ctx context.Context) {
 		Recorder: k8sManager.GetEventRecorderFor("solr-operator"),
 	}).SetupWithManager(k8sManager)).To(Succeed())
 
+	By("registering the operator metrics")
+	Expect(RegisterResourceMetrics(k8sManager.GetCache())).To(Succeed())
+
 	go func() {
 		defer GinkgoRecover()
 		err = k8sManager.Start(ctx)

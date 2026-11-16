@@ -104,6 +104,24 @@ mTLS:
   insecureSkipVerify: true
   watchForUpdates: true
 
-# Enable metrics for the Solr Operator
+# Metrics of the Solr Operator itself, see https://solr.apache.org/guide/operator/latest/getting-started/operator-metrics.html
 metrics:
+  # Serve Prometheus metrics on the "metrics"/8080 port of the operator pods, under the "/metrics" path.
   enable: true
+
+# How Prometheus should scrape the metrics of the Solr Operator, when metrics.enable is true
+prometheus:
+  # Put prometheus.io/scrape, prometheus.io/port and prometheus.io/path annotations on the operator pods,
+  # for a Prometheus that discovers pods to scrape through annotations.
+  scrapeAnnotations:
+    enable: true
+  # Create a PodMonitor for the operator pods, for a Prometheus run by the Prometheus Operator.
+  # Requires the monitoring.coreos.com CRDs to be installed in the cluster.
+  podMonitor:
+    enable: false
+    # Labels to put on the PodMonitor, matched by the podMonitorSelector of the Prometheus that should scrape the operator.
+    labels: {}
+    # How often Prometheus should scrape the operator, e.g. 30s. Defaults to the interval of the Prometheus.
+    interval: ""
+    # Timeout for scraping the operator, e.g. 10s. Must not be longer than the interval.
+    scrapeTimeout: ""

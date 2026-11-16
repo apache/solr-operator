@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	solr "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/metrics"
 	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"net/http"
@@ -142,6 +143,7 @@ func DeleteAsyncRequest(ctx context.Context, cloud *solr.SolrCloud, asyncId stri
 }
 
 func CallCollectionsApi(ctx context.Context, cloud *solr.SolrCloud, urlParams url.Values, response interface{}) (err error) {
+	defer func() { metrics.RecordSolrAPIRequest(cloud.Namespace, cloud.Name, err) }()
 	cloudUrl := solr.InternalURLForCloud(cloud)
 
 	client := noVerifyTLSHttpClient
