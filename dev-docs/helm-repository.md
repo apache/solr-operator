@@ -30,7 +30,7 @@ An index with `oci://` chart urls needs Helm 3.8 or later.
 [`test_oci_index.sh`](../hack/release/smoke_test/test_oci_index.sh) checks every way of consuming
 the index (repo add/update, search, show, pull with and without `--verify`, install-style chart
 resolution, and `helm dependency update` with a repository url or an `@alias`). It runs against
-Helm 3.8.2, 3.19.0 and 4.3.1, in the `Helm OCI Index` GitHub workflow, and locally with:
+Helm 3.8.2, 3.19.0 and 4.3.1 by default. Run it locally when changing the index tooling:
 
 ```bash
 make yq
