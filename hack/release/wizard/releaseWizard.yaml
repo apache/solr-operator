@@ -1102,28 +1102,9 @@ groups:
         logfile: svn_mv_solr_operator.log
         tee: true
   - !Todo
-    id: publish_helm_charts
-    title: Publish the staged Helm charts
-    depends: svn_release_mv
-    vars:
-      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
-      official_helm_charts_url: https://nightlies.apache.org/solr/release/helm-charts
-    commands: !Commands
-      root_folder: '{{ git_checkout_folder }}'
-      confirm_each_command: false
-      commands_text: |
-        This will upload the staged Helm chart to the release location in nightlies.apache.org.
-        You will be prompted for your Apache password in the beggining, to use when uploading.
-        Next you will be prompted for your GPG Key passphrase, to sign the helm index.yaml.
-      commands:
-        - !Command
-          cmd: ./hack/release/upload/upload_helm.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -a "{{ gpg.apache_id | default("<apache_id>", True) }}" -c "{{ official_helm_charts_url }}" -r "{{ dist_release_url }}"
-          logfile: upload_helm.log
-          tee: true
-  - !Todo
     id: publish_helm_charts_oci
     title: Publish Helm charts to the OCI registry (GHCR)
-    depends: publish_helm_charts
+    depends: svn_release_mv
     vars:
       dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
       solr_operator_chart_url: '{{ dist_release_url }}/helm-charts/solr-operator-{{ release_version[1:] }}.tgz'
@@ -1250,16 +1231,19 @@ groups:
     title: Check state of ArtifactHub entries
     depends:
       - publish_docker_image
-      - publish_helm_charts
       - publish_helm_charts_oci
+      - publish_website
     description: |
       Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} version of the Solr Operator and Solr Helm Charts.
       Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
 
       The ChangeLog is very finicky, so make sure that it renders correctly.
 
-      Note that ArtifactHub still indexes the HTTPS chart repository, not the OCI registry,
-      so the OCI copies published in the previous step will not show up here.
+      ArtifactHub tracks the Helm repository at https://solr.apache.org/charts, so the new version
+      only shows up once the website, with the updated index.yaml, has been published. The index
+      entries point at the OCI copies on ghcr.io, which ArtifactHub downloads to read the charts.
+      If the new version does not appear after the next ArtifactHub scan (up to ~30 minutes), check
+      the repository's tracking errors on ArtifactHub (control panel > repositories) before anything else.
     links:
       - https://artifacthub.io/packages/helm/apache-solr/solr-operator
       - https://artifacthub.io/packages/helm/apache-solr/solr
@@ -1382,6 +1366,46 @@ groups:
           logfile: commit.log
           stdout: true
   - !Todo
+    id: website_update_helm_index
+    title: Add the release to the Helm repository index
+    depends:
+      - website_git_clone
+      - publish_helm_charts_oci
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      helm_index_file: '{{ [git_website_folder, "content", "charts", "index.yaml"] | path_join }}'
+    description: |
+      The Helm repository at https://solr.apache.org/charts is the index.yaml checked into the
+      website, under content/charts/. Its entries point at the OCI copies of the charts on ghcr.io,
+      so the charts must have been published to the OCI registry first.
+
+      The script downloads the released charts from dist.apache.org, verifies their checksums and
+      signatures, and adds entries for them to the index, pointing at:
+        - oci://ghcr.io/apache/solr-operator/helm/solr-operator:{{ release_version[1:] }}
+        - oci://ghcr.io/apache/solr-operator/helm/solr:{{ release_version[1:] }}
+      It then signs the index, and writes its checksum.
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: |
+        This will add the new release to the website's Helm repository index.
+        You will be prompted for your GPG Key passphrase, to sign the index.yaml.
+      commands:
+        - !Command
+          cmd: git checkout {{ release_version }} && make yq
+          comment: The index script and yq come from the release tag
+          tee: true
+        - !Command
+          cmd: ./hack/release/upload/update_helm_index.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -r "{{ dist_release_url }}" -i "{{ helm_index_file }}"
+          logfile: update_helm_index.log
+          tee: true
+        - !Command
+          cmd: git -C "{{ git_website_folder }}" add content/charts && git -C "{{ git_website_folder }}" commit -m "Add Solr Operator {{ release_version }} to the Helm repository index"
+          logfile: commit.log
+          stdout: true
+    post_description: |
+      You will push and verify all changes in a later step
+  - !Todo
     id: update_other
     title: Update rest of webpage
     depends: website_update_doap
@@ -1415,6 +1439,7 @@ groups:
       - prepare_announce
       - website_update_doap
       - website_update_versions
+      - website_update_helm_index
     description: |
       Push the website changes to 'main' branch, and check the staging site.
       You will get a chance to preview the diff of all changes before you push.
@@ -1473,6 +1498,15 @@ groups:
       Wait a few minutes for the build to happen. You can follow the site build at https://ci2.apache.org/#/builders/3
 
       Verify on https://solr.apache.org/operator that the site is OK.
+
+      Then verify that the Helm repository serves the new release, with a throwaway repo name,
+      and no registry credentials:
+
+         helm registry logout ghcr.io
+         helm repo add apache-solr-check https://solr.apache.org/charts
+         helm show chart apache-solr-check/solr-operator --version {{ release_version[1:] }}
+         helm show chart apache-solr-check/solr --version {{ release_version[1:] }}
+         helm repo remove apache-solr-check
     links:
       - https://ci2.apache.org/#/builders/3
       - https://solr.apache.org

@@ -136,6 +136,10 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 === v0.10.0
 
+* The Helm charts are now distributed as OCI artifacts, from `oci://ghcr.io/apache/solr-operator/helm/solr-operator` and `oci://ghcr.io/apache/solr-operator/helm/solr`.
+The Helm repository at `https://solr.apache.org/charts` still lists every release, so existing `helm repo add` setups and `helm dependency` references keep working, but its entries now point at the OCI registry, which requires Helm `v3.8` or later.
+The signed chart tarballs on the Apache download mirrors remain the official release artifacts.
+
 * The default Solr version has been upgraded from `8.11` to `9.11.0`.
 This only affects newly created resources, since the operator writes the resolved Solr version into the resource's spec on the first reconcile, so an operator upgrade never changes the Solr version of a running cluster.
 Note that a Solr `>=9.10` node refuses to start if its `major.minor` version is lower than the highest version already running in the same Solr cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.

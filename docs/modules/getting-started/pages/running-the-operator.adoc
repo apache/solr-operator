@@ -34,6 +34,10 @@ $ helm repo add apache-solr https://solr.apache.org/charts
 $ helm repo update
 ----
 
+The charts are published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`, and the Helm repository above lists them from there.
+This requires Helm `v3.8` or later.
+You can also skip adding the repository and install straight from the OCI registry, replacing `apache-solr/solr-operator` below with `oci://ghcr.io/apache/solr-operator/helm/solr-operator`.
+
 Next, install the Solr Operator chart. Note this is using Helm v3, use the official Helm chart documentation linked to above.
 This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
 

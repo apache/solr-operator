@@ -38,6 +38,9 @@ You should only need to add the solr operator helm chart repository once, by run
 helm repo add apache-solr https://solr.apache.org/charts
 ```
 
+The charts are published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`, and the repository above lists them from there, which requires Helm 3.8 or later.
+Instead of adding the repository, you can also install straight from the OCI registry, by replacing `apache-solr/solr-operator` in the commands below with `oci://ghcr.io/apache/solr-operator/helm/solr-operator`.
+
 ### Installing the Chart
 
 To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
