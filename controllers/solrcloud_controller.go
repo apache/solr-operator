@@ -108,10 +108,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
+	// Patch rather than update, so that only the defaulted fields are written and the operator
+	// does not take ownership of fields that another field manager, such as Helm, has applied
+	unmodifiedInstance := instance.DeepCopy()
 	changed := instance.WithDefaults(logger)
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
-		if err = r.Update(ctx, instance); err != nil {
+		if err = r.Patch(ctx, instance, client.MergeFromWithOptions(unmodifiedInstance, client.MergeFromWithOptimisticLock{})); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
@@ -1213,6 +1216,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 	// If persistentStorage is being used by the cloud, and the reclaim policy is set to "Delete",
 	// then set a finalizer for the storage on the cloud, and delete the PVCs if the solrcloud has been deleted.
 	pvcLabelSelector := statefulSet.Spec.Selector.MatchLabels
+	unmodifiedCloud := cloud.DeepCopy()
 
 	if cloud.Spec.StorageOptions.PersistentStorage != nil && cloud.Spec.StorageOptions.PersistentStorage.VolumeReclaimPolicy == solrv1beta1.VolumeReclaimPolicyDelete {
 		if cloud.ObjectMeta.DeletionTimestamp.IsZero() {
@@ -1220,7 +1224,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 			// then lets add the finalizer and update the object
 			if !util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
 				cloud.ObjectMeta.Finalizers = append(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-				if err := r.Update(ctx, cloud); err != nil {
+				if err := r.Patch(ctx, cloud, client.MergeFromWithOptions(unmodifiedCloud, client.MergeFromWithOptimisticLock{})); err != nil {
 					return err
 				}
 			}
@@ -1237,7 +1241,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 
 			// remove our finalizer from the list and update it.
 			cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-			if err := r.Update(ctx, cloud); err != nil {
+			if err := r.Patch(ctx, cloud, client.MergeFromWithOptions(unmodifiedCloud, client.MergeFromWithOptimisticLock{})); err != nil {
 				return err
 			}
 		}
@@ -1245,7 +1249,7 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 		// remove our finalizer from the list and update it, because there is no longer a need to delete PVCs after the cloud is deleted.
 		logger.Info("Removing storage finalizer for SolrCloud")
 		cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-		if err := r.Update(ctx, cloud); err != nil {
+		if err := r.Patch(ctx, cloud, client.MergeFromWithOptions(unmodifiedCloud, client.MergeFromWithOptimisticLock{})); err != nil {
 			return err
 		}
 	}

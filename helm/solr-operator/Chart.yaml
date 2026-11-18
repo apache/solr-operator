@@ -186,6 +186,11 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/556
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/892
+    - kind: fixed
+      description: The operator no longer takes ownership of SolrCloud, SolrBackup and SolrPrometheusExporter fields it does not default, which broke `helm upgrade` with Helm 4's server-side apply
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/872
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

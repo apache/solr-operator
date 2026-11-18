@@ -81,10 +81,11 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return reconcile.Result{}, err
 	}
 
+	unmodifiedBackup := backup.DeepCopy()
 	changed := backup.WithDefaults()
 	if changed {
 		logger.Info("Setting default settings for solr-backup")
-		if err = r.Update(ctx, backup); err != nil {
+		if err = r.Patch(ctx, backup, client.MergeFromWithOptions(unmodifiedBackup, client.MergeFromWithOptimisticLock{})); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
