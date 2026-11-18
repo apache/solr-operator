@@ -119,7 +119,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Version-specific resources cannot be generated without a supported Solr major version.
 	// Wait for the user to fix the image tag, which triggers a new reconcile.
-	if _, versionErr := instance.SolrMajorVersion(); versionErr != nil {
+	if _, versionErr := instance.SolrVersion(); versionErr != nil {
 		if !instance.DeletionTimestamp.IsZero() {
 			// Don't block the deletion of the SolrCloud on its storage finalizer
 			return r.reconcileStorageFinalizerForDeletion(ctx, instance, logger)
@@ -262,7 +262,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 				}
 				// Solr 10 refuses to start with some settings that Solr 9 needs, so warn before the rolling restart reaches them.
 				// This only warns, as a match can be a false positive, e.g. in an XML comment.
-				if instance.SolrVersionAtLeast(10) {
+				if instance.SolrVersionAtLeast("10") {
 					if settings := util.SettingsUnsupportedBySolr10(solrXml); len(settings) > 0 {
 						r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
 							"Custom solr.xml in ConfigMap %s contains settings that Solr 10 refuses to start with: %s. "+

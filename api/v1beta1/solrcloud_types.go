@@ -27,6 +27,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/apimachinery/pkg/util/version"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -1333,7 +1334,7 @@ func (zkInfo ZookeeperConnectionInfo) ZkConnectionString() string {
 // e.g. "10.0.0", "10.1.0-SNAPSHOT", "10.0.0.1", "10.0.0@sha256:...", "9.10-slim" or "8.11".
 // Short versions are accepted because released Solr Operator versions defaulted to tags such as "8.11",
 // and they cannot change their major version.
-var solrImageTagVersionRegex = regexp.MustCompile(`^(?P<major>\d+)(?:\.\d+)*(?:[^\d.].*)?$`)
+var solrImageTagVersionRegex = regexp.MustCompile(`^(?P<version>\d+(?:\.\d+)*)(?:[^\d.].*)?$`)
 
 const (
 	// The range of Solr major versions that the Solr Operator supports.
@@ -1341,52 +1342,75 @@ const (
 	MaxSupportedSolrMajorVersion = 10
 )
 
-// SolrMajorVersion returns the major version of Solr that this SolrCloud runs, parsed from spec.solrImage.tag.
+// SolrVersion returns the version of Solr that this SolrCloud runs, parsed from spec.solrImage.tag.
 // An error is returned if the tag does not start with the Solr version,
 // or if the major version is not supported by the Solr Operator.
-func (sc *SolrCloud) SolrMajorVersion() (int, error) {
+func (sc *SolrCloud) SolrVersion() (*version.Version, error) {
 	tag := ""
 	if sc.Spec.SolrImage != nil {
 		tag = sc.Spec.SolrImage.Tag
 	}
-	return SolrMajorVersionFromTag(tag)
+	return SolrVersionFromTag(tag)
 }
 
-// SolrMajorVersionFromTag returns the Solr major version that a Solr image tag starts with.
+// SolrVersionFromTag returns the Solr version that a Solr image tag starts with.
 // An error is returned if the tag does not start with the Solr version,
 // or if the major version is not supported by the Solr Operator.
-func SolrMajorVersionFromTag(tag string) (int, error) {
-	major, ok := ParseSolrMajorVersion(tag)
+func SolrVersionFromTag(tag string) (*version.Version, error) {
+	v, ok := ParseSolrVersion(tag)
 	if !ok {
-		return 0, fmt.Errorf("cannot determine the Solr version from image tag %q: "+
+		return nil, fmt.Errorf("cannot determine the Solr version from image tag %q: "+
 			"the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"", tag)
 	}
-	if major < MinSupportedSolrMajorVersion || major > MaxSupportedSolrMajorVersion {
-		return 0, fmt.Errorf("image tag %q is not a supported Solr version: the Solr Operator supports Solr %d to %d, "+
+	if v.Major() < MinSupportedSolrMajorVersion || v.Major() > MaxSupportedSolrMajorVersion {
+		return nil, fmt.Errorf("image tag %q is not a supported Solr version: the Solr Operator supports Solr %d to %d, "+
 			"and the tag must start with the Solr version, e.g. \"10.0.0\" or \"10.0.0-my-build\"",
 			tag, MinSupportedSolrMajorVersion, MaxSupportedSolrMajorVersion)
 	}
-	return major, nil
+	return v, nil
 }
 
-// ParseSolrMajorVersion returns the major version that a Solr image tag starts with, without checking
-// whether the Solr Operator supports it. ok is false if the tag does not start with a version.
-func ParseSolrMajorVersion(tag string) (major int, ok bool) {
+// ParseSolrVersion returns the version that a Solr image tag starts with, without checking
+// whether the Solr Operator supports it. A tag without a minor version, e.g. "9", is version 9.0.
+// ok is false if the tag does not start with a version.
+func ParseSolrVersion(tag string) (v *version.Version, ok bool) {
 	match := solrImageTagVersionRegex.FindStringSubmatch(tag)
 	if match == nil {
-		return 0, false
+		return nil, false
 	}
-	major, err := strconv.Atoi(match[solrImageTagVersionRegex.SubexpIndex("major")])
-	return major, err == nil
+	versionString := match[solrImageTagVersionRegex.SubexpIndex("version")]
+	if !strings.Contains(versionString, ".") {
+		versionString += ".0"
+	}
+	v, err := version.ParseGeneric(versionString)
+	return v, err == nil
 }
 
-// SolrVersionAtLeast returns true if this SolrCloud runs the given Solr major version or later,
-// e.g. SolrVersionAtLeast(10) for Solr 10+.
-// An undeterminable or unsupported version returns false, so !SolrVersionAtLeast(n) is also true for those.
+// mustParseSolrVersion parses a version that the Solr Operator compares Solr versions against, e.g. "9.7" or "10".
+func mustParseSolrVersion(v string) *version.Version {
+	parsed, ok := ParseSolrVersion(v)
+	if !ok {
+		panic(fmt.Sprintf("invalid Solr version %q", v))
+	}
+	return parsed
+}
+
+// SolrVersionAtLeast returns true if this SolrCloud runs the given Solr version or later,
+// e.g. SolrVersionAtLeast("10") for Solr 10+.
+// An undeterminable or unsupported version returns false, so it gets the same code path as the oldest Solr versions.
 // That is safe because the SolrCloud controller does not reconcile such a cloud.
-func (sc *SolrCloud) SolrVersionAtLeast(major int) bool {
-	v, err := sc.SolrMajorVersion()
-	return err == nil && v >= major
+func (sc *SolrCloud) SolrVersionAtLeast(v string) bool {
+	current, err := sc.SolrVersion()
+	return err == nil && current.AtLeast(mustParseSolrVersion(v))
+}
+
+// SolrVersionBelow returns true if this SolrCloud runs a Solr version older than the given one,
+// e.g. SolrVersionBelow("9") for Solr 8, or SolrVersionBelow("9.7") for Solr 9.6 and older.
+// An undeterminable or unsupported version returns true, so it gets the same code path as the oldest Solr versions.
+// That is safe because the SolrCloud controller does not reconcile such a cloud.
+func (sc *SolrCloud) SolrVersionBelow(v string) bool {
+	current, err := sc.SolrVersion()
+	return err != nil || current.LessThan(mustParseSolrVersion(v))
 }
 
 // UsesHeadlessService returns whether the given solrCloud requires a headless service to be created for it.

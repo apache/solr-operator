@@ -501,7 +501,7 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		if solrCloud.SolrVersionAtLeast(10) {
+		if solrCloud.SolrVersionAtLeast("10") {
 			javaToolOptions = append(javaToolOptions,
 				fmt.Sprintf("-Dsolr.security.auth.basicauth.credentials=$(cat %s):$(cat %s)", usernameFile, passwordFile),
 				"-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer",
@@ -527,9 +527,9 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsOutputFilter = ""
 	}
 
-	apiUrlFlag := "-get"
-	if solrCloud.SolrVersionAtLeast(10) {
-		apiUrlFlag = "--solr-url"
+	apiUrlFlag := "--solr-url"
+	if solrCloud.SolrVersionBelow("9.7") {
+		apiUrlFlag = "-get"
 	}
 	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")

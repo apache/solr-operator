@@ -444,7 +444,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
 	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
 	// Solr 9 ignores them. They are not set for Solr 8, so that this check is removed along with Solr 8 support.
-	if solrCloud.SolrVersionAtLeast(9) {
+	if !solrCloud.SolrVersionBelow("9") {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "SOLR_PORT_LISTEN",
 			Value: strconv.Itoa(solrPodPort),
@@ -997,7 +997,7 @@ func GenerateSolrXMLStringForCloud(solrCloud *solr.SolrCloud) string {
 	backupSection, solrModules, additionalLibs := GenerateBackupRepositoriesForSolrXml(solrCloud.Spec.BackupRepositories)
 	solrModules = append(solrModules, solrCloud.Spec.SolrModules...)
 	additionalLibs = append(additionalLibs, solrCloud.Spec.AdditionalLibs...)
-	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs, solrCloud.SolrVersionAtLeast(10))
+	return GenerateSolrXMLString(backupSection, solrModules, additionalLibs, solrCloud.SolrVersionAtLeast("10"))
 }
 
 func GenerateSolrXMLString(backupSection string, solrModules []string, additionalLibs []string, isSolr10 bool) string {
@@ -1410,7 +1410,7 @@ func generateZKInteractionInitContainer(solrCloud *solr.SolrCloud, solrCloudStat
 	}
 
 	if solrCloud.Spec.SolrTLS != nil {
-		cmd += setUrlSchemeClusterPropCmd(solrCloud.SolrVersionAtLeast(10))
+		cmd += setUrlSchemeClusterPropCmd(solrCloud.SolrVersionBelow("9.7"))
 	}
 
 	if security != nil && security.SecurityJson != "" {

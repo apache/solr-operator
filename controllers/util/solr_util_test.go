@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -227,26 +228,26 @@ func TestGenerateSolrXMLStringForCloud(t *testing.T) {
 	assert.Containsf(t, GenerateSolrXMLStringForCloud(solrCloud), "<str name=\"sharedLib\">${solr.sharedLib:},/ext/lib1,/ext/lib2</str>", "Wrong sharedLib xml for a cloud with a just additionalLibs")
 }
 
-func TestSolrMajorVersion(t *testing.T) {
+func TestSolrVersion(t *testing.T) {
 	tests := []struct {
 		name    string
 		image   *solr.ContainerImage
-		want    int
+		want    string
 		wantErr bool
 	}{
-		{name: "Solr 8 release", image: &solr.ContainerImage{Tag: "8.11.4"}, want: 8},
-		{name: "Solr 9 release", image: &solr.ContainerImage{Tag: "9.10.0"}, want: 9},
-		{name: "Solr 10 release", image: &solr.ContainerImage{Tag: "10.0.0"}, want: 10},
-		{name: "snapshot", image: &solr.ContainerImage{Tag: "10.1.0-SNAPSHOT"}, want: 10},
-		{name: "custom suffix", image: &solr.ContainerImage{Tag: "10.2.0-my-company-custom-overlay-9.3"}, want: 10},
-		{name: "more than three version parts", image: &solr.ContainerImage{Tag: "10.0.0.1.2"}, want: 10},
-		{name: "pinned digest", image: &solr.ContainerImage{Tag: "10.0.0@sha256:0123456789abcdef"}, want: 10},
-		{name: "slim variant", image: &solr.ContainerImage{Tag: "9.10.0-slim"}, want: 9},
-		{name: "major only", image: &solr.ContainerImage{Tag: "10"}, want: 10},
-		{name: "major.minor", image: &solr.ContainerImage{Tag: "9.10"}, want: 9},
-		{name: "default tag of operator v0.6 to v0.9", image: &solr.ContainerImage{Tag: "8.11"}, want: 8},
-		{name: "default tag of operator v0.5", image: &solr.ContainerImage{Tag: "8.9"}, want: 8},
-		{name: "major with variant", image: &solr.ContainerImage{Tag: "9-slim"}, want: 9},
+		{name: "Solr 8 release", image: &solr.ContainerImage{Tag: "8.11.4"}, want: "8.11.4"},
+		{name: "Solr 9 release", image: &solr.ContainerImage{Tag: "9.10.0"}, want: "9.10.0"},
+		{name: "Solr 10 release", image: &solr.ContainerImage{Tag: "10.0.0"}, want: "10.0.0"},
+		{name: "snapshot", image: &solr.ContainerImage{Tag: "10.1.0-SNAPSHOT"}, want: "10.1.0"},
+		{name: "custom suffix", image: &solr.ContainerImage{Tag: "10.2.0-my-company-custom-overlay-9.3"}, want: "10.2.0"},
+		{name: "more than three version parts", image: &solr.ContainerImage{Tag: "10.0.0.1.2"}, want: "10.0.0.1.2"},
+		{name: "pinned digest", image: &solr.ContainerImage{Tag: "10.0.0@sha256:0123456789abcdef"}, want: "10.0.0"},
+		{name: "slim variant", image: &solr.ContainerImage{Tag: "9.10.0-slim"}, want: "9.10.0"},
+		{name: "major only", image: &solr.ContainerImage{Tag: "10"}, want: "10.0"},
+		{name: "major.minor", image: &solr.ContainerImage{Tag: "9.10"}, want: "9.10"},
+		{name: "default tag of operator v0.6 to v0.9", image: &solr.ContainerImage{Tag: "8.11"}, want: "8.11"},
+		{name: "default tag of operator v0.5", image: &solr.ContainerImage{Tag: "8.9"}, want: "8.9"},
+		{name: "major with variant", image: &solr.ContainerImage{Tag: "9-slim"}, want: "9.0"},
 		{name: "trailing dot", image: &solr.ContainerImage{Tag: "10."}, wantErr: true},
 		{name: "dot without number", image: &solr.ContainerImage{Tag: "10..0"}, wantErr: true},
 		{name: "v prefix", image: &solr.ContainerImage{Tag: "v10.0.0"}, wantErr: true},
@@ -262,27 +263,59 @@ func TestSolrMajorVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cloud := &solr.SolrCloud{Spec: solr.SolrCloudSpec{SolrImage: tt.image}}
-			got, err := cloud.SolrMajorVersion()
+			got, err := cloud.SolrVersion()
 			if tt.wantErr {
 				assert.Error(t, err)
-				assert.False(t, cloud.SolrVersionAtLeast(solr.MinSupportedSolrMajorVersion), "an unsupported version is never at least any version")
+				assert.False(t, cloud.SolrVersionAtLeast(strconv.Itoa(solr.MinSupportedSolrMajorVersion)), "an unsupported version is never at least any version")
+				assert.True(t, cloud.SolrVersionBelow(strconv.Itoa(solr.MinSupportedSolrMajorVersion)), "an unsupported version is below every version")
 				return
 			}
 			assert.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-			assert.Equal(t, tt.want >= 10, cloud.SolrVersionAtLeast(10))
-			assert.True(t, cloud.SolrVersionAtLeast(tt.want))
-			assert.False(t, cloud.SolrVersionAtLeast(tt.want+1))
+			assert.Equal(t, tt.want, got.String())
+			major := int(got.Major())
+			assert.Equal(t, major >= 10, cloud.SolrVersionAtLeast("10"))
+			assert.True(t, cloud.SolrVersionAtLeast(strconv.Itoa(major)))
+			assert.False(t, cloud.SolrVersionAtLeast(strconv.Itoa(major+1)))
+			assert.False(t, cloud.SolrVersionBelow(strconv.Itoa(major)))
+			assert.True(t, cloud.SolrVersionBelow(strconv.Itoa(major+1)))
 		})
 	}
 }
 
-func TestSolrMajorVersionFromDefaultImage(t *testing.T) {
+func TestSolrVersionBelow(t *testing.T) {
+	tests := []struct {
+		tag        string
+		below9     bool
+		below9dot7 bool
+	}{
+		{tag: "8.11.4", below9: true, below9dot7: true},
+		{tag: "8.11", below9: true, below9dot7: true},
+		{tag: "9", below9: false, below9dot7: true},
+		{tag: "9-slim", below9: false, below9dot7: true},
+		{tag: "9.6.1", below9: false, below9dot7: true},
+		{tag: "9.7.0", below9: false, below9dot7: false},
+		{tag: "9.7", below9: false, below9dot7: false},
+		{tag: "9.10.0", below9: false, below9dot7: false},
+		{tag: "9.10-slim", below9: false, below9dot7: false},
+		{tag: "10.0.0", below9: false, below9dot7: false},
+		{tag: "10.2.0-my-company-custom-overlay-9.3", below9: false, below9dot7: false},
+		{tag: "latest", below9: true, below9dot7: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.tag, func(t *testing.T) {
+			cloud := &solr.SolrCloud{Spec: solr.SolrCloudSpec{SolrImage: &solr.ContainerImage{Tag: tt.tag}}}
+			assert.Equal(t, tt.below9, cloud.SolrVersionBelow("9"), `SolrVersionBelow("9")`)
+			assert.Equal(t, tt.below9dot7, cloud.SolrVersionBelow("9.7"), `SolrVersionBelow("9.7")`)
+		})
+	}
+}
+
+func TestSolrVersionFromDefaultImage(t *testing.T) {
 	cloud := &solr.SolrCloud{}
 	cloud.WithDefaults(logr.Discard())
-	got, err := cloud.SolrMajorVersion()
+	got, err := cloud.SolrVersion()
 	assert.NoError(t, err, "the default Solr image tag must be supported")
-	assert.Equal(t, 9, got)
+	assert.Equal(t, solr.DefaultSolrVersion, got.String())
 }
 
 func TestGenerateAdditionalLibXMLPartSolr10(t *testing.T) {
@@ -409,10 +442,10 @@ func newProbeForTest() *corev1.Probe {
 	}
 }
 
-func TestUseSecureProbeForSolr9(t *testing.T) {
+func TestUseSecureProbeBeforeSolr97(t *testing.T) {
 	solrCloud := &solr.SolrCloud{
 		Spec: solr.SolrCloudSpec{
-			SolrImage: &solr.ContainerImage{Repository: "library/solr", Tag: "9.10.0"},
+			SolrImage: &solr.ContainerImage{Repository: "library/solr", Tag: "9.6.1"},
 		},
 	}
 	probe := newProbeForTest()
@@ -421,25 +454,27 @@ func TestUseSecureProbeForSolr9(t *testing.T) {
 	assert.Nil(t, probe.HTTPGet, "HTTPGet should be replaced by Exec")
 	assert.NotNil(t, probe.Exec, "Exec command should be set")
 	cmd := probe.Exec.Command[2]
-	assert.Contains(t, cmd, "solr api -get", "Solr 9 should use 'solr api -get' syntax")
-	assert.Contains(t, cmd, "${SOLR_HOST}", "Solr 9 probe should reference SOLR_HOST env var")
-	assert.NotContains(t, cmd, "--solr-url", "Solr 9 should not use Solr 10 --solr-url flag")
+	assert.Contains(t, cmd, "solr api -get", "Solr before 9.7 should use 'solr api -get' syntax")
+	assert.Contains(t, cmd, "${SOLR_HOST}", "probe should reference SOLR_HOST env var")
+	assert.NotContains(t, cmd, "--solr-url", "Solr before 9.7 does not have the --solr-url flag")
 }
 
-func TestUseSecureProbeForSolr10(t *testing.T) {
-	solrCloud := &solr.SolrCloud{
-		Spec: solr.SolrCloudSpec{
-			SolrImage: &solr.ContainerImage{Repository: "library/solr", Tag: "10.0.0"},
-		},
-	}
-	probe := newProbeForTest()
-	useSecureProbe(solrCloud, probe, "/etc/secrets/foo")
+func TestUseSecureProbeFromSolr97(t *testing.T) {
+	for _, tag := range []string{"9.7.0", "9.10.0", "10.0.0"} {
+		solrCloud := &solr.SolrCloud{
+			Spec: solr.SolrCloudSpec{
+				SolrImage: &solr.ContainerImage{Repository: "library/solr", Tag: tag},
+			},
+		}
+		probe := newProbeForTest()
+		useSecureProbe(solrCloud, probe, "/etc/secrets/foo")
 
-	assert.Nil(t, probe.HTTPGet, "HTTPGet should be replaced by Exec")
-	assert.NotNil(t, probe.Exec, "Exec command should be set")
-	cmd := probe.Exec.Command[2]
-	assert.Contains(t, cmd, "solr api --solr-url", "Solr 10 should use 'solr api --solr-url' syntax")
-	assert.NotContains(t, cmd, "-get ", "Solr 10 should not use Solr 9 -get flag")
+		assert.Nil(t, probe.HTTPGet, "HTTPGet should be replaced by Exec")
+		assert.NotNil(t, probe.Exec, "Exec command should be set")
+		cmd := probe.Exec.Command[2]
+		assert.Contains(t, cmd, "solr api --solr-url", "Solr %s should use 'solr api --solr-url' syntax", tag)
+		assert.NotContains(t, cmd, "-get ", "Solr %s should not use the -get flag, which Solr 10 removed", tag)
+	}
 }
 
 func TestUseSecureProbeWithBasicAuth(t *testing.T) {
@@ -471,15 +506,15 @@ func TestUseSecureProbeWithBasicAuth(t *testing.T) {
 }
 
 func TestSetUrlSchemeClusterPropCmd(t *testing.T) {
-	// Solr 9 uses zkcli.sh
-	solr9Cmd := setUrlSchemeClusterPropCmd(false)
-	assert.Contains(t, solr9Cmd, "zkcli.sh", "Solr 9 should call zkcli.sh")
-	assert.Contains(t, solr9Cmd, "clusterprop", "Solr 9 should use the clusterprop subcommand")
+	// Solr before 9.7 uses zkcli.sh
+	solr96Cmd := setUrlSchemeClusterPropCmd(true)
+	assert.Contains(t, solr96Cmd, "zkcli.sh", "Solr before 9.7 should call zkcli.sh")
+	assert.Contains(t, solr96Cmd, "clusterprop", "Solr before 9.7 should use the clusterprop subcommand")
 
-	// Solr 10 uses `solr cluster --property`
-	solr10Cmd := setUrlSchemeClusterPropCmd(true)
-	assert.NotContains(t, solr10Cmd, "zkcli.sh", "Solr 10 must not call removed zkcli.sh")
-	assert.Contains(t, solr10Cmd, "solr cluster --property urlScheme --value https", "Solr 10 should set the cluster property via the `solr cluster` CLI")
+	// Solr 9.7+ uses `solr cluster --property`
+	solr97Cmd := setUrlSchemeClusterPropCmd(false)
+	assert.NotContains(t, solr97Cmd, "zkcli.sh", "Solr 10 removed zkcli.sh")
+	assert.Contains(t, solr97Cmd, "solr cluster --property urlScheme --value https", "Solr 9.7+ should set the cluster property via the `solr cluster` CLI")
 }
 
 func newSolrCloudForTest(tag string, modules []string) *solr.SolrCloud {

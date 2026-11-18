@@ -297,15 +297,15 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 func unsupportedExporterSolrVersion(exporterImage *solrv1beta1.ContainerImage, solrCloudImage *solrv1beta1.ContainerImage) string {
 	const fix = "Delete this SolrPrometheusExporter and scrape the Solr pods' /solr/admin/metrics endpoint directly instead"
 	if solrCloudImage != nil {
-		if major, ok := solrv1beta1.ParseSolrMajorVersion(solrCloudImage.Tag); ok && major >= 10 {
+		if v, ok := solrv1beta1.ParseSolrVersion(solrCloudImage.Tag); ok && v.Major() >= 10 {
 			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: the referenced SolrCloud runs Solr %d, "+
-				"which the Prometheus exporter does not support. %s", major, fix)
+				"which the Prometheus exporter does not support. %s", v.Major(), fix)
 		}
 	}
 	if exporterImage != nil {
-		if major, ok := solrv1beta1.ParseSolrMajorVersion(exporterImage.Tag); ok && major >= 10 {
+		if v, ok := solrv1beta1.ParseSolrVersion(exporterImage.Tag); ok && v.Major() >= 10 {
 			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: image %s is Solr %d, "+
-				"but the Prometheus exporter was removed in Solr 10. %s", exporterImage.ToImageName(), major, fix)
+				"but the Prometheus exporter was removed in Solr 10. %s", exporterImage.ToImageName(), v.Major(), fix)
 		}
 	}
 	return ""
