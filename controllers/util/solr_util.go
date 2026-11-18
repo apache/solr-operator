@@ -442,17 +442,14 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	}
 
 	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
-	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
-	// Solr 9 ignores them. They are not set for Solr 8, so that this check is removed along with Solr 8 support.
-	if !solrCloud.SolrVersionBelow("9") {
-		envVars = append(envVars, corev1.EnvVar{
-			Name:  "SOLR_PORT_LISTEN",
-			Value: strconv.Itoa(solrPodPort),
-		}, corev1.EnvVar{
-			Name:  "SOLR_HOST_ADVERTISE",
-			Value: solrHostName,
-		})
-	}
+	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop. Older Solr versions ignore them.
+	envVars = append(envVars, corev1.EnvVar{
+		Name:  "SOLR_PORT_LISTEN",
+		Value: strconv.Itoa(solrPodPort),
+	}, corev1.EnvVar{
+		Name:  "SOLR_HOST_ADVERTISE",
+		Value: solrHostName,
+	})
 
 	// Add all necessary information for connection to Zookeeper
 	zkEnvVars, zkSolrOpt, _ := createZkConnectionEnvVars(solrCloud, solrCloudStatus)

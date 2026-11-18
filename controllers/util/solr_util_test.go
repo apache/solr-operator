@@ -579,12 +579,8 @@ func TestGenerateStatefulSetListenPort(t *testing.T) {
 		port, _ := envValue(env, "SOLR_PORT")
 		assert.Equal(t, "8080", port, "SOLR_PORT should be the pod port for Solr %s", tag)
 
-		listenPort, ok := envValue(env, "SOLR_PORT_LISTEN")
-		if tag == "8.11.0" {
-			assert.False(t, ok, "SOLR_PORT_LISTEN should not be set for Solr 8")
-		} else {
-			assert.Equal(t, "8080", listenPort, "SOLR_PORT_LISTEN should be the pod port for Solr %s", tag)
-		}
+		listenPort, _ := envValue(env, "SOLR_PORT_LISTEN")
+		assert.Equal(t, "8080", listenPort, "SOLR_PORT_LISTEN should be the pod port for Solr %s", tag)
 	}
 }
 
