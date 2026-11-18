@@ -104,11 +104,15 @@ export RAWFILE_LOCAL_PV_VERSION=0.13.1
 # The cert-manager charts version their releases with a "v" prefix; without it Helm warns and falls back.
 export CERT_MANAGER_VERSION=v1.17.4
 export CERT_MANAGER_CSI_DRIVER_VERSION=v0.5.0
+# The image the zookeeper-operator runs when a ZookeeperCluster does not name one. Keep it in step with the
+# zookeeper-operator chart version in helm/solr-operator/Chart.yaml.
+export ZOOKEEPER_IMAGE="pravega/zookeeper:0.2.14"
+IMAGE_PLATFORM="linux/$(docker version -f '{{.Server.Arch}}')"
 
-# Load a locally built image into the Kind cluster. Images that come from a registry are
-# never loaded; the Kind nodes pull those themselves.
+# Load a locally built image into the Kind cluster. The largest registry images are shared with
+# the nodes by cache_registry_images instead.
 #
-# Loading a registry image fails with Docker's containerd image store (the default since
+# Loading a registry image this way fails with Docker's containerd image store (the default since
 # Docker Engine 29): 'kind load docker-image' exports the full multi-platform index, but only
 # the host platform's content was pulled, so the import dies with
 # "content digest sha256:...: not found". See https://github.com/kubernetes-sigs/kind/issues/3795
@@ -125,11 +129,59 @@ function load_local_image_into_kind() {
 Failed to load "${IMAGE}" into Kind. If the error above mentions a missing content digest,
 Docker's containerd image store exported a multi-platform index whose content is not all
 present locally. Only locally built, single-platform images can be loaded this way; images
-from a registry should not be loaded at all, the Kind nodes pull them.
+from a registry should not be loaded this way.
 See https://github.com/kubernetes-sigs/kind/issues/3795
 ERR
     exit 1
   fi
+}
+
+# Pull the largest registry images once on the host, in the background and in parallel, and save each for a single
+# platform. share_cached_images then imports them into every Kind node, so the nodes do not each pull them during
+# the tests. The smaller images are left for the nodes to pull.
+function cache_registry_images() {
+  CACHED_IMAGES_DIR="$(mktemp -d)"
+  trap 'rm -rf "${CACHED_IMAGES_DIR}"' EXIT
+  local images=("${SOLR_IMAGE}" "${ZOOKEEPER_IMAGE}" "openebs/rawfile-localpv:v${RAWFILE_LOCAL_PV_VERSION}")
+  printf "Caching the images %s in the background.\n\n" "${images[*]}"
+  (
+    for idx in "${!images[@]}"; do
+      cache_registry_image "${images[$idx]}" "${CACHED_IMAGES_DIR}/${idx}" &
+    done
+    wait
+  ) &
+  CACHED_IMAGES_PID=$!
+}
+
+function cache_registry_image() {
+  local image="$1" archive="$2" platform
+  # Some images, such as the Zookeeper image, are only built for linux/amd64. Other hosts can only run those emulated.
+  for platform in "${IMAGE_PLATFORM}" linux/amd64; do
+    if [[ "$(docker image inspect --platform "${platform}" -f '{{.Size}}' "${image}" 2>/dev/null)" =~ ^[1-9] ]] ||
+        docker pull -q --platform "${platform}" "${image}" &>/dev/null; then
+      # Saving a single platform avoids the missing-content error of 'kind load docker-image' described above.
+      if docker save --platform "${platform}" -o "${archive}.tar" "${image}" 2>/dev/null; then
+        echo "${platform}" > "${archive}.platform"
+        return
+      fi
+    fi
+  done
+  printf "Could not cache \"%s\". The Kind nodes will pull it themselves.\n" "${image}" >&2
+}
+
+function share_cached_images() {
+  wait "${CACHED_IMAGES_PID}" || true
+  printf "Importing the cached images into the Kind nodes.\n\n"
+  local archive
+  for archive in "${CACHED_IMAGES_DIR}"/*.tar; do
+    [[ -e "${archive}" ]] || continue
+    for NODE in $(kind get nodes --name "${CLUSTER_NAME}"); do
+      (docker exec -i "${NODE}" ctr -n k8s.io images import --platform "$(cat "${archive%.tar}.platform")" - <"${archive}" >/dev/null ||
+        printf "Could not import %s into %s. It will pull the image itself.\n" "${archive}" "${NODE}" >&2) &
+    done
+  done
+  wait
+  rm -rf "${CACHED_IMAGES_DIR}"
 }
 
 # These gingko params are customized via the following envVars
@@ -174,6 +226,8 @@ function delete_cluster() {
 }
 
 function start_cluster() {
+  cache_registry_images
+
   if (kind get clusters | grep "^${CLUSTER_NAME}$"); then
     if [[ "${REUSE_KIND_CLUSTER_IF_EXISTS}" = true ]]; then
       printf "KinD cluster exists and REUSE_KIND_CLUSTER_IF_EXISTS = true, so using existing KinD cluster.\n\n"
@@ -193,14 +247,12 @@ function start_cluster() {
 }
 
 function setup_cluster() {
-  # Only locally built images are loaded into the cluster. The Solr and Zookeeper images
-  # always come from a registry, so the Kind nodes pull them.
   load_local_image_into_kind "${OPERATOR_IMAGE}"
   # The array may be empty, and bash < 4.4 treats "${arr[@]}" on an empty array as unbound under 'set -u'.
   for IMAGE in ${ADDITIONAL_IMAGES[@]+"${ADDITIONAL_IMAGES[@]}"}; do
     load_local_image_into_kind "${IMAGE}"
   done
-  printf "The Kind nodes will pull the Solr image \"%s\" from its registry.\n\n" "${SOLR_IMAGE}"
+  share_cached_images
 
   printf "Installing Solr & Zookeeper CRDs\n"
   kubectl --context "${KUBE_CONTEXT}" create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl --context "${KUBE_CONTEXT}" replace -f "${REPO_DIR}/config/crd/bases/"
