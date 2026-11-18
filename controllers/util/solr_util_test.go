@@ -454,19 +454,20 @@ func TestUseSecureProbeWithBasicAuth(t *testing.T) {
 			},
 		}
 	}
-	creds := `"$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)"`
 
 	probe := newProbeForTest()
 	useSecureProbe(newCloud("9.10.0"), probe, "/etc/secrets/foo")
 	cmd := probe.Exec.Command[2]
 	assert.Contains(t, cmd, "-Dbasicauth=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)", "Solr 9 should pass credentials via JAVA_TOOL_OPTIONS")
-	assert.NotContains(t, cmd, "--credentials", "Solr 9 should not use the Solr 10 --credentials flag")
+	assert.Contains(t, cmd, "PreemptiveBasicAuthClientBuilderFactory", "Solr 9 should use the Solr 9 client builder factory")
 
 	probe = newProbeForTest()
 	useSecureProbe(newCloud("10.0.0"), probe, "/etc/secrets/foo")
 	cmd = probe.Exec.Command[2]
-	assert.Equal(t, `solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system" --credentials `+creds, cmd, "Solr 10 should pass credentials via --credentials")
-	assert.NotContains(t, cmd, "JAVA_TOOL_OPTIONS", "Solr 10 removed the client builder factory used with JAVA_TOOL_OPTIONS")
+	assert.Equal(t, `JAVA_TOOL_OPTIONS="-Dsolr.security.auth.basicauth.credentials=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password) `+
+		`-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer" `+
+		`solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system" 2>&1 | grep -v JAVA_TOOL_OPTIONS`, cmd, "Solr 10 should pass credentials via JAVA_TOOL_OPTIONS")
+	assert.NotContains(t, cmd, "--credentials", "Solr 10 should not pass credentials as a process argument")
 }
 
 func TestSetUrlSchemeClusterPropCmd(t *testing.T) {
