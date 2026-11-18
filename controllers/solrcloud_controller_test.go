@@ -559,7 +559,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
 
 			testPodEnvVariables(map[string]string{
-				"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}, statefulSet.Spec.Template.Spec.Containers[0].Env)
 
 			var zoneEnvVar *corev1.EnvVar

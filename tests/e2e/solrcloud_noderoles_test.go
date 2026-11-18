@@ -56,6 +56,17 @@ var _ = FDescribe("E2E - SolrCloud - Node Roles", func() {
 		By("Waiting for the SolrCloud to come up healthy")
 		solrCloud = expectSolrCloudToBeReady(ctx, solrCloud)
 
+		// We can reach a race condition with these tests if we have more than data nodes
+		// But try to do additional operations on a fresh cluster w/o checking the status of the overseer
+		// This check simply prevents that from happening
+		if len(solrCloud.GetNonDataNodeGroups()) > 0 {
+			expectNonDataStatefulSetsReady(ctx, solrCloud)
+			overseerNode := solrNodePattern(solrCloud, solrv1beta1.SolrNodeRoleOverseer)
+			Eventually(func(g Gomega, ctx context.Context) {
+				g.Expect(fetchOverseerLeader(ctx, g, solrCloud)).To(MatchRegexp(overseerNode.String()))
+			}).WithContext(ctx).Within(time.Minute*2).Should(Succeed(), "Overseer leadership never moved to an overseer node")
+		}
+
 		By("creating a first Solr Collection")
 		createAndQueryCollection(ctx, solrCloud, solrCollection1, 1, 2)
 	})
@@ -113,15 +124,9 @@ var _ = FDescribe("E2E - SolrCloud - Node Roles", func() {
 
 		FIt("Serve queries through the coordinator", func(ctx context.Context) {
 			expectNonDataStatefulSetsReady(ctx, solrCloud)
-			coordinatorNode := solrNodePattern(solrCloud, solrv1beta1.SolrNodeRoleCoordinator)
 
 			By("Checking the coordinator is valid")
-			var coordinator string
-			Eventually(func(g Gomega, ctx context.Context) {
-				coordinator = fetchOverseerLeader(ctx, g, solrCloud)
-				g.Expect(coordinator).NotTo(BeEmpty())
-				g.Expect(coordinator).To(MatchRegexp(coordinatorNode.String()))
-			}).WithContext(ctx).Within(time.Minute).WithPolling(time.Second*5).Should(Succeed(), "Unable to find overseer leader")
+			var coordinator = fmt.Sprintf("%s-0.%s", solrCloud.StatefulSetNameForRole(solrv1beta1.SolrNodeRoleCoordinator), solrCloud.HeadlessServiceName())
 
 			Eventually(func(g Gomega, ctx context.Context) {
 				response, err := callSolrApiInPod(ctx, solrCloud, "get", fmt.Sprintf("/solr/%s/select", solrCollection1),

@@ -84,7 +84,7 @@ var _ = FDescribe("SolrCloud controller - Node Roles", func() {
 				g.Expect(*sts.Spec.Replicas).To(Equal(int32(2)))
 				g.Expect(sts.Labels).To(HaveKeyWithValue(solrv1beta1.SolrNodeRoleLabel, string(solrv1beta1.SolrNodeRoleOverseer)))
 				testPodEnvVariablesWithGomega(g, map[string]string{
-					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:preferred,coordinator:off",
+					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:preferred,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 				}, sts.Spec.Template.Spec.Containers[0].Env)
 			})
 			coordinatorName := solrCloud.StatefulSetNameForRole(solrv1beta1.SolrNodeRoleCoordinator)
@@ -93,7 +93,7 @@ var _ = FDescribe("SolrCloud controller - Node Roles", func() {
 				g.Expect(sts.Labels).To(HaveKeyWithValue(solrv1beta1.SolrNodeRoleLabel, string(solrv1beta1.SolrNodeRoleCoordinator)))
 				//g.Expect(sts.Spec.Selector.MatchLabels).To(HaveKeyWithValue(coordinatorName, coordinatorName))
 				testPodEnvVariablesWithGomega(g, map[string]string{
-					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:disallowed,coordinator:on",
+					"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:off,overseer:disallowed,coordinator:on -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 				}, sts.Spec.Template.Spec.Containers[0].Env)
 			})
 		})

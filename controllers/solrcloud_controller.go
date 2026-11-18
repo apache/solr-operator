@@ -498,6 +498,12 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if podSelector, podList, err = r.initializePods(ctx, instance, statefulSet, logger); err != nil {
 		return requeueOrNot, err
 	}
+	// Overseer & Coordinator Pods also have the same readiness gate, so they need initializing too
+	for _, sts := range nonDataStatefulSets {
+		if _, _, err = r.initializePods(ctx, instance, sts, logger); err != nil {
+			return requeueOrNot, err
+		}
+	}
 
 	// Make sure the SolrCloud status is up-to-date with the state of the cluster
 	var outOfDatePods util.OutOfDatePodSegmentation
