@@ -57,7 +57,12 @@ busyBoxImage: {}
 
 solrOptions:
   javaMemory: ""
-  javaOpts: ""
+  # -XX:-UseBASE64Intrinsics is an interim mitigation for CVE-2026-114938 ("Java4Shell"), a critical
+  # JDK heap-overflow RCE in the AVX-512 Base64 decoder intrinsic (affects OpenJDK 17.0.6+/21/25/27
+  # on x86-64 hosts with AVX-512 VBMI). No vendor has shipped a GA patched JDK build yet as of
+  # 2026-11-18; remove this once the Solr image is on a JDK build that includes the fix
+  # (17.0.21.1/21.0.13.1/25.0.5.1/27.0.1.1 or later).
+  javaOpts: "-XX:-UseBASE64Intrinsics"
   zkJavaOpts: ""
   logLevel: ""
   gcTune: ""
