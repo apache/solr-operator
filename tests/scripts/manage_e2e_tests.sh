@@ -87,6 +87,9 @@ IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
 export CLUSTER_NAME
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
+# Pin every kubectl and helm call, including those made by the test suite, to this cluster. 'kind create cluster'
+# switches the shared current-context, so test runs against several clusters at once would otherwise cross over.
+export HELM_KUBECONTEXT="${KUBE_CONTEXT}"
 export KUBERNETES_VERSION
 export OPERATOR_IMAGE
 export SOLR_IMAGE
@@ -200,13 +203,13 @@ function setup_cluster() {
   printf "The Kind nodes will pull the Solr image \"%s\" from its registry.\n\n" "${SOLR_IMAGE}"
 
   printf "Installing Solr & Zookeeper CRDs\n"
-  kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
-  kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
+  kubectl --context "${KUBE_CONTEXT}" create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl --context "${KUBE_CONTEXT}" replace -f "${REPO_DIR}/config/crd/bases/"
+  kubectl --context "${KUBE_CONTEXT}" create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl --context "${KUBE_CONTEXT}" replace -f "${REPO_DIR}/config/dependencies/"
   echo ""
 
 
   printf "Edit the TTL of CoreDNS kubernetes so that statefulSet endpoints are refreshed more often\n"
-  kubectl get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl replace -n kube-system -f -
+  kubectl --context "${KUBE_CONTEXT}" get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl --context "${KUBE_CONTEXT}" replace -n kube-system -f -
   echo ""
 
   printf "Installing Rawfile LocalPV Provisioner\n"
