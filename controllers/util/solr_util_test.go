@@ -536,7 +536,7 @@ func TestGenerateStatefulSetSolr10EnvVars(t *testing.T) {
 }
 
 func TestGenerateStatefulSetListenPort(t *testing.T) {
-	for _, tag := range []string{"9.10.0", "10.0.0"} {
+	for _, tag := range []string{"8.11.0", "9.10.0", "10.0.0"} {
 		cloud := newSolrCloudForTest(tag, nil)
 		cloud.Spec.SolrAddressability.PodPort = 8080
 		env := solrNodeContainerEnv(t, cloud)
@@ -545,10 +545,10 @@ func TestGenerateStatefulSetListenPort(t *testing.T) {
 		assert.Equal(t, "8080", port, "SOLR_PORT should be the pod port for Solr %s", tag)
 
 		listenPort, ok := envValue(env, "SOLR_PORT_LISTEN")
-		if tag == "10.0.0" {
-			assert.Equal(t, "8080", listenPort, "Solr 10 reads the listen port from SOLR_PORT_LISTEN")
+		if tag == "8.11.0" {
+			assert.False(t, ok, "SOLR_PORT_LISTEN should not be set for Solr 8")
 		} else {
-			assert.False(t, ok, "SOLR_PORT_LISTEN should only be set for Solr 10+, to not restart older pods")
+			assert.Equal(t, "8080", listenPort, "SOLR_PORT_LISTEN should be the pod port for Solr %s", tag)
 		}
 	}
 }
@@ -557,8 +557,9 @@ func TestGenerateStatefulSetSolr9EnvVars(t *testing.T) {
 	cloud := newSolrCloudForTest("9.10.0", []string{"ltr"})
 	env := solrNodeContainerEnv(t, cloud)
 
-	_, ok := envValue(env, "SOLR_HOST_ADVERTISE")
-	assert.False(t, ok, "Solr 9 pod should not have SOLR_HOST_ADVERTISE set")
+	advertise, ok := envValue(env, "SOLR_HOST_ADVERTISE")
+	assert.True(t, ok, "Solr 9 pod should have SOLR_HOST_ADVERTISE set")
+	assert.NotEmpty(t, advertise, "SOLR_HOST_ADVERTISE should not be empty")
 
 	_, ok = envValue(env, "SOLR_MODULES")
 	assert.False(t, ok, "SOLR_MODULES should not be set, modules are loaded via sharedLib")

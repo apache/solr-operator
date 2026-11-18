@@ -443,8 +443,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 
 	// Solr 10+ reads the listen port from SOLR_PORT_LISTEN instead of SOLR_PORT,
 	// and uses SOLR_HOST_ADVERTISE in place of the deprecated 'host' sysprop.
-	// These are only set for Solr 10+, so that pods of older Solr versions are not restarted by an operator upgrade.
-	if solrCloud.SolrVersionAtLeast(10) {
+	// Solr 9 ignores them. They are not set for Solr 8, so that this check is removed along with Solr 8 support.
+	if solrCloud.SolrVersionAtLeast(9) {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  "SOLR_PORT_LISTEN",
 			Value: strconv.Itoa(solrPodPort),
