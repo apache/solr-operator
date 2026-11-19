@@ -108,6 +108,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
+	reconcileGeneration := instance.ObjectMeta.Generation
+
 	changed := instance.WithDefaults(logger)
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
@@ -134,6 +136,27 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	requeueOrNot := reconcile.Result{}
 
 	newStatus := solrv1beta1.SolrCloudStatus{}
+	updateObservedGeneration := true
+
+	// Update the observed generation if reconcile exits early due to an error, indicating no further progress can be made.
+	// It simply indicates that the operator has tried all possible actions.
+	defer func() {
+		if instance.GetDeletionTimestamp() != nil || reflect.DeepEqual(instance.Status, solrv1beta1.SolrCloudStatus{}) {
+			logger.Info("Skipping ObservedGeneration update due to empty status or instance deletion")
+			return
+		}
+		if instance.Status.ObservedGeneration == nil || *instance.Status.ObservedGeneration != reconcileGeneration {
+			if updateObservedGeneration {
+				logger.Info("Updating Solrcloud Observed Generation")
+				oldinstance := instance.DeepCopy()
+				instance.Status.ObservedGeneration = &reconcileGeneration
+				err := r.Status().Patch(ctx, instance, client.MergeFrom(oldinstance))
+				if err != nil {
+					logger.Error(err, "Failed to patch ObservedGeneration")
+				}
+			}
+		}
+	}()
 
 	blockReconciliationOfStatefulSet := false
 	if err = r.reconcileZk(ctx, logger, instance, &newStatus); err != nil {
@@ -725,6 +748,8 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return requeueOrNot, serviceCleanupError
 	}
 
+	updateObservedGeneration = false
+	newStatus.ObservedGeneration = &reconcileGeneration
 	if !reflect.DeepEqual(instance.Status, newStatus) {
 		logger.Info("Updating SolrCloud Status", "status", newStatus)
 		oldInstance := instance.DeepCopy()

@@ -1163,6 +1163,9 @@ type SolrCloudStatus struct {
 	// BackupRepositoriesAvailable lists the backupRepositories specified in the SolrCloud and whether they are available across all Pods.
 	// +optional
 	BackupRepositoriesAvailable map[string]bool `json:"backupRepositoriesAvailable,omitempty"`
+
+	// ObservedGeneration represents the most recent generation observed for this SolrCloud.
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 }
 
 // SolrNodeStatus is the status of a solrNode in the cloud, with readiness status

@@ -172,6 +172,32 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			})
 			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
 		})
+
+		FIt("tracks the observed generation", func(ctx context.Context) {
+			expectObservedGeneration := func(minGeneration int64) int64 {
+				return expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+					g.Expect(found.Generation).To(BeNumerically(">=", minGeneration))
+					g.Expect(found.Status.ObservedGeneration).To(Equal(&found.Generation), "Wrong observedGeneration in status")
+				}, 1).Generation
+			}
+
+			By("observing the initial generation")
+			generation := expectObservedGeneration(1)
+
+			By("observing a spec change that leaves the rest of the status unchanged")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrOpts = "other-opts"
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Change the solrOpts for the SolrCloud")
+			})
+			generation = expectObservedGeneration(generation + 1)
+
+			By("observing a spec change that fails reconciliation")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrClientTLS = &solrv1beta1.SolrTLSOptions{MountedTLSDir: &solrv1beta1.MountedTLSDirectory{Path: "/tls"}}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Set solrClientTLS without solrTLS for the SolrCloud")
+			})
+			expectObservedGeneration(generation + 1)
+		})
 	})
 
 	FContext("Solr Cloud with Custom Kube Options", func() {

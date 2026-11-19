@@ -55,6 +55,13 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: added
+      description: SolrCloud status now includes `observedGeneration`, the most recent generation of the SolrCloud processed by the operator
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/650
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/722
     - kind: removed
       description: The preStop hook running 'solr stop' has been removed from the Solr container, along with the SOLR_STOP_WAIT envVar that only served it. Solr shuts down on SIGTERM, so pod deletions no longer emit a FailedPreStopHook warning event
       links:
