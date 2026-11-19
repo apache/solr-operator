@@ -153,6 +153,8 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/865
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/908
     - kind: changed
       description: The default Solr version (`DefaultSolrVersion`) is now 9.11.0, up from 9.10.0, so newly created SolrClouds without an image tag start on a Solr version carrying the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516. Existing clusters are unaffected; the operator writes the resolved tag into the spec on first reconcile, so an operator upgrade never changes a running cluster's Solr version
       links:
