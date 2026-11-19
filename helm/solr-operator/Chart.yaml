@@ -92,6 +92,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/779
     - kind: fixed
+      description: A SolrBackup no longer gets stuck when the operator loses the status update recording that Solr accepted the backup, such as when the operator restarts at that moment
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/848
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/907
+    - kind: fixed
       description: Fixed initContainer script that imports security.json
       links:
         - name: Github Issue
