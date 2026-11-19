@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,8 +44,10 @@ var _ = FDescribe("E2E - Prometheus Exporter - TLS ", Ordered, func() {
 		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
 	*/
 	BeforeAll(func(ctx context.Context) {
+		skipIfPrometheusExporterUnavailable()
+
 		installSolrIssuer(ctx, testNamespace())
-		solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true)
+		solrCloud = generateBaseSolrCloudWithSecretTLS(ctx, 2, true, true)
 
 		solrCloud.Spec.SolrTLS.CheckPeerName = true
 

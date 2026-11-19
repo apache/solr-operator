@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	certmanagerv1 "github.com/cert-manager/cert-manager/pkg/apis/certmanager/v1"
 	certmanagermetav1 "github.com/cert-manager/cert-manager/pkg/apis/meta/v1"
@@ -28,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -39,10 +41,10 @@ const (
 	clientAuthSecret         = "client-auth"
 )
 
-func generateBaseSolrCloudWithSecretTLS(ctx context.Context, replicas int, includeClientTLS bool) (solrCloud *solrv1beta1.SolrCloud) {
+func generateBaseSolrCloudWithSecretTLS(ctx context.Context, replicas int, includeClientTLS bool, createKeyStore bool) (solrCloud *solrv1beta1.SolrCloud) {
 	solrCloud = generateBaseSolrCloud(replicas)
 
-	solrCertSecret, tlsPasswordSecret, clientCertSecret, clientTlsPasswordSecret := generateSolrCert(ctx, solrCloud, includeClientTLS)
+	solrCertSecret, tlsPasswordSecret, clientCertSecret, clientTlsPasswordSecret := generateSolrCert(ctx, solrCloud, includeClientTLS, createKeyStore)
 
 	solrCloud.Spec.SolrTLS = &solrv1beta1.SolrTLSOptions{
 		PKCS12Secret: &corev1.SecretKeySelector{
@@ -255,9 +257,11 @@ func installBootstrapIssuer(ctx context.Context) {
 			},
 		},
 	}
-	Expect(k8sClient.Create(ctx, bootstrapIssuer)).To(Succeed(), "Failed to install SelfSigned ClusterIssuer for bootstrapping CA")
+	// The issuer is cluster-scoped, so a reused KinD cluster (REUSE_KIND_CLUSTER_IF_EXISTS) can still hold the
+	// one left behind by an interrupted run. It is identical, so keep it.
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, bootstrapIssuer))).To(Succeed(), "Failed to install SelfSigned ClusterIssuer for bootstrapping CA")
 	DeferCleanup(func(ctx context.Context) {
-		Expect(k8sClient.Delete(ctx, bootstrapIssuer)).To(Succeed(), "Failed to delete SelfSigned bootstrapping ClusterIssuer")
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, bootstrapIssuer))).To(Succeed(), "Failed to delete SelfSigned bootstrapping ClusterIssuer")
 	})
 }
 
@@ -276,7 +280,7 @@ func installSolrIssuer(ctx context.Context, namespace string) {
 				RotationPolicy: certmanagerv1.RotationPolicyNever,
 				Algorithm:      "RSA",
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  "bootstrap-issuer",
 				Kind:  "ClusterIssuer",
 				Group: "cert-manager.io",
@@ -303,7 +307,7 @@ func installSolrIssuer(ctx context.Context, namespace string) {
 	expectSecret(ctx, clusterCA, secretName)
 }
 
-func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, includeClientTLS bool) (certSecretName string, tlsPasswordSecretName string, clientTLSCertSecretName string, clientTLSPasswordSecretName string) {
+func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, includeClientTLS bool, createKeyStore bool) (certSecretName string, tlsPasswordSecretName string, clientTLSCertSecretName string, clientTLSPasswordSecretName string) {
 	// First create a secret to use as a password for the keystore/truststore
 	tlsPasswordSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -338,7 +342,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 			SecretName: certSecretName,
 			Keystores: &certmanagerv1.CertificateKeystores{
 				PKCS12: &certmanagerv1.PKCS12Keystore{
-					Create: true,
+					Create: createKeyStore,
 					PasswordSecretRef: certmanagermetav1.SecretKeySelector{
 						LocalObjectReference: certmanagermetav1.LocalObjectReference{
 							Name: tlsPasswordSecret.Name,
@@ -347,7 +351,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 					},
 				},
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  solrIssuerName,
 				Kind:  "Issuer",
 				Group: "cert-manager.io",
@@ -403,7 +407,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 						},
 					},
 				},
-				IssuerRef: certmanagermetav1.ObjectReference{
+				IssuerRef: certmanagermetav1.IssuerReference{
 					Name:  solrIssuerName,
 					Kind:  "Issuer",
 					Group: "cert-manager.io",

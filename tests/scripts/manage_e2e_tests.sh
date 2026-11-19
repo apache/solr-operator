@@ -35,12 +35,13 @@ Available actions are: run-tests, create-cluster, destroy-cluster, kubeconfig
     -h  Display this help and exit
     -i  Solr Operator docker image to use (Optional, defaults to apache/solr-operator:<version>)
     -k  Kubernetes Version to test with (full tag, e.g. v1.24.16) (Optional, defaults to a compatible version)
-    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 8.11). (Optional, defaults to a compatible version)
-    -a  Load additional local images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
+    -s  Full solr image, or image tag (for the official Solr image), to test with (e.g. apache/solr-nightly:9.4.0, 9.10.0). (Optional, defaults to a compatible version)
+    -a  Load additional locally built images into the test Kubernetes cluster. Provide option multiple times for multiple images. (Optional)
+        Only images that exist nowhere but the local Docker need this; images from a registry are pulled by the Kind nodes.
 EOF
 }
 
-ADDITIONAL_IMAGES=("pravega/zookeeper:0.2.15")
+ADDITIONAL_IMAGES=()
 OPTIND=1
 while getopts hv:i:k:s:a: opt; do
     case $opt in
@@ -73,10 +74,10 @@ if [[ -z "${OPERATOR_IMAGE:-}" ]]; then
   echo "Specify a Docker image for the Solr Operator through -i, or through the OPERATOR_IMAGE env var" >&2 && exit 1
 fi
 if [[ -z "${KUBERNETES_VERSION:-}" ]]; then
-  KUBERNETES_VERSION="v1.26.6"
+  KUBERNETES_VERSION="v1.33.7"
 fi
 if [[ -z "${SOLR_IMAGE:-}" ]]; then
-  SOLR_IMAGE="${SOLR_VERSION:-9.4.0}"
+  SOLR_IMAGE="${SOLR_VERSION:-9.11.0}"
 fi
 if [[ "${SOLR_IMAGE}" != *":"* ]]; then
   SOLR_IMAGE="solr:${SOLR_IMAGE}"
@@ -86,6 +87,9 @@ IFS=$'\036'; RAW_GINKGO=(${RAW_GINKGO:-}); unset IFS
 CLUSTER_NAME="$(echo "solr-op-e2e-${OPERATOR_IMAGE##*:}-k-${KUBERNETES_VERSION}-s-${SOLR_IMAGE##*:}"  | tr '[:upper:]' '[:lower:]' | sed "s/snapshot/snap/" | sed "s/prerelease/pre/")"
 export CLUSTER_NAME
 export KUBE_CONTEXT="kind-${CLUSTER_NAME}"
+# Pin every kubectl and helm call, including those made by the test suite, to this cluster. 'kind create cluster'
+# switches the shared current-context, so test runs against several clusters at once would otherwise cross over.
+export HELM_KUBECONTEXT="${KUBE_CONTEXT}"
 export KUBERNETES_VERSION
 export OPERATOR_IMAGE
 export SOLR_IMAGE
@@ -96,24 +100,88 @@ export RAW_GINKGO
 export REUSE_KIND_CLUSTER_IF_EXISTS="${REUSE_KIND_CLUSTER_IF_EXISTS:-true}" # This is used for all start_cluster calls
 export LEAVE_KIND_CLUSTER_ON_SUCCESS="${LEAVE_KIND_CLUSTER_ON_SUCCESS:-false}" # This is only used when using run_tests or run_with_cluster
 
-export CERT_MANAGER_VERSION=1.12.3
-export CERT_MANAGER_CSI_DRIVER_VERSION=0.5.0
+export RAWFILE_LOCAL_PV_VERSION=0.13.1
+# The cert-manager charts version their releases with a "v" prefix; without it Helm warns and falls back.
+export CERT_MANAGER_VERSION=v1.17.4
+export CERT_MANAGER_CSI_DRIVER_VERSION=v0.5.0
+# The image the zookeeper-operator runs when a ZookeeperCluster does not name one. Keep it in step with the
+# zookeeper-operator chart version in helm/solr-operator/Chart.yaml.
+export ZOOKEEPER_IMAGE="pravega/zookeeper:0.2.14"
+IMAGE_PLATFORM="linux/$(docker version -f '{{.Server.Arch}}')"
 
-function add_image_to_kind_repo_if_local() {
+# Load a locally built image into the Kind cluster. The largest registry images are shared with
+# the nodes by cache_registry_images instead.
+#
+# Loading a registry image this way fails with Docker's containerd image store (the default since
+# Docker Engine 29): 'kind load docker-image' exports the full multi-platform index, but only
+# the host platform's content was pulled, so the import dies with
+# "content digest sha256:...: not found". See https://github.com/kubernetes-sigs/kind/issues/3795
+function load_local_image_into_kind() {
   IMAGE="$1"
-  PULL_IF_NOT_LOCAL="$2"
-  if (docker image inspect "${IMAGE}" &>/dev/null); then
-    printf "\nUsing local version of image \"%s\".\nIf you want to use an updated version of this image, run \"docker pull %s\" before running the integration tests again.\n\n" "${IMAGE}" "${IMAGE}"
-    kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-  else
-    if [ "${PULL_IF_NOT_LOCAL}" = true ]; then
-      printf "\nPulling image \"%s\" since it was not found locally.\n\n" "${IMAGE}"
-      docker pull "${IMAGE}"
-      kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"
-    else
-      printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
-    fi
+  if ! (docker image inspect "${IMAGE}" &>/dev/null); then
+    printf "\nUsing the remote image \"%s\", since it was not found in the local Docker image list.\n\n" "${IMAGE}"
+    return
   fi
+  printf "\nLoading local image \"%s\" into the Kind cluster.\n\n" "${IMAGE}"
+  if ! kind load docker-image --name "${CLUSTER_NAME}" "${IMAGE}"; then
+    cat >&2 <<ERR
+
+Failed to load "${IMAGE}" into Kind. If the error above mentions a missing content digest,
+Docker's containerd image store exported a multi-platform index whose content is not all
+present locally. Only locally built, single-platform images can be loaded this way; images
+from a registry should not be loaded this way.
+See https://github.com/kubernetes-sigs/kind/issues/3795
+ERR
+    exit 1
+  fi
+}
+
+# Pull the largest registry images once on the host, in the background and in parallel, and save each for a single
+# platform. share_cached_images then imports them into every Kind node, so the nodes do not each pull them during
+# the tests. The smaller images are left for the nodes to pull.
+function cache_registry_images() {
+  CACHED_IMAGES_DIR="$(mktemp -d)"
+  trap 'rm -rf "${CACHED_IMAGES_DIR}"' EXIT
+  local images=("${SOLR_IMAGE}" "${ZOOKEEPER_IMAGE}" "openebs/rawfile-localpv:v${RAWFILE_LOCAL_PV_VERSION}")
+  printf "Caching the images %s in the background.\n\n" "${images[*]}"
+  (
+    for idx in "${!images[@]}"; do
+      cache_registry_image "${images[$idx]}" "${CACHED_IMAGES_DIR}/${idx}" &
+    done
+    wait
+  ) &
+  CACHED_IMAGES_PID=$!
+}
+
+function cache_registry_image() {
+  local image="$1" archive="$2" platform
+  # Some images, such as the Zookeeper image, are only built for linux/amd64. Other hosts can only run those emulated.
+  for platform in "${IMAGE_PLATFORM}" linux/amd64; do
+    if [[ "$(docker image inspect --platform "${platform}" -f '{{.Size}}' "${image}" 2>/dev/null)" =~ ^[1-9] ]] ||
+        docker pull -q --platform "${platform}" "${image}" &>/dev/null; then
+      # Saving a single platform avoids the missing-content error of 'kind load docker-image' described above.
+      if docker save --platform "${platform}" -o "${archive}.tar" "${image}" 2>/dev/null; then
+        echo "${platform}" > "${archive}.platform"
+        return
+      fi
+    fi
+  done
+  printf "Could not cache \"%s\". The Kind nodes will pull it themselves.\n" "${image}" >&2
+}
+
+function share_cached_images() {
+  wait "${CACHED_IMAGES_PID}" || true
+  printf "Importing the cached images into the Kind nodes.\n\n"
+  local archive
+  for archive in "${CACHED_IMAGES_DIR}"/*.tar; do
+    [[ -e "${archive}" ]] || continue
+    for NODE in $(kind get nodes --name "${CLUSTER_NAME}"); do
+      (docker exec -i "${NODE}" ctr -n k8s.io images import --platform "$(cat "${archive%.tar}.platform")" - <"${archive}" >/dev/null ||
+        printf "Could not import %s into %s. It will pull the image itself.\n" "${archive}" "${NODE}" >&2) &
+    done
+  done
+  wait
+  rm -rf "${CACHED_IMAGES_DIR}"
 }
 
 # These gingko params are customized via the following envVars
@@ -130,7 +198,13 @@ function run_tests() {
       GINKGO_PARAMS+=("${param}" "${!envName}")
     fi
   done
-  GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
+  if [[ -n "${RAW_GINKGO:-}" ]]; then
+    GINKGO_PARAMS+=("${RAW_GINKGO[@]}")
+  fi
+
+  # Write machine-readable reports next to the per-test debug output (tests/e2e/output is gitignored and
+  # recreated by the suite before the specs run, so the reports are written once the suite has finished)
+  GINKGO_PARAMS+=(--output-dir "${REPO_DIR}/tests/e2e/output" --junit-report junit.xml --json-report report.json)
 
   GINKGO_EDITOR_INTEGRATION=true ginkgo --randomize-all "${GINKGO_PARAMS[@]}" "${REPO_DIR}"/tests/e2e/...
 
@@ -152,6 +226,8 @@ function delete_cluster() {
 }
 
 function start_cluster() {
+  cache_registry_images
+
   if (kind get clusters | grep "^${CLUSTER_NAME}$"); then
     if [[ "${REUSE_KIND_CLUSTER_IF_EXISTS}" = true ]]; then
       printf "KinD cluster exists and REUSE_KIND_CLUSTER_IF_EXISTS = true, so using existing KinD cluster.\n\n"
@@ -171,26 +247,31 @@ function start_cluster() {
 }
 
 function setup_cluster() {
-  # Load the docker images into the cluster
-  add_image_to_kind_repo_if_local "${OPERATOR_IMAGE}" false
-  add_image_to_kind_repo_if_local "${SOLR_IMAGE}" true
-  for IMAGE in "${ADDITIONAL_IMAGES[@]}"; do
-    add_image_to_kind_repo_if_local "${IMAGE}" true
+  load_local_image_into_kind "${OPERATOR_IMAGE}"
+  # The array may be empty, and bash < 4.4 treats "${arr[@]}" on an empty array as unbound under 'set -u'.
+  for IMAGE in ${ADDITIONAL_IMAGES[@]+"${ADDITIONAL_IMAGES[@]}"}; do
+    load_local_image_into_kind "${IMAGE}"
   done
+  share_cached_images
 
   printf "Installing Solr & Zookeeper CRDs\n"
-  kubectl create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/crd/bases/"
-  kubectl create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl replace -f "${REPO_DIR}/config/dependencies/"
+  kubectl --context "${KUBE_CONTEXT}" create -f "${REPO_DIR}/config/crd/bases/" 2>/dev/null || kubectl --context "${KUBE_CONTEXT}" replace -f "${REPO_DIR}/config/crd/bases/"
+  kubectl --context "${KUBE_CONTEXT}" create -f "${REPO_DIR}/config/dependencies/" 2>/dev/null || kubectl --context "${KUBE_CONTEXT}" replace -f "${REPO_DIR}/config/dependencies/"
   echo ""
 
 
   printf "Edit the TTL of CoreDNS kubernetes so that statefulSet endpoints are refreshed more often\n"
-  kubectl get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl replace -n kube-system -f -
+  kubectl --context "${KUBE_CONTEXT}" get configmap coredns -n kube-system -o yaml | sed 's/\(.*\)ttl 30\(.*\)/\1ttl 5\2/' | kubectl --context "${KUBE_CONTEXT}" replace -n kube-system -f -
+  echo ""
+
+  printf "Installing Rawfile LocalPV Provisioner\n"
+  helm repo add rawfile-localpv https://openebs.github.io/rawfile-localpv --force-update
+  helm upgrade -i -n openebs --create-namespace  rawfile-localpv rawfile-localpv/rawfile-localpv --version "${RAWFILE_LOCAL_PV_VERSION}" --set analytics.enabled=false
   echo ""
 
   printf "Installing Cert Manager\n"
   helm repo add cert-manager https://charts.jetstack.io --force-update
-  helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set installCRDs=true
+  helm upgrade -i -n cert-manager --create-namespace  cert-manager cert-manager/cert-manager --version "${CERT_MANAGER_VERSION}" --set crds.enabled=true
   helm upgrade -i -n cert-manager cert-manager-csi-driver cert-manager/cert-manager-csi-driver --version "${CERT_MANAGER_CSI_DRIVER_VERSION}"
   echo ""
 }

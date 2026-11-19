@@ -22,6 +22,8 @@ import (
 	"crypto/md5"
 	b64 "encoding/base64"
 	"fmt"
+	"strings"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strings"
 )
 
 var _ = FDescribe("SolrCloud controller - TLS", func() {
@@ -522,7 +523,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 				break
 			}
 		}
-		expCmd := "openssl pkcs12 -export -in /var/solr/tls/tls.crt -in /var/solr/tls/ca.crt -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
+		expCmd := "OPTIONAL_CACRT=\"$(test -e /var/solr/tls/ca.crt && echo ' -certfile /var/solr/tls/ca.crt')\"; openssl pkcs12 -export -in /var/solr/tls/tls.crt $OPTIONAL_CACRT -inkey /var/solr/tls/tls.key -out /var/solr/tls/pkcs12/keystore.p12 -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 		g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the gen-pkcs12-keystore InitContainer in the sts!")
 		g.Expect(expInitContainer.Command[2]).To(Equal(expCmd), "Wrong TLS initContainer command")
 	}
@@ -540,7 +541,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe != nil {
 			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.LivenessProbe.HTTPGet.Path
 		}
-		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "liveness probe should invoke solr api -get to contact Solr securely")
+		g.Expect(mainContainer.LivenessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api --solr-url \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "liveness probe should invoke solr api --solr-url to contact Solr securely")
 		g.Expect(mainContainer.ReadinessProbe).To(Not(BeNil()), "main container should have a readiness probe defined")
 		g.Expect(mainContainer.ReadinessProbe.Exec).To(Not(BeNil()), "readiness probe should have an exec when mTLS is enabled")
 		g.Expect(mainContainer.ReadinessProbe.Exec.Command).To(HaveLen(3), "readiness probe command has wrong number of args")
@@ -548,7 +549,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe != nil {
 			path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.ReadinessProbe.HTTPGet.Path
 		}
-		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "readiness probe should invoke solr api -get to contact Solr securely")
+		g.Expect(mainContainer.ReadinessProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api --solr-url \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "readiness probe should invoke solr api --solr-url to contact Solr securely")
 		if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
 			g.Expect(mainContainer.StartupProbe).To(Not(BeNil()), "main container should have a startup probe defined")
 			g.Expect(mainContainer.StartupProbe.Exec).To(Not(BeNil()), "startup probe should have an exec when auth is enabled")
@@ -557,7 +558,7 @@ func expectTLSConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1beta1.Sol
 			if solrCloud.Spec.CustomSolrKubeOptions.PodOptions != nil && solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe != nil {
 				path = solrCloud.Spec.CustomSolrKubeOptions.PodOptions.StartupProbe.HTTPGet.Path
 			}
-			g.Expect(mainContainer.StartupProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "startup probe should invoke solr api -get to contact Solr securely")
+			g.Expect(mainContainer.StartupProbe.Exec.Command[2]).To(ContainSubstring(fmt.Sprintf("solr api --solr-url \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), solrCloud.Spec.SolrAddressability.PodPort, path)), "startup probe should invoke solr api --solr-url to contact Solr securely")
 		}
 	} else if solrCloud != nil {
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
@@ -926,7 +927,7 @@ func expectZkSetupInitContainerForTLSWithGomega(g Gomega, solrCloud *solrv1beta1
 		}
 	}
 	expChrootCmd := "solr zk ls ${ZK_CHROOT} -z ${ZK_SERVER} || solr zk mkroot ${ZK_CHROOT} -z ${ZK_SERVER};"
-	expCmd := "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https"
+	expCmd := "solr cluster --property urlScheme --value https -z ${ZK_HOST}"
 	if solrCloud.Spec.SolrTLS != nil {
 		g.Expect(zkSetupInitContainer).To(Not(BeNil()), "Didn't find the zk-setup InitContainer in the sts!")
 		if zkSetupInitContainer != nil {

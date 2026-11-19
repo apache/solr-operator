@@ -43,6 +43,8 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		Create a single SolrCloud that all PrometheusExporter tests in this "Describe" will use.
 	*/
 	BeforeAll(func(ctx context.Context) {
+		skipIfPrometheusExporterUnavailable()
+
 		solrCloud = generateBaseSolrCloud(2)
 
 		By("creating the SolrCloud")
@@ -86,7 +88,7 @@ var _ = FDescribe("E2E - Prometheus Exporter", Ordered, func() {
 		checkMetrics(ctx, solrPrometheusExporter, solrCloud, solrCollection)
 	})
 
-	FContext("Default - Solr Reference", func() {
+	FContext("Default - Solr Reference", Label("pr"), func() {
 		BeforeEach(func() {
 			solrPrometheusExporter.Spec.SolrReference = solrv1beta1.SolrReference{
 				Cloud: &solrv1beta1.SolrCloudReference{

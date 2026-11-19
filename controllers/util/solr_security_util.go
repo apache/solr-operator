@@ -117,6 +117,9 @@ func reconcileForBasicAuthWithBootstrappedSecurityJson(ctx context.Context, clie
 
 		// supply the bootstrap security.json to the initContainer via a simple BASE64 encoding env var
 		security.SecurityJson = string(bootstrapSecret.Data[SecurityJsonFile])
+		security.SecurityJsonSrc = &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: bootstrapSecret.Name}, Key: SecurityJsonFile}}
 		basicAuthSecret = authSecret
 	}
 
@@ -237,10 +240,20 @@ func addHostHeaderToProbe(httpGet *corev1.HTTPGetAction, host string) {
 }
 
 func cmdToPutSecurityJsonInZk() string {
-	scriptsDir := "/opt/solr/server/scripts/cloud-scripts"
-	cmd := " ZK_SECURITY_JSON=$(%s/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); "
-	cmd += "if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then echo $SECURITY_JSON > /tmp/security.json; %s/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
-	return fmt.Sprintf(cmd, scriptsDir, scriptsDir)
+	cmd := " solr zk cp zk:/security.json /tmp/current_security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; " +
+		"if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " + // JSON already exists
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ; then " + // File doesn't exist, is empty, or is just '{}'
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; " +
+		"fi; " + // TODO: Consider checking a diff and still applying over the top
+		"elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " + // JSON doesn't exist, but not other error types
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json;" +
+		" solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'No security.json found. Put new security.json in ZK'; " +
+		"fi"
+	return cmd
 }
 
 // Add auth data to the supplied Context using secrets already resolved (stored in the SecurityConfig)
@@ -383,7 +396,9 @@ func generateSecurityJson(solrCloud *solr.SolrCloud) map[string][]byte {
           { "name": "k8s-metrics", "role":"k8s", "collection": null, "path":"/admin/metrics" },
           { "name": "k8s-zk", "role":"k8s", "collection": null, "path":"/admin/zookeeper/status" },
           { "name": "k8s-ping", "role":"k8s", "collection": "*", "path":"/admin/ping" },
-          { "name": "read", "role":["admin","users"] },
+          { "name": "k8s-replica-balancing", "role":"k8s", "collection": null, "path":"/____v2/cluster/replicas/balance" },
+          { "name": "collection-admin-edit", "role":"k8s" },
+          { "name": "read", "role":["admin","users","k8s"] },
           { "name": "update", "role":["admin"] },
           { "name": "security-read", "role": ["admin"] },
           { "name": "security-edit", "role": ["admin"] },
@@ -486,10 +501,17 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		javaToolOptions = append(javaToolOptions,
-			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
-		)
+		if solrCloud.SolrVersionAtLeast("10") {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dsolr.security.auth.basicauth.credentials=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer",
+			)
+		} else {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+			)
+		}
 	}
 
 	// construct the probe command to invoke the SolrCLI "api" action
@@ -505,7 +527,11 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsOutputFilter = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
+	apiUrlFlag := "--solr-url"
+	if solrCloud.SolrVersionBelow("9.7") {
+		apiUrlFlag = "-get"
+	}
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

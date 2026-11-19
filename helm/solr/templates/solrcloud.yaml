@@ -146,6 +146,9 @@ spec:
           {{- if .Values.dataStorage.persistent.pvc.storageClassName }}
           storageClassName: {{ .Values.dataStorage.persistent.pvc.storageClassName | quote }}
           {{- end }}
+          {{- if .Values.dataStorage.persistent.pvc.volumeAttributesClassName }}
+          volumeAttributesClassName: {{ .Values.dataStorage.persistent.pvc.volumeAttributesClassName | quote }}
+          {{- end }}
         {{- end }}
     {{- else }}
     ephemeral:

@@ -73,9 +73,18 @@ type PodOptions struct {
 	// +optional
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 
+	// ContainerSecurityContext the container-level security context used by the pod's primary container
+	// +optional
+	ContainerSecurityContext *corev1.SecurityContext `json:"containerSecurityContext,omitempty"`
+
 	// Additional environment variables to pass to the default container.
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`
+
+	// Additional environment variables to load into the default container from
+	// ConfigMaps or Secrets.
+	// +optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 
 	// Annotations to be added for pods.
 	// +optional
@@ -137,6 +146,14 @@ type PodOptions struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
+	// Should process namespace sharing be enabled on created pods
+	// +optional
+	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
+
+	// Should service environment variables be created on containers
+	// +optional
+	EnableServiceLinks *bool `json:"enableServiceLinks,omitempty"`
+
 	// Optional PodSpreadTopologyConstraints to use when scheduling pods.
 	// More information here: https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/
 	//
@@ -153,6 +170,10 @@ type PodOptions struct {
 	// DefaultInitContainerResources are the resource requirements for the default init container(s) created by the Solr Operator, if any are created.
 	// +optional
 	DefaultInitContainerResources corev1.ResourceRequirements `json:"defaultInitContainerResources,omitempty"`
+
+	// DefaultInitContainerSecurityContext is the security context for the default init container(s) created by the Solr Operator, if any are created.
+	// +optional
+	DefaultInitContainerSecurityContext *corev1.SecurityContext `json:"defaultInitContainerSecurityContext,omitempty"`
 }
 
 // ServiceOptions defines custom options for services
@@ -164,6 +185,18 @@ type ServiceOptions struct {
 	// Labels to be added for the Service.
 	// +optional
 	Labels map[string]string `json:"labels,omitempty"`
+
+	// SessionAffinity is used to maintain session affinity for the Service.
+	// Enables client IP based session affinity when set to "ClientIP". Must be "ClientIP" or "None". Defaults to "None".
+	// +optional
+	// +kubebuilder:validation:Enum=None;ClientIP
+	// +kubebuilder:default=None
+	SessionAffinity corev1.ServiceAffinity `json:"sessionAffinity,omitempty"`
+
+	// SessionAffinityConfig contains the configuration of the Service's session affinity.
+	// Only used when SessionAffinity is set to "ClientIP".
+	// +optional
+	SessionAffinityConfig *corev1.SessionAffinityConfig `json:"sessionAffinityConfig,omitempty"`
 }
 
 // IngressOptions defines custom options for ingresses
@@ -249,7 +282,14 @@ func (c *ContainerImage) ToImageName() (name string) {
 	return c.Repository + ":" + c.Tag
 }
 
+// Version returns the version part of the image's tag, without a digest, e.g. "10.0.0" for "10.0.0@sha256:...".
+func (c *ContainerImage) Version() string {
+	return ImageVersion(c.ToImageName())
+}
+
 func ImageVersion(image string) (version string) {
+	// Ignore a digest, e.g. "solr:10.0.0@sha256:..."
+	image, _, _ = strings.Cut(image, "@")
 	split := strings.Split(image, ":")
 	if len(split) < 2 {
 		return ""

@@ -21,13 +21,14 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
+	"strconv"
+	"strings"
+
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
 )
 
 const (
@@ -707,8 +708,11 @@ func (tls *TLSConfig) generatePkcs12InitContainer(imageName string, imagePullPol
 		},
 	}
 
-	cmd := "openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " -in " + DefaultKeyStorePath +
-		"/ca.crt -inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
+	caCrtFileName := DefaultKeyStorePath + "/ca.crt"
+
+	cmd := "OPTIONAL_CACRT=\"$(test -e " + caCrtFileName + " && echo ' -certfile " + caCrtFileName + "')\"; " +
+		"openssl pkcs12 -export -in " + DefaultKeyStorePath + "/" + TLSCertKey + " $OPTIONAL_CACRT " +
+		"-inkey " + DefaultKeyStorePath + "/tls.key -out " + DefaultKeyStorePath +
 		"/pkcs12/" + DefaultPkcs12KeystoreFile + " -passout pass:${SOLR_SSL_KEY_STORE_PASSWORD}"
 
 	return corev1.Container{
@@ -752,10 +756,15 @@ func mountedTLSPath(dir *solr.MountedTLSDirectory, fileName string, defaultName 
 	return fmt.Sprintf("%s/%s", dir.Path, fileName)
 }
 
-// Command to set the urlScheme cluster prop to "https"
-func setUrlSchemeClusterPropCmd() string {
-	return "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https" +
-		"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json;"
+// Command to set the urlScheme cluster prop to "https".
+// Solr 9.7 added the `solr cluster --property` CLI, and Solr 10 removed zkcli.sh.
+func setUrlSchemeClusterPropCmd(isBeforeSolr97 bool) string {
+	if isBeforeSolr97 {
+		return "/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd clusterprop -name urlScheme -val https" +
+			"; /opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /clusterprops.json;"
+	}
+	return "solr cluster --property urlScheme --value https -z ${ZK_HOST}" +
+		"; solr zk cp zk:/clusterprops.json /dev/stdout -z ${ZK_HOST};"
 }
 
 // Appends additional Java system properties to the JAVA_OPTS environment variable of the main container and ensures JAVA_OPTS is the last env var

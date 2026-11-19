@@ -23,6 +23,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/apache/solr-operator/controllers/util/solr_api"
@@ -34,20 +41,16 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/release"
 	"helm.sh/helm/v3/pkg/storage/driver"
-	"io"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/rand"
+	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/pointer"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const (
@@ -232,7 +235,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}
 
 	additionalOffset += 1
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -245,7 +248,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 	}).Within(time.Second*10).WithContext(ctx).Should(Succeed(), "Collection creation command start was not successful")
 	// Only wait 5 seconds when trying to create the asyncCommand
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -270,7 +273,7 @@ func createAndQueryCollectionWithGomega(ctx context.Context, solrCloud *solrv1be
 		innerG.Expect(response).To(ContainSubstring("\"state\":\"completed\""), "Did not finish creating Solr Collection in time")
 	}).Within(time.Second*40).WithContext(ctx).Should(Succeed(), "Collection creation was not successful")
 
-	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega) {
+	g.EventuallyWithOffset(additionalOffset, func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -295,7 +298,18 @@ func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, coll
 }
 
 func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
-	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, g, time.Second*5, resolveOffset(additionalOffset))
+	// Only wait 5 seconds for the collection to be query-able
+}
+
+// queryCollectionAfterRestart allows several query attempts. Right after a pod restart, Solr nodes can fail to connect
+// to each other for a minute or more, and every such attempt takes up Solr's full 60-second connect timeout.
+func queryCollectionAfterRestart(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, Default, time.Minute*3, resolveOffset(additionalOffset))
+}
+
+func queryCollectionWithin(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, within time.Duration, additionalOffset ...int) {
+	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
 			solrCloud,
@@ -308,8 +322,7 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
-	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
-	// Only wait 5 seconds for the collection to be query-able
+	}).Within(within).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
 }
 
 func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) string {
@@ -475,20 +488,103 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		queryParamsString = "?" + queryParamsString
 	}
 
-	command := []string{
-		"solr",
-		"api",
-		"-verbose",
-		"-" + strings.ToLower(httpMethod),
-		fmt.Sprintf(
-			"\"%s://%s%s%s%s\"",
-			solrCloud.UrlScheme(false),
-			hostname,
-			solrCloud.NodePortSuffix(false),
-			apiPath,
-			queryParamsString),
+	if solrCloud.SolrVersionAtLeast("10") {
+		// Solr 10's `solr api` only supports GET (--solr-url URL). The legacy
+		// `-get/-post URL` flags were removed. Fail loudly if a non-GET caller
+		// is added, instead of silently turning the request into a GET.
+		Expect(strings.ToLower(httpMethod)).To(Equal("get"), "callSolrApiInPod against Solr 10 only supports GET")
+	}
+
+	credentials := ""
+	toolOpts := ""
+	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solrv1beta1.Basic {
+		basicAuthSecretName := solrCloud.BasicAuthSecretName()
+		basicAuthSecret := &corev1.Secret{}
+		if err = k8sClient.Get(ctx, resourceKey(solrCloud, basicAuthSecretName), basicAuthSecret); err != nil {
+			return "", err
+		}
+		credentials = string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+		if !solrCloud.SolrVersionAtLeast("10") {
+			toolOpts =
+				"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" + credentials +
+					" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+		}
+	}
+	GinkgoLogr.Info(toolOpts)
+
+	solrUrl := fmt.Sprintf(
+		"\"%s://%s%s%s%s\"",
+		solrCloud.UrlScheme(false),
+		hostname,
+		solrCloud.NodePortSuffix(false),
+		apiPath,
+		queryParamsString)
+
+	var command []string
+	if solrCloud.SolrVersionAtLeast("10") {
+		command = []string{"solr", "api", "--solr-url", solrUrl, "-v"}
+		if credentials != "" {
+			// The command is run via 'sh -c', and generated passwords can contain shell characters such as '('
+			command = append(command, "--credentials", "'"+strings.ReplaceAll(credentials, "'", `'\''`)+"'")
+		}
+	} else {
+		command = []string{"solr", "api", "-verbose", "-" + strings.ToLower(httpMethod), solrUrl}
+	}
+	if toolOpts != "" {
+		commandString := fmt.Sprintf("%s %s", toolOpts, strings.Join(command, " "))
+		commandString = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(commandString), " ")
+
+		command = []string{"sh", "-c", fmt.Sprintf("%q", commandString)}
 	}
 	return runExecForContainer(ctx, util.SolrNodeContainer, solrCloud.GetRandomSolrPodName(), solrCloud.Namespace, command)
+}
+
+// podTopologyLabelsMinVersion is the first Kubernetes version with the PodTopologyLabels admission plugin enabled by
+// default (beta). It copies the node's topology labels, including the zone, onto each pod when it is scheduled.
+var podTopologyLabelsMinVersion = utilversion.MajorMinor(1, 35)
+
+// expectPlacementSystemProperties checks the system properties that every Solr node reports for Solr's
+// AffinityPlacementFactory. The "availability_zone" must match the Kubernetes version under test: the zone label of the
+// node the pod runs on when the cluster copies node topology labels onto pods, and an empty value otherwise.
+// The "spread_domain" is always the name of the node the pod runs on.
+func expectPlacementSystemProperties(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, additionalOffset ...int) {
+	offset := resolveOffset(additionalOffset)
+
+	serverVersion, err := rawK8sClient.Discovery().ServerVersion()
+	ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not fetch the Kubernetes server version")
+	parsedVersion, err := utilversion.ParseGeneric(serverVersion.GitVersion)
+	ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not parse the Kubernetes server version %s", serverVersion.GitVersion)
+	podTopologyLabelsEnabled := parsedVersion.AtLeast(podTopologyLabelsMinVersion)
+
+	for _, podName := range solrCloud.GetAllSolrPodNames() {
+		pod := expectPodNow(ctx, solrCloud, podName, offset)
+		node, err := rawK8sClient.CoreV1().Nodes().Get(ctx, pod.Spec.NodeName, metav1.GetOptions{})
+		ExpectWithOffset(offset, err).ToNot(HaveOccurred(), "Could not fetch node %s of pod %s", pod.Spec.NodeName, podName)
+
+		expectedZone := ""
+		if podTopologyLabelsEnabled {
+			expectedZone = node.Labels[corev1.LabelTopologyZone]
+		}
+		ExpectWithOffset(offset, pod.Labels[corev1.LabelTopologyZone]).To(Equal(expectedZone),
+			"Pod %s has the wrong zone label for Kubernetes %s (node %s is in zone %q)", podName, serverVersion.GitVersion, node.Name, node.Labels[corev1.LabelTopologyZone])
+
+		EventuallyWithOffset(offset, func(g Gomega) {
+			response, err := runExecForContainer(ctx, util.SolrNodeContainer, podName, solrCloud.Namespace, []string{
+				"curl", "-sSk",
+				fmt.Sprintf("\"%s://localhost:${SOLR_PORT}/solr/admin/info/properties?wt=json\"", solrCloud.UrlScheme(false)),
+			})
+			g.Expect(err).ToNot(HaveOccurred(), "Could not fetch the system properties of Solr pod %s", podName)
+
+			properties := &struct {
+				SystemProperties map[string]string `json:"system.properties"`
+			}{}
+			g.Expect(json.Unmarshal([]byte(response), properties)).To(Succeed(), "Could not parse the system properties response: %s", response)
+			g.Expect(properties.SystemProperties).To(HaveKeyWithValue("availability_zone", expectedZone),
+				"Solr pod %s has the wrong availability_zone for Kubernetes %s", podName, serverVersion.GitVersion)
+			g.Expect(properties.SystemProperties).To(HaveKeyWithValue("spread_domain", pod.Spec.NodeName),
+				"Solr pod %s should have its node as the spread_domain", podName)
+		}).Should(Succeed())
+	}
 }
 
 func runExecForContainer(ctx context.Context, container string, podName string, namespace string, command []string) (response string, err error) {
@@ -578,6 +674,91 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 			},
 		},
 	}
+}
+
+// skipIfPrometheusExporterUnavailable skips the current tests if the Solr image under test is Solr 10 or later,
+// which no longer ships the Prometheus exporter.
+func skipIfPrometheusExporterUnavailable() {
+	if generateBaseSolrCloud(1).SolrVersionAtLeast("10") {
+		Skip("The Prometheus exporter was removed in Solr 10")
+	}
+}
+
+// Uses default password from docs : SolrRocks
+// The hash is generated as: base64(sha256(sha256(salt+password))) base64(salt))
+// See https://solr.apache.org/guide/solr/latest/deployment-guide/basic-authentication-plugin.html
+func generateSolrSecuritySecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	securityJsonSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-security-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		StringData: map[string]string{
+			"security.json": `{
+				"authentication": {
+				"blockUnknown": false,
+				"class": "solr.BasicAuthPlugin",
+				"credentials": {
+					"test-oper": "IV0EHq1OnNrj6gvRCwvFwTrZ1+z1oBbnQdiVC3otuq0= Ndd7LKvVBAaZIF0QAVi1ekCfAJXr1GGfLtRUXhgrF8c="
+				},
+				"realm": "Solr Basic Auth",
+				"forwardCredentials": false
+				},
+				"authorization": {
+				"class": "solr.RuleBasedAuthorizationPlugin",
+				"user-role": {
+					"test-oper": "test-oper"
+				},
+				"permissions": [
+					{
+					"name": "cluster",
+					"role": null
+					},
+					{
+					"name": "collections",
+					"role": null,
+					"collection": "*"
+					}
+				]
+				}
+			}`,
+		},
+		Type: corev1.SecretTypeOpaque,
+	}
+	Expect(k8sClient.Create(ctx, securityJsonSecret)).To(Succeed(), "Failed to create secret for security json in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, securityJsonSecret.Name)
+	return
+}
+
+func generateSolrBasicAuthSecret(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) {
+	basicAuthSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      solrCloud.Name + "-basic-auth-secret",
+			Namespace: solrCloud.Namespace,
+		},
+		// Using default creds
+		StringData: map[string]string{
+			"username": "test-oper",
+			"password": "SolrRocks",
+		},
+		Type: corev1.SecretTypeBasicAuth,
+	}
+	Expect(k8sClient.Create(ctx, basicAuthSecret)).To(Succeed(), "Failed to create secret for basic auth in namespace "+solrCloud.Namespace)
+
+	expectSecret(ctx, solrCloud, basicAuthSecret.Name)
+	return
+}
+
+func generateBaseSolrCloudWithSecurityJSON(replicas int) *solrv1beta1.SolrCloud {
+	solrCloud := generateBaseSolrCloud(replicas)
+
+	// Ensure SolrSecurity is initialized
+	if solrCloud.Spec.SolrSecurity == nil {
+		solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{}
+	}
+
+	return solrCloud
 }
 
 func generateBaseSolrCloudWithPlacementPolicy(replicas int, placementPlugin string) *solrv1beta1.SolrCloud {

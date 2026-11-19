@@ -27,6 +27,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"net/url"
 	"sort"
 	"strings"
@@ -548,7 +549,7 @@ func GetManagedSolrNodeNames(solrCloud *solr.SolrCloud, currentlyConfiguredPodCo
 // EvictReplicasForPodIfNecessary takes a solr Pod and migrates all replicas off of that Pod.
 // For updates this will only be called for pods using ephemeral data.
 // For scale-down operations, this can be called for pods using ephemeral or persistent data.
-func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, logger logr.Logger) (err error, canDeletePod bool, requestInProgress bool) {
+func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrCloud, pod *corev1.Pod, podHasReplicas bool, evictionReason string, recorder record.EventRecorder, logger logr.Logger) (err error, canDeletePod bool, requestInProgress bool) {
 	logger = logger.WithValues("evictionReason", evictionReason)
 	// If the Cloud has 1 or zero pods, and this is the "-0" pod, then delete the data since we can't move it anywhere else
 	// Otherwise, move the replicas to other pods
@@ -581,6 +582,8 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 				}
 				if err == nil {
 					logger.Info("Migrating all replicas off of pod before deletion.", "requestId", requestId, "pod", pod.Name)
+					recorder.Eventf(solrCloud, corev1.EventTypeNormal, "ReplicaMigrationStarted",
+						"Migrating all replicas off of pod %s before deletion (%s)", pod.Name, evictionReason)
 					requestInProgress = true
 				} else {
 					logger.Error(err, "Could not migrate all replicas off of pod before deletion. Will try again.")
@@ -595,8 +598,12 @@ func EvictReplicasForPodIfNecessary(ctx context.Context, solrCloud *solr.SolrClo
 			if asyncState == "completed" {
 				canDeletePod = true
 				logger.Info("Migration of all replicas off of pod before deletion complete. Pod can now be deleted.", "pod", pod.Name)
+				recorder.Eventf(solrCloud, corev1.EventTypeNormal, "ReplicaMigrationComplete",
+					"Migration of all replicas off of pod %s is complete; the pod can now be deleted (%s)", pod.Name, evictionReason)
 			} else if asyncState == "failed" {
 				logger.Info("Migration of all replicas off of pod before deletion failed. Will try again.", "pod", pod.Name, "message", message)
+				recorder.Eventf(solrCloud, corev1.EventTypeWarning, "ReplicaMigrationFailed",
+					"Migration of all replicas off of pod %s failed and will be retried: %s", pod.Name, message)
 			} else {
 				requestInProgress = true
 			}

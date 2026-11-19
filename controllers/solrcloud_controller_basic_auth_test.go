@@ -290,10 +290,10 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		g.Expect(basicAuthSecretVolMount.MountPath).To(Equal("/etc/secrets/"+secretName), "Wrong path used to mount Basic Auth volume")
 
 		expLivenessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
+			"solr api --solr-url \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
 			solrCloud.Name, solrCloud.Name, expLivenessProbePath)
 		expReadinessProbeCmd := fmt.Sprintf("JAVA_TOOL_OPTIONS=\"-Dbasicauth=$(cat /etc/secrets/%s-solrcloud-basic-auth/username):$(cat /etc/secrets/%s-solrcloud-basic-auth/password) -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\" "+
-			"solr api -get \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
+			"solr api --solr-url \"http://${SOLR_HOST}:8983%s\" 2>&1 | grep -v JAVA_TOOL_OPTIONS",
 			solrCloud.Name, solrCloud.Name, expReadinessProbePath)
 
 		g.Expect(mainContainer.LivenessProbe).To(Not(BeNil()), "main container should have a liveness probe defined")
@@ -311,7 +311,6 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 	// if no user-provided auth secret, then check that security.json gets bootstrapped correctly
 	if solrCloud.Spec.SolrSecurity.BasicAuthSecret == "" || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
 		// initContainers
-		g.Expect(podTemplate.Spec.InitContainers).To(Not(BeEmpty()), "The Solr Pod template requires an init container to bootstrap the security.json")
 		var expInitContainer *corev1.Container = nil
 		for _, cnt := range podTemplate.Spec.InitContainers {
 			if cnt.Name == "setup-zk" {
@@ -321,13 +320,15 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 		}
 
 		if expectBootstrapSecret || solrCloud.Spec.SolrSecurity.BootstrapSecurityJson != nil {
+			g.Expect(expInitContainer).To(Not(BeNil()), "The Solr Pod template requires a setup-zk init container to bootstrap the security.json")
 			// if the zookeeperRef has ACLs set, verify the env vars were set correctly for this initContainer
 			allACL, _ := solrCloud.Spec.ZookeeperRef.GetACLs()
 			if allACL != nil {
-				g.Expect(expInitContainer.Env).To(HaveLen(10), "Wrong number of env vars using ACLs and Basic Auth")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced the Solr Pod env vars")
-				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced the Solr Pod env vars")
-				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-2], true)
+				g.Expect(expInitContainer.Env).To(HaveLen(11), "Wrong number of env vars using ACLs and Basic Auth")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-3].Name).To(Equal("SOLR_OPTS"), "Env var SOLR_OPTS is misplaced among the initContainer env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-2].Name).To(Equal("SOLR_TOOL_OPTS"), "Env var SOLR_TOOL_OPTS is misplaced among the initContainer env vars")
+				g.Expect(expInitContainer.Env[len(expInitContainer.Env)-1].Name).To(Equal("SECURITY_JSON"), "Env var SECURITY_JSON is misplaced among the initContainer env vars")
+				testACLEnvVarsWithGomega(g, expInitContainer.Env[3:len(expInitContainer.Env)-3], true)
 			} // else this ref not using ACLs
 
 			expectPutSecurityJsonInZkCmd(g, expInitContainer)
@@ -351,10 +352,13 @@ func expectBasicAuthConfigOnPodTemplateWithGomega(g Gomega, solrCloud *solrv1bet
 
 func expectPutSecurityJsonInZkCmd(g Gomega, expInitContainer *corev1.Container) {
 	g.Expect(expInitContainer).To(Not(BeNil()), "Didn't find the setup-zk InitContainer in the sts!")
-	expCmd := "ZK_SECURITY_JSON=$(/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd get /security.json || echo 'failed-to-get-security.json'); " +
-		"if [ ${#ZK_SECURITY_JSON} -lt 3 ]; then " +
-		"echo $SECURITY_JSON > /tmp/security.json; " +
-		"/opt/solr/server/scripts/cloud-scripts/zkcli.sh -zkhost ${ZK_HOST} -cmd putfile /security.json /tmp/security.json; echo \"put security.json in ZK\"; fi"
+	expCmd := "solr zk cp zk:/security.json /tmp/current_security.json -z $ZK_HOST >/dev/null 2>&1;  " +
+		"GET_CURRENT_SECURITY_JSON_EXIT_CODE=$?; if [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 0 ]; then " +
+		"if [ ! -s /tmp/current_security.json ] || grep -q '^{}$' /tmp/current_security.json ; then  " +
+		"printf '%s' \"$SECURITY_JSON\" > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'Blank security.json found. Put new security.json in ZK'; fi; elif [ ${GET_CURRENT_SECURITY_JSON_EXIT_CODE} -eq 1 ]; then " +
+		" printf '%s' \"$SECURITY_JSON\" > /tmp/security.json; solr zk cp /tmp/security.json zk:/security.json -z $ZK_HOST >/dev/null 2>&1; " +
+		" echo 'No security.json found. Put new security.json in ZK'; fi"
 	g.Expect(expInitContainer.Command[2]).To(ContainSubstring(expCmd), "setup-zk initContainer not configured to bootstrap security.json!")
 }
 

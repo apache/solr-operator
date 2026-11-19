@@ -95,7 +95,7 @@ echo "Pulling CRDs from the staged url and uploading to release location ${CRDS_
     cd "${TMP_DIR}"
 
     # Download CRD files from the staged location
-    wget -r -np -nH -nd --level=1 -A "*.yaml*" "${RELEASE_URL}/crds/"
+    wget -e robots=off -r -np -nH -nd --level=1 -A "*.yaml*" "${RELEASE_URL}/crds/"
 
     rm -f robots.txt*
 

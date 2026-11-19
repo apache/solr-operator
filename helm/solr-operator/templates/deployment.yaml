@@ -38,13 +38,26 @@ spec:
         {{ toYaml .Values.labels | nindent 8 }}
         {{- end }}
     spec:
+      {{- if or .Values.global.imagePullSecrets .Values.image.imagePullSecret }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        {{- if kindIs "string" . }}
+        - name: {{ . }}
+        {{- else }}
+        - name: {{ required "Each entry in global.imagePullSecrets must be a string or an object with a 'name' field" .name }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.image.imagePullSecret }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
       serviceAccountName: {{ include "solr-operator.serviceAccountName" . }}
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
       {{- end }}
       containers:
       - name: {{ .Chart.Name }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}" 
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         args:
         {{- if or (index .Values "zookeeper-operator" "install") (index .Values "zookeeper-operator" "use") }}
@@ -74,6 +87,16 @@ spec:
         - "--leader-elect=true"
         {{- else }}
         - "--leader-elect=false"
+        {{- end }}
+        - --zap-devel={{ .Values.development }}
+        {{- if .Values.logger.encoder }}
+        - --zap-encoder={{ .Values.logger.encoder }}
+        {{- end }}
+        {{- if .Values.logger.level }}
+        - --zap-log-level={{ .Values.logger.level }}
+        {{- end }}
+        {{- if .Values.logger.stacktraceLevel }}
+        - --zap-stacktrace-level={{ .Values.logger.stacktraceLevel }}
         {{- end }}
 
         env:
@@ -120,7 +143,10 @@ spec:
       volumes:
         {{- include "solr-operator.mTLS.volumes" . | nindent 8 }}
       {{- end }}
-
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if .Values.sidecarContainers }}
       {{ toYaml .Values.sidecarContainers | nindent 6 }}
       {{- end }}

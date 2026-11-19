@@ -19,14 +19,16 @@ package e2e
 
 import (
 	"context"
+	"time"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
@@ -153,17 +155,22 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 				g.Expect(clusterOp.Metadata).To(Equal("RollingUpdateComplete"), "StatefulSet balanceReplicas lock operation has the wrong metadata.")
 			})
 
-			// After all pods are ready, make sure that the SolrCloud status is correct
-			solrCloud = expectSolrCloud(ctx, solrCloud)
-			Expect(solrCloud.Status.ReadyReplicas).To(Equal(solrCloud.Status.UpToDateNodes), "The SolrCloud did not finish the rolling restart, all nodes are up-to-date, but not all are ready")
-			// Make sure that the status object is correct for the nodes
-			for _, nodeStatus := range solrCloud.Status.SolrNodes {
-				Expect(nodeStatus.SpecUpToDate).To(BeTrue(), "Node not finishing as up-to-date when rolling restart ends: %s", nodeStatus.Name)
-				Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
-			}
+			// After all pods are ready, make sure that the SolrCloud status is correct.
+			// The status is written by a separate reconcile than the one that sees the StatefulSet become ready,
+			// so give it a moment to catch up.
+			solrCloud = expectSolrCloudWithChecksAndTimeout(ctx, solrCloud, time.Second, time.Millisecond*100, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Status.ReadyReplicas).To(Equal(found.Status.UpToDateNodes), "The SolrCloud did not finish the rolling restart, all nodes are up-to-date, but not all are ready")
+				// Make sure that the status object is correct for the nodes
+				for _, nodeStatus := range found.Status.SolrNodes {
+					g.Expect(nodeStatus.SpecUpToDate).To(BeTrue(), "Node not finishing as up-to-date when rolling restart ends: %s", nodeStatus.Name)
+					g.Expect(nodeStatus.Ready).To(BeTrue(), "Node not finishing as ready when rolling restart ends: %s", nodeStatus.Name)
+				}
+			})
 
 			By("waiting for the balanceReplicas to finish")
-			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*70, time.Second, func(g Gomega, found *appsv1.StatefulSet) {
+			// Right after the restart, Solr can still dial the restarted pod's old IP, from its 30s DNS cache. Each such
+			// attempt takes Solr's full 60s connect timeout and fails the balance, which the operator then retries.
+			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Minute*3, time.Second, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a balanceReplicas lock after balancing is complete.")
@@ -172,6 +179,10 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			By("checking that the collections can be queried after the restart")
 			queryCollection(ctx, solrCloud, solrCollection1, 0)
 			queryCollection(ctx, solrCloud, solrCollection2, 0)
+
+			By("checking that rolling update cluster-operation events were recorded on the SolrCloud")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationStarted")
+			expectEvent(ctx, solrCloud, corev1.EventTypeNormal, "ClusterOperationComplete")
 		})
 	})
 })
