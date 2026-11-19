@@ -191,6 +191,8 @@ annotations:
       links:
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/872
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/905
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease
