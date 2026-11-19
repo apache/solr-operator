@@ -75,11 +75,20 @@ annotations:
       links:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
-    - kind: changed
-      description: The Helm charts are now distributed as OCI artifacts, from oci://ghcr.io/apache/solr-operator/helm. The Helm repository at https://solr.apache.org/charts lists the same charts, so existing `helm repo add` setups keep working, but it now requires Helm 3.8 or later
+    - kind: added
+      description: The Helm charts are now published as OCI artifacts to oci://ghcr.io/apache/solr-operator/helm, which needs no `helm repo add` and no credentials
       links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/813
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/814
+    - kind: changed
+      description: The Helm repository at https://solr.apache.org/charts now lists the OCI charts, so existing `helm repo add` setups and chart dependencies keep working. It requires Helm 3.8 or later
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/813
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/900
   artifacthub.io/containsSecurityUpdates: "true"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator

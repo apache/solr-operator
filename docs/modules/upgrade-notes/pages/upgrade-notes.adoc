@@ -97,6 +97,46 @@ It is always encouraged to upgrade to the latest patch version of the minor and 
 There is no need to upgrade one patch version at a time (e.g. `v0.2.5` -> `v0.2.6` -> `v0.2.7` -> `v0.2.8`),
 instead you can leap to the latest patch version (e.g. `v0.2.5` -> `v0.2.8`).
 
+[#where-the-helm-charts-are-published]
+== Where the Helm charts are published
+
+The Solr Operator and Solr Helm charts are published as OCI artifacts to the GitHub Container Registry, at `oci://ghcr.io/apache/solr-operator/helm`.
+They can be installed either straight from the registry, or through the Helm repository at `https://solr.apache.org/charts`, which lists the same charts.
+Both are supported.
+
+[tabs#helm-chart-source]
+======
+OCI Charts::
++
+====
+Installing from the OCI registry needs no `helm repo add`, and no credentials.
+
+[source,bash,subs="verbatim,attributes"]
+----
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
+helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version}
+----
+====
+
+Charts Repo::
++
+====
+The Helm repository's entries point at the OCI registry, so it serves exactly the same charts.
+It requires Helm `v3.8` or later, and keeps existing `helm repo add` setups and chart dependencies on `https://solr.apache.org/charts` working.
+
+[source,bash,subs="verbatim,attributes"]
+----
+helm repo add apache-solr https://solr.apache.org/charts
+helm repo update
+helm install solr-operator apache-solr/solr-operator --version {operator-version}
+helm install example apache-solr/solr --version {operator-version}
+----
+====
+======
+
+The signed chart tarballs on the Apache download mirrors remain the official release artifacts.
+The OCI copies are byte-identical to them, so `helm install --verify` works with either source.
+
 == Installing the Solr Operator vs Solr CRDs
 
 Installing the Solr Operator, especially via the https://artifacthub.io/packages/helm/apache-solr/solr-operator[Helm Chart],
@@ -127,7 +167,7 @@ If you are using the Solr Helm chart to deploy the Zookeeper operator, then you 
 ----
 # Just replace the Solr CRDs and all CRDs it might depend on (e.g. ZookeeperCluster)
 kubectl replace -f "http://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml"
-helm upgrade solr-operator apache-solr/solr-operator --version {operator-version}
+helm upgrade solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
 ----
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
@@ -136,9 +176,9 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 === v0.10.0
 
-* The Helm charts are now distributed as OCI artifacts, from `oci://ghcr.io/apache/solr-operator/helm/solr-operator` and `oci://ghcr.io/apache/solr-operator/helm/solr`.
-The Helm repository at `https://solr.apache.org/charts` still lists every release, so existing `helm repo add` setups and `helm dependency` references keep working, but its entries now point at the OCI registry, which requires Helm `v3.8` or later.
-The signed chart tarballs on the Apache download mirrors remain the official release artifacts.
+* The Helm charts are now published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`.
+The Helm repository at `https://solr.apache.org/charts` keeps working, and now lists the same OCI charts, which requires Helm `v3.8` or later.
+See <<where-the-helm-charts-are-published>>.
 
 * The default Solr version has been upgraded from `8.11` to `9.11.0`.
 This only affects newly created resources, since the operator writes the resolved Solr version into the resource's spec on the first reconcile, so an operator upgrade never changes the Solr version of a running cluster.

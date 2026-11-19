@@ -31,22 +31,31 @@ If you do not wish to use the Zookeeper Operator, set:
 - `zookeeper-operator.use: false`
 
 
-### Adding the Solr Operator Helm Chart Repository
-You should only need to add the solr operator helm chart repository once, by running the following command:
-
-```bash
-helm repo add apache-solr https://solr.apache.org/charts
-```
-
-The charts are published as OCI artifacts to `oci://ghcr.io/apache/solr-operator/helm`, and the repository above lists them from there, which requires Helm 3.8 or later.
-Instead of adding the repository, you can also install straight from the OCI registry, by replacing `apache-solr/solr-operator` in the commands below with `oci://ghcr.io/apache/solr-operator/helm/solr-operator`.
-
 ### Installing the Chart
 
-To install the Solr Operator for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+The Solr Operator Helm chart is published as an OCI artifact to the GitHub Container Registry, and the Helm repository at `https://solr.apache.org/charts` lists the same chart.
+Both are supported, see [Where the Helm charts are published](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published).
+
+Install the CRDs first. Helm does not install the `ZookeeperCluster` CRD, so this step is required whichever chart source you use:
 
 ```bash
 kubectl create -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+```
+
+#### OCI Charts
+
+No repository needs to be added, and no credentials are required.
+
+```bash
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease
+```
+
+#### Charts Repo
+
+This requires Helm 3.8 or later.
+
+```bash
+helm repo add apache-solr https://solr.apache.org/charts
 helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
@@ -57,10 +66,26 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 ### Upgrading the Solr Operator
 
-If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS:
+If you are upgrading your Solr Operator deployment, you should always use a specific version of the chart and pre-install the Solr CRDS.
+
+Upgrade the CRDs first. Helm does not update CRDs that are already installed, so this step is required whichever chart source you use:
 
 ```bash
 kubectl replace -f https://solr.apache.org/operator/downloads/crds/v0.10.0-prerelease/all-with-dependencies.yaml
+```
+
+Then upgrade the chart.
+
+#### OCI Charts
+
+```bash
+helm upgrade solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease
+```
+
+#### Charts Repo
+
+```bash
+helm repo update
 helm upgrade solr-operator apache-solr/solr-operator --version 0.10.0-prerelease
 ```
 
@@ -70,18 +95,20 @@ If you want to specify the namespace for the installation, use the `--namespace`
 All resources will be deployed to the given namespace.
 
 ```bash
-helm install solr-operator apache-solr/solr-operator --namespace solr
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease --namespace solr
 ```
 
 If you want to only watch that namespace, or others, then you will have to provide the `watchNamespaces` option.
 
 ```bash
 # Watch the namespace where the operator is deployed to (just pass the boolean true)
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces=true
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease --namespace solr --set watchNamespaces=true
+
 # Watch a single namespace different than the one being deployed to
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces=other
-# Watch multiple namespaces (commmas must be escaped in the set string)
-helm install solr-operator apache-solr/solr-operator --namespace solr --set watchNamespaces="team1\,team2\,team3"
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease --namespace solr --set watchNamespaces=other
+
+# Watch multiple namespaces (commas must be escaped in the set string)
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease --namespace solr --set watchNamespaces="team1\,team2\,team3"
 ```
 
 Note: Passing `false` or `""` to the `watchNamespaces` variable will both result in the operator watchting all namespaces in the Kube cluster.
@@ -93,8 +120,16 @@ Helm 3 automatically installs the Solr CRDs in the /crds directory, so no furthe
 If you have solr operator installations in multiple namespaces that are managed separately, you will likely want to skip installing CRDs when installing the chart.
 This can be done with the `--skip-crds` helm option.
 
+#### OCI Charts
+
 ```bash
-helm install solr-operator apache-solr/solr-operator --skip-crds --namespace solr
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version 0.10.0-prerelease --skip-crds --namespace solr
+```
+
+#### Charts Repo
+
+```bash
+helm install solr-operator apache-solr/solr-operator --version 0.10.0-prerelease --skip-crds --namespace solr
 ```
 
 **Helm will not upgrade CRDs once they have been installed.
