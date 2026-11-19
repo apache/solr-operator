@@ -112,7 +112,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	Expect(os.Mkdir(outputDir, os.ModeDir|os.ModePerm)).To(Succeed(), "Could not create directory for test output: %s", outputDir)
 
 	var err error
-	k8sConfig, err = config.GetConfig()
+	k8sConfig, err = config.GetConfigWithContext(os.Getenv("KUBE_CONTEXT"))
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
 	k8sConfig.Timeout = time.Minute
 	Expect(zkApi.AddToScheme(scheme.Scheme)).To(Succeed())
@@ -152,7 +152,7 @@ var _ = SynchronizedBeforeSuite(func(ctx context.Context) {
 	logf.SetLogger(logger)
 
 	var err error
-	k8sConfig, err = config.GetConfig()
+	k8sConfig, err = config.GetConfigWithContext(os.Getenv("KUBE_CONTEXT"))
 	Expect(err).NotTo(HaveOccurred(), "Could not load in default kubernetes config")
 
 	rawK8sClient, err = kubernetes.NewForConfig(k8sConfig)
