@@ -80,5 +80,8 @@ COPYFILE_DISABLE=true "${TAR}" --exclude-vcs --exclude-vcs-ignores \
   --exclude .asf.yaml \
   --exclude .github \
   --exclude .run \
+  --exclude .agents \
+  --exclude AGENTS.md \
+  --exclude .claude \
   --transform "s,^,solr-operator-${VERSION}/," \
   -czf "${ARTIFACTS_DIR}/solr-operator-${VERSION}.tgz" .

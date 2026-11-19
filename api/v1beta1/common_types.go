@@ -81,6 +81,11 @@ type PodOptions struct {
 	// +optional
 	EnvVariables []corev1.EnvVar `json:"envVars,omitempty"`
 
+	// Additional environment variables to load into the default container from
+	// ConfigMaps or Secrets.
+	// +optional
+	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
+
 	// Annotations to be added for pods.
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
@@ -277,7 +282,14 @@ func (c *ContainerImage) ToImageName() (name string) {
 	return c.Repository + ":" + c.Tag
 }
 
+// Version returns the version part of the image's tag, without a digest, e.g. "10.0.0" for "10.0.0@sha256:...".
+func (c *ContainerImage) Version() string {
+	return ImageVersion(c.ToImageName())
+}
+
 func ImageVersion(image string) (version string) {
+	// Ignore a digest, e.g. "solr:10.0.0@sha256:..."
+	image, _, _ = strings.Cut(image, "@")
 	split := strings.Split(image, ":")
 	if len(split) < 2 {
 		return ""

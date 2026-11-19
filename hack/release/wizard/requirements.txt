@@ -1,7 +1,11 @@
-six~=1.16.0
-Jinja2~=3.1.1
-PyYAML~=6.0
-holidays~=0.16
-ics~=0.7.2
-console-menu~=0.7.1
-PyGithub~=1.56
+# Pinned exactly, so that every release manager runs the wizard with the same
+# dependencies. Dependabot proposes the upgrades, see .github/dependabot.yml.
+# Only the packages the wizard imports are listed here; their own dependencies
+# (arrow, attrs, six, tatsu, ...) are resolved by pip.
+#
+# Note that holidays requires Python 3.11 or later.
+Jinja2==3.1.6
+PyYAML==6.0.3
+holidays==0.108
+ics==0.7.3
+console-menu==0.8.0

@@ -117,6 +117,19 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	// Version-specific resources cannot be generated without a supported Solr major version.
+	// Wait for the user to fix the image tag, which triggers a new reconcile.
+	if _, versionErr := instance.SolrVersion(); versionErr != nil {
+		if !instance.DeletionTimestamp.IsZero() {
+			// Don't block the deletion of the SolrCloud on its storage finalizer
+			return r.reconcileStorageFinalizerForDeletion(ctx, instance, logger)
+		}
+		logger.Error(versionErr, "Not reconciling SolrCloud, its Solr version is not supported")
+		r.Recorder.Eventf(instance, corev1.EventTypeWarning, "UnsupportedSolrVersion",
+			"Not reconciling SolrCloud: %s", versionErr.Error())
+		return reconcile.Result{}, nil
+	}
+
 	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
 	requeueOrNot := reconcile.Result{}
 
@@ -246,6 +259,15 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					return requeueOrNot,
 						fmt.Errorf("custom solr.xml in ConfigMap %s must contain a placeholder for either 'solr.port.advertise', or its deprecated alternative 'hostPort', e.g. <int name=\"hostPort\">${solr.port.advertise:80}</int>",
 							providedConfigMapName)
+				}
+				// Solr 10 refuses to start with some settings that Solr 9 needs, so warn before the rolling restart reaches them.
+				// This only warns, as a match can be a false positive, e.g. in an XML comment.
+				if instance.SolrVersionAtLeast("10") {
+					if settings := util.SettingsUnsupportedBySolr10(solrXml); len(settings) > 0 {
+						r.Recorder.Eventf(instance, corev1.EventTypeWarning, "InvalidConfigMap",
+							"Custom solr.xml in ConfigMap %s contains settings that Solr 10 refuses to start with: %s. "+
+								"Remove them, see the Solr Operator upgrade notes", providedConfigMapName, strings.Join(settings, ", "))
+					}
 				}
 				// stored in the pod spec annotations on the statefulset so that we get a restart when solr.xml changes
 				reconcileConfigInfo[util.SolrXmlMd5Annotation] = fmt.Sprintf("%x", md5.Sum([]byte(solrXml)))
@@ -510,7 +532,9 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		case PvcExpansionLock:
 			operationComplete, retryLaterDuration, err = handlePvcExpansion(ctx, r, instance, statefulSet, clusterOp, logger)
 			// PVC expansion (the controller-side volume resize) can take a long time on some provisioners,
-			// so it should use the long requeue timeout rather than being preempted after a minute.
+			// so a slow-but-progressing expansion should use the long requeue timeout rather than being
+			// preempted after a minute. An expansion that is erroring is still queued for a later retry
+			// after a minute, like any other failing operation.
 			shortTimeoutForRequeue = false
 		default:
 			operationFound = false
@@ -521,6 +545,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			err = clearClusterOpLockWithPatch(ctx, r, statefulSet, "clusterOp not supported", logger)
 		}
 		if operationFound {
+			// The error returned by the cluster operation is not returned by the reconcile, because the
+			// clusterOp has its own retry mechanism (it will be queued for a later retry if it keeps failing).
+			// The error is still needed below, to decide whether the operation should be queued for a later retry.
+			clusterOpError := err
 			err = nil
 			if operationComplete {
 				if nextClusterOperation == nil {
@@ -545,7 +573,7 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 				clusterOpRuntime := time.Since(clusterOp.LastStartTime.Time)
 				queueForLaterReason := ""
-				if err != nil && clusterOpRuntime > time.Minute {
+				if clusterOpError != nil && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "hit an error during operation"
 				} else if shortTimeoutForRequeue && clusterOpRuntime > time.Minute {
 					queueForLaterReason = "timed out during operation (1 minutes)"
@@ -567,6 +595,13 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					r.Recorder.Eventf(instance, corev1.EventTypeWarning, "ClusterOperationRetry",
 						"Pausing cluster operation %q because it %s; it has been queued to be retried later", string(clusterOp.Operation), queueForLaterReason)
 				}
+			}
+
+			// A failed cluster operation must always be retried, otherwise a transient error (e.g. Solr
+			// being temporarily unreachable) would stall the operation forever, since nothing else is
+			// guaranteed to trigger another reconcile for this SolrCloud.
+			if clusterOpError != nil && retryLaterDuration == 0 {
+				retryLaterDuration = time.Second * 5
 			}
 		}
 	} else if opErr == nil {
@@ -867,7 +902,7 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 		if len(p.Status.ContainerStatuses) > 0 {
 			// The first container should always be running solr
 			nodeStatus.Version = solrv1beta1.ImageVersion(p.Spec.Containers[0].Image)
-			if nodeStatus.Version != solrCloud.Spec.SolrImage.Tag {
+			if nodeStatus.Version != solrCloud.Spec.SolrImage.Version() {
 				otherVersions = append(otherVersions, nodeStatus.Version)
 			}
 		}
@@ -951,11 +986,11 @@ func createCloudStatus(solrCloud *solrv1beta1.SolrCloud,
 
 	// If there are multiple versions of solr running, use the first otherVersion as the current running solr version of the cloud
 	if len(otherVersions) > 0 {
-		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Tag
+		newStatus.TargetVersion = solrCloud.Spec.SolrImage.Version()
 		newStatus.Version = otherVersions[0]
 	} else {
 		newStatus.TargetVersion = ""
-		newStatus.Version = solrCloud.Spec.SolrImage.Tag
+		newStatus.Version = solrCloud.Spec.SolrImage.Version()
 	}
 
 	newStatus.InternalCommonAddress = solrCloud.UrlScheme(false) + "://" + solrCloud.InternalCommonUrl(true)
@@ -1237,6 +1272,29 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 		}
 	}
 	return nil
+}
+
+// reconcileStorageFinalizerForDeletion handles the storage finalizer of a SolrCloud that is being deleted,
+// without reconciling anything else. It is used when the rest of the SolrCloud cannot be reconciled.
+func (r *SolrCloudReconciler) reconcileStorageFinalizerForDeletion(ctx context.Context, cloud *solrv1beta1.SolrCloud, logger logr.Logger) (reconcile.Result, error) {
+	statefulSet := &appsv1.StatefulSet{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cloud.Namespace, Name: cloud.StatefulSetName()}, statefulSet); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, err
+		}
+		// The StatefulSet can already be gone, e.g. with foreground cascading deletion.
+		// Its PVCs still carry the StatefulSet's selector labels, so use those.
+		statefulSet.Spec.Selector = &metav1.LabelSelector{MatchLabels: util.SolrCloudSelectorLabels(cloud)}
+	}
+	// Same as in the main reconcile: without the PVC labels, all PVCs could be deleted
+	if len(statefulSet.Spec.Selector.MatchLabels) == 0 {
+		return reconcile.Result{}, nil
+	}
+	if err := r.reconcileStorageFinalizer(ctx, cloud, statefulSet, logger); err != nil {
+		logger.Error(err, "Cannot delete PVCs while garbage collecting after deletion.")
+		return reconcile.Result{RequeueAfter: time.Second * 15}, nil
+	}
+	return reconcile.Result{}, nil
 }
 
 func (r *SolrCloudReconciler) getPVCCount(ctx context.Context, cloud *solrv1beta1.SolrCloud, pvcLabelSelector map[string]string) (int, error) {

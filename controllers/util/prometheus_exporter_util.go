@@ -119,8 +119,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	if solrConnectionInfo.CloudZkConnnectionInfo != nil {
 		envVars = append(envVars, corev1.EnvVar{Name: "ZK_HOST", Value: solrConnectionInfo.CloudZkConnnectionInfo.ZkConnectionString()})
 
-		// Add ACL information, if given, through Env Vars
-		if hasACLs, aclEnvs := AddACLsToEnv(solrConnectionInfo.CloudZkConnnectionInfo.AllACL, solrConnectionInfo.CloudZkConnnectionInfo.ReadOnlyACL); hasACLs {
+		// Add ACL information, if given, through Env Vars.
+		// The exporter only runs on Solr 9 and older (Solr 10 removed it), which still have the VMParams ACL classes.
+		if hasACLs, aclEnvs := AddACLsToEnv(solrConnectionInfo.CloudZkConnnectionInfo.AllACL, solrConnectionInfo.CloudZkConnnectionInfo.ReadOnlyACL, false); hasACLs {
 			envVars = append(envVars, aclEnvs...)
 
 			// The $SOLR_ZK_CREDS_AND_ACLS parameter does not get picked up when running the Prometheus Exporter, it must be added to the JAVA_OPTS.

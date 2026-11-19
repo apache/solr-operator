@@ -20,6 +20,10 @@ Note all repositories are defined in the `SolrCloud` specification.
 In order to use a repository in the `SolrBackup` CRD, it must be defined in the `SolrCloud` spec.
 All yaml examples below are `SolrCloud` resources, not `SolrBackup` resources.
 
+NOTE: The operator registers the repositories with Solr through a `<backup>` element in the `solr.xml` it generates.
+If you provide your own `solr.xml` through `providedConfigMap`, you must add the `<backup>` element and the repository modules to your custom `solr.xml` yourself.
+See xref:solr-cloud:custom-solr-config.adoc#solr-xml-managed-elements[Elements the operator normally generates for you].
+
 The Solr-operator currently supports three different backup repository types: Google Cloud Storage ("GCS"), AWS S3 ("S3"), and Volume ("local").
 The cloud backup solutions (GCS and S3) are strongly suggested as they are cloud-native backup solutions, however they require newer Solr versions.
 

@@ -61,7 +61,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Down", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection2, 1, 1, 2)
 	})
 
-	FContext("with replica migration", func() {
+	FContext("with replica migration", Label("pr"), func() {
 		FIt("Scales Down", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()
 			solrCloud.Spec.Replicas = pointer.Int32(1)
@@ -348,7 +348,7 @@ var _ = FDescribe("E2E - SolrCloud - Scale Up", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection2, 2, 1)
 	})
 
-	FContext("with replica migration", func() {
+	FContext("with replica migration", Label("pr"), func() {
 
 		FIt("Scales Up", func(ctx context.Context) {
 			originalSolrCloud := solrCloud.DeepCopy()

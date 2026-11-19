@@ -54,7 +54,7 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 		createAndQueryCollection(ctx, solrCloud, "basic", 2, 1)
 	})
 
-	FContext("Provided Security JSON", func() {
+	FContext("Provided Security JSON", Label("pr"), func() {
 		BeforeEach(func(ctx context.Context) {
 			solrCloud.Spec.ZookeeperRef = &solrv1beta1.ZookeeperRef{
 				ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
@@ -109,6 +109,24 @@ var _ = FDescribe("E2E - SolrCloud - Security JSON", func() {
 			queryCollection(ctx, solrCloud, "basic", 0)
 
 			// TODO: When balancing is in all Operator supported Solr versions, add a test to make sure balancing occurred
+		})
+	})
+
+	FContext("Bootstrapped Security - Probes Require Auth", func() {
+
+		BeforeEach(func() {
+			solrCloud.Spec.SolrSecurity = &solrv1beta1.SolrSecurityOptions{
+				AuthenticationType: "Basic",
+				ProbesRequireAuth:  true,
+			}
+		})
+
+		// The pods only become ready if the authenticated exec probes succeed, which is checked in "JustBeforeEach"
+		FIt("Starts correctly", func(ctx context.Context) {
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				readinessProbe := found.Spec.Template.Spec.Containers[0].ReadinessProbe
+				g.Expect(readinessProbe.Exec).ToNot(BeNil(), "Probes that require auth should use an exec command")
+			})
 		})
 	})
 })

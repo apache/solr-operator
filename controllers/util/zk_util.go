@@ -399,7 +399,10 @@ func CopyZookeeperClusterFields(from, to *zkApi.ZookeeperCluster, logger logr.Lo
 
 // AddACLsToEnv creates the neccessary environment variables for using ZK ACLs, and returns whether ACLs were provided.
 // info: Zookeeper Connection Information
-func AddACLsToEnv(allACL *solrv1beta1.ZookeeperACL, readOnlyACL *solrv1beta1.ZookeeperACL) (hasACLs bool, envVars []corev1.EnvVar) {
+// useCredentialsInjector selects DigestZkACLProvider, DigestZkCredentialsProvider and VMParamsZkCredentialsInjector,
+// which read the same zkDigest* system properties. It must be set for Solr 10.1+, which removed
+// VMParamsAllAndReadonlyDigestZkACLProvider (SOLR-18122). The replacements exist since Solr 9.1.
+func AddACLsToEnv(allACL *solrv1beta1.ZookeeperACL, readOnlyACL *solrv1beta1.ZookeeperACL, useCredentialsInjector bool) (hasACLs bool, envVars []corev1.EnvVar) {
 	if allACL == nil && readOnlyACL == nil {
 		return false, envVars
 	}
@@ -465,8 +468,18 @@ func AddACLsToEnv(allACL *solrv1beta1.ZookeeperACL, readOnlyACL *solrv1beta1.Zoo
 	envVars = append(envVars,
 		corev1.EnvVar{
 			Name:  "SOLR_ZK_CREDS_AND_ACLS",
-			Value: "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider " + strings.Join(zkDigests, " "),
+			Value: zkACLProviderOpts(useCredentialsInjector) + " " + strings.Join(zkDigests, " "),
 		})
 
 	return true, envVars
+}
+
+func zkACLProviderOpts(useCredentialsInjector bool) string {
+	if useCredentialsInjector {
+		return "-DzkACLProvider=org.apache.solr.common.cloud.DigestZkACLProvider" +
+			" -DzkCredentialsProvider=org.apache.solr.common.cloud.DigestZkCredentialsProvider" +
+			" -DzkCredentialsInjector=org.apache.solr.common.cloud.VMParamsZkCredentialsInjector"
+	}
+	return "-DzkACLProvider=org.apache.solr.common.cloud.VMParamsAllAndReadonlyDigestZkACLProvider" +
+		" -DzkCredentialsProvider=org.apache.solr.common.cloud.VMParamsSingleSetCredentialsDigestZkCredentialsProvider"
 }
