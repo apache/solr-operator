@@ -203,6 +203,14 @@ The label is only copied onto pods by Kubernetes `v1.35`+, and the property is e
 Solr pods also get the `spread_domain` system property, set to the name of their Kubernetes node, which Solr only uses when `spreadAcrossDomains` is enabled in the `AffinityPlacementFactory` configuration.
 These are part of the same pod spec change that restarts the Solr pods during this upgrade, so they do not cause an additional restart.
 
+* The `preStop` hook running `solr stop` has been removed, along with the `SOLR_STOP_WAIT` envVar that only served it, so pod deletions no longer emit a `FailedPreStopHook` warning event.
+Solr now shuts down on the `SIGTERM` that Kubernetes sends, which runs the same graceful shutdown.
+** This is part of the same pod spec change that restarts the Solr pods during this upgrade, so it does not cause an additional restart.
+The old pods emit the `FailedPreStopHook` event one last time as they are replaced.
+** A stopped Solr container now exits with code `143` instead of `0`, so its last state shows `Error` instead of `Completed`.
+** A custom Solr image whose entrypoint does not pass `SIGTERM` on to the Solr process is now killed at the end of `terminationGracePeriodSeconds`.
+Fix the entrypoint, or set your own `preStop` hook through `customSolrKubeOptions.podOptions.lifecycle`.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*
