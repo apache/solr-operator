@@ -77,7 +77,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/869
     - kind: security
-      description: Solr 9.11.0 carries the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516, all of which affect Solr 9.10.0 and earlier. Existing SolrClouds are not upgraded automatically; set `image.tag` to 9.11.0 to pick the fixes up
+      description: Solr 9.11.0 carries several CVE fixes for Solr 9.10.0 and earlier. Existing SolrClouds are not upgraded automatically; set `image.tag` to 9.11.0 to pick the fixes up
       links:
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
