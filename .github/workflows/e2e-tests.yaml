@@ -50,7 +50,7 @@ on:
         type: string
         default: 'pr'
       solr-version:
-        description: 'Solr image tag to test with (SOLR_IMAGE=solr:<tag>)'
+        description: 'Single Solr image tag to test with (SOLR_IMAGE=solr:<tag>). Leave empty to test every version a pull request tests.'
         type: string
         default: '9.11.0'
       kube-version:
@@ -74,10 +74,14 @@ jobs:
     timeout-minutes: 90
 
     strategy:
+      # Both Solr versions are reported, a failure on one does not cancel the other.
+      fail-fast: false
       matrix:
         go-version: [ '1.27' ]
         kube-version: [ "${{ inputs.kube-version || 'v1.33.7' }}" ]
-        solr-version: [ "${{ inputs.solr-version || '9.11.0' }}" ]
+        # Pull requests run the reduced profile against every supported Solr major version, so that
+        # Solr 10 compatibility is covered. A manual run tests only the version given by the input.
+        solr-version: ${{ fromJSON(inputs.solr-version && format('["{0}"]', inputs.solr-version) || '["9.11.0", "10.1.0"]') }}
 
     steps:
       # Setup
