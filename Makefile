@@ -54,7 +54,7 @@ GO_LICENSES_ENV=GOOS=linux GOARCH=amd64
 LICENSE_REPORT_TEMPLATE=hack/licenses/dependency_licenses.csv.tmpl
 GINKGO_VERSION = $(shell cat go.mod | grep 'github.com/onsi/ginkgo' | sed 's/.*\(v.*\)$$/\1/g')
 KIND_VERSION=v0.33.0
-YQ_VERSION=v4.54.1
+YQ_VERSION=v4.54.3
 CONTROLLER_RUNTIME_VERSION = $(shell cat go.mod | grep 'sigs.k8s.io/controller-runtime' | sed 's/.*\(v\(.*\)\.[^.]*\)$$/\2/g')
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION ?= 1.37.0
