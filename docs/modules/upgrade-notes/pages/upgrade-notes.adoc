@@ -139,7 +139,7 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 * The default Solr version has been upgraded from `8.11` to `9.11.0`.
 This only affects newly created resources, since the operator writes the resolved Solr version into the resource's spec on the first reconcile, so an operator upgrade never changes the Solr version of a running cluster.
 Note that a Solr `>=9.10` node refuses to start if its `major.minor` version is lower than the highest version already running in the same Solr cluster, so a rolling downgrade of Solr requires setting the `SOLR_CLOUD_DOWNGRADE_ENABLED` envVar to `true` on the pods.
-Solr `9.11.0` carries the fixes for CVE-2026-22022, CVE-2026-22444 and CVE-2025-66516, so existing clusters on an older Solr version have to set their image tag themselves to pick them up.
+Solr `9.11.0` carries several CVE fixes, so existing clusters on an older Solr version have to set their image tag themselves to pick them up.
 
 * The CRDs gain the new optional pod fields from the Kubernetes `1.32` to `1.37` API types, settable through `podOptions`.
 Upgrade the CRDs along with the operator, see <<installing-the-solr-operator-vs-solr-crds>>, before using them.
