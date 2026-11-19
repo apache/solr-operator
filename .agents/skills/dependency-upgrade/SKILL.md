@@ -37,6 +37,22 @@ nothing, ask rather than guess. Stop and ask if tracked files are modified (untr
 are fine). Branch from `<remote>/main`, never local `main`. Do not `git pull`. Do not commit to
 `main`.
 
+### Establish the baseline release
+
+The changelog on `main` describes the next release, so every "from X to Y", every vulnerability
+count and every list of links is relative to the **last release**, not to `main`. Find it yourself:
+
+```bash
+git fetch <remote> --tags
+BASE=$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -Ev -- '-(rc|alpha|beta|prerelease)' | head -1)
+git log -1 --format='%h %cs' "${BASE}"
+```
+
+Releases are tagged on release branches, so `BASE` is usually not an ancestor of `main` and
+`git describe` will not find it. Sanity-check it against the chart `version` on `main`, which is the
+next release with a `-prerelease` suffix. Write `"${BASE}:path"` with braces: in zsh, `$BASE:a...`
+is a history modifier, not a path.
+
 ## Preflight
 
 All five. Each one silently ruins the run.
@@ -165,7 +181,7 @@ sweep — file it separately, or the diff stops being reviewable.
 6. `make prepare` — the one command that makes a PR pass lint. Runs `fmt`, `generate`, `manifests`,
    `fetch-licenses-list` and `mod-tidy` in the right order.
 7. `make test`, then repair fixtures.
-8. Add or consolidate the changelog entries.
+8. Add or consolidate the changelog entries against `BASE`, then self-QA them (see below).
 9. `make lint`, then `make test` again.
 
 ### Regenerate, never hand-edit
@@ -212,8 +228,9 @@ by hand without it fails confusingly on programmatic focus.
 
 ## Changelog: both charts
 
-Add entries to `artifacthub.io/changes` in **both** `helm/solr-operator/Chart.yaml` and
-`helm/solr/Chart.yaml` — a YAML block scalar holding a list. `kind` accepts exactly `added`,
+Add entries to `artifacthub.io/changes` in `helm/solr-operator/Chart.yaml`, and in
+`helm/solr/Chart.yaml` for whatever the Solr chart's users see — new CRD fields they can set through
+`podOptions`, a changed default — each a YAML block scalar holding a list. `kind` accepts exactly `added`,
 `changed`, `deprecated`, `removed`, `fixed`, `security`. Follow the existing entries, including the
 `links:` convention of a `Github Issue` and/or `Github PR` pair. Malformed YAML fails
 `make check-helm`.
@@ -225,6 +242,18 @@ Write for a user deciding whether to upgrade, not a reviewer reading the diff:
 - Several sweeps land in one release cycle. If that grouped entry is already there from an earlier
   one, update it instead of adding a second — the net span since the last release, not this PR's
   delta — and add this PR to its `links:`. The separate-entry rules below still apply.
+- The grouped entry names the notable sets with both ends, from `BASE` to this branch: the
+  Kubernetes libraries, controller-runtime, the Go toolchain (`go.mod` and `build/Dockerfile`), and
+  the bundled Zookeeper Operator if it moved. Earlier sweeps do not always leave an entry, so find
+  them with `git log --oneline "${BASE}"..HEAD -- go.mod` and link every one that moved a notable
+  version.
+- New CRD fields from a Kubernetes bump come from every API minor after `BASE`'s, so name the range
+  (e.g. "the Kubernetes 1.32 to 1.37 API types"), not just the newest minor.
+- A `security` entry covers every vulnerability reachable at `BASE` and fixed on this branch, not
+  just those this PR fixes. Count them with `govulncheck` (`go run
+  golang.org/x/vuln/cmd/govulncheck@latest ./...`) in a temporary worktree of `BASE` and on the
+  branch, and name the modules. `govulncheck` checks the installed Go's standard library, not the
+  one `BASE` was built with, so never claim a number for standard-library fixes.
 - A separate entry for anything changing behaviour or requiring action: new RBAC permissions, a
   bundled Zookeeper Operator bump, a changed default.
 - A CVE fix uses `kind: security` **and** flips `artifacthub.io/containsSecurityUpdates` to `"true"`
@@ -232,7 +261,9 @@ Write for a user deciding whether to upgrade, not a reviewer reading the diff:
 - A sweep with no user-visible effect still gets one `changed` entry.
 
 If the bundled Zookeeper Operator moved, also add an entry to
-`docs/modules/upgrade-notes/pages/upgrade-notes.adoc`; its matrices are hand-maintained.
+`docs/modules/upgrade-notes/pages/upgrade-notes.adoc`; its matrices are hand-maintained. Keep the
+release's section of the upgrade notes consistent with the changelog: anything there that needs
+action, such as new CRD fields that only work once the CRDs are upgraded, belongs in both.
 
 Release-time interaction: the release process wipes `artifacthub.io/changes` to a placeholder just
 after a release branch is cut, so an entry added to `main` after that lands in the *next* release.
@@ -240,6 +271,24 @@ An upgrade belonging to the release being cut must merge before that step. That 
 dummy entries (`Addition 1`, `Change 2`), not an empty list — replace them, don't append.
 
 ## Verify before you commit
+
+### Self-QA the final changelog
+
+Before committing, re-derive every claim in the final entries from scratch, as if writing them
+afresh against `BASE`. Edits made one sweep at a time drift: a count stays at what one PR fixed, a
+version gets measured from the `main` of the time.
+
+- **Versions:** compare `git show "${BASE}:go.mod"` and `"${BASE}:build/Dockerfile"` with the
+  branch. Every "from X to Y" in the grouped entry matches both ends.
+- **Vulnerabilities:** the `security` entry's count and modules match the `govulncheck` difference
+  between `BASE` and the branch.
+- **Links:** every sweep since `BASE` that moved a notable version is linked, including this one.
+- **CRD fields:** the named API range starts after `BASE`'s Kubernetes minor.
+- **Other entries:** check every "up from X" or "from X to Y" elsewhere in both changelogs and in
+  the release's upgrade notes against `BASE`, such as the default Solr version. Fix the sweep's own
+  entries; report any other mismatch to the user instead of fixing it unasked.
+
+### Lint and test
 
 1. `make lint`, serially. Covers zk version consistency, tidy, formatting, licenses, manifests,
    generated code, charts, docs.
