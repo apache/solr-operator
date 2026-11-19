@@ -33,8 +33,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -336,9 +338,12 @@ func TestDeletePodForUpdateReportsRealDeleteError(t *testing.T) {
 	requireEvent(t, rec, corev1.EventTypeWarning, "PodUpdateError")
 }
 
-// emitted when a backup is attempted against a repository that the SolrCloud has not yet marked
-// available. A GCS repository is used so that EnsureDirectoryForBackup is a no-op (no pod exec).
-func TestReconcileSolrCloudBackupEmitsCloudNotReadyEvent(t *testing.T) {
+// TestSolrBackupReconcileEmitsOneEventWhenCloudNotReady checks that a backup attempted against a
+// repository that the SolrCloud has not yet marked available records exactly one warning event.
+// reconcileSolrCloudBackup only returns its errors, and Reconcile records them, so an error must
+// not also be recorded where it happens. A GCS repository is used so that EnsureDirectoryForBackup
+// is a no-op (no pod exec).
+func TestSolrBackupReconcileEmitsOneEventWhenCloudNotReady(t *testing.T) {
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		t.Fatalf("could not add client-go types to scheme: %v", err)
@@ -369,12 +374,27 @@ func TestReconcileSolrCloudBackupEmitsCloudNotReadyEvent(t *testing.T) {
 
 	rec := record.NewFakeRecorder(8)
 	r := &SolrBackupReconciler{
-		Client:   fake.NewClientBuilder().WithScheme(scheme).WithObjects(solrCloud).Build(),
+		Client: fake.NewClientBuilder().WithScheme(scheme).
+			WithObjects(solrCloud, backup).
+			WithStatusSubresource(&solrv1beta1.SolrBackup{}).
+			Build(),
 		Recorder: rec,
 	}
 
-	if _, _, err := r.reconcileSolrCloudBackup(context.Background(), backup, &backup.Status.IndividualSolrBackupStatus, logr.Discard()); err == nil {
-		t.Error("expected a 'cloud not ready' error, got nil")
+	// The first reconcile may only fill in the backup's defaults, and requeue.
+	req := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: backup.Namespace, Name: backup.Name}}
+	for i := 0; i < 2; i++ {
+		result, err := r.Reconcile(context.Background(), req)
+		if err != nil {
+			t.Fatalf("expected the reconcile to succeed and requeue, got: %v", err)
+		}
+		if !result.Requeue {
+			if result.RequeueAfter == 0 {
+				t.Error("expected the backup to be requeued while the cloud is not ready")
+			}
+			break
+		}
 	}
-	requireEvent(t, rec, corev1.EventTypeWarning, "BackupCloudNotReady")
+	requireEvent(t, rec, corev1.EventTypeWarning, "BackupError")
+	requireNoEvent(t, rec)
 }

@@ -20,12 +20,14 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/fields"
 	"reflect"
+	"time"
+
+	"k8s.io/apimachinery/pkg/fields"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"time"
 
 	"github.com/apache/solr-operator/controllers/util"
 	"github.com/go-logr/logr"
@@ -126,9 +128,21 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	// The SolrCloud being backed up, and a context carrying any auth needed to call its Solr API.
+	// They are only set when backup work is done.
+	var solrCloud *solrv1beta1.SolrCloud
+	var solrCtx context.Context
+	// Collections whose async backup requests finished during this reconcile. Solr's async statuses for them may only
+	// be deleted once the status recording their results has been saved.
+	var asyncFinishedCollections []string
+
 	// Do backup work if a backup is in-progress or needs to be started
 	if doBackupWork {
-		solrCloud, _, err1 := r.reconcileSolrCloudBackup(ctx, backup, &backup.Status.IndividualSolrBackupStatus, logger)
+		var err1 error
+		solrCloud, solrCtx, err1 = r.getSolrCloudForBackup(ctx, backup, logger)
+		if err1 == nil {
+			asyncFinishedCollections, err1 = r.reconcileSolrCloudBackup(solrCtx, backup, solrCloud, &backup.Status.IndividualSolrBackupStatus, logger)
+		}
 		if err1 != nil {
 			// TODO Should we be failing the backup for some sub-set of errors here?
 			logger.Error(err1, "Error while taking SolrCloud backup")
@@ -149,7 +163,7 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				r.Recorder.Eventf(backup, corev1.EventTypeWarning, "BackupFailed",
 					"The backup of SolrCloud %q finished but was not successful", backup.Spec.SolrCloud)
 			}
-		} else if solrCloud != nil {
+		} else {
 			// When working with the collection backups, auto-requeue after 5 seconds
 			// to check on the status of the async solr backup calls
 			updateRequeueAfter(&requeueOrNot, time.Second*5)
@@ -180,44 +194,63 @@ func (r *SolrBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		err = r.Status().Patch(ctx, backup, client.MergeFrom(unmodifiedBackupResource))
 	}
 
-	return requeueOrNot, err
-}
-
-func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, currentBackupStatus *solrv1beta1.IndividualSolrBackupStatus, logger logr.Logger) (solrCloud *solrv1beta1.SolrCloud, actionTaken bool, err error) {
-	// Get the solrCloud that this backup is for.
-	solrCloud = &solrv1beta1.SolrCloud{}
-
-	err = r.Get(ctx, types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.SolrCloud}, solrCloud)
-	if err != nil && errors.IsNotFound(err) {
-		logger.Error(err, "Could not find cloud to backup", "solrCloud", backup.Spec.SolrCloud)
-		return nil, actionTaken, err
-	} else if err != nil {
-		return nil, actionTaken, err
-	}
-
-	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
-	if solrCloud.Spec.SolrSecurity != nil {
-		ctx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud)
-		if err != nil {
-			return nil, actionTaken, err
+	// Only delete the async statuses once their results are saved. If they were deleted first, and the status could
+	// not be saved, the next reconcile would find the backups still in progress, but Solr would report them as
+	// "notfound", so they would be taken again.
+	if err == nil {
+		for _, collection := range asyncFinishedCollections {
+			// A failure is only logged. The status is already saved, so the backup result is not lost.
+			_ = util.DeleteAsyncInfoForBackup(solrCtx, solrCloud, collection, backup.Name, logger)
 		}
 	}
 
+	return requeueOrNot, err
+}
+
+// getSolrCloudForBackup fetches the SolrCloud that the backup is for, and returns a context carrying any auth needed
+// to call its Solr API.
+func (r *SolrBackupReconciler) getSolrCloudForBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, logger logr.Logger) (solrCloud *solrv1beta1.SolrCloud, solrCtx context.Context, err error) {
+	solrCloud = &solrv1beta1.SolrCloud{}
+	err = r.Get(ctx, types.NamespacedName{Namespace: backup.Namespace, Name: backup.Spec.SolrCloud}, solrCloud)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			logger.Error(err, "Could not find cloud to backup", "solrCloud", backup.Spec.SolrCloud)
+		}
+		return nil, ctx, err
+	}
+
+	// Add any additional values needed to Authn to Solr to the Context used when invoking the API
+	solrCtx = ctx
+	if solrCloud.Spec.SolrSecurity != nil {
+		if solrCtx, err = util.AddAuthToContext(ctx, &r.Client, solrCloud); err != nil {
+			return nil, ctx, err
+		}
+	}
+	return solrCloud, solrCtx, nil
+}
+
+// reconcileSolrCloudBackup starts, or checks on, the backup of each collection. ctx must carry any auth needed to call
+// the SolrCloud's Solr API, see getSolrCloudForBackup.
+//
+// Errors are only returned, never recorded as events here, since the caller records an event for them.
+//
+// asyncFinishedCollections lists the collections whose async backup requests finished during this call. Their async
+// statuses in Solr must be deleted, but only once the backup status, which records their results, has been saved.
+func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, solrCloud *solrv1beta1.SolrCloud, currentBackupStatus *solrv1beta1.IndividualSolrBackupStatus, logger logr.Logger) (asyncFinishedCollections []string, err error) {
 	// First check if the collection backups have been completed
 	collectionBackupsFinished := util.UpdateStatusOfCollectionBackups(currentBackupStatus)
 
 	// If the collectionBackups are complete, then nothing else has to be done here
 	if collectionBackupsFinished {
-		return solrCloud, actionTaken, nil
+		return nil, nil
 	}
 
-	actionTaken = true
 	backupRepository := util.GetBackupRepositoryByName(solrCloud.Spec.BackupRepositories, backup.Spec.RepositoryName)
 	if backupRepository == nil {
 		err = fmt.Errorf("Unable to find backup repository to use for backup [%s] (which specified the repository"+
 			" [%s]).  solrcloud must define a repository matching that name (or have only 1 repository defined).",
 			backup.Name, backup.Spec.RepositoryName)
-		return solrCloud, actionTaken, err
+		return nil, err
 	}
 
 	// This should only occur before the backup processes have been started
@@ -225,15 +258,13 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 		// Prep the backup directory in the persistentVolume
 		err = util.EnsureDirectoryForBackup(solrCloud, backupRepository, backup, r.Config)
 		if err != nil {
-			return solrCloud, actionTaken, err
+			return nil, err
 		}
 
 		// Make sure that all solr living Solr pods have the backupRepo configured
 		if !solrCloud.Status.BackupRepositoriesAvailable[backupRepository.Name] {
 			logger.Info("Cloud not ready for backup", "solrCloud", solrCloud.Name, "repository", backupRepository.Name)
-			r.Recorder.Eventf(backup, corev1.EventTypeWarning, "BackupCloudNotReady",
-				"SolrCloud %q is not yet ready for backups in the %q repository", solrCloud.Name, backupRepository.Name)
-			return solrCloud, actionTaken, errors.NewServiceUnavailable(fmt.Sprintf("Cloud is not ready for backups in the %s repository", backupRepository.Name))
+			return nil, errors.NewServiceUnavailable(fmt.Sprintf("Cloud is not ready for backups in the %s repository", backupRepository.Name))
 		}
 
 		// Only set the solr version at the start of the backup. This shouldn't change throughout the backup.
@@ -245,31 +276,39 @@ func (r *SolrBackupReconciler) reconcileSolrCloudBackup(ctx context.Context, bac
 
 	collectionsToBackup := backup.Spec.Collections
 
-	// If there are no collections specified, we need to list through collections available in Solr
+	// If there are no collections specified, we need to list through collections available in Solr.
+	// Without the list there is nothing to back up, so this ends the reconcile. The caller logs the error and requeues.
 	if len(collectionsToBackup) == 0 {
-		collectionsToBackup, err = util.ListAllSolrCollections(ctx, solrCloud, logger)
-		if err != nil {
-			logger.Error(err, "Error listing collections", "solrCloud", solrCloud.Name)
-			r.Recorder.Eventf(backup, corev1.EventTypeWarning, "BackupCollectionListError",
-				"Error listing the collections to back up for SolrCloud %q: %v", solrCloud.Name, err)
+		if collectionsToBackup, err = util.ListAllSolrCollections(ctx, solrCloud, logger); err != nil {
+			return nil, fmt.Errorf("could not list the collections to back up in SolrCloud %q: %w", solrCloud.Name, err)
 		}
 	}
 
+	var errs []error
 	// Go through each collection specified and reconcile the backup.
+	// A failure for one collection does not hold up the others, the errors are returned together.
 	for _, collection := range collectionsToBackup {
 		// This will in-place update the CollectionBackupStatus in the backup object
-		if _, err = reconcileSolrCollectionBackup(ctx, backup, currentBackupStatus, solrCloud, backupRepository, collection, logger); err != nil {
-			break
+		asyncFinished, collectionErr := reconcileSolrCollectionBackup(ctx, backup, currentBackupStatus, solrCloud, backupRepository, collection, logger)
+		if collectionErr != nil {
+			errs = append(errs, fmt.Errorf("collection %q: %w", collection, collectionErr))
+		}
+		if asyncFinished {
+			asyncFinishedCollections = append(asyncFinishedCollections, collection)
 		}
 	}
 
 	// First check if the collection backups have been completed
 	util.UpdateStatusOfCollectionBackups(currentBackupStatus)
 
-	return solrCloud, actionTaken, err
+	return asyncFinishedCollections, utilerrors.NewAggregate(errs)
 }
 
-func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, currentBackupStatus *solrv1beta1.IndividualSolrBackupStatus, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, logger logr.Logger) (finished bool, err error) {
+// reconcileSolrCollectionBackup starts, or checks on, the backup of a single collection, updating its status in place.
+//
+// asyncFinished is true when Solr reported the collection's async backup request as finished during this call. Its
+// async status must then be deleted, but only once the updated backup status has been saved.
+func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.SolrBackup, currentBackupStatus *solrv1beta1.IndividualSolrBackupStatus, solrCloud *solrv1beta1.SolrCloud, backupRepository *solrv1beta1.SolrBackupRepository, collection string, logger logr.Logger) (asyncFinished bool, err error) {
 	now := metav1.Now()
 	collectionBackupStatus := solrv1beta1.CollectionBackupStatus{}
 	collectionBackupStatus.Collection = collection
@@ -284,7 +323,7 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 
 	// If the collection backup hasn't started, start it
 	if collectionBackupStatus.Finished {
-		return true, nil
+		return false, nil
 	} else if !collectionBackupStatus.InProgress {
 		// Start the backup by calling solr, unless Solr already has it
 		var started bool
@@ -294,7 +333,7 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		if !started {
 			started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
 			if err != nil {
-				return true, err
+				return false, err
 			}
 		}
 		collectionBackupStatus.InProgress = started
@@ -303,13 +342,14 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		}
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
-		var successful bool
+		var finished, successful bool
 		var asyncStatus string
 		// Check the state of the backup, when it is in progress, and update the state accordingly
 		finished, successful, asyncStatus, err = util.CheckBackupForCollection(ctx, solrCloud, collection, backup.Name, logger)
 		if err != nil {
 			return false, err
 		}
+		asyncFinished = finished
 		collectionBackupStatus.Finished = finished
 		if finished {
 			collectionBackupStatus.InProgress = false
@@ -320,10 +360,14 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 			if collectionBackupStatus.FinishTime == nil {
 				collectionBackupStatus.FinishTime = &now
 			}
-
-			err = util.DeleteAsyncInfoForBackup(ctx, solrCloud, collection, backup.Name, logger)
+			// The async status is deleted by the caller, once this result has been saved
 		} else {
 			collectionBackupStatus.AsyncBackupStatus = asyncStatus
+			// If we have waited over 5 seconds, and the backup is still not found, submit it again
+			if asyncStatus == "notfound" &&
+				(collectionBackupStatus.StartTime != nil && time.Since(collectionBackupStatus.StartTime.Time) > time.Second*5) {
+				collectionBackupStatus.InProgress = false
+			}
 		}
 	}
 
@@ -333,7 +377,7 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		currentBackupStatus.CollectionBackupStatuses[backupIndex] = collectionBackupStatus
 	}
 
-	return collectionBackupStatus.Finished, err
+	return asyncFinished, err
 }
 
 // SetupWithManager sets up the controller with the Manager.
