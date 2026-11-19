@@ -873,6 +873,15 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 	for _, item := range serviceList.Items {
 		Expect(k8sClient.Delete(ctx, &item)).To(Or(Succeed(), MatchError("services \""+item.Name+"\" not found")))
 	}
+
+	// The next spec in this namespace reuses the same pod names. If an old pod is still terminating, its StatefulSet
+	// cannot create the replacement, and only retries with an ever-growing backoff once the old pod is gone.
+	By("waiting for all pods to be deleted")
+	Eventually(func(g Gomega) {
+		podList := &corev1.PodList{}
+		g.Expect(k8sClient.List(ctx, podList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed(), "List all of the pods in the namespace")
+		g.Expect(podList.Items).To(BeEmpty(), "Pods still exist in the namespace after cleanup")
+	}).WithContext(ctx).Within(time.Minute).Should(Succeed())
 }
 
 var (

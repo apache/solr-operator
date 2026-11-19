@@ -55,6 +55,11 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: removed
+      description: The preStop hook running 'solr stop' has been removed from the Solr container, along with the SOLR_STOP_WAIT envVar that only served it. Solr shuts down on SIGTERM, so pod deletions no longer emit a FailedPreStopHook warning event
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/871
     - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
@@ -155,6 +160,11 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: fixed
+      description: A SolrPrometheusExporter that references a SolrCloud in another namespace is now reconciled when that SolrCloud changes, instead of only when a SolrCloud of the same name in the exporter's own namespace changes
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/879
     - kind: changed
       description: The `solr.xml` is now mounted into the Solr home directory from the ConfigMap, via a subPath volumeMount, instead of being copied there by the `cp-solr-xml` initContainer. That initContainer is only created for `volume` backupRepositories now, renamed to `volume-prep`
       links:

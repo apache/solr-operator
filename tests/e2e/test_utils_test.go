@@ -298,6 +298,17 @@ func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, coll
 }
 
 func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, g, time.Second*5, resolveOffset(additionalOffset))
+	// Only wait 5 seconds for the collection to be query-able
+}
+
+// queryCollectionAfterRestart allows several query attempts. Right after a pod restart, Solr nodes can fail to connect
+// to each other for a minute or more, and every such attempt takes up Solr's full 60-second connect timeout.
+func queryCollectionAfterRestart(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, Default, time.Minute*3, resolveOffset(additionalOffset))
+}
+
+func queryCollectionWithin(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, within time.Duration, additionalOffset ...int) {
 	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
@@ -311,8 +322,7 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
-	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
-	// Only wait 5 seconds for the collection to be query-able
+	}).Within(within).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
 }
 
 func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) string {
