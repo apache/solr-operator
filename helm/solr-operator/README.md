@@ -35,6 +35,7 @@ If you do not wish to use the Zookeeper Operator, set:
 
 The Solr Operator Helm chart is published as an OCI artifact to the GitHub Container Registry, and the Helm repository at `https://solr.apache.org/charts` lists the same chart.
 Both are supported, see [Where the Helm charts are published](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published).
+The charts are signed, and can be verified when installing, see [Verifying the Helm charts](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#verifying-the-helm-charts).
 
 Install the CRDs first. Helm does not install the `ZookeeperCluster` CRD, so this step is required whichever chart source you use:
 

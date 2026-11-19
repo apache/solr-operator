@@ -38,6 +38,7 @@ $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-v
 Then install the Solr Operator chart.
 The chart is published to the GitHub Container Registry as an OCI artifact, and the Helm repository at `https://solr.apache.org/charts` lists the same chart.
 Both are supported, see xref:upgrade-notes:upgrade-notes.adoc#where-the-helm-charts-are-published[Where the Helm charts are published].
+The charts are signed, and can be verified when installing, see xref:upgrade-notes:upgrade-notes.adoc#verifying-the-helm-charts[Verifying the Helm charts].
 
 [tabs#install-solr-operator]
 ======

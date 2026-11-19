@@ -35,6 +35,7 @@ There may be breaking changes between the version you are using and the version 
 
 The Solr Helm chart is published as an OCI artifact to the GitHub Container Registry, and the Helm repository at `https://solr.apache.org/charts` lists the same chart.
 Both are supported, see [Where the Helm charts are published](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published).
+The charts are signed, and can be verified when installing, see [Verifying the Helm charts](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#verifying-the-helm-charts).
 
 To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version:
 

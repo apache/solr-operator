@@ -135,7 +135,53 @@ helm install example apache-solr/solr --version {operator-version}
 ======
 
 The signed chart tarballs on the Apache download mirrors remain the official release artifacts.
-The OCI copies are byte-identical to them, so `helm install --verify` works with either source.
+The OCI copies are byte-identical to them, and carry the same signatures, so the charts can be verified with either source.
+See <<verifying-the-helm-charts>>.
+
+[#verifying-the-helm-charts]
+=== Verifying the Helm charts
+
+The charts are signed with the Solr release signing keys, and Helm can check that signature when installing or upgrading, with `--verify`.
+
+Helm reads keys from a keyring in the legacy GnuPG format, `~/.gnupg/pubring.gpg` by default.
+GnuPG 2.1 and later no longer write that file, so import the Solr keys and export them to a keyring for Helm first:
+
+[source,bash]
+----
+curl -sL https://dist.apache.org/repos/dist/release/solr/KEYS | gpg --import
+gpg --export > ~/solr-keyring.gpg
+----
+
+Then pass `--verify` and the keyring to `helm install` or `helm upgrade`:
+
+[tabs#verify-helm-charts]
+======
+OCI Charts::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
+helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version} \
+  --verify --keyring ~/solr-keyring.gpg
+helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version} \
+  --verify --keyring ~/solr-keyring.gpg
+----
+====
+
+Charts Repo::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
+helm install solr-operator apache-solr/solr-operator --version {operator-version} \
+  --verify --keyring ~/solr-keyring.gpg
+helm install example apache-solr/solr --version {operator-version} \
+  --verify --keyring ~/solr-keyring.gpg
+----
+====
+======
+
+Helm refuses to install a chart whose signature does not verify against the keyring.
 
 == Installing the Solr Operator vs Solr CRDs
 
