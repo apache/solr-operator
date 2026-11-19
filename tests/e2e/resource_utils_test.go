@@ -840,7 +840,7 @@ func cleanupTest(ctx context.Context, parentResource client.Object) {
 		podList := &corev1.PodList{}
 		g.Expect(k8sClient.List(ctx, podList, client.InNamespace(parentResource.GetNamespace()))).To(Succeed(), "List all of the pods in the namespace")
 		g.Expect(podList.Items).To(BeEmpty(), "Pods still exist in the namespace after cleanup")
-	}).WithContext(ctx).Within(time.Minute * 3).Should(Succeed())
+	}).WithContext(ctx).Within(time.Minute).Should(Succeed())
 }
 
 var (
