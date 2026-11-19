@@ -164,7 +164,7 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, group solr.SolrNodeGroup, so
 	allSolrOpts = append(allSolrOpts, "-Dsolr.node.roles="+group.Role.NodeRolesSystemProperty())
 	// The "availability_zone" and "spread_domain" system properties are used by Solr's AffinityPlacementFactory
 	// to spread replicas across zones, and across Kubernetes nodes within a zone
-	allSolrOpts = append(allSolrOpts, "-DhostPort=$(SOLR_NODE_PORT)", "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)")
+	allSolrOpts = append(allSolrOpts, "-Davailability_zone=$(SOLR_AVAILABILITY_ZONE)", "-Dspread_domain=$(SOLR_SPREAD_DOMAIN)")
 
 	// Volumes & Mounts
 	solrVolumes := []corev1.Volume{
