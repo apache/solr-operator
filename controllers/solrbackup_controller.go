@@ -329,15 +329,20 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 		// The collection's status is recorded even if the backup could not be started, and the error is returned below.
 		// The SolrBackup can then not finish until this collection's backup has, even if all others finish first.
 		var started bool
-		if started, err = util.PrepareBackupForCollection(ctx, solrCloud, collection, backup.Name, logger); err == nil && !started {
-			started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
+		if started, err = util.PrepareBackupForCollection(ctx, solrCloud, collection, backup.Name, logger); err == nil {
+			if !started {
+				started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
+				// Reset on every submission, including when a backup that Solr lost track of is resubmitted. The 5 second grace
+				// before resubmitting a "notfound" backup is measured from this, so it also applies to the resubmitted backup.
+				if started {
+					collectionBackupStatus.StartTime = &now
+				}
+			} else if collectionBackupStatus.StartTime == nil {
+				// We did not submit a new backup, but found one already running in Solr. Without a start time, use now.
+				collectionBackupStatus.StartTime = &now
+			}
 		}
 		collectionBackupStatus.InProgress = started
-		// Reset on every submission, including when a backup that Solr lost track of is resubmitted. The 5 second grace
-		// before resubmitting a "notfound" backup is measured from this, so it also applies to the resubmitted backup.
-		if started {
-			collectionBackupStatus.StartTime = &now
-		}
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
 	} else if collectionBackupStatus.InProgress {
 		var finished, successful bool
