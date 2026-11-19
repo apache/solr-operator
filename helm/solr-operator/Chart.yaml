@@ -187,7 +187,7 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/892
     - kind: fixed
-      description: The operator no longer takes ownership of SolrCloud, SolrBackup and SolrPrometheusExporter fields it does not default, which broke `helm upgrade` with Helm 4's server-side apply
+      description: The operator no longer keeps ownership of SolrCloud and SolrPrometheusExporter fields, including the ones it defaults such as the image tag, which broke `helm upgrade` with Helm 4's server-side apply
       links:
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/872

@@ -85,10 +85,13 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	changed := prometheusExporter.WithDefaults()
 	if changed {
 		logger.Info("Setting default settings for Solr PrometheusExporter")
-		if err := r.Patch(ctx, prometheusExporter, client.MergeFromWithOptions(unmodifiedExporter, client.MergeFromWithOptimisticLock{})); err != nil {
+		if err := patchResource(ctx, r.Client, prometheusExporter, unmodifiedExporter); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{Requeue: true}, nil
+	}
+	if err := releaseFieldOwnership(ctx, r.Client, prometheusExporter); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	requeueOrNot := ctrl.Result{}
