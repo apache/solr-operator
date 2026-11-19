@@ -258,6 +258,7 @@ Write for a user deciding whether to upgrade, not a reviewer reading the diff:
   bundled Zookeeper Operator bump, a changed default.
 - A CVE fix uses `kind: security` **and** flips `artifacthub.io/containsSecurityUpdates` to `"true"`
   in that chart. Once set in a cycle it stays set; a later CVE-free sweep must not flip it back.
+  Say "several CVE fixes" rather than listing CVE numbers; link the Solr Security News page.
 - A sweep with no user-visible effect still gets one `changed` entry.
 
 If the bundled Zookeeper Operator moved, also add an entry to
