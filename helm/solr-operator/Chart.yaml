@@ -165,6 +165,11 @@ annotations:
       links:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/879
+    - kind: added
+      description: The operator can manage a PodMonitor for a SolrCloud, so that Prometheus scrapes the metrics endpoint of every Solr pod. Requires Solr 10 and the Prometheus Operator CRDs, and adds RBAC permissions for podmonitors
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/820
     - kind: changed
       description: The `solr.xml` is now mounted into the Solr home directory from the ConfigMap, via a subPath volumeMount, instead of being copied there by the `cp-solr-xml` initContainer. That initContainer is only created for `volume` backupRepositories now, renamed to `volume-prep`
       links:

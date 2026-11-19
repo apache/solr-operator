@@ -19,6 +19,7 @@ package util
 
 import (
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	netv1 "k8s.io/api/networking/v1"
@@ -40,6 +42,11 @@ var (
 	SecretReadOnlyPermissions int32 = 440
 	PublicReadOnlyPermissions int32 = 444
 )
+
+// ManagedLabelsAnnotation lists the label keys that the operator put on an object, so that a label
+// taken out of the SolrCloud spec can be taken off the object again without touching the labels that
+// someone else added.
+const ManagedLabelsAnnotation = "solr.apache.org/managedLabels"
 
 func Replicas(num int) *int32 {
 	num32 := int32(num)
@@ -61,9 +68,10 @@ func CopyLabelsAndAnnotations(from, to *metav1.ObjectMeta, logger logr.Logger) (
 		to.Labels = make(map[string]string, len(from.Labels))
 	}
 	for k, v := range from.Labels {
-		if to.Labels[k] != v {
+		// An absent key is a change even when the wanted value is empty, which is a valid label value
+		if old, present := to.Labels[k]; !present || old != v {
 			requireUpdate = true
-			logger.Info("Update Label", "label", k, "newValue", v, "oldValue", to.Labels[k])
+			logger.Info("Update Label", "label", k, "newValue", v, "oldValue", old)
 			to.Labels[k] = v
 		}
 	}
@@ -72,13 +80,40 @@ func CopyLabelsAndAnnotations(from, to *metav1.ObjectMeta, logger logr.Logger) (
 		to.Annotations = make(map[string]string, len(from.Annotations))
 	}
 	for k, v := range from.Annotations {
-		if to.Annotations[k] != v {
+		if old, present := to.Annotations[k]; !present || old != v {
 			requireUpdate = true
-			logger.Info("Update Annotation", "annotation", k, "newValue", v, "oldValue", to.Annotations[k])
+			logger.Info("Update Annotation", "annotation", k, "newValue", v, "oldValue", old)
 			to.Annotations[k] = v
 		}
 	}
 
+	return requireUpdate
+}
+
+// ManagedLabelKeys formats the keys of the given labels for the ManagedLabelsAnnotation.
+func ManagedLabelKeys(labels map[string]string) string {
+	keys := make([]string, 0, len(labels))
+	for key := range labels {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+// removeStaleManagedLabels deletes the labels that the operator put on the 'to' object earlier and no
+// longer wants, going by its ManagedLabelsAnnotation. Labels the operator never set are left alone.
+// Call before CopyLabelsAndAnnotations, which overwrites that annotation.
+func removeStaleManagedLabels(from, to *metav1.ObjectMeta, logger logr.Logger) (requireUpdate bool) {
+	for _, key := range strings.Split(to.Annotations[ManagedLabelsAnnotation], ",") {
+		if _, stillWanted := from.Labels[key]; stillWanted {
+			continue
+		}
+		if value, present := to.Labels[key]; present {
+			requireUpdate = true
+			logger.Info("Remove Label", "label", key, "oldValue", value)
+			delete(to.Labels, key)
+		}
+	}
 	return requireUpdate
 }
 
@@ -195,6 +230,24 @@ func CopyConfigMapFields(from, to *corev1.ConfigMap, logger logr.Logger) bool {
 		logger.Info("Update required because field changed", "field", "Data", "from", to.Data, "to", from.Data)
 	}
 	to.Data = from.Data
+
+	return requireUpdate
+}
+
+// CopyPodMonitorFields copies the owned fields from one PodMonitor to another
+func CopyPodMonitorFields(from, to *monitoringv1.PodMonitor, logger logr.Logger) bool {
+	logger = logger.WithValues("kind", "podMonitor")
+	// The Prometheus instance selects the PodMonitor by its labels, so a label dropped from the spec
+	// has to come off the PodMonitor too, or that Prometheus keeps scraping the cloud.
+	requireUpdate := removeStaleManagedLabels(&from.ObjectMeta, &to.ObjectMeta, logger)
+	requireUpdate = CopyLabelsAndAnnotations(&from.ObjectMeta, &to.ObjectMeta, logger) || requireUpdate
+
+	// The whole spec is owned here, as the API server defaults nothing in it
+	if !DeepEqualWithNils(to.Spec, from.Spec) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec", "from", to.Spec, "to", from.Spec)
+	}
+	to.Spec = from.Spec
 
 	return requireUpdate
 }

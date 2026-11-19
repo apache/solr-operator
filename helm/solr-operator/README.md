@@ -31,6 +31,15 @@ If you do not wish to use the Zookeeper Operator, set:
 - `zookeeper-operator.use: false`
 
 
+### Using the Prometheus Operator
+
+The Solr Operator can manage PodMonitors for your SolrClouds, so that a Prometheus run by the [Prometheus Operator](https://github.com/prometheus-operator/prometheus-operator) scrapes the metrics endpoint of your Solr pods.
+
+This is enabled when the `monitoring.coreos.com` CRDs are installed in the cluster, as detected by Helm. Set `prometheus.crdsInstalled` to decide for yourself, e.g. `true` when you install the Prometheus Operator after the Solr Operator. If the CRDs turn out to be missing, the operator logs that it is not managing PodMonitors and carries on.
+
+See the [SolrCloud Metrics documentation](https://solr.apache.org/guide/operator/latest/solr-cloud/metrics.html) for enabling this per SolrCloud.
+
+
 ### Adding the Solr Operator Helm Chart Repository
 You should only need to add the solr operator helm chart repository once, by running the following command:
 
@@ -156,6 +165,7 @@ The command removes all the Kubernetes components associated with the chart and 
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
+| prometheus.crdsInstalled | boolean | *auto* | Whether the Prometheus Operator CRDs (`monitoring.coreos.com`) are installed in the cluster, which lets the Solr Operator manage PodMonitors for SolrClouds. Defaults to Helm detecting them in the cluster. |
 | watchNamespaces | string | `""` | A comma-separated list of namespaces that the solr operator should watch. If empty, the solr operator will watch all namespaces in the cluster. If set to `true`, this will be populated with the namespace that the operator is deployed to. |
 | zookeeper-operator.install | boolean | `true` | This option installs the Zookeeper Operator as a helm dependency |
 | zookeeper-operator.use | boolean | `false` | This option enables the use of provided Zookeeper instances for SolrClouds via the Zookeeper Operator, without installing the Zookeeper Operator as a dependency. If `zookeeper-operator.install`=`true`, then this option is ignored. |
