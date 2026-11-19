@@ -55,6 +55,11 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: removed
+      description: The preStop hook running 'solr stop' has been removed from the Solr container, along with the SOLR_STOP_WAIT envVar that only served it. Solr shuts down on SIGTERM, so pod deletions no longer emit a FailedPreStopHook warning event
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/871
     - kind: added
       description: The operator can now resize (expand) persistent data PVCs, which requires new RBAC permissions for persistentvolumeclaims (update/patch) and storageclasses (get/list/watch)
       links:
@@ -155,6 +160,11 @@ annotations:
           url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
         - name: Solr Security News
           url: https://solr.apache.org/security-news.html
+    - kind: fixed
+      description: A SolrPrometheusExporter that references a SolrCloud in another namespace is now reconciled when that SolrCloud changes, instead of only when a SolrCloud of the same name in the exporter's own namespace changes
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/879
     - kind: added
       description: The operator can manage a PodMonitor for a SolrCloud, so that Prometheus scrapes the metrics endpoint of every Solr pod. Requires Solr 10 and the Prometheus Operator CRDs, and adds RBAC permissions for podmonitors
       links:
@@ -172,6 +182,39 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/707
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/876
+    - kind: added
+      description: Ability to load environment variables into the Solr container from ConfigMaps or Secrets via `podOptions.envFrom`
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/677
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/877
+    - kind: added
+      description: Solr pods now get the availability_zone system property, used by Solr's AffinityPlacementFactory, from the topology.kubernetes.io/zone label of their Kubernetes node. The label is copied onto pods by Kubernetes v1.35+, and the property is empty on older versions. Solr pods also get the spread_domain system property, set to the name of their Kubernetes node
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/556
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/892
+    - kind: added
+      description: Support for Solr 10. See the upgrade notes before upgrading a SolrCloud to Solr 10.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/821
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The operator no longer reconciles a SolrPrometheusExporter that uses a Solr 10 image or refers to a Solr 10 SolrCloud, as Solr 10 removed the Prometheus exporter. It emits an UnsupportedSolrVersion Warning event instead.
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/820
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
+    - kind: changed
+      description: The SolrCloud image tag must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). SolrClouds with other tags, such as `latest`, are no longer reconciled; see the upgrade notes before upgrading the operator.
+      links:
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/827
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.10.0-prerelease

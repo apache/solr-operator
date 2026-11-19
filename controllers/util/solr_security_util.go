@@ -501,10 +501,17 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		javaToolOptions = append(javaToolOptions,
-			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
-		)
+		if solrCloud.SolrVersionAtLeast("10") {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dsolr.security.auth.basicauth.credentials=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer",
+			)
+		} else {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+			)
+		}
 	}
 
 	// construct the probe command to invoke the SolrCLI "api" action
@@ -520,7 +527,11 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 		javaToolOptionsOutputFilter = ""
 	}
 
-	probeCommand := fmt.Sprintf("%ssolr api -get \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
+	apiUrlFlag := "--solr-url"
+	if solrCloud.SolrVersionBelow("9.7") {
+		apiUrlFlag = "-get"
+	}
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

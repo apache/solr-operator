@@ -82,7 +82,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"solr"` | The repository of the Solr image |
-| image.tag | string | `"9.11.0"` | The tag/version of Solr to run |
+| image.tag | string | `"9.11.0"` | The tag/version of Solr to run. Must start with the Solr version, e.g. `9`, `9.10` or `10.0.0-slim` |
 | image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string | | PullSecret for the Solr image |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
@@ -300,6 +300,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |
+| podOptions.envFrom | []object |  | List of ConfigMap or Secret sources to load as environment variables in the Solr container. Variables set via `envVars` or by the operator take precedence |
 | podOptions.podSecurityContext | object |  | Security context for the Solr pod |
 | podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |
