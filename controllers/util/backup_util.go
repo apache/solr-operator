@@ -126,9 +126,11 @@ func PrepareBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, coll
 	case "completed", "failed":
 		logger.Info("Deleting a finished async request left over from an earlier collection backup", "solrCloud", cloud.Name, "collection", collection, "asyncState", asyncState)
 		return false, DeleteAsyncInfoForBackup(ctx, cloud, collection, backupName, logger)
-	default:
+	case "submitted", "running":
 		logger.Info("Found a collection backup already started in Solr, tracking it", "solrCloud", cloud.Name, "collection", collection, "asyncState", asyncState)
 		return true, nil
+	default:
+		return false, fmt.Errorf("unexpected async state %q for collection backup %q", asyncState, asyncId)
 	}
 }
 

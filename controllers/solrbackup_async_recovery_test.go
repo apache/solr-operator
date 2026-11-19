@@ -131,6 +131,17 @@ func TestCollectionBackupResubmitsOverFinishedRequest(t *testing.T) {
 	}
 }
 
+func TestCollectionBackupRejectsUnknownAsyncState(t *testing.T) {
+	solr, backup, cloud, repo := backupAsyncFixture(t, "")
+	solr.states[util.AsyncIdForCollectionBackup("books", backup.Name)] = ""
+	status := &solrv1beta1.IndividualSolrBackupStatus{}
+
+	_, err := reconcileSolrCollectionBackup(context.Background(), backup, status, cloud, repo, "books", logr.Discard())
+	assert.Error(t, err)
+	assert.Empty(t, status.CollectionBackupStatuses)
+	assert.NotContains(t, solr.actions, "BACKUP")
+}
+
 func TestCollectionBackupSubmitsWhenSolrHasNoRequest(t *testing.T) {
 	solr, backup, cloud, repo := backupAsyncFixture(t, "")
 	status := &solrv1beta1.IndividualSolrBackupStatus{}
