@@ -176,7 +176,8 @@ func TestCollectionBackupIsResubmittedWhenSolrLosesTrackOfIt(t *testing.T) {
 		"name":       util.FullCollectionBackupName("collection", backup.Name),
 		"async":      util.AsyncIdForCollectionBackup("collection", backup.Name),
 	}, fake.backupParams[0])
-	assert.True(t, originalStart.Equal(collectionStatus.StartTime), "Resubmitting must keep the original start time")
+	require.NotNil(t, collectionStatus.StartTime)
+	assert.True(t, collectionStatus.StartTime.After(originalStart.Time), "Resubmitting must reset the start time")
 
 	// 3. The resubmitted backup completes, and the collection backup finishes successfully.
 	// Its async status is left for the caller to delete, once this result has been saved.
@@ -329,4 +330,26 @@ func TestSolrBackupDoesNotFinishWithoutACollectionThatFailedToStart(t *testing.T
 	assert.False(t, status.CollectionBackupStatuses[0].Finished)
 	assert.False(t, status.Finished, "The SolrBackup must not finish while a collection has not been backed up")
 	assert.Nil(t, status.Successful)
+}
+
+// The grace before resubmitting a "notfound" backup must also apply to a resubmitted backup, so a
+// "notfound" straight after resubmitting does not resubmit it yet again.
+func TestResubmittedCollectionBackupGetsTheSameGraceBeforeAnotherResubmit(t *testing.T) {
+	fake := useFakeSolr(t, "notfound", "notfound")
+	backup, status, cloud, repo := notFoundTestFixtures(time.Minute)
+	ctx := context.Background()
+
+	// 1. Solr no longer knows about the backup, and 2. it is resubmitted.
+	for i := 0; i < 2; i++ {
+		_, err := reconcileSolrCollectionBackup(ctx, backup, status, cloud, repo, "collection", logr.Discard())
+		require.NoError(t, err)
+	}
+	require.Len(t, fake.backupParams, 1)
+
+	// 3. Solr reports "notfound" right after the resubmission: it is not resubmitted again yet.
+	_, err := reconcileSolrCollectionBackup(ctx, backup, status, cloud, repo, "collection", logr.Discard())
+	require.NoError(t, err)
+	assert.True(t, status.CollectionBackupStatuses[0].InProgress, "The resubmitted backup should still be waited on")
+	// The second REQUESTSTATUS is the check, before resubmitting, that Solr holds no request for the backup.
+	assert.Equal(t, []string{"REQUESTSTATUS", "REQUESTSTATUS", "BACKUP", "REQUESTSTATUS"}, fake.calls)
 }

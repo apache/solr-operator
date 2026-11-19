@@ -333,7 +333,9 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 			started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
 		}
 		collectionBackupStatus.InProgress = started
-		if started && collectionBackupStatus.StartTime == nil {
+		// Reset on every submission, including when a backup that Solr lost track of is resubmitted. The 5 second grace
+		// before resubmitting a "notfound" backup is measured from this, so it also applies to the resubmitted backup.
+		if started {
 			collectionBackupStatus.StartTime = &now
 		}
 		collectionBackupStatus.BackupName = util.FullCollectionBackupName(collection, backup.Name)
