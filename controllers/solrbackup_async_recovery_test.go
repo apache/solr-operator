@@ -139,7 +139,10 @@ func TestCollectionBackupRejectsUnknownAsyncState(t *testing.T) {
 
 	_, err := reconcileSolrCollectionBackup(context.Background(), backup, status, cloud, repo, "books", logr.Discard())
 	assert.Error(t, err)
-	assert.Empty(t, status.CollectionBackupStatuses)
+	// The collection's status is still recorded, as not started, so the SolrBackup cannot finish without it.
+	require.Len(t, status.CollectionBackupStatuses, 1)
+	assert.False(t, status.CollectionBackupStatuses[0].InProgress)
+	assert.Nil(t, status.CollectionBackupStatuses[0].StartTime)
 	assert.NotContains(t, solr.actions, "BACKUP")
 }
 

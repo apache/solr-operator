@@ -325,16 +325,12 @@ func reconcileSolrCollectionBackup(ctx context.Context, backup *solrv1beta1.Solr
 	if collectionBackupStatus.Finished {
 		return false, nil
 	} else if !collectionBackupStatus.InProgress {
-		// Start the backup by calling solr, unless Solr already has it
+		// Start the backup by calling solr, unless Solr already has it.
+		// The collection's status is recorded even if the backup could not be started, and the error is returned below.
+		// The SolrBackup can then not finish until this collection's backup has, even if all others finish first.
 		var started bool
-		if started, err = util.PrepareBackupForCollection(ctx, solrCloud, collection, backup.Name, logger); err != nil {
-			return false, err
-		}
-		if !started {
+		if started, err = util.PrepareBackupForCollection(ctx, solrCloud, collection, backup.Name, logger); err == nil && !started {
 			started, err = util.StartBackupForCollection(ctx, solrCloud, backupRepository, backup, collection, logger)
-			if err != nil {
-				return false, err
-			}
 		}
 		collectionBackupStatus.InProgress = started
 		if started && collectionBackupStatus.StartTime == nil {

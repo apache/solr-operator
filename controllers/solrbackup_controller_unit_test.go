@@ -57,9 +57,11 @@ func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) 
 type fakeSolrCollectionsApi struct {
 	t *testing.T
 	// Queued async states, by request id
-	asyncStates  map[string][]string
-	calls        []string
-	backupParams []map[string]string
+	asyncStates map[string][]string
+	// BACKUP calls for these collections fail.
+	failBackupFor map[string]bool
+	calls         []string
+	backupParams  []map[string]string
 }
 
 func (f *fakeSolrCollectionsApi) roundTrip(request *http.Request) (*http.Response, error) {
@@ -77,6 +79,13 @@ func (f *fakeSolrCollectionsApi) roundTrip(request *http.Request) (*http.Respons
 		}
 		body = fmt.Sprintf(`{"responseHeader":{"status":0},"status":{"state":%q}}`, state)
 	case "BACKUP":
+		if f.failBackupFor[query.Get("collection")] {
+			return &http.Response{
+				StatusCode: http.StatusServiceUnavailable,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("unavailable")),
+			}, nil
+		}
 		f.backupParams = append(f.backupParams, map[string]string{
 			"collection": query.Get("collection"),
 			"name":       query.Get("name"),
@@ -287,4 +296,37 @@ func TestSolrCloudBackupStopsWhenCollectionsCannotBeListed(t *testing.T) {
 	assert.Empty(t, asyncFinished)
 	assert.Empty(t, status.CollectionBackupStatuses)
 	assert.Equal(t, []string{"LIST"}, fake.calls, "No collection backups should be attempted")
+}
+
+// A collection whose backup cannot be started must still hold up the SolrBackup. Otherwise, once
+// the other collections finish, the SolrBackup would be finished, and successful, without it.
+func TestSolrBackupDoesNotFinishWithoutACollectionThatFailedToStart(t *testing.T) {
+	fake := useFakeSolr(t)
+	fake.failBackupFor = map[string]bool{"a": true}
+	// b is checked before it is submitted, and then once in progress.
+	fake.asyncStates[util.AsyncIdForCollectionBackup("b", "backup")] = []string{"notfound", "completed"}
+	backup, _, cloud, repo := notFoundTestFixtures(time.Minute)
+	backup.Spec.Collections = []string{"a", "b"}
+	status := &solrv1beta1.IndividualSolrBackupStatus{StartTime: metav1.Now()}
+	r := &SolrBackupReconciler{Recorder: record.NewFakeRecorder(4)}
+	cloud.Spec.BackupRepositories = []solrv1beta1.SolrBackupRepository{*repo}
+
+	// 1. a fails to start, b starts.
+	_, err := r.reconcileSolrCloudBackup(context.Background(), backup, cloud, status, logr.Discard())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `collection "a"`)
+	require.Len(t, status.CollectionBackupStatuses, 2, "Both collections should have a status, even the one that failed to start")
+	assert.Equal(t, "a", status.CollectionBackupStatuses[0].Collection)
+	assert.False(t, status.CollectionBackupStatuses[0].InProgress)
+	assert.Nil(t, status.CollectionBackupStatuses[0].StartTime)
+	assert.True(t, status.CollectionBackupStatuses[1].InProgress)
+
+	// 2. a fails to start again, b completes. The SolrBackup must not finish without a.
+	asyncFinished, err := r.reconcileSolrCloudBackup(context.Background(), backup, cloud, status, logr.Discard())
+	require.Error(t, err)
+	assert.Equal(t, []string{"b"}, asyncFinished)
+	assert.True(t, status.CollectionBackupStatuses[1].Finished)
+	assert.False(t, status.CollectionBackupStatuses[0].Finished)
+	assert.False(t, status.Finished, "The SolrBackup must not finish while a collection has not been backed up")
+	assert.Nil(t, status.Successful)
 }
