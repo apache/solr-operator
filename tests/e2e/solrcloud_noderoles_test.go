@@ -71,7 +71,7 @@ var _ = FDescribe("E2E - SolrCloud - Node Roles", func() {
 		createAndQueryCollection(ctx, solrCloud, solrCollection1, 1, 2)
 	})
 
-	FContext("Statefulsets for roles exist - Solr Behaves as expected", func() {
+	FContext("Statefulsets for roles exist - Solr Behaves as expected", Label("pr"), func() {
 		BeforeEach(func() {
 			solrCloud = generateBaseSolrCloudWithNodeRoles(2, 2, 1)
 		})
