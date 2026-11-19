@@ -298,6 +298,17 @@ func queryCollection(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, coll
 }
 
 func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, additionalOffset ...int) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, g, time.Second*5, resolveOffset(additionalOffset))
+	// Only wait 5 seconds for the collection to be query-able
+}
+
+// queryCollectionAfterRestart allows several query attempts. Right after a pod restart, Solr nodes can fail to connect
+// to each other for a minute or more, and every such attempt takes up Solr's full 60-second connect timeout.
+func queryCollectionAfterRestart(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, additionalOffset ...int) {
+	queryCollectionWithin(ctx, solrCloud, collection, docCount, Default, time.Minute*3, resolveOffset(additionalOffset))
+}
+
+func queryCollectionWithin(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, collection string, docCount int, g Gomega, within time.Duration, additionalOffset ...int) {
 	g.EventuallyWithOffset(resolveOffset(additionalOffset), func(innerG Gomega, ctx context.Context) {
 		response, err := callSolrApiInPod(
 			ctx,
@@ -311,8 +322,7 @@ func queryCollectionWithGomega(ctx context.Context, solrCloud *solrv1beta1.SolrC
 		)
 		innerG.Expect(err).ToNot(HaveOccurred(), "Error occurred while querying empty Solr Collection")
 		innerG.Expect(response).To(ContainSubstring("\"numFound\":%d", docCount), "Error occurred while querying Solr Collection '%s'", collection)
-	}).Within(time.Second*5).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
-	// Only wait 5 seconds for the collection to be query-able
+	}).Within(within).WithContext(ctx).Should(Succeed(), "Could not successfully query collection: %v", fetchClusterStatus(ctx, solrCloud))
 }
 
 func fetchClusterStatus(ctx context.Context, solrCloud *solrv1beta1.SolrCloud) string {
@@ -478,6 +488,14 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		queryParamsString = "?" + queryParamsString
 	}
 
+	if solrCloud.SolrVersionAtLeast("10") {
+		// Solr 10's `solr api` only supports GET (--solr-url URL). The legacy
+		// `-get/-post URL` flags were removed. Fail loudly if a non-GET caller
+		// is added, instead of silently turning the request into a GET.
+		Expect(strings.ToLower(httpMethod)).To(Equal("get"), "callSolrApiInPod against Solr 10 only supports GET")
+	}
+
+	credentials := ""
 	toolOpts := ""
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.AuthenticationType == solrv1beta1.Basic {
 		basicAuthSecretName := solrCloud.BasicAuthSecretName()
@@ -485,25 +503,32 @@ func callSolrApiInPod(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, htt
 		if err = k8sClient.Get(ctx, resourceKey(solrCloud, basicAuthSecretName), basicAuthSecret); err != nil {
 			return "", err
 		}
-		toolOpts =
-			"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" +
-				string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey]) +
-				" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+		credentials = string(basicAuthSecret.Data[corev1.BasicAuthUsernameKey]) + ":" + string(basicAuthSecret.Data[corev1.BasicAuthPasswordKey])
+		if !solrCloud.SolrVersionAtLeast("10") {
+			toolOpts =
+				"JAVA_TOOL_OPTIONS=\"-Dbasicauth=" + credentials +
+					" -Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory\""
+		}
 	}
 	GinkgoLogr.Info(toolOpts)
 
-	command := []string{
-		"solr",
-		"api",
-		"-verbose",
-		"-" + strings.ToLower(httpMethod),
-		fmt.Sprintf(
-			"\"%s://%s%s%s%s\"",
-			solrCloud.UrlScheme(false),
-			hostname,
-			solrCloud.NodePortSuffix(false),
-			apiPath,
-			queryParamsString),
+	solrUrl := fmt.Sprintf(
+		"\"%s://%s%s%s%s\"",
+		solrCloud.UrlScheme(false),
+		hostname,
+		solrCloud.NodePortSuffix(false),
+		apiPath,
+		queryParamsString)
+
+	var command []string
+	if solrCloud.SolrVersionAtLeast("10") {
+		command = []string{"solr", "api", "--solr-url", solrUrl, "-v"}
+		if credentials != "" {
+			// The command is run via 'sh -c', and generated passwords can contain shell characters such as '('
+			command = append(command, "--credentials", "'"+strings.ReplaceAll(credentials, "'", `'\''`)+"'")
+		}
+	} else {
+		command = []string{"solr", "api", "-verbose", "-" + strings.ToLower(httpMethod), solrUrl}
 	}
 	if toolOpts != "" {
 		commandString := fmt.Sprintf("%s %s", toolOpts, strings.Join(command, " "))
@@ -648,6 +673,14 @@ func generateBaseSolrCloud(replicas int) *solrv1beta1.SolrCloud {
 				},
 			},
 		},
+	}
+}
+
+// skipIfPrometheusExporterUnavailable skips the current tests if the Solr image under test is Solr 10 or later,
+// which no longer ships the Prometheus exporter.
+func skipIfPrometheusExporterUnavailable() {
+	if generateBaseSolrCloud(1).SolrVersionAtLeast("10") {
+		Skip("The Prometheus exporter was removed in Solr 10")
 	}
 }
 

@@ -131,7 +131,7 @@ var _ = FDescribe("E2E - SolrCloud - Ingress", func() {
 			expectPodWithChecks(ctx, solrCloud, solrCloud.GetSolrPodName(0), func(g Gomega, pod *corev1.Pod) {
 				g.Expect(pod.Annotations).To(HaveKeyWithValue(util.ServiceTypeAnnotation, util.PerNodeServiceType))
 			})
-			expectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
+			eventuallyExpectNoService(ctx, solrCloud, solrCloud.HeadlessServiceName(), "Headless service shouldn't exist, but it does.")
 
 		})
 	})
