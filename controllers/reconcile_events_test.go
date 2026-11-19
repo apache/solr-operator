@@ -22,8 +22,10 @@ import (
 	"fmt"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -163,6 +165,46 @@ var _ = FDescribe("SolrCloud controller - Events", func() {
 
 			By("checking that an InvalidConfigMap event was recorded")
 			expectEvent(ctx, solrCloud, corev1.EventTypeWarning, "InvalidConfigMap")
+		})
+	})
+
+	FContext("when podPort is changed on an existing SolrCloud", func() {
+		FIt("records a PodPortChangeNotSupported event and stops reconciling until podPort is set back", func(ctx context.Context) {
+			By("creating the SolrCloud")
+			Expect(k8sClient.Create(ctx, solrCloud)).To(Succeed())
+
+			By("waiting for the StatefulSet with the default podPort")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				port, hasPort := util.DeployedSolrPodPort(found)
+				g.Expect(hasPort).To(BeTrue(), "The Solr container has no client port")
+				g.Expect(port).To(Equal(8983), "The StatefulSet should use the default podPort")
+			})
+
+			By("changing podPort, and a pod annotation along with it")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.PodPort = 8984
+				found.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{Annotations: map[string]string{"podport-test": "changed"}}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Change podPort and a pod annotation of the SolrCloud")
+			})
+
+			By("checking that a PodPortChangeNotSupported event was recorded")
+			expectEvent(ctx, solrCloud, corev1.EventTypeWarning, "PodPortChangeNotSupported")
+
+			By("checking that the StatefulSet is not changed at all")
+			expectStatefulSetWithConsistentChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				port, _ := util.DeployedSolrPodPort(found)
+				g.Expect(port).To(Equal(8983), "The StatefulSet podPort should not change")
+				g.Expect(found.Spec.Template.Annotations).ToNot(HaveKey("podport-test"), "The SolrCloud should not be reconciled while podPort differs")
+			})
+
+			By("setting podPort back, after which the other change is applied")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.SolrAddressability.PodPort = 8983
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Set podPort of the SolrCloud back")
+			})
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue("podport-test", "changed"), "The SolrCloud should be reconciled again")
+			})
 		})
 	})
 })

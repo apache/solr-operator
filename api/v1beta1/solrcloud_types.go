@@ -468,6 +468,8 @@ type SolrAddressabilityOptions struct {
 
 	// PodPort defines the port to have the Solr Pod listen on.
 	// Defaults to 8983
+	// This cannot be changed after the SolrCloud has been created. While it differs from the port of the running pods,
+	// the SolrCloud is not reconciled.
 	// +optional
 	PodPort int `json:"podPort,omitempty"`
 

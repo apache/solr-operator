@@ -117,6 +117,10 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{Requeue: true}, nil
 	}
 
+	if rejected, err := r.rejectPodPortChange(ctx, logger, instance); err != nil || rejected {
+		return reconcile.Result{}, err
+	}
+
 	// When working with the clouds, some actions outside of kube may need to be retried after a few seconds
 	requeueOrNot := reconcile.Result{}
 
@@ -718,6 +722,28 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 // cleanupUnconfiguredServices remove services that are no longer defined by the SolrCloud resource, and no longer in use by pods.
 // This does not currently include removing per-node services that are no longer in use because the SolrCloud has been scaled down.
+// rejectPodPortChange stops the reconcile when podPort differs from the port the existing pods listen on. Changing it is
+// not supported: the Solr nodes would register under new node names, so the operator would no longer find their
+// replicas, and would restart the pods without migrating them first.
+func (r *SolrCloudReconciler) rejectPodPortChange(ctx context.Context, logger logr.Logger, instance *solrv1beta1.SolrCloud) (rejected bool, err error) {
+	statefulSet := &appsv1.StatefulSet{}
+	if err = r.Get(ctx, types.NamespacedName{Name: instance.StatefulSetName(), Namespace: instance.Namespace}, statefulSet); err != nil {
+		if errors.IsNotFound(err) {
+			err = nil
+		}
+		return
+	}
+	deployedPort, found := util.DeployedSolrPodPort(statefulSet)
+	requestedPort := instance.Spec.SolrAddressability.PodPort
+	if !found || deployedPort == requestedPort {
+		return
+	}
+	logger.Info("Changing podPort of an existing SolrCloud is not supported, so the SolrCloud is not reconciled until it is set back", "podPort", requestedPort, "deployedPodPort", deployedPort)
+	r.Recorder.Eventf(instance, corev1.EventTypeWarning, "PodPortChangeNotSupported",
+		"Changing spec.solrAddressability.podPort of an existing SolrCloud is not supported. The SolrCloud is not reconciled until podPort is set back to %d (requested %d).", deployedPort, requestedPort)
+	return true, nil
+}
+
 func (r *SolrCloudReconciler) cleanupUnconfiguredServices(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, podList []corev1.Pod, logger logr.Logger) (err error) {
 	var onlyServiceTypeInUse string
 	if solrCloud.UsesHeadlessService() {

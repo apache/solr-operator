@@ -21,6 +21,7 @@ The SolrCloud CRD provides users the ability to define how it is addressed, thro
 Under `SolrCloud.Spec.solrAddressability`:
 
 * **`podPort`** - The port on which the pod is listening. This is also that the port that the Solr Jetty service will listen on. (Defaults to `8983`)
+This cannot be changed after the SolrCloud has been created. If it is, the operator records a `PodPortChangeNotSupported` warning event and does not reconcile the SolrCloud until `podPort` is set back.
 * **`commonServicePort`** - The port on which the common service is exposed. (Defaults to `80`)
 * **`kubeDomain`** - Specifies an override of the default Kubernetes cluster domain name, `cluster.local`. This option should only be used if the Kubernetes cluster has been setup with a custom domain name.
 * **`external`** - Expose the cloud externally, outside of the kubernetes cluster in which it is running.

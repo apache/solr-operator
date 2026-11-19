@@ -55,6 +55,11 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: changed
+      description: Changing podPort of an existing SolrCloud is not supported. The operator now records a PodPortChangeNotSupported warning event and stops reconciling the SolrCloud until podPort is set back, instead of restarting every pod without migrating its replicas
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/847
     - kind: removed
       description: The preStop hook running 'solr stop' has been removed from the Solr container, along with the SOLR_STOP_WAIT envVar that only served it. Solr shuts down on SIGTERM, so pod deletions no longer emit a FailedPreStopHook warning event
       links:
