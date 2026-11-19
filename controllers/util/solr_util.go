@@ -835,6 +835,21 @@ func generateSolrSetupInitContainers(solrCloud *solr.SolrCloud, solrCloudStatus 
 	return containers
 }
 
+// DeployedSolrPodPort returns the port that the Solr container of an existing StatefulSet listens on.
+func DeployedSolrPodPort(statefulSet *appsv1.StatefulSet) (port int, found bool) {
+	for _, container := range statefulSet.Spec.Template.Spec.Containers {
+		if container.Name != SolrNodeContainer {
+			continue
+		}
+		for _, containerPort := range container.Ports {
+			if containerPort.Name == SolrClientPortName {
+				return int(containerPort.ContainerPort), true
+			}
+		}
+	}
+	return 0, false
+}
+
 func createDefaultProbeHandlerForPath(probeScheme corev1.URIScheme, solrPodPort int, path string) corev1.ProbeHandler {
 	return corev1.ProbeHandler{
 		HTTPGet: &corev1.HTTPGetAction{
