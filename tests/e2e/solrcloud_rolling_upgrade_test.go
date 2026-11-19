@@ -168,7 +168,9 @@ var _ = FDescribe("E2E - SolrCloud - Rolling Upgrades", func() {
 			})
 
 			By("waiting for the balanceReplicas to finish")
-			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*70, time.Second, func(g Gomega, found *appsv1.StatefulSet) {
+			// Right after the restart, Solr can still dial the restarted pod's old IP, from its 30s DNS cache. Each such
+			// attempt takes Solr's full 60s connect timeout and fails the balance, which the operator then retries.
+			expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Minute*3, time.Second, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).To(BeNil(), "StatefulSet should not have a balanceReplicas lock after balancing is complete.")
