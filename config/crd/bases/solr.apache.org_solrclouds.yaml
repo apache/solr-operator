@@ -19,7 +19,7 @@ metadata:
   annotations:
     operator.solr.apache.org/version: v0.10.0-prerelease
     argocd.argoproj.io/sync-options: Replace=true
-    controller-gen.kubebuilder.io/version: v0.23.0
+    controller-gen.kubebuilder.io/version: v0.21.0
   name: solrclouds.solr.apache.org
 spec:
   group: solr.apache.org
@@ -11095,6 +11095,21 @@ spec:
                         - Delete
                         type: string
                     type: object
+                type: object
+              nodeRoleDistribution:
+                description: Distribution of node roles
+                properties:
+                  coordinators:
+                    description: Number of dedicated coordinator nodes (data:off,
+                      coordinator:on).
+                    format: int32
+                    minimum: 0
+                    type: integer
+                  overseers:
+                    description: Number of dedicated overseer nodes (data:off, overseer:preferred).
+                    format: int32
+                    minimum: 0
+                    type: integer
                 type: object
               replicas:
                 description: The number of solr nodes to run

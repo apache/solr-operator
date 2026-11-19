@@ -19,11 +19,12 @@ package v1beta1
 
 import (
 	"fmt"
-	"github.com/go-logr/logr"
-	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 	"math/rand"
 	"strconv"
 	"strings"
+
+	"github.com/go-logr/logr"
+	zkApi "github.com/pravega/zookeeper-operator/api/v1beta1"
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
@@ -73,6 +74,10 @@ type SolrCloudSpec struct {
 
 	// +optional
 	SolrImage *ContainerImage `json:"solrImage,omitempty"`
+
+	// Distribution of node roles
+	// +optional
+	NodeRoleDistribution *NodeRoleDistribution `json:"nodeRoleDistribution,omitempty"`
 
 	// Customize how the cloud data is stored.
 	// If neither "persistent" or "ephemeral" is provided, then ephemeral storage will be used by default.
@@ -237,6 +242,88 @@ type CustomSolrKubeOptions struct {
 	// IngressOptions defines the custom options for the solrCloud Ingress.
 	// +optional
 	IngressOptions *IngressOptions `json:"ingressOptions,omitempty"`
+}
+
+type NodeRoleDistribution struct {
+	// Number of dedicated overseer nodes (data:off, overseer:preferred).
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overseers *int32 `json:"overseers,omitempty"`
+
+	// Number of dedicated coordinator nodes (data:off, coordinator:on).
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Coordinators *int32 `json:"coordinators,omitempty"`
+}
+
+type SolrNodeRole string
+
+const (
+	SolrNodeRoleData        SolrNodeRole = "data"
+	SolrNodeRoleOverseer    SolrNodeRole = "overseer"
+	SolrNodeRoleCoordinator SolrNodeRole = "coordinator"
+	SolrNodeRoleLabel                    = "solr-node-role"
+)
+
+// SolrNodeGroup represent one StatefulSet's worth of Solr Nodes.
+type SolrNodeGroup struct {
+	Role     SolrNodeRole
+	Replicas int32
+}
+
+func (role SolrNodeRole) NodeRolesSystemProperty() string {
+	switch role {
+	case SolrNodeRoleOverseer:
+		return "data:off,overseer:preferred,coordinator:off"
+	case SolrNodeRoleCoordinator:
+		return "data:off,overseer:disallowed,coordinator:on"
+	// To achieve backward compatability, if neither overseer nor coordinator are set, then we default to all being data
+	// nodes, however, we should still allow the role of overseer so that overseers can still be present.
+	default:
+		return "data:on,overseer:allowed,coordinator:off"
+	}
+}
+
+func getReplicaCount(x *int32) int32 {
+	if x == nil {
+		return 0
+	}
+	return *x
+}
+
+func (solrCloud *SolrCloud) GetDataNodeGroup() SolrNodeGroup {
+	return SolrNodeGroup{Role: SolrNodeRoleData, Replicas: getReplicaCount(solrCloud.Spec.Replicas)}
+}
+
+func (solrCloud *SolrCloud) GetNonDataNodeGroups() []SolrNodeGroup {
+	nodeRoleDistribution := solrCloud.Spec.NodeRoleDistribution
+	if nodeRoleDistribution == nil {
+		return nil
+	}
+	return []SolrNodeGroup{
+		{Role: SolrNodeRoleOverseer, Replicas: getReplicaCount(nodeRoleDistribution.Overseers)},
+		{Role: SolrNodeRoleCoordinator, Replicas: getReplicaCount(nodeRoleDistribution.Coordinators)},
+	}
+}
+
+// StatefulSetNameForRole Format the StatefulSet name for different node roles. Overseer and Coordinators are
+// suffixed with their respective names.
+func (solrCloud *SolrCloud) StatefulSetNameForRole(role SolrNodeRole) string {
+	if role == SolrNodeRoleData {
+		return solrCloud.StatefulSetName()
+	}
+	return fmt.Sprintf("%s-%s", solrCloud.StatefulSetName(), role)
+}
+
+// GetNonDataPodNames lists the pods the spec expects for the overseer & coordinator StatefulSets.
+func (solrCloud *SolrCloud) GetNonDataPodNames() (podNames []string) {
+	for _, group := range solrCloud.GetNonDataNodeGroups() {
+		name := solrCloud.StatefulSetNameForRole(group.Role)
+		for i := range group.Replicas {
+			podNames = append(podNames, fmt.Sprintf("%s-%d", name, i))
+		}
+	}
+	return podNames
 }
 
 type SolrDataStorageOptions struct {

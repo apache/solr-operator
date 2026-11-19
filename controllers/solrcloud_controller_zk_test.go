@@ -108,7 +108,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT":           "8983",
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -174,7 +174,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT":           "8983",
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -458,7 +458,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"ZK_CHROOT":           "/a-ch/root",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, false)
 			for _, envVar := range extraVars {
@@ -534,7 +534,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_PORT":           "8983",
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_CREDS_AND_ACLS) -Dextra -Dopts",
 			}
 			insertExpectedAclEnvVars(expectedEnvVars, true)
 			for _, envVar := range extraVars {
@@ -576,7 +576,7 @@ var _ = FDescribe("SolrCloud controller - Zookeeper", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_ZK_OPTS":        testSolrZKOpts,
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_OPTS) " + testSolrOpts,
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) $(SOLR_ZK_OPTS) " + testSolrOpts,
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 

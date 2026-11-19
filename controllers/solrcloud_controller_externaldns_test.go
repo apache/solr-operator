@@ -19,6 +19,7 @@ package controllers
 
 import (
 	"context"
+
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/apache/solr-operator/controllers/util"
 	. "github.com/onsi/ginkgo/v2"
@@ -102,7 +103,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -181,7 +182,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -253,7 +254,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -324,7 +325,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -393,7 +394,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "3000",
 				"SOLR_NODE_PORT":      "3000",
 				"SOLR_PORT_ADVERTISE": "3000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -474,7 +475,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
@@ -540,7 +541,7 @@ var _ = FDescribe("SolrCloud controller - External DNS", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Dsolr.node.roles=data:on,overseer:allowed,coordinator:off -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
