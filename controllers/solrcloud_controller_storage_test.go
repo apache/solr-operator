@@ -228,9 +228,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				})
 				return pvc
 			}
-			dataLabels := solrCloud.SharedLabels()
-			dataLabels["technology"] = solrv1beta1.SolrTechnologyLabel
-			return claim("data-"+solrCloud.StatefulSetName()+"-0", dataLabels), claim(solrCloud.Name+"-other-claim", solrCloud.SharedLabels())
+			return claim("data-"+solrCloud.StatefulSetName()+"-0", util.SolrCloudSelectorLabels(solrCloud)), claim(solrCloud.Name+"-other-claim", solrCloud.SharedLabels())
 		}
 
 		deleteCloudAndCheckClaims := func(ctx context.Context, dataClaim, otherClaim *corev1.PersistentVolumeClaim) {
