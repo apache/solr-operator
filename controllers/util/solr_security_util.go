@@ -501,29 +501,37 @@ func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath st
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
 		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
 		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
-		javaToolOptions = append(javaToolOptions,
-			fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-			"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
-		)
+		if solrCloud.SolrVersionAtLeast("10") {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dsolr.security.auth.basicauth.credentials=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer",
+			)
+		} else {
+			javaToolOptions = append(javaToolOptions,
+				fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
+				"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
+			)
+		}
 	}
 
 	// construct the probe command to invoke the SolrCLI "api" action
-	solrApiCommand := fmt.Sprintf("solr api -get \"%s://${SOLR_HOST}:%d%s\"", solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 
 	// Future work - SOLR_TOOL_OPTIONS is only in 9.4.0, use JAVA_TOOL_OPTIONS until that is the minimum supported version
-	var probeCommand string
+	var javaToolOptionsStr string
+	var javaToolOptionsOutputFilter string
 	if len(javaToolOptions) > 0 {
-		// The JVM echoes "Picked up JAVA_TOOL_OPTIONS: ..." on startup, which would leak the basic auth
-		// credentials into the probe output that Kubernetes surfaces in pod events, so that line has to be
-		// filtered out. The filter must not swallow the exit code of 'solr api' though, otherwise a failing
-		// probe (e.g. a 401) looks like a successful one. Capture the output first, then filter it, then
-		// exit with the status saved before the filter ran. Written for POSIX 'sh', so no 'pipefail'.
-		probeCommand = fmt.Sprintf(
-			"probe_output=$(JAVA_TOOL_OPTIONS=%q %s 2>&1); probe_status=$?; echo \"$probe_output\" | grep -v JAVA_TOOL_OPTIONS; exit $probe_status",
-			strings.Join(javaToolOptions, " "), solrApiCommand)
+		javaToolOptionsStr = fmt.Sprintf("JAVA_TOOL_OPTIONS=%q ", strings.Join(javaToolOptions, " "))
+		javaToolOptionsOutputFilter = " 2>&1 | grep -v JAVA_TOOL_OPTIONS"
 	} else {
-		probeCommand = solrApiCommand
+		javaToolOptionsStr = ""
+		javaToolOptionsOutputFilter = ""
 	}
+
+	apiUrlFlag := "--solr-url"
+	if solrCloud.SolrVersionBelow("9.7") {
+		apiUrlFlag = "-get"
+	}
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

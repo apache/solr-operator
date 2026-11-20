@@ -822,7 +822,7 @@ groups:
           cmd: docker buildx create --use
           tee: true
         - !Command
-          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag {{ docker_image }} -f ./build/Dockerfile
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} --build-arg VERSION={{ release_version }}-rc{{ rc_number }} --build-arg DOCS_VERSION={{ release_version_major }}_{{ release_version_minor }} . --tag {{ docker_image }} -f ./build/Dockerfile
           logfile: rc_docker_upload.log
           tee: true
   - !Todo
@@ -965,10 +965,10 @@ groups:
     description: |
       At the end of the voting deadline, count the votes and send RESULT message to the mailing list.
 
-      {% set vote_close_epoch = initiate_vote.vote_close_epoch | int %}
+      {% set vote_close_epoch = initiate_vote.vote_close_epoch | default(0) | int %}
       {% if epoch < vote_close_epoch %}
       WARNING: The planned voting deadline {{ initiate_vote.vote_close }} has not yet passed
-      {% else %}
+      {% elif vote_close_epoch > 0 %}
       The planned 72h voting deadline {{ initiate_vote.vote_close }} has passed.
       {% endif %}
     asciidoc: |
@@ -1102,24 +1102,77 @@ groups:
         logfile: svn_mv_solr_operator.log
         tee: true
   - !Todo
-    id: publish_helm_charts
-    title: Publish the staged Helm charts
+    id: publish_helm_charts_oci
+    title: Publish Helm charts to the OCI registry (GHCR)
     depends: svn_release_mv
     vars:
       dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
-      official_helm_charts_url: https://nightlies.apache.org/solr/release/helm-charts
-    commands: !Commands
-      root_folder: '{{ git_checkout_folder }}'
-      confirm_each_command: false
-      commands_text: |
-        This will upload the staged Helm chart to the release location in nightlies.apache.org.
-        You will be prompted for your Apache password in the beggining, to use when uploading.
-        Next you will be prompted for your GPG Key passphrase, to sign the helm index.yaml.
-      commands:
-        - !Command
-          cmd: ./hack/release/upload/upload_helm.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -a "{{ gpg.apache_id | default("<apache_id>", True) }}" -c "{{ official_helm_charts_url }}" -r "{{ dist_release_url }}"
-          logfile: upload_helm.log
-          tee: true
+      solr_operator_chart_url: '{{ dist_release_url }}/helm-charts/solr-operator-{{ release_version[1:] }}.tgz'
+      solr_chart_url: '{{ dist_release_url }}/helm-charts/solr-{{ release_version[1:] }}.tgz'
+      workflow_url: https://github.com/apache/solr-operator/actions/workflows/publish-helm-oci.yaml
+    description: |
+      Publish the released Helm charts as OCI artifacts to the GitHub Container Registry,
+      using the "Publish Helm Charts to OCI Registry" GitHub Actions workflow.
+
+      The charts on dist.apache.org remain the canonical, signed release artifacts.
+      The OCI copies are convenience binaries, published to:
+        - oci://ghcr.io/apache/solr-operator/helm/solr-operator
+        - oci://ghcr.io/apache/solr-operator/helm/solr
+
+      Steps to publish:
+      1. Navigate to the GitHub Actions workflow:
+         {{ workflow_url }}
+
+      2. Click the "Run workflow" button on the right side
+
+      3. Fill in the workflow inputs:
+         - solr-operator-chart-url: {{ solr_operator_chart_url }}
+         - solr-chart-url: {{ solr_chart_url }}
+         - dry-run: true
+
+      4. The dry-run verifies, without publishing anything, that:
+         - The URLs are valid and point at dist.apache.org
+         - The charts, checksums, signatures and provenance files all download
+         - The SHA512 checksums match
+         - The GPG signatures verify against the Solr KEYS file
+         - The chart versions are what you expect
+
+      5. Re-run the workflow with dry-run = false to actually publish
+
+      6. Monitor the workflow execution for any errors. After pushing, the workflow logs
+         out of the registry and pulls both charts back anonymously, verifying their
+         provenance and checking they are byte-identical to the released artifacts.
+         If this step fails with an authorization error, the ghcr.io packages are still
+         private and INFRA needs to make them public - see the note below.
+
+      7. Confirm for yourself that the charts are resolvable, with no credentials:
+
+         helm registry logout ghcr.io
+         helm show chart oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {{ release_version[1:] }}
+         helm show chart oci://ghcr.io/apache/solr-operator/helm/solr --version {{ release_version[1:] }}
+
+      8. Smoke test an actual install from the OCI registry, in a throwaway Kind cluster.
+         The -o flag points the Helm installs at the OCI registry, while the CRDs still come
+         from the release location. This verifies 'helm install --verify' against the pushed
+         .prov files, which is the part 'helm show chart' does not cover:
+
+         ./hack/release/smoke_test/test_cluster.sh \
+             -v "{{ release_version }}" \
+             -l "{{ dist_release_url }}" \
+             -i "apache/solr-operator:{{ release_version }}-rc{{ rc_number }}" \
+             -g "{{ gpg_key | default("<gpg_key_id>", True) }}" \
+             -o "oci://ghcr.io/apache/solr-operator/helm"
+
+         Note this uses the RC Docker image, since the final image is not pushed to Docker
+         Hub until a later step. The chart is what is under test here, not the image.
+
+      Note: the workflow authenticates with the built-in GITHUB_TOKEN, so no secrets need
+      to be configured. However, ghcr.io creates new packages as *private*. The very first
+      time a chart name is published, an INFRA ticket is needed to make the package public.
+      This is a one-time action per chart name; later versions inherit the visibility.
+    links:
+      - https://github.com/apache/solr-operator/actions/workflows/publish-helm-oci.yaml
+      - https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}/helm-charts/
   - !Todo
     id: publish_crds
     title: Publish the staged CRDs
@@ -1161,7 +1214,7 @@ groups:
           cmd: docker buildx create --use
           tee: true
         - !Command
-          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
+          cmd: docker buildx build --pull --push --platform "linux/amd64,linux/arm64" --build-arg GIT_SHA={{ build_rc.git_sha | default("<git_sha>", True) }} --build-arg VERSION={{ release_version }} --build-arg DOCS_VERSION={{ release_version_major }}_{{ release_version_minor }} . --tag apache/solr-operator:{{ release_version }} -f ./build/Dockerfile
           tee: true
           logfile: docker_upload.log
   - !Todo
@@ -1178,12 +1231,19 @@ groups:
     title: Check state of ArtifactHub entries
     depends:
       - publish_docker_image
-      - publish_helm_charts
+      - publish_helm_charts_oci
+      - publish_website
     description: |
       Check to make sure that ArtifactHub has successfully loaded the {{ release_version }} version of the Solr Operator and Solr Helm Charts.
       Mark this as complete when you have confirmed all aspects of the chart in artifactHub.
 
       The ChangeLog is very finicky, so make sure that it renders correctly.
+
+      ArtifactHub tracks the Helm repository at https://solr.apache.org/charts, so the new version
+      only shows up once the website, with the updated index.yaml, has been published. The index
+      entries point at the OCI copies on ghcr.io, which ArtifactHub downloads to read the charts.
+      If the new version does not appear after the next ArtifactHub scan (up to ~30 minutes), check
+      the repository's tracking errors on ArtifactHub (control panel > repositories) before anything else.
     links:
       - https://artifacthub.io/packages/helm/apache-solr/solr-operator
       - https://artifacthub.io/packages/helm/apache-solr/solr
@@ -1306,6 +1366,46 @@ groups:
           logfile: commit.log
           stdout: true
   - !Todo
+    id: website_update_helm_index
+    title: Add the release to the Helm repository index
+    depends:
+      - website_git_clone
+      - publish_helm_charts_oci
+    vars:
+      dist_release_url: https://dist.apache.org/repos/dist/release/solr/solr-operator/{{ release_version }}
+      helm_index_file: '{{ [git_website_folder, "content", "charts", "index.yaml"] | path_join }}'
+    description: |
+      The Helm repository at https://solr.apache.org/charts is the index.yaml checked into the
+      website, under content/charts/. Its entries point at the OCI copies of the charts on ghcr.io,
+      so the charts must have been published to the OCI registry first.
+
+      The script downloads the released charts from dist.apache.org, verifies their checksums and
+      signatures, and adds entries for them to the index, pointing at:
+        - oci://ghcr.io/apache/solr-operator/helm/solr-operator:{{ release_version[1:] }}
+        - oci://ghcr.io/apache/solr-operator/helm/solr:{{ release_version[1:] }}
+      It then signs the index, and writes its checksum.
+    commands: !Commands
+      root_folder: '{{ git_checkout_folder }}'
+      confirm_each_command: false
+      commands_text: |
+        This will add the new release to the website's Helm repository index.
+        You will be prompted for your GPG Key passphrase, to sign the index.yaml.
+      commands:
+        - !Command
+          cmd: git checkout {{ release_version }} && make yq
+          comment: The index script and yq come from the release tag
+          tee: true
+        - !Command
+          cmd: ./hack/release/upload/update_helm_index.sh -g "{{ gpg_key | default("<gpg_key_id>", True) }}" -r "{{ dist_release_url }}" -i "{{ helm_index_file }}"
+          logfile: update_helm_index.log
+          tee: true
+        - !Command
+          cmd: git -C "{{ git_website_folder }}" add content/charts && git -C "{{ git_website_folder }}" commit -m "Add Solr Operator {{ release_version }} to the Helm repository index"
+          logfile: commit.log
+          stdout: true
+    post_description: |
+      You will push and verify all changes in a later step
+  - !Todo
     id: update_other
     title: Update rest of webpage
     depends: website_update_doap
@@ -1339,6 +1439,7 @@ groups:
       - prepare_announce
       - website_update_doap
       - website_update_versions
+      - website_update_helm_index
     description: |
       Push the website changes to 'main' branch, and check the staging site.
       You will get a chance to preview the diff of all changes before you push.
@@ -1397,6 +1498,15 @@ groups:
       Wait a few minutes for the build to happen. You can follow the site build at https://ci2.apache.org/#/builders/3
 
       Verify on https://solr.apache.org/operator that the site is OK.
+
+      Then verify that the Helm repository serves the new release, with a throwaway repo name,
+      and no registry credentials:
+
+         helm registry logout ghcr.io
+         helm repo add apache-solr-check https://solr.apache.org/charts
+         helm show chart apache-solr-check/solr-operator --version {{ release_version[1:] }}
+         helm show chart apache-solr-check/solr --version {{ release_version[1:] }}
+         helm repo remove apache-solr-check
     links:
       - https://ci2.apache.org/#/builders/3
       - https://solr.apache.org

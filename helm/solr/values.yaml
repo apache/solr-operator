@@ -298,6 +298,7 @@ podOptions:
 
   priorityClassName: ""
   envVars: []
+  envFrom: []
   podSecurityContext: {}
   containerSecurityContext: {}
   terminationGracePeriodSeconds: null

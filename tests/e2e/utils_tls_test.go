@@ -29,6 +29,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -256,9 +257,11 @@ func installBootstrapIssuer(ctx context.Context) {
 			},
 		},
 	}
-	Expect(k8sClient.Create(ctx, bootstrapIssuer)).To(Succeed(), "Failed to install SelfSigned ClusterIssuer for bootstrapping CA")
+	// The issuer is cluster-scoped, so a reused KinD cluster (REUSE_KIND_CLUSTER_IF_EXISTS) can still hold the
+	// one left behind by an interrupted run. It is identical, so keep it.
+	Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, bootstrapIssuer))).To(Succeed(), "Failed to install SelfSigned ClusterIssuer for bootstrapping CA")
 	DeferCleanup(func(ctx context.Context) {
-		Expect(k8sClient.Delete(ctx, bootstrapIssuer)).To(Succeed(), "Failed to delete SelfSigned bootstrapping ClusterIssuer")
+		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, bootstrapIssuer))).To(Succeed(), "Failed to delete SelfSigned bootstrapping ClusterIssuer")
 	})
 }
 
@@ -277,7 +280,7 @@ func installSolrIssuer(ctx context.Context, namespace string) {
 				RotationPolicy: certmanagerv1.RotationPolicyNever,
 				Algorithm:      "RSA",
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  "bootstrap-issuer",
 				Kind:  "ClusterIssuer",
 				Group: "cert-manager.io",
@@ -348,7 +351,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 					},
 				},
 			},
-			IssuerRef: certmanagermetav1.ObjectReference{
+			IssuerRef: certmanagermetav1.IssuerReference{
 				Name:  solrIssuerName,
 				Kind:  "Issuer",
 				Group: "cert-manager.io",
@@ -404,7 +407,7 @@ func generateSolrCert(ctx context.Context, solrCloud *solrv1beta1.SolrCloud, inc
 						},
 					},
 				},
-				IssuerRef: certmanagermetav1.ObjectReference{
+				IssuerRef: certmanagermetav1.IssuerReference{
 					Name:  solrIssuerName,
 					Kind:  "Issuer",
 					Group: "cert-manager.io",

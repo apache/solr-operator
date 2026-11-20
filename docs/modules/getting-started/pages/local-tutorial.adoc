@@ -1,4 +1,5 @@
 = Solr on Kubernetes on local Mac
+:tabs-sync-option:
 // Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
@@ -79,24 +80,43 @@ You can follow along here, or follow the instructions in the https://artifacthub
 
 Now that we have the prerequisites setup, let us install Solr Operator which will let us easily manage a large Solr cluster:
 
-Now add the Solr Operator Helm repository. (You should only need to do this once)
-
-[source,bash]
-----
-$ helm repo add apache-solr https://solr.apache.org/charts
-$ helm repo update
-----
-
-Next, install the Solr Operator chart. Note this is using Helm v3, in order to use Helm v2 please consult the https://hub.helm.sh/charts/solr-operator/solr-operator[Helm Chart documentation].
-This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
+First install the Solr & Zookeeper CRDs:
 
 [source,bash,subs="verbatim,attributes"]
 ----
-# Install the Solr & Zookeeper CRDs
 $ kubectl create -f https://solr.apache.org/operator/downloads/crds/v{operator-version}/all-with-dependencies.yaml
-# Install the Solr operator and Zookeeper Operator
+----
+
+Then install the Solr Operator chart.
+This will install the https://github.com/pravega/zookeeper-operator[Zookeeper Operator] by default.
+The charts are published to the GitHub Container Registry as OCI artifacts, and are also listed in the Helm repository at `https://solr.apache.org/charts`.
+Pick either, the rest of the tutorial follows your choice.
+See xref:upgrade-notes:upgrade-notes.adoc#where-the-helm-charts-are-published[Where the Helm charts are published] for more.
+
+[tabs#install-solr-operator]
+======
+OCI Charts::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
+$ helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version {operator-version}
+----
+====
+
+Charts Repo::
++
+====
+Add the Helm repository once, which requires Helm `v3.8` or later:
+
+[source,bash,subs="verbatim,attributes"]
+----
+$ helm repo add apache-solr https://solr.apache.org/charts
+$ helm repo update
 $ helm install solr-operator apache-solr/solr-operator --version {operator-version}
 ----
+====
+======
 
 _Note that the Helm chart version does not contain a `v` prefix, which the downloads version does. The Helm chart version is the only part of the Solr Operator release that does not use the `v` prefix._
 
@@ -125,9 +145,30 @@ After inspecting the status of you Kube cluster, you should see a deployment for
 
 To start a Solr Cloud cluster, we will create a yaml that will tell the Solr Operator what version of Solr Cloud to run, and how many nodes, with how much memory etc.
 
+Create a 3-node cluster v9.10.0 with 300m Heap each:
+
+[tabs#install-solr]
+======
+OCI Charts::
++
+====
 [source,bash,subs="verbatim,attributes"]
 ----
-# Create a 3-node cluster v9.10.0 with 300m Heap each:
+helm install example-solr oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version} \
+  --set image.tag=9.10.0 \
+  --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
+  --set addressability.external.method=Ingress \
+  --set addressability.external.domainName="ing.local.domain" \
+  --set addressability.external.useExternalAddress="true" \
+  --set ingressOptions.ingressClassName="nginx"
+----
+====
+
+Charts Repo::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
 helm install example-solr apache-solr/solr --version {operator-version} \
   --set image.tag=9.10.0 \
   --set solrOptions.javaMemory="-Xms300m -Xmx300m" \
@@ -135,7 +176,12 @@ helm install example-solr apache-solr/solr --version {operator-version} \
   --set addressability.external.domainName="ing.local.domain" \
   --set addressability.external.useExternalAddress="true" \
   --set ingressOptions.ingressClassName="nginx"
+----
+====
+======
 
+[source,bash,subs="verbatim,attributes"]
+----
 # The solr-operator has created a new resource type 'solrclouds' which we can query
 # Check the status live as the deploy happens
 kubectl get solrclouds -w
@@ -222,12 +268,37 @@ So we wish to upgrade to a newer Solr version:
 ----
 # Take note of the current version
 curl -s http://default-example-solrcloud.ing.local.domain/solr/admin/info/system | grep solr-i
+----
 
-# Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler.
+Update the solrCloud configuration with the new version, keeping all previous settings and the number of nodes set by the autoscaler:
+
+[tabs#upgrade-solr]
+======
+OCI Charts::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
+helm upgrade example-solr oci://ghcr.io/apache/solr-operator/helm/solr --version {operator-version} \
+  --reuse-values \
+  --set image.tag=9.11.0
+----
+====
+
+Charts Repo::
++
+====
+[source,bash,subs="verbatim,attributes"]
+----
 helm upgrade example-solr apache-solr/solr --version {operator-version} \
   --reuse-values \
-  --set image.tag=9.10.0
+  --set image.tag=9.11.0
+----
+====
+======
 
+[source,bash,subs="verbatim,attributes"]
+----
 # Click the 'Show all details" button in Admin UI and start hitting the "Refresh" button
 # See how the operator upgrades one pod at a time. Solr version is in the 'node' column
 # You can also watch the status with the 'kubectl get solrclouds' command

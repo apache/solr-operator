@@ -33,10 +33,25 @@ There may be breaking changes between the version you are using and the version 
 
 ### Installing the Chart
 
-To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version, run with the following commands:
+The Solr Helm chart is published as an OCI artifact to the GitHub Container Registry, and the Helm repository at `https://solr.apache.org/charts` lists the same chart.
+Both are supported, see [Where the Helm charts are published](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published).
+The charts are signed, and can be verified when installing, see [Verifying the Helm charts](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#verifying-the-helm-charts).
+
+To install a SolrCloud for the first time in your cluster, you can use the latest version or a specific version:
+
+#### OCI Charts
 
 ```bash
-helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.10.0
+helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.10.0-prerelease --set image.tag=9.11.0
+```
+
+#### Charts Repo
+
+This requires Helm 3.8 or later.
+
+```bash
+helm repo add apache-solr https://solr.apache.org/charts
+helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.11.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -49,8 +64,17 @@ _Note that the Helm chart version does not contain a `v` prefix, which the Solr 
 
 If you are upgrading your SolrCloud deployment, you should always use a specific version of the chart and upgrade **after [upgrading the Solr Operator](https://artifacthub.io/packages/helm/apache-solr/solr-operator#upgrading-the-solr-operator) to the same version**:
 
+#### OCI Charts
+
 ```bash
-helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.10.0
+helm upgrade example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.11.0
+```
+
+#### Charts Repo
+
+```bash
+helm repo update
+helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.11.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
@@ -82,7 +106,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | nameOverride | string | `""` |  |
 | replicas | int | `3` | The number of Solr pods to run in the Solr Cloud. If you want to use autoScaling, do not set this field. |
 | image.repository | string | `"solr"` | The repository of the Solr image |
-| image.tag | string | `"9.10.0"` | The tag/version of Solr to run |
+| image.tag | string | `"9.11.0"` | The tag/version of Solr to run. Must start with the Solr version, e.g. `9`, `9.10` or `10.0.0-slim` |
 | image.pullPolicy | string | | PullPolicy for the Solr image, defaults to the empty Pod behavior |
 | image.imagePullSecret | string | | PullSecret for the Solr image |
 | busyBoxImage.repository | string | `"busybox"` | The repository of the BusyBox image |
@@ -293,6 +317,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.sidecarContainers | []object |  | An optional list of additional containers to run along side the Solr in its pod |
 | podOptions.initContainers | []object |  | An optional list of additional initContainers to run before the Solr container starts |
 | podOptions.envVars | []object |  | List of additional environment variables for the Solr container |
+| podOptions.envFrom | []object |  | List of ConfigMap or Secret sources to load as environment variables in the Solr container. Variables set via `envVars` or by the operator take precedence |
 | podOptions.podSecurityContext | object |  | Security context for the Solr pod |
 | podOptions.containerSecurityContext | object |  | Security context for the Solr container in each pod |
 | podOptions.terminationGracePeriodSeconds | int |  | Optional amount of time to wait for Solr to stop on its own, before manually killing it |

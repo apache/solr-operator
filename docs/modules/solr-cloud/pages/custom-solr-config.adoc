@@ -36,10 +36,12 @@ spec:
 == Custom solr.xml
 
 Solr pods load node-level configuration settings from `/var/solr/data/solr.xml`.
-This important configuration file gets created by the `cp-solr-xml` initContainer which bootstraps the `solr.home` directory on each pod before starting the main container.
-The default `solr.xml` is mounted into the `cp-solr-xml` initContainer from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
+It is mounted there from a ConfigMap, via a `subPath` volumeMount so that only this one file is mounted into the `solr.home` directory.
+The default `solr.xml` comes from a ConfigMap named `<INSTANCE>-solrcloud-configmap` (where `<INSTANCE>` is the name of your SolrCloud instance) created by the Solr operator.
+The mount only exists in the Solr container, so a sidecar or custom initContainer that needs the `solr.xml` has to mount the ConfigMap itself.
 
 NOTE: The data in the default ConfigMap is not editable! Any changes to the `solr.xml` in the default ConfigMap created by the operator will be overwritten during the next reconcile cycle.
+The `solr.xml` in a running pod is read-only, and ConfigMap changes only reach pods through the restart described below.
 
 Many of the specific values in `solr.xml` can be set using Java system properties; for instance, the following setting controls the read timeout for the HTTP client used by Solr's `HttpShardHandlerFactory`:
 
@@ -103,6 +105,33 @@ spec:
 ----
 
 NOTE: If you set `providedConfigMap`, then the ConfigMap must include the `solr.xml` or `log4j2.xml` key, otherwise the SolrCloud will fail to reconcile.
+
+NOTE: The format of `solr.xml` differs between Solr major versions, e.g. Solr 9 requires `hostContext` and Solr 10 refuses to start with it.
+When upgrading a SolrCloud to a new Solr major version, create a new ConfigMap with a `solr.xml` for that version, and change `spec.solrImage.tag` and `providedConfigMap` in the same update.
+The `solr.xml` that ships with the new Solr version (`server/solr/solr.xml`) is a good starting point.
+
+[#solr-xml-managed-elements]
+=== Elements the operator normally generates for you
+
+Some SolrCloud settings only work by adding elements to the `solr.xml` that the operator generates:
+`spec.solrModules` and `spec.additionalLibs` are written into the `sharedLib` element, and `spec.backupRepositories` into the `<backup>` element.
+The operator never modifies a user-provided `solr.xml`, so with a custom `solr.xml` these settings have no effect and you must add the elements yourself.
+
+The simplest approach is to configure these settings first, then copy the generated `solr.xml` as described above and customize from there.
+The relevant elements look like this for one module and one S3 repository:
+
+[source,xml]
+----
+<str name="sharedLib">${solr.sharedLib:},/opt/solr/contrib/analysis-extras/lib,/opt/solr/contrib/s3-repository/lib,/opt/solr/dist</str>
+<backup>
+  <repository name="s3-backups" class="org.apache.solr.s3.S3BackupRepository">
+    <str name="s3.bucket.name">my-bucket</str>
+    <str name="s3.region">us-east-1</str>
+  </repository>
+</backup>
+----
+
+Keeping the `${solr.sharedLib:}` placeholder lets you set the library paths with `-Dsolr.sharedLib=...` in `solrOpts` instead of editing the XML.
 
 === Changes to Custom Config Trigger Rolling Restarts
 
