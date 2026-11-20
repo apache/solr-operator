@@ -249,6 +249,13 @@ annotations:
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/900
     - kind: fixed
+      description: A collection backup that Solr has lost track of, whose async status is reported as `notfound`, is now submitted again instead of being waited on forever. Previously this left the SolrBackup in progress indefinitely, and stopped recurring backups from ever being scheduled again. The operator also no longer deletes a backup's async status in Solr until the backup's result has been saved, which is one way this could happen, and a failing collection no longer stops the other collections' backups from being checked
+      links:
+        - name: Github Issue
+          url: https://github.com/apache/solr-operator/issues/824
+        - name: Github PR
+          url: https://github.com/apache/solr-operator/pull/910
+    - kind: fixed
       description: A SolrCloud that is being deleted no longer gets stuck when its providedConfigMap has already been removed, e.g. by Helm in the same uninstall
       links:
         - name: Github Issue
