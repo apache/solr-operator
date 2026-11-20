@@ -17,6 +17,9 @@
 // under the License.
 
 Solr metrics can be collected from solr clouds/standalone solr both residing within the kubernetes cluster and outside.
+
+NOTE: The Prometheus exporter was removed from Solr in Solr 10, so a `SolrPrometheusExporter` only works with Solr 9 and earlier images.
+Solr 10 nodes expose their metrics in Prometheus format at `/solr/admin/metrics`, which Prometheus can scrape directly.
 To use the Prometheus exporter, the easiest thing to do is just provide a reference to a Solr instance. That can be any of the following:
 
 * The name and namespace of the Solr Cloud CRD
@@ -36,7 +39,9 @@ You have two options for the prometheus exporter to find the zookeeper connectio
 
 * Provide the name of a `SolrCloud` object in the same Kubernetes cluster, and optional namespace.
 The Solr Operator will keep the ZK Connection info up to date from the SolrCloud object.
-This name can be provided at: `SolrPrometheusExporter.spec.solrRef.cloud.name`
+This name can be provided at: `SolrPrometheusExporter.spec.solrReference.cloud.name`, and the namespace at: `SolrPrometheusExporter.spec.solrReference.cloud.namespace`
+The namespace defaults to the namespace of the `SolrPrometheusExporter`.
+A `SolrCloud` in another namespace is supported, but only if the Solr Operator is watching that namespace.
 * Provide explicit Zookeeper Connection info for the prometheus exporter to use.
   This info can be provided at: `SolrPrometheusExporter.spec.solrRef.cloud.zkConnectionInfo`, with keys `internalConnectionString` and `chroot`
 
@@ -172,7 +177,8 @@ kubectl get pods -n monitoring
 
 === Deploy Prometheus Exporter for Solr Metrics
 
-Next, deploy a Solr Prometheus exporter for the SolrCloud you want to capture metrics from in the namespace where you're running SolrCloud, not in the `monitoring` namespace.
+Next, deploy a Solr Prometheus exporter for the SolrCloud you want to capture metrics from.
+Deploy it in the namespace where you're running SolrCloud, not in the `monitoring` namespace.
 For instance, the following example creates a Prometheus exporter named `dev-prom-exporter` for a SolrCloud named `dev` deployed in the `dev` namespace:
 
 [source,yaml]

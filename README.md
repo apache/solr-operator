@@ -54,7 +54,13 @@ Join us on the [#solr-operator](https://kubernetes.slack.com/messages/solr-opera
 Please visit the following pages for documentation on using and developing the Solr Operator:
 
 - [Local Tutorial](https://solr.apache.org/guide/operator/latest/getting-started/local-tutorial.html)
-- [Helm Instructions via Artifact Hub](https://artifacthub.io/packages/helm/apache-solr/solr-operator)
+- **Helm Chart Installation**, from either [chart source](https://solr.apache.org/guide/operator/latest/upgrade-notes/upgrade-notes.html#where-the-helm-charts-are-published):
+  - **OCI Charts**
+    - **Solr Operator**: `helm install solr-operator oci://ghcr.io/apache/solr-operator/helm/solr-operator --version <VERSION>`
+    - **Solr Cloud**: `helm install solr oci://ghcr.io/apache/solr-operator/helm/solr --version <VERSION>`
+  - **Charts Repo** (Helm 3.8+), after `helm repo add apache-solr https://solr.apache.org/charts`
+    - **Solr Operator**: `helm install solr-operator apache-solr/solr-operator --version <VERSION>`
+    - **Solr Cloud**: `helm install solr apache-solr/solr --version <VERSION>`
   - The released helm charts and their instructions should be used for all safe and stable deployments.
     The charts found in `helm/` are not guaranteed to be compatible with the last stable release, and should only be used for development purposes.
 - [Running the Solr Operator](https://solr.apache.org/guide/operator/latest/getting-started/running-the-operator.html)
@@ -90,6 +96,9 @@ If you are trying to run tests locally in IntelliJ/GoLand, refer to [the IDEA te
 
 Please refer to the [E2E/Integration Testing guide](dev-docs/e2e-testing.md) for information on how to run full integration tests
 for your changes.
+
+When you open a PR or moves it from DRAFT to ready for review, an automated, advisory comment may point out a missing changelog entry, docs or tests; see
+[LLM-assisted PR triage](dev-docs/pr-triage-llm.md) for how it works and how to run it locally.
 
 ## License
 

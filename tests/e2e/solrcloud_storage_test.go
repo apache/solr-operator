@@ -126,7 +126,9 @@ var _ = FDescribe("E2E - SolrCloud - Storage", func() {
 				Expect(pvc.Spec.Resources.Requests).To(HaveKeyWithValue(corev1.ResourceStorage, newStorageSize), "The PVC %q does not have the new storage size in its resource requests", pvc.Name)
 			}
 
-			statefulSet := expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), 1, time.Millisecond, func(g Gomega, found *appsv1.StatefulSet) {
+			// The expansion clears its own clusterOp lock in the same reconcile that marks the pods out-of-date,
+			// so the RollingUpdate lock is only taken by a later reconcile. Wait for it instead of checking once.
+			statefulSet := expectStatefulSetWithChecksAndTimeout(ctx, solrCloud, solrCloud.StatefulSetName(), time.Second*10, time.Millisecond*50, func(g Gomega, found *appsv1.StatefulSet) {
 				clusterOp, err := controllers.GetCurrentClusterOp(found)
 				g.Expect(err).ToNot(HaveOccurred(), "Error occurred while finding clusterLock for SolrCloud")
 				g.Expect(clusterOp).ToNot(BeNil(), "StatefulSet does not have a RollingUpdate lock.")
@@ -164,8 +166,8 @@ var _ = FDescribe("E2E - SolrCloud - Storage", func() {
 			}).WithContext(ctx).WithTimeout(time.Second * 90).WithPolling(time.Second).Should(Succeed())
 
 			By("checking that the collections can be queried after the restart")
-			queryCollection(ctx, solrCloud, solrCollection1, 0)
-			queryCollection(ctx, solrCloud, solrCollection2, 0)
+			queryCollectionAfterRestart(ctx, solrCloud, solrCollection1, 0)
+			queryCollectionAfterRestart(ctx, solrCloud, solrCollection2, 0)
 		})
 	})
 })

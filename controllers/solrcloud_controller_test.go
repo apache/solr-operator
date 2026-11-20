@@ -21,7 +21,6 @@ import (
 	"context"
 	"crypto/md5"
 	"fmt"
-	"strconv"
 	"strings"
 
 	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
@@ -84,6 +83,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{
 					PodOptions: &solrv1beta1.PodOptions{
 						EnvVariables:       extraVars,
+						EnvFrom:            extraEnvFrom,
 						PodSecurityContext: &testPodSecurityContext,
 						Volumes:            extraVolumes,
 						Affinity:           testAffinity,
@@ -127,7 +127,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"SOLR_LOG_LEVEL":      "DEBUG",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) extra-opts",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN) extra-opts",
 			}
 			foundEnv := statefulSet.Spec.Template.Spec.Containers[0].Env
 			// Note that this check changes the variable foundEnv, so the values are no longer valid afterwards.
@@ -137,7 +137,8 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			testPodEnvVariables(expectedEnvVars, append(foundEnv[:len(foundEnv)-3], foundEnv[len(foundEnv)-1]))
 
 			// Other Pod Options Checks
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "Post-start command should be nil.")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].EnvFrom).To(Equal(extraEnvFrom), "EnvFrom is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(*statefulSet.Spec.Template.Spec.SecurityContext).To(Equal(testPodSecurityContext), "PodSecurityContext is not the same as the one provided in podOptions")
 			Expect(statefulSet.Spec.Template.Spec.Affinity).To(Equal(testAffinity), "Affinity is not the same as the one provided in podOptions")
@@ -267,7 +268,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 		})
 		FIt("has the correct resources", func(ctx context.Context) {
 			By("testing the Solr ConfigMap")
-			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLString("", []string{}, []string{})})
+			configMap := expectConfigMap(ctx, solrCloud, solrCloud.ConfigMapName(), map[string]string{"solr.xml": util.GenerateSolrXMLString("", []string{}, []string{}, false)})
 			Expect(configMap.Labels).To(Equal(util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), testConfigMapLabels)), "Incorrect configMap labels")
 			Expect(configMap.Annotations).To(Equal(testConfigMapAnnotations), "Incorrect configMap annotations")
 
@@ -306,8 +307,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_NODE_PORT":      "8983",
 				"SOLR_PORT_ADVERTISE": "8983",
 				"GC_TUNE":             "gc Options",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
-				"SOLR_STOP_WAIT":      strconv.FormatInt(testTerminationGracePeriodSeconds-5, 10),
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			expectedStatefulSetLabels := util.MergeLabelsOrAnnotations(solrCloud.SharedLabelsWith(solrCloud.Labels), map[string]string{"technology": util.SolrCloudPVCTechnology})
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: "host:7271/test"}
@@ -419,7 +419,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			expectedStatefulSetAnnotations := map[string]string{util.SolrZKConnectionStringAnnotation: expectedZKHost}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			Expect(statefulSet.Annotations).To(Equal(expectedStatefulSetAnnotations), "Incorrect statefulSet annotations")
-			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle.PostStart).To(BeNil(), "There should be no postStart command, even if there is a chRoot for ZK")
+			Expect(statefulSet.Spec.Template.Spec.Containers[0].Lifecycle).To(BeNil(), "No lifecycle hooks should be set by default")
 			Expect(statefulSet.Spec.Template.Spec.ServiceAccountName).To(BeEmpty(), "No custom serviceAccountName specified, so the field should be empty.")
 
 			// PodDisruptionBudget creation should be enabled by default
@@ -511,7 +511,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				"SOLR_PORT":           "2000",
 				"SOLR_NODE_PORT":      "2000",
 				"SOLR_PORT_ADVERTISE": "2000",
-				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT)",
+				"SOLR_OPTS":           "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
 			}
 			testPodEnvVariables(expectedEnvVars, statefulSet.Spec.Template.Spec.Containers[0].Env)
 			By("testing the Solr Common Service")
@@ -539,6 +539,46 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(found.InternalCommonAddress).To(Equal("http://"+solrCloud.CommonServiceName()+"."+solrCloud.Namespace+".svc."+testKubeDomain+":5000"), "Wrong internal common address in status")
 				g.Expect(found.ExternalCommonAddress).To(BeNil(), "External common address in status should be nil")
 			})
+		})
+	})
+
+	FContext("Solr Cloud availability zone and spread domain", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+
+			testPodEnvVariables(map[string]string{
+				"SOLR_OPTS": "-DhostPort=$(SOLR_NODE_PORT) -Davailability_zone=$(SOLR_AVAILABILITY_ZONE) -Dspread_domain=$(SOLR_SPREAD_DOMAIN)",
+			}, statefulSet.Spec.Template.Spec.Containers[0].Env)
+
+			var zoneEnvVar *corev1.EnvVar
+			for _, envVar := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+				if envVar.Name == "SOLR_AVAILABILITY_ZONE" {
+					zoneEnvVar = &envVar
+					break
+				}
+			}
+			Expect(zoneEnvVar).To(Not(BeNil()), "SOLR_AVAILABILITY_ZONE env var should be set")
+			Expect(zoneEnvVar.ValueFrom.FieldRef.FieldPath).To(Equal("metadata.labels['topology.kubernetes.io/zone']"), "Wrong fieldRef for the availability zone env var")
+
+			var spreadDomainEnvVar *corev1.EnvVar
+			for _, envVar := range statefulSet.Spec.Template.Spec.Containers[0].Env {
+				if envVar.Name == "SOLR_SPREAD_DOMAIN" {
+					spreadDomainEnvVar = &envVar
+					break
+				}
+			}
+			Expect(spreadDomainEnvVar).To(Not(BeNil()), "SOLR_SPREAD_DOMAIN env var should be set")
+			Expect(spreadDomainEnvVar.ValueFrom.FieldRef.FieldPath).To(Equal("spec.nodeName"), "Wrong fieldRef for the spread domain env var")
 		})
 	})
 
@@ -708,14 +748,14 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 				g.Expect(logXmlVolMount).To(Not(BeNil()), "Didn't find the log4j2-xml Volume mount")
 				g.Expect(logXmlVolMount.MountPath).To(Equal(expectedMountPath), "log4j2-xml Volume mount has the wrong path")
 
-				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.GenerateSolrXMLString("", []string{}, []string{}))))), "Custom solr.xml MD5 annotation should be set on the pod template.")
+				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.SolrXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(util.GenerateSolrXMLString("", []string{}, []string{}, false))))), "Custom solr.xml MD5 annotation should be set on the pod template.")
 
 				g.Expect(found.Spec.Template.Annotations).To(HaveKeyWithValue(util.LogXmlMd5Annotation, fmt.Sprintf("%x", md5.Sum([]byte(configMap.Data[util.LogXmlFile])))), "Custom log4j2.xml MD5 annotation should be set on the pod template.")
 				expectedEnvVars := map[string]string{"LOG4J_PROPS": fmt.Sprintf("%s/%s", expectedMountPath, util.LogXmlFile)}
 				testPodEnvVariablesWithGomega(g, expectedEnvVars, found.Spec.Template.Spec.Containers[0].Env)
 			})
 
-			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.GenerateSolrXMLString("", []string{}, []string{})})
+			expectConfigMap(ctx, solrCloud, fmt.Sprintf("%s-solrcloud-configmap", solrCloud.GetName()), map[string]string{util.SolrXmlFile: util.GenerateSolrXMLString("", []string{}, []string{}, false)})
 
 			By("updating the user-provided log XML to trigger a pod rolling restart")
 			configMap.Data[util.LogXmlFile] = "<Configuration>Updated!</Configuration>"
