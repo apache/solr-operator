@@ -15,7 +15,7 @@
 apiVersion: v2
 name: solr
 description: A SolrCloud cluster running on Kubernetes via the Solr Operator
-version: 0.10.0-prerelease
+version: 0.11.0-prerelease
 appVersion: 9.11.0
 kubeVersion: ">= 1.22.0-0"
 home: https://solr.apache.org
@@ -42,65 +42,16 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   artifacthub.io/changes: |
     - kind: added
-      description: Allow resizing (expanding) of persistent data PVCs
+      description: Addition 1
       links:
         - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/709
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/712
-    - kind: added
-      description: volumeAttributesClassName key is now supported when using PVCs in the Solr Helm chart
-      links:
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/811
-    - kind: added
-      description: global.imagePullSecrets and podOptions.imagePullSecrets now accept plain strings in addition to objects, and are merged correctly into the Solr pods
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/338
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/832
+          url: https://github.com/issue-url
     - kind: changed
-      description: The SolrCloud CRD accepts the new optional pod fields from the Kubernetes 1.32 to 1.37 API types, settable via podOptions once the operator chart's CRDs are updated. No existing field or default changed
+      description: Change 2
       links:
         - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/838
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/865
-    - kind: changed
-      description: The default Solr version is now 9.11.0, up from 8.11. Newly created SolrClouds that do not set `image.tag` start on 9.11.0; existing clusters keep the tag already written into their spec
-      links:
-        - name: Solr 9.11.0 Release Notes
-          url: https://solr.apache.org/docs/9_11_0/changes/Changes.html
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/807
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/869
-    - kind: security
-      description: Solr 9.11.0 carries several CVE fixes for Solr 9.10.0 and earlier. Existing SolrClouds are not upgraded automatically; set `image.tag` to 9.11.0 to pick the fixes up
-      links:
-        - name: Solr Security News
-          url: https://solr.apache.org/security-news.html
-    - kind: changed
-      description: The `image.tag` value must start with the Solr version (e.g. `10.0.0`, `9.10` or `8.11`). The Solr Operator does not reconcile SolrClouds with other tags, such as `latest`; see the upgrade notes before upgrading the operator.
-      links:
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/827
-    - kind: added
-      description: The Helm charts are now published as OCI artifacts to oci://ghcr.io/apache/solr-operator/helm, which needs no `helm repo add` and no credentials
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/813
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/814
-    - kind: changed
-      description: The Helm repository at https://solr.apache.org/charts now lists the OCI charts, so existing `helm repo add` setups and chart dependencies keep working. It requires Helm 3.8 or later
-      links:
-        - name: Github Issue
-          url: https://github.com/apache/solr-operator/issues/813
-        - name: Github PR
-          url: https://github.com/apache/solr-operator/pull/900
-  artifacthub.io/containsSecurityUpdates: "true"
+          url: https://github.com/pr-url
+  artifacthub.io/containsSecurityUpdates: "false"
   artifacthub.io/recommendations: |
     - url: https://artifacthub.io/packages/helm/apache-solr/solr-operator
   artifacthub.io/links: |

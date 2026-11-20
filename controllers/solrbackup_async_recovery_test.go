@@ -106,12 +106,13 @@ func TestCollectionBackupAdoptsRequestSolrAlreadyAccepted(t *testing.T) {
 	assert.NotContains(t, solr.actions, "BACKUP")
 
 	solr.states[util.AsyncIdForCollectionBackup("books", backup.Name)] = "completed"
-	finished, err := reconcileSolrCollectionBackup(context.Background(), backup, status, cloud, repo, "books", logr.Discard())
+	asyncFinished, err := reconcileSolrCollectionBackup(context.Background(), backup, status, cloud, repo, "books", logr.Discard())
 	require.NoError(t, err)
-	assert.True(t, finished)
+	assert.True(t, asyncFinished, "the finished async request should be reported, so it is deleted once the status is saved")
+	assert.True(t, status.CollectionBackupStatuses[0].Finished)
 	require.NotNil(t, status.CollectionBackupStatuses[0].Successful)
 	assert.True(t, *status.CollectionBackupStatuses[0].Successful)
-	assert.Empty(t, solr.states, "the async request should be deleted once the backup finishes")
+	assert.NotContains(t, solr.actions, "DELETESTATUS", "the async request is only deleted once the backup status is saved")
 }
 
 // A finished request may be left over from a previous recurrence, so it must not count as this backup.
@@ -138,7 +139,10 @@ func TestCollectionBackupRejectsUnknownAsyncState(t *testing.T) {
 
 	_, err := reconcileSolrCollectionBackup(context.Background(), backup, status, cloud, repo, "books", logr.Discard())
 	assert.Error(t, err)
-	assert.Empty(t, status.CollectionBackupStatuses)
+	// The collection's status is still recorded, as not started, so the SolrBackup cannot finish without it.
+	require.Len(t, status.CollectionBackupStatuses, 1)
+	assert.False(t, status.CollectionBackupStatuses[0].InProgress)
+	assert.Nil(t, status.CollectionBackupStatuses[0].StartTime)
 	assert.NotContains(t, solr.actions, "BACKUP")
 }
 

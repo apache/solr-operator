@@ -19,8 +19,8 @@
 # version/version.go. Make documentation/version changes in this template.
 name: operator
 title: Apache Solr Operator
-version: '0_10'
-display_version: 'v0.10-prerelease'
+version: '0_11'
+display_version: 'v0.11-prerelease'
 prerelease: -prerelease
 start_page: ROOT:index.adoc
 nav:
@@ -36,7 +36,7 @@ asciidoc:
     idseparator: '-'
     idprefix: ''
     # Full operator version (no leading 'v'), e.g. used in install snippets.
-    operator-version: '0.10.0'
+    operator-version: '0.11.0'
     # Link target for the Solr Reference Guide (absolute so it resolves in
     # both the local operator-only preview and the combined official site).
     solr-ref-guide: 'https://solr.apache.org/guide/solr/latest/'
