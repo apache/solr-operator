@@ -214,11 +214,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 		},
 	}
 
-	var containerSecurityContext *corev1.SecurityContext
-	if customPodOptions != nil {
-		containerSecurityContext = customPodOptions.ContainerSecurityContext
-	}
-
 	containers := []corev1.Container{
 		{
 			Name:            SolrPrometheusExporterContainer,
@@ -251,7 +246,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				SuccessThreshold: 1,
 				FailureThreshold: 3,
 			},
-			SecurityContext: containerSecurityContext,
 		},
 	}
 
@@ -302,12 +296,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &gracePeriodTerm,
-					SecurityContext: &corev1.PodSecurityContext{
-						FSGroup: &fsGroup,
-					},
-					Volumes:        solrVolumes,
-					InitContainers: initContainers,
-					Containers:     containers,
+					SecurityContext:               defaultPodSecurityContext(customPodOptions, fsGroup),
+					Volumes:                       solrVolumes,
+					InitContainers:                initContainers,
+					Containers:                    containers,
 				},
 			},
 		},
@@ -334,10 +326,6 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 
 		if customPodOptions.Resources.Limits != nil || customPodOptions.Resources.Requests != nil {
 			metricsContainer.Resources = customPodOptions.Resources
-		}
-
-		if customPodOptions.PodSecurityContext != nil {
-			deployment.Spec.Template.Spec.SecurityContext = customPodOptions.PodSecurityContext
 		}
 
 		if customPodOptions.Tolerations != nil {
@@ -392,6 +380,9 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 	if tls != nil && tls.ClientConfig != nil {
 		tls.enableTLSOnExporterDeployment(deployment)
 	}
+
+	// Harden every container the operator generated, now that they have all been added
+	setSecurityContextOnOperatorContainers(&deployment.Spec.Template.Spec, customPodOptions)
 
 	return deployment
 }
