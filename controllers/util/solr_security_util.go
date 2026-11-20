@@ -497,41 +497,24 @@ func BasicAuthEnvVars(secretName string) []corev1.EnvVar {
 func useSecureProbe(solrCloud *solr.SolrCloud, probe *corev1.Probe, mountPath string) {
 	// mount the secret in a file so it gets updated; env vars do not see:
 	// https://kubernetes.io/docs/concepts/configuration/secret/#environment-variables-are-not-updated-after-a-secret-update
-	javaToolOptions := make([]string, 0)
+	// bin/solr picks the client auth for the Solr version from SOLR_AUTH_TYPE. The probe's exit status is that of 'solr api',
+	// so there must be no pipeline after it.
+	authEnv := ""
 	if solrCloud.Spec.SolrSecurity != nil && solrCloud.Spec.SolrSecurity.ProbesRequireAuth && solrCloud.Spec.SolrSecurity.AuthenticationType == solr.Basic {
-		usernameFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthUsernameKey)
-		passwordFile := fmt.Sprintf("%s/%s", mountPath, corev1.BasicAuthPasswordKey)
+		credentials := fmt.Sprintf("$(cat %s/%s):$(cat %s/%s)", mountPath, corev1.BasicAuthUsernameKey, mountPath, corev1.BasicAuthPasswordKey)
 		if solrCloud.SolrVersionAtLeast("10") {
-			javaToolOptions = append(javaToolOptions,
-				fmt.Sprintf("-Dsolr.security.auth.basicauth.credentials=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-				"-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer",
-			)
+			// Keeps the credentials out of the process arguments, but only Solr 10+ reads this env var
+			authEnv = fmt.Sprintf("SOLR_AUTH_TYPE=basic SOLR_SECURITY_AUTH_BASICAUTH_CREDENTIALS=\"%s\" ", credentials)
 		} else {
-			javaToolOptions = append(javaToolOptions,
-				fmt.Sprintf("-Dbasicauth=$(cat %s):$(cat %s)", usernameFile, passwordFile),
-				"-Dsolr.httpclient.builder.factory=org.apache.solr.client.solrj.impl.PreemptiveBasicAuthClientBuilderFactory",
-			)
+			authEnv = fmt.Sprintf("SOLR_AUTH_TYPE=basic SOLR_AUTHENTICATION_OPTS=\"-Dbasicauth=%s\" ", credentials)
 		}
-	}
-
-	// construct the probe command to invoke the SolrCLI "api" action
-
-	// Future work - SOLR_TOOL_OPTIONS is only in 9.4.0, use JAVA_TOOL_OPTIONS until that is the minimum supported version
-	var javaToolOptionsStr string
-	var javaToolOptionsOutputFilter string
-	if len(javaToolOptions) > 0 {
-		javaToolOptionsStr = fmt.Sprintf("JAVA_TOOL_OPTIONS=%q ", strings.Join(javaToolOptions, " "))
-		javaToolOptionsOutputFilter = " 2>&1 | grep -v JAVA_TOOL_OPTIONS"
-	} else {
-		javaToolOptionsStr = ""
-		javaToolOptionsOutputFilter = ""
 	}
 
 	apiUrlFlag := "--solr-url"
 	if solrCloud.SolrVersionBelow("9.7") {
 		apiUrlFlag = "-get"
 	}
-	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"%s", javaToolOptionsStr, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path, javaToolOptionsOutputFilter)
+	probeCommand := fmt.Sprintf("%ssolr api %s \"%s://${SOLR_HOST}:%d%s\"", authEnv, apiUrlFlag, solrCloud.UrlScheme(false), probe.HTTPGet.Port.IntVal, probe.HTTPGet.Path)
 	probeCommand = regexp.MustCompile(`\s+`).ReplaceAllString(strings.TrimSpace(probeCommand), " ")
 
 	// use an Exec instead of an HTTP GET

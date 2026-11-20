@@ -55,16 +55,13 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
-    - kind: added
-      description: Addition 1
+    - kind: fixed
+      description: With `solrSecurity.probesRequireAuth`, the Solr pod probes now fail when the request to Solr fails, e.g. with a 401, instead of always succeeding
       links:
         - name: Github Issue
-          url: https://github.com/issue-url
-    - kind: changed
-      description: Change 2
-      links:
+          url: https://github.com/apache/solr-operator/issues/799
         - name: Github PR
-          url: https://github.com/pr-url
+          url: https://github.com/apache/solr-operator/pull/854
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.11.0-prerelease
