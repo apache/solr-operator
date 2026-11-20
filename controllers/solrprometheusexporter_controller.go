@@ -96,6 +96,27 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 
 	requeueOrNot := ctrl.Result{}
 
+	// Get the ZkConnectionString to connect to
+	solrConnectionInfo := util.SolrConnectionInfo{}
+	var solrCloudImage *solrv1beta1.ContainerImage
+	if solrConnectionInfo, solrCloudImage, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
+		return requeueOrNot, err
+	}
+
+	// Solr 10 removed the Prometheus exporter, and Solr 10's metrics API only serves the Prometheus format,
+	// so neither a Solr 10+ exporter image nor a referenced Solr 10+ SolrCloud can work.
+	// Don't create or update any resources for such an exporter. An existing Deployment is left alone, but marked not ready.
+	if msg := unsupportedExporterSolrVersion(prometheusExporter.Spec.Image, solrCloudImage); msg != "" {
+		logger.Error(nil, msg)
+		r.Recorder.Event(prometheusExporter, corev1.EventTypeWarning, "UnsupportedSolrVersion", msg)
+		if prometheusExporter.Status.Ready {
+			originalPrometheusExporter := prometheusExporter.DeepCopy()
+			prometheusExporter.Status.Ready = false
+			return reconcile.Result{}, r.Status().Patch(ctx, prometheusExporter, client.MergeFrom(originalPrometheusExporter))
+		}
+		return reconcile.Result{}, nil
+	}
+
 	configMapKey := util.PrometheusExporterConfigMapKey
 	configXmlMd5 := ""
 	if prometheusExporter.Spec.Config == "" && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions != nil && prometheusExporter.Spec.CustomKubeOptions.ConfigMapOptions.ProvidedConfigMap != "" {
@@ -181,13 +202,6 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 		}
 	}
 	if err != nil {
-		return requeueOrNot, err
-	}
-
-	// Get the ZkConnectionString to connect to
-	solrConnectionInfo := util.SolrConnectionInfo{}
-	var solrCloudImage *solrv1beta1.ContainerImage
-	if solrConnectionInfo, solrCloudImage, err = getSolrConnectionInfo(ctx, r, prometheusExporter); err != nil {
 		return requeueOrNot, err
 	}
 
@@ -280,6 +294,43 @@ func (r *SolrPrometheusExporterReconciler) Reconcile(ctx context.Context, req ct
 	return requeueOrNot, err
 }
 
+// unsupportedExporterSolrVersion returns why the exporter cannot work with Solr 10 or later, or "" if it can.
+// exporterImage is the exporter's own image, if set; solrCloudImage is the image of the referenced SolrCloud, if any,
+// which is also the exporter's image when it doesn't set one.
+// Tags that don't start with a version are allowed, as custom exporter images don't need to follow Solr's tags.
+func unsupportedExporterSolrVersion(exporterImage *solrv1beta1.ContainerImage, solrCloudImage *solrv1beta1.ContainerImage) string {
+	const fix = "Delete this SolrPrometheusExporter and scrape the Solr pods' /solr/admin/metrics endpoint directly instead"
+	if solrCloudImage != nil {
+		if v, ok := solrv1beta1.ParseSolrVersion(solrCloudImage.Tag); ok && v.Major() >= 10 {
+			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: the referenced SolrCloud runs Solr %d, "+
+				"which the Prometheus exporter does not support. %s", v.Major(), fix)
+		}
+	}
+	if exporterImage != nil {
+		if v, ok := solrv1beta1.ParseSolrVersion(exporterImage.Tag); ok && v.Major() >= 10 {
+			return fmt.Sprintf("Not reconciling SolrPrometheusExporter: image %s is Solr %d, "+
+				"but the Prometheus exporter was removed in Solr 10. %s", exporterImage.ToImageName(), v.Major(), fix)
+		}
+	}
+	return ""
+}
+
+// referencedSolrCloud returns the name and namespace of the SolrCloud that the given
+// SolrPrometheusExporter references, or nil if it does not reference a SolrCloud by name.
+// The namespace of the reference is normally filled in by WithDefaults(), but it is not guaranteed
+// to be set, e.g. when indexing an exporter that has not been defaulted yet.
+func referencedSolrCloud(prometheusExporter *solrv1beta1.SolrPrometheusExporter) *types.NamespacedName {
+	cloudRef := prometheusExporter.Spec.SolrReference.Cloud
+	if cloudRef == nil || cloudRef.Name == "" {
+		return nil
+	}
+	namespace := cloudRef.Namespace
+	if namespace == "" {
+		namespace = prometheusExporter.Namespace
+	}
+	return &types.NamespacedName{Name: cloudRef.Name, Namespace: namespace}
+}
+
 func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconciler, prometheusExporter *solrv1beta1.SolrPrometheusExporter) (solrConnectionInfo util.SolrConnectionInfo, solrCloudImage *solrv1beta1.ContainerImage, err error) {
 	solrConnectionInfo = util.SolrConnectionInfo{}
 
@@ -290,13 +341,9 @@ func getSolrConnectionInfo(ctx context.Context, r *SolrPrometheusExporterReconci
 		cloudRef := prometheusExporter.Spec.SolrReference.Cloud
 		if cloudRef.ZookeeperConnectionInfo != nil {
 			solrConnectionInfo.CloudZkConnnectionInfo = cloudRef.ZookeeperConnectionInfo
-		} else if cloudRef.Name != "" {
+		} else if cloudName := referencedSolrCloud(prometheusExporter); cloudName != nil {
 			solrCloud := &solrv1beta1.SolrCloud{}
-			solrNamespace := prometheusExporter.Spec.SolrReference.Cloud.Namespace
-			if solrNamespace == "" {
-				solrNamespace = prometheusExporter.Namespace
-			}
-			err = r.Get(ctx, types.NamespacedName{Name: prometheusExporter.Spec.SolrReference.Cloud.Name, Namespace: solrNamespace}, solrCloud)
+			err = r.Get(ctx, *cloudName, solrCloud)
 			if err == nil {
 				solrConnectionInfo.CloudZkConnnectionInfo = &solrCloud.Status.ZookeeperConnectionInfo
 				solrCloudImage = solrCloud.Spec.SolrImage
@@ -395,19 +442,18 @@ func (r *SolrPrometheusExporterReconciler) SetupWithManager(mgr ctrl.Manager) er
 }
 
 func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.Manager, ctrlBuilder *builder.Builder) (*builder.Builder, error) {
-	solrCloudField := ".spec.solrReference.cloud.name"
+	// An exporter can reference a SolrCloud in any namespace, so index the full namespaced name of the
+	// referenced cloud. Indexing the name alone would only ever match clouds in the exporter's own namespace.
+	solrCloudField := ".spec.solrReference.cloud"
 
 	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &solrv1beta1.SolrPrometheusExporter{}, solrCloudField, func(rawObj client.Object) []string {
 		// grab the SolrPrometheusExporter object, extract the used SolrCloud...
-		exporter := rawObj.(*solrv1beta1.SolrPrometheusExporter)
-		if exporter.Spec.SolrReference.Cloud == nil {
-			return nil
-		}
-		if exporter.Spec.SolrReference.Cloud.Name == "" {
+		cloudName := referencedSolrCloud(rawObj.(*solrv1beta1.SolrPrometheusExporter))
+		if cloudName == nil {
 			return nil
 		}
 		// ...and if so, return it
-		return []string{exporter.Spec.SolrReference.Cloud.Name}
+		return []string{cloudName.String()}
 	}); err != nil {
 		return ctrlBuilder, err
 	}
@@ -416,9 +462,9 @@ func (r *SolrPrometheusExporterReconciler) indexAndWatchForSolrClouds(mgr ctrl.M
 		&solrv1beta1.SolrCloud{},
 		handler.EnqueueRequestsFromMapFunc(func(ctx context.Context, obj client.Object) []reconcile.Request {
 			foundExporters := &solrv1beta1.SolrPrometheusExporterList{}
+			// No namespace is given, since exporters in any namespace can reference this SolrCloud.
 			listOps := &client.ListOptions{
-				FieldSelector: fields.OneTermEqualSelector(solrCloudField, obj.GetName()),
-				Namespace:     obj.GetNamespace(),
+				FieldSelector: fields.OneTermEqualSelector(solrCloudField, client.ObjectKeyFromObject(obj).String()),
 			}
 			err := r.List(ctx, foundExporters, listOps)
 			if err != nil {

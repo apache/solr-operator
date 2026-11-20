@@ -109,6 +109,31 @@ func StartBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, backup
 	return success, err
 }
 
+// PrepareBackupForCollection checks Solr for an async request left behind under the backup's async ID,
+// e.g. when the status update recording an accepted backup was lost. A request still submitted or running
+// is adopted. A finished one may be from a previous recurrence, so it is deleted to let the backup be resubmitted.
+func PrepareBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (alreadyStarted bool, err error) {
+	asyncId := AsyncIdForCollectionBackup(collection, backupName)
+	asyncState, message, err := solr_api.CheckAsyncRequest(ctx, cloud, asyncId)
+	if err != nil {
+		logger.Error(err, "Error checking for an existing collection backup", "solrCloud", cloud.Name, "collection", collection, "message", message)
+		return false, err
+	}
+
+	switch asyncState {
+	case "notfound":
+		return false, nil
+	case "completed", "failed":
+		logger.Info("Deleting a finished async request left over from an earlier collection backup", "solrCloud", cloud.Name, "collection", collection, "asyncState", asyncState)
+		return false, DeleteAsyncInfoForBackup(ctx, cloud, collection, backupName, logger)
+	case "submitted", "running":
+		logger.Info("Found a collection backup already started in Solr, tracking it", "solrCloud", cloud.Name, "collection", collection, "asyncState", asyncState)
+		return true, nil
+	default:
+		return false, fmt.Errorf("unexpected async state %q for collection backup %q", asyncState, asyncId)
+	}
+}
+
 func CheckBackupForCollection(ctx context.Context, cloud *solr.SolrCloud, collection string, backupName string, logger logr.Logger) (finished bool, success bool, asyncStatus string, err error) {
 	logger.Info("Calling to check on collection backup", "solrCloud", cloud.Name, "collection", collection)
 
@@ -146,10 +171,11 @@ func EnsureDirectoryForBackup(solrCloud *solr.SolrCloud, backupRepository *solr.
 	// Directory creation only required/possible for volume (i.e. local) backups
 	if IsRepoVolume(backupRepository) {
 		backupPath := BackupLocationPath(backupRepository, backup.Spec.Location)
+		// No shell, since backupPath contains the user-provided spec.location
 		return RunExecForPod(
 			solrCloud.GetAllSolrPodNames()[0],
 			solrCloud.Namespace,
-			[]string{"/bin/bash", "-c", "mkdir -p " + backupPath},
+			[]string{"mkdir", "-p", backupPath},
 			config,
 		)
 	}

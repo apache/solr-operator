@@ -166,8 +166,8 @@ var _ = FDescribe("E2E - SolrCloud - Storage", func() {
 			}).WithContext(ctx).WithTimeout(time.Second * 90).WithPolling(time.Second).Should(Succeed())
 
 			By("checking that the collections can be queried after the restart")
-			queryCollection(ctx, solrCloud, solrCollection1, 0)
-			queryCollection(ctx, solrCloud, solrCollection2, 0)
+			queryCollectionAfterRestart(ctx, solrCloud, solrCollection1, 0)
+			queryCollectionAfterRestart(ctx, solrCloud, solrCollection2, 0)
 		})
 	})
 })

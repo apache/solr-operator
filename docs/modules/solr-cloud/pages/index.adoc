@@ -119,6 +119,19 @@ Also note that certain features available within the Solr Operator are only supp
 The version compatibility matrix shows the minimum Solr version supported for *most* options.
 Please refer to the Solr Reference guide to see what features are enabled for the Solr version you are running.
 
+=== Solr Image Tags
+
+Some behavior of the Solr Operator depends on the Solr major version, e.g. the `solr.xml` it generates and the `bin/solr` commands it runs.
+The operator reads the version from `spec.solrImage.tag`, so the tag must start with the Solr version, e.g. `10.0.0`, `9.10`, `8.11` or `10`.
+Anything after the version must start with neither a digit nor a dot, e.g. `9.10.0-slim`, `10.1.0-SNAPSHOT`, `10.0.0-my-custom-build` or `10.0.0@sha256:...`.
+
+Tags without a version, such as `latest` or `slim`, are not accepted, because the Solr version behind them can change without the SolrCloud changing.
+To pin an image by its digest, keep the version in the tag, e.g. `tag: 10.0.0@sha256:<digest>`.
+If you build your own images, tag them with the Solr version they are based on, e.g. `10.0.0-2026.10.1` instead of `2026.10.1`.
+
+The operator does not reconcile a SolrCloud whose tag does not follow this format, or whose Solr major version it does not support (see the xref:upgrade-notes:upgrade-notes.adoc#solr-versions[Version Compatibility Matrix]).
+It emits an `UnsupportedSolrVersion` Warning event instead.
+
 === Build Your Own Private Solr Images
 
 The Solr Operator supports private Docker repo access for Solr images you may want to store in a private Docker repo. It is recommended to source your image from the official Solr images.
