@@ -36,7 +36,7 @@ logger: {}
 
 image:
   repository: apache/solr-operator
-  tag: v0.10.0-prerelease
+  tag: v0.11.0-prerelease
   pullPolicy: IfNotPresent
   imagePullSecret: ""
 

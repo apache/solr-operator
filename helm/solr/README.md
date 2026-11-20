@@ -42,7 +42,7 @@ To install a SolrCloud for the first time in your cluster, you can use the lates
 #### OCI Charts
 
 ```bash
-helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.10.0-prerelease --set image.tag=9.11.0
+helm install example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.11.0-prerelease --set image.tag=9.11.0
 ```
 
 #### Charts Repo
@@ -51,7 +51,7 @@ This requires Helm 3.8 or later.
 
 ```bash
 helm repo add apache-solr https://solr.apache.org/charts
-helm install example apache-solr/solr --version 0.10.0-prerelease --set image.tag=9.11.0
+helm install example apache-solr/solr --version 0.11.0-prerelease --set image.tag=9.11.0
 ```
 
 The command deploys a SolrCloud object on the Kubernetes cluster with the default configuration.
@@ -67,14 +67,14 @@ If you are upgrading your SolrCloud deployment, you should always use a specific
 #### OCI Charts
 
 ```bash
-helm upgrade example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.11.0
+helm upgrade example oci://ghcr.io/apache/solr-operator/helm/solr --version 0.11.0-prerelease --reuse-values --set image.tag=9.11.0
 ```
 
 #### Charts Repo
 
 ```bash
 helm repo update
-helm upgrade example apache-solr/solr --version 0.10.0-prerelease --reuse-values --set image.tag=9.11.0
+helm upgrade example apache-solr/solr --version 0.11.0-prerelease --reuse-values --set image.tag=9.11.0
 ```
 
 The upgrade will be done according to the `upgradeStrategy.method` chosen in the values.
