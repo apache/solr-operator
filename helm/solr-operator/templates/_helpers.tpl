@@ -93,6 +93,17 @@ Determine whether to use ClusterRoles or Roles
 {{- end -}}
 {{- end -}}
 
+{{- define "solr-operator.volumeMounts" -}}
+{{- include "solr-operator.mTLS.volumeMounts" . }}
+{{- include "solr-operator.logging.volumeMounts" . }}
+{{- end -}}
+
+{{- define "solr-operator.volumes" -}}
+{{- include "solr-operator.mTLS.volumes" . }}
+{{- include "solr-operator.logging.volumes" . }}
+{{- end -}}
+
+
 {{/*
 mTLS vars
 */}}
