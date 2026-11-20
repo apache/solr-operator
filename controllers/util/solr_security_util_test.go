@@ -33,11 +33,8 @@ import (
 
 const probeTestPassword = "sup3r-s3cr3t-pa55"
 
-// Stands in for 'bin/solr' on the PATH. Mimics the two things that matter for the probe command: the
-// JVM echoing 'Picked up JAVA_TOOL_OPTIONS: ...' (which contains the credentials) to stderr, and the
-// CLI exiting non-zero when the Solr request fails.
+// Stands in for 'bin/solr' on the PATH, exiting non-zero when the Solr request fails.
 const fakeSolrScript = `#!/bin/sh
-echo "Picked up JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS}" >&2
 if [ "${FAKE_SOLR_EXIT:-0}" -ne 0 ]; then
   echo "ERROR: Parse error : HTTP ERROR 401 Bad credentials" >&2
 else
@@ -118,8 +115,7 @@ func runProbeCommand(t *testing.T, probe *corev1.Probe, env []string) (int, stri
 	return exitCode, string(output)
 }
 
-// The basic auth probe command filters the credentials out of its output, but must still fail when
-// Solr says no. See https://github.com/apache/solr-operator/issues/799
+// The basic auth probe command must fail when Solr says no. See https://github.com/apache/solr-operator/issues/799
 func TestSecureProbeWithBasicAuthReportsFailure(t *testing.T) {
 	mountPath, env := probeTestEnvironment(t, "1")
 	probe := probeTestHttpGetProbe()
@@ -130,7 +126,6 @@ func TestSecureProbeWithBasicAuthReportsFailure(t *testing.T) {
 	assert.Equal(t, 1, exitCode, "probe must fail when 'solr api' fails, got output: %s", output)
 	assert.NotContains(t, output, probeTestPassword, "probe output must not leak the basic auth password")
 	assert.Contains(t, output, "HTTP ERROR 401 Bad credentials", "probe output should keep the error from Solr")
-	assert.NotContains(t, output, "Picked up JAVA_TOOL_OPTIONS", "the JVM's JAVA_TOOL_OPTIONS line must be filtered out")
 }
 
 func TestSecureProbeWithBasicAuthReportsSuccess(t *testing.T) {
@@ -145,15 +140,14 @@ func TestSecureProbeWithBasicAuthReportsSuccess(t *testing.T) {
 	assert.Contains(t, output, `"status":"OK"`, "probe output should keep the response from Solr")
 }
 
-// Without basic auth there is nothing to redact, so the command is a bare 'solr api' call. Its exit
-// code must still be the probe's exit code.
+// Without basic auth the command is a bare 'solr api' call, whose exit code must still be the probe's exit code.
 func TestSecureProbeWithoutBasicAuthReportsFailure(t *testing.T) {
 	mountPath, env := probeTestEnvironment(t, "1")
 	probe := probeTestHttpGetProbe()
 	useSecureProbe(probeTestSolrCloud(false), probe, mountPath)
 
-	assert.False(t, strings.Contains(probe.Exec.Command[2], "JAVA_TOOL_OPTIONS"),
-		"no JAVA_TOOL_OPTIONS handling is needed when the probes do not require auth")
+	assert.False(t, strings.Contains(probe.Exec.Command[2], "SOLR_AUTH_TYPE"),
+		"no auth is needed when the probes do not require auth")
 
 	exitCode, output := runProbeCommand(t, probe, env)
 
