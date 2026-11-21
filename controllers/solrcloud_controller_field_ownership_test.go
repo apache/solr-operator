@@ -168,7 +168,7 @@ func applyAsHelm(ctx context.Context, obj *unstructured.Unstructured) {
 
 func expectNoOperatorFieldOwnership(g Gomega, obj metav1.Object) {
 	for _, entry := range obj.GetManagedFields() {
-		if entry.Manager == fieldManager {
+		if entry.Manager == FieldManager {
 			g.Expect(entry.Subresource).To(Equal("status"), "The operator should not own any spec or metadata fields")
 		}
 	}

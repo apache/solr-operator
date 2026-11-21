@@ -100,6 +100,7 @@ var _ = BeforeSuite(func(ctx context.Context) {
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
+		Client: client.Options{FieldOwner: FieldManager},
 	})
 	Expect(err).ToNot(HaveOccurred())
 

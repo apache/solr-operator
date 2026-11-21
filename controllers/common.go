@@ -26,8 +26,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-// fieldManager owns the operator's writes to the spec and metadata of its own resources
-const fieldManager = "solr-operator"
+// FieldManager is the field manager of all the operator's writes. It is set as the default field owner of the
+// operator's client, so that its managedFields entries can be told apart from those of other clients.
+const FieldManager = "solr-operator"
 
 // Set the requeueAfter if it has not been set, or is greater than the new time to requeue at
 func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
@@ -42,7 +43,7 @@ func updateRequeueAfter(requeueOrNot *reconcile.Result, newWait time.Duration) {
 // patchResource writes only the changes made to obj since orig was read, failing if obj was modified in between.
 // An Update would also write the fields that the Go types fill in, making the operator their owner.
 func patchResource(ctx context.Context, c client.Client, obj client.Object, orig client.Object) error {
-	return c.Patch(ctx, obj, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}), client.FieldOwner(fieldManager))
+	return c.Patch(ctx, obj, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
 // releaseFieldOwnership drops the operator's ownership of the spec and metadata fields it has written, such as defaults,
@@ -51,7 +52,7 @@ func releaseFieldOwnership(ctx context.Context, c client.Client, obj client.Obje
 	managedFields := obj.GetManagedFields()
 	kept := make([]metav1.ManagedFieldsEntry, 0, len(managedFields))
 	for _, entry := range managedFields {
-		if entry.Manager != fieldManager || entry.Subresource != "" {
+		if entry.Manager != FieldManager || entry.Subresource != "" {
 			kept = append(kept, entry)
 		}
 	}
