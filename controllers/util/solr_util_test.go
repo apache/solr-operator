@@ -490,19 +490,18 @@ func TestUseSecureProbeWithBasicAuth(t *testing.T) {
 		}
 	}
 
-	probe := newProbeForTest()
-	useSecureProbe(newCloud("9.10.0"), probe, "/etc/secrets/foo")
-	cmd := probe.Exec.Command[2]
-	assert.Contains(t, cmd, "-Dbasicauth=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)", "Solr 9 should pass credentials via JAVA_TOOL_OPTIONS")
-	assert.Contains(t, cmd, "PreemptiveBasicAuthClientBuilderFactory", "Solr 9 should use the Solr 9 client builder factory")
-
-	probe = newProbeForTest()
-	useSecureProbe(newCloud("10.0.0"), probe, "/etc/secrets/foo")
-	cmd = probe.Exec.Command[2]
-	assert.Equal(t, `JAVA_TOOL_OPTIONS="-Dsolr.security.auth.basicauth.credentials=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password) `+
-		`-Dsolr.solrj.http.jetty.customizer=org.apache.solr.client.solrj.jetty.PreemptiveBasicAuthClientCustomizer" `+
-		`solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system" 2>&1 | grep -v JAVA_TOOL_OPTIONS`, cmd, "Solr 10 should pass credentials via JAVA_TOOL_OPTIONS")
-	assert.NotContains(t, cmd, "--credentials", "Solr 10 should not pass credentials as a process argument")
+	for tag, expected := range map[string]string{
+		"8.11.4": `SOLR_AUTH_TYPE=basic SOLR_AUTHENTICATION_OPTS="-Dbasicauth=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)" ` +
+			`solr api -get "http://${SOLR_HOST}:8983/solr/admin/info/system"`,
+		"9.10.0": `SOLR_AUTH_TYPE=basic SOLR_AUTHENTICATION_OPTS="-Dbasicauth=$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)" ` +
+			`solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system"`,
+		"10.0.0": `SOLR_AUTH_TYPE=basic SOLR_SECURITY_AUTH_BASICAUTH_CREDENTIALS="$(cat /etc/secrets/foo/username):$(cat /etc/secrets/foo/password)" ` +
+			`solr api --solr-url "http://${SOLR_HOST}:8983/solr/admin/info/system"`,
+	} {
+		probe := newProbeForTest()
+		useSecureProbe(newCloud(tag), probe, "/etc/secrets/foo")
+		assert.Equal(t, expected, probe.Exec.Command[2], "Wrong basic auth probe command for Solr %s", tag)
+	}
 }
 
 func TestSetUrlSchemeClusterPropCmd(t *testing.T) {
