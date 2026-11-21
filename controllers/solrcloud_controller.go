@@ -108,13 +108,17 @@ func (r *SolrCloudReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return reconcile.Result{}, err
 	}
 
+	unmodifiedInstance := instance.DeepCopy()
 	changed := instance.WithDefaults(logger)
 	if changed {
 		logger.Info("Setting default settings for SolrCloud")
-		if err = r.Update(ctx, instance); err != nil {
+		if err = patchResource(ctx, r.Client, instance, unmodifiedInstance); err != nil {
 			return reconcile.Result{}, err
 		}
 		return reconcile.Result{Requeue: true}, nil
+	}
+	if err = releaseFieldOwnership(ctx, r.Client, instance); err != nil {
+		return reconcile.Result{}, err
 	}
 
 	// Owned resources are garbage collected, so a SolrCloud being deleted only needs its storage finalizer handled.
@@ -1243,8 +1247,9 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 			// The object is not being deleted, so if it does not have our finalizer,
 			// then lets add the finalizer and update the object
 			if !util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
+				unmodifiedCloud := cloud.DeepCopy()
 				cloud.ObjectMeta.Finalizers = append(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-				if err := r.Update(ctx, cloud); err != nil {
+				if err := patchResource(ctx, r.Client, cloud, unmodifiedCloud); err != nil {
 					return err
 				}
 			}
@@ -1260,16 +1265,18 @@ func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, clo
 			logger.Info("Deleted PVCs for SolrCloud")
 
 			// remove our finalizer from the list and update it.
+			unmodifiedCloud := cloud.DeepCopy()
 			cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-			if err := r.Update(ctx, cloud); err != nil {
+			if err := patchResource(ctx, r.Client, cloud, unmodifiedCloud); err != nil {
 				return err
 			}
 		}
 	} else if util.ContainsString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer) {
 		// remove our finalizer from the list and update it, because there is no longer a need to delete PVCs after the cloud is deleted.
 		logger.Info("Removing storage finalizer for SolrCloud")
+		unmodifiedCloud := cloud.DeepCopy()
 		cloud.ObjectMeta.Finalizers = util.RemoveString(cloud.ObjectMeta.Finalizers, util.SolrStorageFinalizer)
-		if err := r.Update(ctx, cloud); err != nil {
+		if err := patchResource(ctx, r.Client, cloud, unmodifiedCloud); err != nil {
 			return err
 		}
 	}

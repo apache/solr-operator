@@ -32,6 +32,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"strings"
 
@@ -138,6 +139,7 @@ func main() {
 
 	operatorOptions := ctrl.Options{
 		Scheme:                  scheme,
+		Client:                  client.Options{FieldOwner: controllers.FieldManager},
 		Metrics:                 metricsserver.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress:  probeAddr,
 		LeaderElection:          enableLeaderElection,
