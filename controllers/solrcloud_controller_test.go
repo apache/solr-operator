@@ -153,6 +153,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.Volumes[3].VolumeSource).To(Equal(extraVolumes[0].Source), "Additional Volume from podOptions not loaded into pod properly.")
 			Expect(statefulSet.Spec.Template.Spec.ShareProcessNamespace).Should(PointTo(BeFalse()))
 			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).Should(BeNil())
+			Expect(statefulSet.Spec.Template.Spec.AutomountServiceAccountToken).Should(BeNil(), "automountServiceAccountToken should not be set by default")
 			Expect(statefulSet.Spec.Template.Spec.ReadinessGates).To(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrIsNotStoppedReadinessCondition}), "All pods should contain the isNotStopped readinessGate.")
 
 			By("testing the Solr Common Service")
@@ -219,6 +220,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 						ImagePullSecrets:              testAdditionalImagePullSecrets,
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
+						AutomountServiceAccountToken:  newBoolPtr(false),
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
 						DefaultInitContainerResources: testResources2,
 						DefaultInitContainerSecurityContext: &corev1.SecurityContext{
@@ -348,6 +350,7 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[0]).To(Equal(testTopologySpreadConstraints[0]), "Wrong first topologySpreadConstraint")
 			Expect(statefulSet.Spec.Template.Spec.ShareProcessNamespace).To(Equal(&testShareProcessNamespace), "Wrong shareProcessNamespace value")
 			Expect(statefulSet.Spec.Template.Spec.EnableServiceLinks).To(Equal(&testEnableServiceLinks), "Wrong enableServiceLinks value")
+			Expect(statefulSet.Spec.Template.Spec.AutomountServiceAccountToken).To(PointTo(BeFalse()), "Wrong automountServiceAccountToken value")
 			expectedSecondTopologyConstraint := testTopologySpreadConstraints[1].DeepCopy()
 			expectedSecondTopologyConstraint.LabelSelector = statefulSet.Spec.Selector
 			Expect(statefulSet.Spec.Template.Spec.TopologySpreadConstraints[1]).To(Equal(*expectedSecondTopologyConstraint), "Wrong second topologySpreadConstraint")
@@ -378,6 +381,43 @@ var _ = FDescribe("SolrCloud controller - General", func() {
 
 			By("testing the PodDisruptionBudget")
 			expectNoPodDisruptionBudget(ctx, solrCloud, solrCloud.StatefulSetName())
+		})
+	})
+
+	FContext("Solr Cloud with a changing automountServiceAccountToken", func() {
+		BeforeEach(func() {
+			solrCloud.Spec = solrv1beta1.SolrCloudSpec{
+				ZookeeperRef: &solrv1beta1.ZookeeperRef{
+					ConnectionInfo: &solrv1beta1.ZookeeperConnectionInfo{
+						InternalConnectionString: "host:7271",
+					},
+				},
+			}
+		})
+		FIt("has the correct resources", func(ctx context.Context) {
+			By("testing the Solr StatefulSet")
+			statefulSet := expectStatefulSet(ctx, solrCloud, solrCloud.StatefulSetName())
+			Expect(statefulSet.Spec.Template.Spec.AutomountServiceAccountToken).To(BeNil(), "automountServiceAccountToken should not be set by default")
+
+			By("updating the existing StatefulSet when automountServiceAccountToken is set")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.CustomSolrKubeOptions.PodOptions = &solrv1beta1.PodOptions{
+					AutomountServiceAccountToken: newBoolPtr(false),
+				}
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Set automountServiceAccountToken for the SolrCloud")
+			})
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.AutomountServiceAccountToken).To(PointTo(BeFalse()), "automountServiceAccountToken should be set on the pod template after it is set in the podOptions")
+			})
+
+			By("updating the existing StatefulSet when automountServiceAccountToken is removed")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.CustomSolrKubeOptions.PodOptions.AutomountServiceAccountToken = nil
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Remove automountServiceAccountToken from the SolrCloud")
+			})
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.Template.Spec.AutomountServiceAccountToken).To(BeNil(), "automountServiceAccountToken should be removed from the pod template after it is removed from the podOptions")
+			})
 		})
 	})
 

@@ -129,6 +129,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			}
 			Expect(deployment.Spec.Template.Spec.Containers[0].Env).To(ContainElements(exporterArgEnvVars), "Incorrect arguments for the SolrPrometheusExporter container")
 			Expect(deployment.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{util.DefaultPrometheusExporterEntrypoint}), "Incorrect command for the SolrPrometheusExporter container")
+			Expect(deployment.Spec.Template.Spec.AutomountServiceAccountToken).To(BeNil(), "automountServiceAccountToken should not be set by default")
 		})
 	})
 
@@ -173,6 +174,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 						ImagePullSecrets:              testAdditionalImagePullSecrets,
 						TerminationGracePeriodSeconds: &testTerminationGracePeriodSeconds,
 						ServiceAccountName:            testServiceAccountName,
+						AutomountServiceAccountToken:  newBoolPtr(false),
 						Lifecycle:                     testLifecycle,
 						TopologySpreadConstraints:     testTopologySpreadConstraints,
 						DefaultInitContainerResources: testResources2,
@@ -264,6 +266,7 @@ var _ = FDescribe("SolrPrometheusExporter controller - General", func() {
 			Expect(deployment.Spec.Template.Spec.NodeSelector).To(Equal(testNodeSelectors), "Incorrect nodeSelector")
 			Expect(deployment.Spec.Template.Spec.PriorityClassName).To(Equal(testPriorityClass), "Incorrect priorityClassName")
 			Expect(deployment.Spec.Template.Spec.ServiceAccountName).To(Equal(testServiceAccountName), "Incorrect serviceAccountName")
+			Expect(deployment.Spec.Template.Spec.AutomountServiceAccountToken).To(PointTo(BeFalse()), "Incorrect automountServiceAccountToken")
 			Expect(deployment.Spec.Template.Spec.Tolerations).To(Equal(testTolerationsPromExporter), "Incorrect tolerations")
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect tolerations")
 			Expect(deployment.Spec.Template.Spec.SecurityContext).To(Not(BeNil()), "Incorrect Pod securityContext")

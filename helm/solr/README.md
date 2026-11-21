@@ -311,6 +311,7 @@ When using the helm chart, omit `customSolrKubeOptions.`
 | podOptions.tolerations | []object |  | Specify a list of Kubernetes tolerations for the Solr pod |
 | podOptions.topologySpreadConstraints | []object |  | Specify a list of Kubernetes topologySpreadConstraints for the Solr pod. No need to provide a `labelSelector`, as the Solr Operator will default that for you. More information can be found in [the documentation](https://kubernetes.io/docs/concepts/workloads/pods/pod-topology-spread-constraints/). |
 | podOptions.serviceAccountName | string |  | Optional serviceAccount to run the Solr pods under |
+| podOptions.automountServiceAccountToken | boolean |  | Whether to mount the serviceAccount token into the Solr pods. If not set, the setting of the serviceAccount is used, which mounts the token by default. Solr does not need the token |
 | podOptions.shareProcessNamespace | boolean | false | Whether containers in a pod should share the same process namespace. |
 | podOptions.enableServiceLinks | boolean | true | Whether service environment variables be created containers. |
 | podOptions.priorityClassName | string | | Optional priorityClassName for the Solr pod |

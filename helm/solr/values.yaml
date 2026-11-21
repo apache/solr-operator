@@ -306,6 +306,9 @@ podOptions:
   # Set Solr service account individually instead of the global "serviceAccount.name"
   serviceAccountName: ""
 
+  # Whether to mount the service account token into the Solr pods. Uses the setting of the service account if not set.
+  # automountServiceAccountToken: false
+
   shareProcessNamespace: false
 
   enableServiceLinks: true

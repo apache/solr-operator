@@ -328,6 +328,10 @@ func GenerateSolrPrometheusExporterDeployment(solrPrometheusExporter *solr.SolrP
 			deployment.Spec.Template.Spec.ServiceAccountName = customPodOptions.ServiceAccountName
 		}
 
+		if customPodOptions.AutomountServiceAccountToken != nil {
+			deployment.Spec.Template.Spec.AutomountServiceAccountToken = customPodOptions.AutomountServiceAccountToken
+		}
+
 		if customPodOptions.Affinity != nil {
 			deployment.Spec.Template.Spec.Affinity = customPodOptions.Affinity
 		}

@@ -530,6 +530,11 @@ func (in *PodOptions) DeepCopyInto(out *PodOptions) {
 		*out = new(int64)
 		**out = **in
 	}
+	if in.AutomountServiceAccountToken != nil {
+		in, out := &in.AutomountServiceAccountToken, &out.AutomountServiceAccountToken
+		*out = new(bool)
+		**out = **in
+	}
 	if in.EnableServiceLinks != nil {
 		in, out := &in.EnableServiceLinks, &out.EnableServiceLinks
 		*out = new(bool)

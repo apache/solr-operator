@@ -632,6 +632,10 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 			stateful.Spec.Template.Spec.ServiceAccountName = customPodOptions.ServiceAccountName
 		}
 
+		if customPodOptions.AutomountServiceAccountToken != nil {
+			stateful.Spec.Template.Spec.AutomountServiceAccountToken = customPodOptions.AutomountServiceAccountToken
+		}
+
 		if customPodOptions.Affinity != nil {
 			stateful.Spec.Template.Spec.Affinity = customPodOptions.Affinity
 		}
