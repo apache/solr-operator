@@ -133,6 +133,11 @@ dataStorage:
   # Options for persistent storage. Only used if type = "persistent"
   persistent:
     reclaimPolicy: "Retain"
+    # Let Kubernetes delete the PVCs, instead of the Solr Operator. The reclaimPolicy is ignored if this is set.
+    # Requires Kubernetes 1.27+
+    pvcRetentionPolicy: {}
+      # whenDeleted: "Retain"
+      # whenScaled: "Delete"
     pvc:
       name: ""
       labels: {}

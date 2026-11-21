@@ -148,6 +148,8 @@ See the [documentation](https://solr.apache.org/guide/operator/latest/solr-cloud
 | dataStorage.ephemeral.emptyDir | object | | Specify options for and ephemeral emptyDir volume to store Solr data. |
 | dataStorage.ephemeral.hostPath | object | | Specify options for and ephemeral hostPath volume to store Solr data. Is not used when `emptyDir` is specified. |
 | dataStorage.persistent.reclaimPolicy | string | `"Retain"` | Determines whether to delete or keep the PVCs when Solr is deleted or scaled down. Either `Retain` or `Delete`. |
+| dataStorage.persistent.pvcRetentionPolicy.whenDeleted | string | | Lets Kubernetes delete (`Delete`) or keep (`Retain`) the PVCs when Solr is deleted. If any `pvcRetentionPolicy` option is set, `reclaimPolicy` is ignored and the other option defaults to `Retain`. Requires Kubernetes 1.27+ |
+| dataStorage.persistent.pvcRetentionPolicy.whenScaled | string | | Lets Kubernetes delete (`Delete`) or keep (`Retain`) the PVCs of the pods that are removed when Solr is scaled down. If any `pvcRetentionPolicy` option is set, `reclaimPolicy` is ignored and the other option defaults to `Retain`. Requires Kubernetes 1.27+ |
 | dataStorage.persistent.pvc.name | string | | Override the default Solr data PVC base-name |
 | dataStorage.persistent.pvc.annotations | map[string]string | | Set the annotations for your Solr data PVCs |
 | dataStorage.persistent.pvc.labels | map[string]string | | Set the labels for your Solr data PVCs |

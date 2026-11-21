@@ -197,7 +197,15 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 	solrDataVolumeName := solrCloud.DataVolumeName()
 
 	var pvcs []corev1.PersistentVolumeClaim
+	var pvcRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy
 	if solrCloud.UsesPersistentStorage() {
+		if policy := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimRetentionPolicy; policy != nil {
+			pvcRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: policy.WhenDeleted,
+				WhenScaled:  policy.WhenScaled,
+			}
+		}
+
 		pvc := solrCloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimTemplate.DeepCopy()
 
 		// Set the default name of the pvc
@@ -603,7 +611,8 @@ func GenerateStatefulSet(solrCloud *solr.SolrCloud, solrCloudStatus *solr.SolrCl
 					ReadinessGates: podReadinessGates,
 				},
 			},
-			VolumeClaimTemplates: pvcs,
+			VolumeClaimTemplates:                 pvcs,
+			PersistentVolumeClaimRetentionPolicy: pvcRetentionPolicy,
 		},
 	}
 	if solrCloud.UsesHeadlessService() {

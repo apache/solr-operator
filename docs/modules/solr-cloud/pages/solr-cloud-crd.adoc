@@ -82,6 +82,34 @@ This describes the lifecycle of PVCs that are deleted after the SolrCloud is del
 `Retain` is used by default, as that is the default Kubernetes policy, to leave PVCs in case pods, or StatefulSets are deleted accidentally.
 +
 NOTE: If reclaimPolicy is set to `Delete`, PVCs will not be deleted if pods are merely deleted. They will only be deleted once the `SolrCloud.spec.replicas` is scaled down or deleted.
+** **`pvcRetentionPolicy`** -
+Optional, lets Kubernetes delete the PVCs instead of the Solr Operator, with a separate setting for when the SolrCloud is deleted and for when it is scaled down.
+It is used as the https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention[`persistentVolumeClaimRetentionPolicy`] of the Solr StatefulSet.
+When `pvcRetentionPolicy` is set, `reclaimPolicy` is ignored and the Solr Operator does not delete any PVCs itself.
+When it is not set, `reclaimPolicy` is used, and the StatefulSet has the default Kubernetes policy of retaining its PVCs.
++
+The following example keeps the PVCs when the SolrCloud is deleted, but deletes the PVCs of the pods that are removed when the SolrCloud is scaled down:
++
+[source,yaml]
+----
+spec:
+  dataStorage:
+    persistent:
+      pvcRetentionPolicy:
+        whenDeleted: Retain
+        whenScaled: Delete
+----
++
+NOTE: This requires Kubernetes v1.27 or later, where Kubernetes supports the policy by default (it is stable since v1.32).
+Older Kubernetes versions ignore the policy and retain all PVCs, unless the `StatefulSetAutoDeletePVC` feature gate is enabled.
+
+*** **`whenDeleted`** -
+Either `Retain`, the default, or `Delete`.
+With `Delete`, Kubernetes deletes the PVCs when the StatefulSet is deleted.
+This happens when the SolrCloud is deleted, but also when only the StatefulSet is deleted, for example with `kubectl delete statefulset`.
+*** **`whenScaled`** -
+Either `Retain`, the default, or `Delete`.
+With `Delete`, Kubernetes deletes the PVCs of the pods that are removed when the StatefulSet is scaled down, as soon as these pods are deleted.
 ** **`pvcTemplate`** - The template of the PVC to use for the solr data PVCs. By default the name will be "data".
 Only the `pvcTemplate.spec` field is required, metadata is optional.
 +

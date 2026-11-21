@@ -344,6 +344,14 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet, logger logr.Logger) boo
 		to.Spec.UpdateStrategy = from.Spec.UpdateStrategy
 	}
 
+	// Kubernetes sets the policy to retain the PVCs when none is given, and versions that do not support the policy leave it empty.
+	// Compare the policies with these defaults filled in, so that there is no update when no policy is wanted and the PVCs are retained already.
+	if pvcRetentionPolicyWithDefaults(to.Spec.PersistentVolumeClaimRetentionPolicy) != pvcRetentionPolicyWithDefaults(from.Spec.PersistentVolumeClaimRetentionPolicy) {
+		requireUpdate = true
+		logger.Info("Update required because field changed", "field", "Spec.PersistentVolumeClaimRetentionPolicy", "from", to.Spec.PersistentVolumeClaimRetentionPolicy, "to", from.Spec.PersistentVolumeClaimRetentionPolicy)
+		to.Spec.PersistentVolumeClaimRetentionPolicy = from.Spec.PersistentVolumeClaimRetentionPolicy
+	}
+
 	/*
 			Kubernetes does not currently support updates to these fields: Selector and PodManagementPolicy
 
@@ -399,6 +407,23 @@ func CopyStatefulSetFields(from, to *appsv1.StatefulSet, logger logr.Logger) boo
 	requireUpdate = CopyPodTemplates(&from.Spec.Template, &to.Spec.Template, "Spec.Template.", logger) || requireUpdate
 
 	return requireUpdate
+}
+
+// pvcRetentionPolicyWithDefaults returns the given policy of a StatefulSet, with "Retain" for everything that is not set, as Kubernetes does.
+func pvcRetentionPolicyWithDefaults(policy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy) appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy {
+	withDefaults := appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+	}
+	if policy != nil {
+		if policy.WhenDeleted != "" {
+			withDefaults.WhenDeleted = policy.WhenDeleted
+		}
+		if policy.WhenScaled != "" {
+			withDefaults.WhenScaled = policy.WhenScaled
+		}
+	}
+	return withDefaults
 }
 
 // CopyDeploymentFields copies the owned fields from one Deployment to another

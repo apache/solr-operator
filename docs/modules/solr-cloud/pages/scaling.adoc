@@ -87,6 +87,7 @@ If the `SolrCloud.spec.replicas` is set to 0, then the SolrCloud will set the st
 
 The data will be saved in PVCs if the SolrCloud is set to use persistent storage, and `dataStorage.persistent.reclaimPolicy` is set to `Retain`.
 If the `reclaimPolicy` is set to `Delete`, these PVCs will be deleted when the pods are scaled down.
+The same goes for `dataStorage.persistent.pvcRetentionPolicy`, which is used instead of the `reclaimPolicy` when it is set: the PVCs will be deleted if its `whenScaled` is set to `Delete`.
 
 === Solr Pod Scale-Up
 
