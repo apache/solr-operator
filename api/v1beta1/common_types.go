@@ -146,6 +146,14 @@ type PodOptions struct {
 	// +optional
 	ServiceAccountName string `json:"serviceAccountName,omitempty"`
 
+	// AutomountServiceAccountToken indicates whether the Service Account token should be automatically mounted into the pod.
+	// When not set, this is left out of the pod spec, and the setting of the pod's Service Account is used, which mounts the token by default.
+	//
+	// The containers created by the Solr Operator do not need the token, since Solr and the Prometheus Exporter do not use the Kubernetes API.
+	// Only set this to "false" if none of your own sidecarContainers or initContainers need the automatically mounted token.
+	// +optional
+	AutomountServiceAccountToken *bool `json:"automountServiceAccountToken,omitempty"`
+
 	// Should process namespace sharing be enabled on created pods
 	// +optional
 	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`

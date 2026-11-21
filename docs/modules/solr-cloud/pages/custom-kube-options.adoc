@@ -101,6 +101,31 @@ spec:
             optional: true
 ----
 
+== Service Account Token
+
+By default, Kubernetes mounts the token of the pod's Service Account into every container, so that it can be used to call the Kubernetes API.
+Security scanners and policies often recommend disabling this for pods that do not need it.
+
+The mounting can be controlled via `SolrCloud.spec.customSolrKubeOptions.podOptions.automountServiceAccountToken`, which is passed on to the https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#opt-out-of-api-credential-automounting[`automountServiceAccountToken`] option of the Solr pods.
+When the option is not set, it is left out of the pods, and Kubernetes uses the setting of the Service Account, which mounts the token unless specified otherwise.
+
+[source,yaml]
+----
+spec:
+  customSolrKubeOptions:
+    podOptions:
+      automountServiceAccountToken: false
+----
+
+Solr does not use the Kubernetes API, and neither do the containers that the Solr Operator adds to the Solr pods, so they keep working without the token.
+Before disabling it, make sure that none of your own `sidecarContainers` or `initContainers` rely on the token mounted at `/var/run/secrets/kubernetes.io/serviceaccount`.
+Service Account tokens that are mounted through a separate `projected` volume are not affected by this option.
+
+The same option is available for the Prometheus Exporter, under `SolrPrometheusExporter.spec.customKubeOptions.podOptions.automountServiceAccountToken`.
+
+It is not available for the pods of a xref:zookeeper.adoc#provided-instance[provided Zookeeper], because the Zookeeper Operator does not have an option for it.
+For those pods, the mounting can only be disabled on the Service Account that they run under.
+
 == Service Session Affinity
 
 The Services that the operator creates for a SolrCloud (`commonServiceOptions`, `headlessServiceOptions`, and `nodeServiceOptions`) can be configured with https://kubernetes.io/docs/reference/networking/virtual-ips/#session-affinity[session affinity].

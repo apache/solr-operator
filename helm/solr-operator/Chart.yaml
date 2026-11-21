@@ -69,6 +69,13 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/799
         - name: Github PR
           url: https://github.com/apache/solr-operator/pull/854
+    - kind: added
+      description: Ability to disable mounting the Service Account token into the Solr and Prometheus Exporter pods via `podOptions.automountServiceAccountToken`
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/701
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/911
   artifacthub.io/images: |
     - name: solr-operator
       image: apache/solr-operator:v0.11.0-prerelease
