@@ -1240,9 +1240,11 @@ func (r *SolrCloudReconciler) storageClassAllowsExpansion(ctx context.Context, c
 func (r *SolrCloudReconciler) reconcileStorageFinalizer(ctx context.Context, cloud *solrv1beta1.SolrCloud, statefulSet *appsv1.StatefulSet, logger logr.Logger) error {
 	// If persistentStorage is being used by the cloud, and the reclaim policy is set to "Delete",
 	// then set a finalizer for the storage on the cloud, and delete the PVCs if the solrcloud has been deleted.
+	// If a PVC retention policy is set, then Kubernetes manages the PVCs through the StatefulSet, and the reclaim policy is not used.
 	pvcLabelSelector := statefulSet.Spec.Selector.MatchLabels
 
-	if cloud.Spec.StorageOptions.PersistentStorage != nil && cloud.Spec.StorageOptions.PersistentStorage.VolumeReclaimPolicy == solrv1beta1.VolumeReclaimPolicyDelete {
+	persistentStorage := cloud.Spec.StorageOptions.PersistentStorage
+	if persistentStorage != nil && persistentStorage.VolumeReclaimPolicy == solrv1beta1.VolumeReclaimPolicyDelete && persistentStorage.PersistentVolumeClaimRetentionPolicy == nil {
 		if cloud.ObjectMeta.DeletionTimestamp.IsZero() {
 			// The object is not being deleted, so if it does not have our finalizer,
 			// then lets add the finalizer and update the object

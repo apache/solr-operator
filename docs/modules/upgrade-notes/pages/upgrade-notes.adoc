@@ -221,6 +221,14 @@ _Note that the Helm chart version does not contain a `v` prefix, which the downl
 
 == Upgrade Warnings and Notes
 
+=== v0.11.0
+
+* *The operator manages the `persistentVolumeClaimRetentionPolicy` of the Solr StatefulSet*
++
+The new `SolrCloud.spec.dataStorage.persistent.pvcRetentionPolicy` option sets the `persistentVolumeClaimRetentionPolicy` of the Solr StatefulSet.
+Existing SolrClouds are not affected, unless you changed this policy on their StatefulSet yourself.
+In that case the operator changes it back to the Kubernetes default of retaining the PVCs, until you set the policy that you want via the new option.
+
 === v0.10.0
 
 * *Solr 10 support, and Solr image tags must start with the Solr version*

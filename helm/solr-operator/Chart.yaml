@@ -55,6 +55,13 @@ annotations:
   # Allowed syntax is described at: https://artifacthub.io/docs/topics/annotations/helm/#example
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
+    - kind: added
+      description: New `dataStorage.persistent.pvcRetentionPolicy` option for SolrClouds, to let Kubernetes delete or keep the Solr data PVCs, separately for when the SolrCloud is deleted (`whenDeleted`) and scaled down (`whenScaled`). It sets the `persistentVolumeClaimRetentionPolicy` of the StatefulSet, is used instead of `reclaimPolicy` when set, and requires Kubernetes 1.27+
+      links:
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/793
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/912
     - kind: fixed
       description: The operator no longer keeps ownership of SolrCloud and SolrPrometheusExporter fields, including the ones it defaults such as the image tag, which broke `helm upgrade` with Helm 4's server-side apply
       links:

@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/version"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -276,6 +277,16 @@ type SolrPersistentDataStorageOptions struct {
 	// +optional
 	VolumeReclaimPolicy VolumeReclaimPolicy `json:"reclaimPolicy,omitempty"`
 
+	// PersistentVolumeClaimRetentionPolicy is used as the "persistentVolumeClaimRetentionPolicy" of the Solr StatefulSet.
+	// It lets Kubernetes delete the PVCs when the StatefulSet is deleted ("whenDeleted") and when it is scaled down ("whenScaled"), independently of each other.
+	//
+	// When this is set, Kubernetes manages the lifecycle of the PVCs. The "reclaimPolicy" option is ignored, and the Solr Operator does not delete any PVCs itself.
+	// When this is not set, the "reclaimPolicy" option is used, and the StatefulSet has the default Kubernetes policy of retaining its PVCs.
+	//
+	// This requires Kubernetes v1.27 or later. Older versions retain all PVCs, unless the "StatefulSetAutoDeletePVC" feature gate has been enabled.
+	// +optional
+	PersistentVolumeClaimRetentionPolicy *PersistentVolumeClaimRetentionPolicy `json:"pvcRetentionPolicy,omitempty"`
+
 	// PersistentVolumeClaimTemplate is the PVC object for the solr node to store its data.
 	// Within metadata, the Name, Labels and Annotations are able to be specified, but defaults will be provided if necessary.
 	// The entire Spec is customizable, however there will be defaults provided if necessary.
@@ -305,6 +316,26 @@ const (
 	// All pod PVCs are deleted after the SolrCloud is deleted.
 	VolumeReclaimPolicyDelete VolumeReclaimPolicy = "Delete"
 )
+
+// PersistentVolumeClaimRetentionPolicy describes when Kubernetes deletes the PVCs that were created for the Solr StatefulSet.
+type PersistentVolumeClaimRetentionPolicy struct {
+	// WhenDeleted determines what happens to the PVCs when the StatefulSet is deleted.
+	// The StatefulSet is deleted when the SolrCloud is deleted, but it can also be deleted on its own.
+	//   - Retain: The PVCs are kept. This is the default.
+	//   - Delete: The PVCs are deleted, after their pods have been deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default=Retain
+	// +optional
+	WhenDeleted appsv1.PersistentVolumeClaimRetentionPolicyType `json:"whenDeleted,omitempty"`
+
+	// WhenScaled determines what happens to the PVCs of the pods that are removed when the StatefulSet is scaled down.
+	//   - Retain: The PVCs are kept, and will be used again when the StatefulSet is scaled back up. This is the default.
+	//   - Delete: The PVCs are deleted, after their pods have been deleted.
+	// +kubebuilder:validation:Enum=Retain;Delete
+	// +kubebuilder:default=Retain
+	// +optional
+	WhenScaled appsv1.PersistentVolumeClaimRetentionPolicyType `json:"whenScaled,omitempty"`
+}
 
 // PersistentVolumeClaimTemplate is used to produce
 // PersistentVolumeClaim objects as part of an EphemeralVolumeSource.

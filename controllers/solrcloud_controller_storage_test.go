@@ -28,11 +28,18 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/pointer"
 )
 
 var _ = FDescribe("SolrCloud controller - Storage", func() {
 	var (
 		solrCloud *solrv1beta1.SolrCloud
+
+		// The policy that Kubernetes sets for a StatefulSet that is created without one
+		defaultPVCRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+			WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+			WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		}
 	)
 
 	BeforeEach(func() {
@@ -115,6 +122,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(corev1.VolumeMount{Name: "solr-xml", MountPath: "/var/solr/data/solr.xml", SubPath: util.SolrXmlFile, ReadOnly: true}), "The solr.xml must be mounted into the Solr home directory via a subPath")
 				g.Expect(found.Spec.Template.Spec.ReadinessGates).To(Not(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrReplicasNotEvictedReadinessCondition})), "Persistent Data using Pods should not have a readiness gate to evict replicas.")
 				g.Expect(found.Spec.Template.Spec.ReadinessGates).To(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrIsNotStoppedReadinessCondition}), "All pods should contain the isNotStopped readinessGate.")
+				g.Expect(found.Spec.PersistentVolumeClaimRetentionPolicy).To(Equal(defaultPVCRetentionPolicy), "The StatefulSet should only have the default PVC retention policy that Kubernetes sets, when the SolrCloud has none")
 			})
 		})
 	})
@@ -159,6 +167,7 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 				g.Expect(found.Spec.Template.Spec.Containers[0].VolumeMounts[1]).To(Equal(corev1.VolumeMount{Name: "solr-xml", MountPath: "/var/solr/data/solr.xml", SubPath: util.SolrXmlFile, ReadOnly: true}), "The solr.xml must be mounted into the Solr home directory via a subPath")
 				g.Expect(found.Spec.Template.Spec.ReadinessGates).To(Not(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrReplicasNotEvictedReadinessCondition})), "Persistent Data using Pods should not have a readiness gate to evict replicas.")
 				g.Expect(found.Spec.Template.Spec.ReadinessGates).To(ContainElement(corev1.PodReadinessGate{ConditionType: util.SolrIsNotStoppedReadinessCondition}), "All pods should contain the isNotStopped readinessGate.")
+				g.Expect(found.Spec.PersistentVolumeClaimRetentionPolicy).To(Equal(defaultPVCRetentionPolicy), "The reclaimPolicy should not change the PVC retention policy of the StatefulSet")
 			})
 
 			By("ensuring that the PVCs are deleted and the finalizer is removed when the SolrCloud is deleted")
@@ -284,6 +293,123 @@ var _ = FDescribe("SolrCloud controller - Storage", func() {
 			}).Should(BeTrue(), "The StatefulSet was not deleted")
 
 			deleteCloudAndCheckClaims(ctx, dataClaim, otherClaim)
+		})
+	})
+
+	FContext("Persistent Data - PVC Retention Policy", func() {
+		BeforeEach(func() {
+			solrCloud.Spec.Replicas = pointer.Int32(1)
+			solrCloud.Spec.StorageOptions = solrv1beta1.SolrDataStorageOptions{
+				PersistentStorage: &solrv1beta1.SolrPersistentDataStorageOptions{
+					VolumeReclaimPolicy: solrv1beta1.VolumeReclaimPolicyDelete,
+					PersistentVolumeClaimRetentionPolicy: &solrv1beta1.PersistentVolumeClaimRetentionPolicy{
+						WhenScaled: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+					},
+					PersistentVolumeClaimTemplate: solrv1beta1.PersistentVolumeClaimTemplate{
+						Spec: corev1.PersistentVolumeClaimSpec{
+							Resources: corev1.VolumeResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceStorage: resource.MustParse("5Gi"),
+								},
+							},
+						},
+					},
+				},
+			}
+		})
+		// Creates a Solr data PVC, as the StatefulSet controller would have done for the pod with the given ordinal.
+		createDataClaim := func(ctx context.Context, ordinal string) *corev1.PersistentVolumeClaim {
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-" + solrCloud.StatefulSetName() + "-" + ordinal,
+					Namespace: solrCloud.Namespace,
+					Labels:    util.SolrCloudSelectorLabels(solrCloud),
+				},
+				Spec: corev1.PersistentVolumeClaimSpec{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					Resources: corev1.VolumeResourceRequirements{
+						Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("5Gi")},
+					},
+				},
+			}
+			Expect(k8sClient.Create(ctx, pvc)).To(Succeed())
+			// envtest has no controller to drop the pvc-protection finalizer, so clear it to really remove the PVC.
+			DeferCleanup(func(ctx context.Context) {
+				found := &corev1.PersistentVolumeClaim{}
+				if err := k8sClient.Get(ctx, resourceKey(solrCloud, pvc.Name), found); errors.IsNotFound(err) {
+					return
+				}
+				found.Finalizers = nil
+				Expect(k8sClient.Update(ctx, found)).To(Succeed())
+				_ = k8sClient.Delete(ctx, found)
+			})
+			return pvc
+		}
+		// envtest runs no controller manager, so a deleted PVC lingers with only the pvc-protection finalizer.
+		isClaimDeleted := func(ctx context.Context, g Gomega, pvc *corev1.PersistentVolumeClaim) bool {
+			found := &corev1.PersistentVolumeClaim{}
+			err := k8sClient.Get(ctx, resourceKey(solrCloud, pvc.Name), found)
+			if errors.IsNotFound(err) {
+				return true
+			}
+			g.Expect(err).ToNot(HaveOccurred(), "Could not get the Solr data PVC")
+			return found.DeletionTimestamp != nil
+		}
+		FIt("lets Kubernetes manage the PVCs instead of the Solr Operator", func(ctx context.Context) {
+			By("testing that the parts of the policy that are not provided are defaulted, and that the reclaimPolicy does not add a finalizer")
+			expectSolrCloudWithConsistentChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimRetentionPolicy).To(Equal(&solrv1beta1.PersistentVolumeClaimRetentionPolicy{
+					WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+					WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+				}), "The PVC retention policy of the SolrCloud should retain PVCs unless specified otherwise")
+				g.Expect(found.GetFinalizers()).To(BeEmpty(), "The solrcloud should have no finalizers when a PVC retention policy is set, even if the reclaim policy is Delete")
+			})
+
+			By("testing the Solr StatefulSet PVC retention policy")
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.PersistentVolumeClaimRetentionPolicy).To(Equal(&appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+					WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+					WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+				}), "The StatefulSet should have the PVC retention policy of the SolrCloud")
+			})
+
+			By("creating PVCs for a pod that is in use, and for a pod that has been scaled down")
+			usedClaim := createDataClaim(ctx, "0")
+			orphanClaim := createDataClaim(ctx, "1")
+
+			By("updating the existing StatefulSet when the PVC retention policy is changed")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimRetentionPolicy.WhenDeleted = appsv1.DeletePersistentVolumeClaimRetentionPolicyType
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Change the PVC retention policy for the SolrCloud")
+			})
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.PersistentVolumeClaimRetentionPolicy).To(Equal(&appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+					WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+					WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+				}), "The StatefulSet should have the changed PVC retention policy of the SolrCloud")
+			})
+
+			By("testing that the Solr Operator does not delete PVCs itself, even though the reclaim policy is Delete")
+			Consistently(func(g Gomega) {
+				g.Expect(isClaimDeleted(ctx, g, orphanClaim)).To(BeFalse(), "The Solr Operator should not delete the PVCs of scaled down pods when a PVC retention policy is set")
+				g.Expect(isClaimDeleted(ctx, g, usedClaim)).To(BeFalse(), "The PVC of a pod that is in use should never be deleted")
+			}).Should(Succeed())
+
+			By("using the reclaim policy again when the PVC retention policy is removed")
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				found.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimRetentionPolicy = nil
+				g.Expect(k8sClient.Update(ctx, found)).To(Succeed(), "Remove the PVC retention policy from the SolrCloud")
+			})
+			expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+				g.Expect(found.GetFinalizers()).To(ContainElement(util.SolrStorageFinalizer), "The storage finalizer should be added when the reclaim policy is Delete and there is no PVC retention policy")
+			})
+			expectStatefulSetWithChecks(ctx, solrCloud, solrCloud.StatefulSetName(), func(g Gomega, found *appsv1.StatefulSet) {
+				g.Expect(found.Spec.PersistentVolumeClaimRetentionPolicy).To(Equal(defaultPVCRetentionPolicy), "The StatefulSet should go back to the default PVC retention policy when the SolrCloud no longer has one")
+			})
+			Eventually(func(g Gomega) {
+				g.Expect(isClaimDeleted(ctx, g, orphanClaim)).To(BeTrue(), "The Solr Operator should delete the PVCs of scaled down pods when the reclaim policy is Delete and there is no PVC retention policy")
+			}).Should(Succeed())
+			Expect(isClaimDeleted(ctx, Default, usedClaim)).To(BeFalse(), "The PVC of a pod that is in use should never be deleted")
 		})
 	})
 

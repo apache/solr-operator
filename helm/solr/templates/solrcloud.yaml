@@ -125,6 +125,10 @@ spec:
     {{- if eq .Values.dataStorage.type "persistent" }}
     persistent:
       reclaimPolicy: {{ .Values.dataStorage.persistent.reclaimPolicy }}
+      {{- if .Values.dataStorage.persistent.pvcRetentionPolicy }}
+      pvcRetentionPolicy:
+        {{- toYaml .Values.dataStorage.persistent.pvcRetentionPolicy | nindent 8 }}
+      {{- end }}
       pvcTemplate:
         metadata:
           name: {{ .Values.dataStorage.persistent.pvc.name | quote }}

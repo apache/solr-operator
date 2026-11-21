@@ -21,6 +21,7 @@ import (
 	solr "github.com/apache/solr-operator/api/v1beta1"
 	"github.com/go-logr/logr"
 	"github.com/stretchr/testify/assert"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"strconv"
@@ -581,6 +582,31 @@ func TestGenerateStatefulSetListenPort(t *testing.T) {
 		listenPort, _ := envValue(env, "SOLR_PORT_LISTEN")
 		assert.Equal(t, "8080", listenPort, "SOLR_PORT_LISTEN should be the pod port for Solr %s", tag)
 	}
+}
+
+func TestGenerateStatefulSetPVCRetentionPolicy(t *testing.T) {
+	status := &solr.SolrCloudStatus{
+		ZookeeperConnectionInfo: solr.ZookeeperConnectionInfo{
+			InternalConnectionString: "zk:2181",
+			ChRoot:                   "/solr",
+		},
+	}
+	cloud := newSolrCloudForTest("9.10.0", nil)
+	cloud.Spec.StorageOptions.PersistentStorage = &solr.SolrPersistentDataStorageOptions{
+		VolumeReclaimPolicy: solr.VolumeReclaimPolicyDelete,
+	}
+	ss := GenerateStatefulSet(cloud, status, map[string]string{}, map[string]string{}, nil, nil)
+	assert.Nil(t, ss.Spec.PersistentVolumeClaimRetentionPolicy, "The StatefulSet should not have a PVC retention policy when the SolrCloud has none, whatever the reclaimPolicy is")
+
+	cloud.Spec.StorageOptions.PersistentStorage.PersistentVolumeClaimRetentionPolicy = &solr.PersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+	}
+	ss = GenerateStatefulSet(cloud, status, map[string]string{}, map[string]string{}, nil, nil)
+	assert.Equal(t, &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+		WhenDeleted: appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+		WhenScaled:  appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+	}, ss.Spec.PersistentVolumeClaimRetentionPolicy, "The StatefulSet should have the PVC retention policy of the SolrCloud")
 }
 
 func TestGenerateStatefulSetSolr9EnvVars(t *testing.T) {
