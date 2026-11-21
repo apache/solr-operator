@@ -114,7 +114,7 @@ Descriptions on how to use these options can be found in the [SolrCloud document
 | busyBoxImage.pullPolicy | string | | PullPolicy for the BusyBox image, defaults to the empty Pod behavior |
 | busyBoxImage.imagePullSecret | string | | PullSecret for the BusyBox image |
 | solrOptions.javaMemory | string | `"-Xms1g -Xmx2g"` | Java memory parameters |
-| solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line.  ZooKeeper-connection related properties should be reserved for `solrOptions.zkJavaOpts` (see below). |
+| solrOptions.javaOpts | string | `""` | Additional java arguments to pass via the command line.  ZooKeeper-connection related properties should be reserved for `solrOptions.zkJavaOpts` (see below). If your Solr image's JDK doesn't yet carry the fix for [CVE-2026-114938](https://openjdk.org/groups/vulnerability/advisories/2026-11-17) ("Java4Shell", a critical AVX-512 Base64 decoder RCE on x86-64 hosts - fixed in Temurin 17.0.21.1, 21.0.13.1, 25.0.5.1 or later), set this to `"-XX:-UseBASE64Intrinsics"` as an interim mitigation. |
 | solrOptions.zkJavaOpts | string | `""` | Additional java arguments required to connect to ZooKeeper to pass via the command line |
 | solrOptions.logLevel | string | `"INFO"` | Log level to run Solr under |
 | solrOptions.gcTune | string | `""` | GC Tuning parameters for Solr |
