@@ -18,12 +18,14 @@
 package controllers
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 )
 
 // FieldManager is the field manager of all the operator's writes. It is set as the default field owner of the
@@ -46,15 +48,24 @@ func patchResource(ctx context.Context, c client.Client, obj client.Object, orig
 	return c.Patch(ctx, obj, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
 
+// takenOverLists are the atomic lists that operators before v0.10 took over from the applier, by writing them back with
+// the empty fields that the Go types fill in, such as a resources block on every container.
+var takenOverLists = []fieldpath.Path{
+	fieldpath.MakePathOrDie("spec", "customSolrKubeOptions", "podOptions", "initContainers"),
+	fieldpath.MakePathOrDie("spec", "customSolrKubeOptions", "podOptions", "sidecarContainers"),
+	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "zookeeperPodPolicy", "initContainers"),
+	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "zookeeperPodPolicy", "containers"),
+	fieldpath.MakePathOrDie("spec", "customKubeOptions", "podOptions", "initContainers"),
+	fieldpath.MakePathOrDie("spec", "customKubeOptions", "podOptions", "sidecarContainers"),
+}
+
 // releaseFieldOwnership drops the operator's ownership of the spec and metadata fields it has written, such as defaults,
 // so that a server-side apply of another value, e.g. by Helm, does not conflict with the operator.
 func releaseFieldOwnership(ctx context.Context, c client.Client, obj client.Object) error {
 	managedFields := obj.GetManagedFields()
-	kept := make([]metav1.ManagedFieldsEntry, 0, len(managedFields))
-	for _, entry := range managedFields {
-		if entry.Manager != FieldManager || entry.Subresource != "" {
-			kept = append(kept, entry)
-		}
+	kept, err := withoutOperatorFieldOwnership(managedFields)
+	if err != nil {
+		return err
 	}
 	if len(kept) == len(managedFields) {
 		return nil
@@ -66,4 +77,66 @@ func releaseFieldOwnership(ctx context.Context, c client.Client, obj client.Obje
 	orig := obj.DeepCopyObject().(client.Object)
 	obj.SetManagedFields(kept)
 	return patchResource(ctx, c, obj, orig)
+}
+
+// withoutOperatorFieldOwnership removes the operator's spec and metadata entries from managedFields. Server-side apply
+// never removes a field that nobody owns, so the takenOverLists that only the operator owns are handed back to the
+// object's Apply manager, if it has exactly one.
+func withoutOperatorFieldOwnership(managedFields []metav1.ManagedFieldsEntry) ([]metav1.ManagedFieldsEntry, error) {
+	kept := make([]metav1.ManagedFieldsEntry, 0, len(managedFields))
+	operatorOwned := &fieldpath.Set{}
+	otherOwned := &fieldpath.Set{}
+	applyIndex := -1
+	applyEntries := 0
+	for _, entry := range managedFields {
+		if entry.Subresource != "" {
+			kept = append(kept, entry)
+			continue
+		}
+		fields, err := fieldSet(entry)
+		if err != nil {
+			return nil, err
+		}
+		if entry.Manager == FieldManager {
+			operatorOwned = operatorOwned.Union(fields)
+			continue
+		}
+		otherOwned = otherOwned.Union(fields)
+		if entry.Operation == metav1.ManagedFieldsOperationApply {
+			applyIndex = len(kept)
+			applyEntries++
+		}
+		kept = append(kept, entry)
+	}
+	if len(kept) == len(managedFields) || applyEntries != 1 {
+		return kept, nil
+	}
+
+	handBack := &fieldpath.Set{}
+	for _, list := range takenOverLists {
+		if operatorOwned.Has(list) && !otherOwned.Has(list) {
+			handBack.Insert(list)
+		}
+	}
+	if handBack.Empty() {
+		return kept, nil
+	}
+	applied, err := fieldSet(kept[applyIndex])
+	if err != nil {
+		return nil, err
+	}
+	raw, err := applied.Union(handBack).ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	kept[applyIndex].FieldsV1 = &metav1.FieldsV1{Raw: raw}
+	return kept, nil
+}
+
+func fieldSet(entry metav1.ManagedFieldsEntry) (*fieldpath.Set, error) {
+	fields := &fieldpath.Set{}
+	if entry.FieldsV1 == nil {
+		return fields, nil
+	}
+	return fields, fields.FromJSON(bytes.NewReader(entry.FieldsV1.Raw))
 }

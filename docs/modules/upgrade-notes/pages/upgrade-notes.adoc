@@ -316,6 +316,13 @@ If a SolrCloud is running with credentials that the probe endpoints reject, its 
 healthy and will now correctly go un-ready and be restarted.
 Check that the basic auth secret is valid, and that the probe paths are authorized for that user, before upgrading.
 
+* *Removing fields with server-side apply after upgrading from v0.9.x*
++
+Earlier versions took ownership of some SolrCloud fields away from the client that applied them, e.g. Helm 4.
+The operator now gives the init and sidecar container lists back to the applier, so that leaving them out of a later apply removes them.
+If a SolrCloud is applied by more than one server-side apply manager, the operator cannot tell which one they belong to, and the lists then stay when left out.
+Apply them once as an explicit empty list, e.g. `initContainers: []`, or remove them with `kubectl patch`.
+
 === v0.8.0
 
 * *The minimum supported Solr version is now 8.11*
