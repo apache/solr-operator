@@ -19,7 +19,11 @@ package controllers
 import (
 	"testing"
 
+	solrv1beta1 "github.com/apache/solr-operator/api/v1beta1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 )
 
@@ -102,5 +106,46 @@ func TestWithoutOperatorFieldOwnership(t *testing.T) {
 				t.Errorf("expected the defaulted fields not to be handed to %s", helm.Manager)
 			}
 		})
+	}
+}
+
+func TestTakenOverListsExist(t *testing.T) {
+	containers := []corev1.Container{{Name: "c"}}
+	podOptions := &solrv1beta1.PodOptions{InitContainers: containers, SidecarContainers: containers}
+	objects := []interface{}{
+		&solrv1beta1.SolrCloud{Spec: solrv1beta1.SolrCloudSpec{
+			CustomSolrKubeOptions: solrv1beta1.CustomSolrKubeOptions{PodOptions: podOptions},
+			ZookeeperRef: &solrv1beta1.ZookeeperRef{ProvidedZookeeper: &solrv1beta1.ZookeeperSpec{
+				InitContainers: containers,
+				Containers:     containers,
+			}},
+		}},
+		&solrv1beta1.SolrPrometheusExporter{Spec: solrv1beta1.SolrPrometheusExporterSpec{
+			CustomKubeOptions: solrv1beta1.CustomExporterKubeOptions{PodOptions: podOptions},
+		}},
+	}
+	var contents []map[string]interface{}
+	for _, obj := range objects {
+		content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+		if err != nil {
+			t.Fatal(err)
+		}
+		contents = append(contents, content)
+	}
+
+	for _, list := range takenOverLists {
+		fields := make([]string, 0, len(list))
+		for _, element := range list {
+			fields = append(fields, *element.FieldName)
+		}
+		found := false
+		for _, content := range contents {
+			if _, ok, _ := unstructured.NestedSlice(content, fields...); ok {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s is not a container list of a SolrCloud or SolrPrometheusExporter", list)
+		}
 	}
 }

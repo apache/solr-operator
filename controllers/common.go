@@ -53,8 +53,8 @@ func patchResource(ctx context.Context, c client.Client, obj client.Object, orig
 var takenOverLists = []fieldpath.Path{
 	fieldpath.MakePathOrDie("spec", "customSolrKubeOptions", "podOptions", "initContainers"),
 	fieldpath.MakePathOrDie("spec", "customSolrKubeOptions", "podOptions", "sidecarContainers"),
-	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "zookeeperPodPolicy", "initContainers"),
-	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "zookeeperPodPolicy", "containers"),
+	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "initContainers"),
+	fieldpath.MakePathOrDie("spec", "zookeeperRef", "provided", "containers"),
 	fieldpath.MakePathOrDie("spec", "customKubeOptions", "podOptions", "initContainers"),
 	fieldpath.MakePathOrDie("spec", "customKubeOptions", "podOptions", "sidecarContainers"),
 }
