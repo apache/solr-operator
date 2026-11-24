@@ -64,6 +64,8 @@ annotations:
           url: https://github.com/apache/solr-operator/issues/913
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/905
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/915
     - kind: fixed
       description: With `solrSecurity.probesRequireAuth`, the Solr pod probes now fail when the request to Solr fails, e.g. with a 401, instead of always succeeding
       links:
