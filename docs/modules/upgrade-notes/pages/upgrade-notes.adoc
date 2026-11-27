@@ -320,7 +320,7 @@ Check that the basic auth secret is valid, and that the probe paths are authoriz
 +
 Earlier versions took ownership of some SolrCloud fields away from the client that applied them, e.g. Helm 4.
 The operator now gives the init and sidecar container lists back to the applier, so that leaving them out of a later apply removes them.
-If a SolrCloud is applied by more than one server-side apply manager, the operator cannot tell which one they belong to, and the lists then stay when left out.
+If a SolrCloud is applied by more than one server-side apply manager, or another client has also written its spec, e.g. with `kubectl edit` or Helm 3, the operator cannot tell who the lists belong to, and they then stay when left out.
 Apply them once as an explicit empty list, e.g. `initContainers: []`, or remove them with `kubectl patch`.
 
 === v0.8.0

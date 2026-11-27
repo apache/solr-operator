@@ -81,40 +81,74 @@ func releaseFieldOwnership(ctx context.Context, c client.Client, obj client.Obje
 
 // withoutOperatorFieldOwnership removes the operator's spec and metadata entries from managedFields. Server-side apply
 // never removes a field that nobody owns, so the takenOverLists that only the operator owns are handed back to the
-// object's Apply manager, if it has exactly one.
+// object's Apply manager, if it has exactly one and no other client has written the spec with an Update.
 func withoutOperatorFieldOwnership(managedFields []metav1.ManagedFieldsEntry) ([]metav1.ManagedFieldsEntry, error) {
 	kept := make([]metav1.ManagedFieldsEntry, 0, len(managedFields))
-	operatorOwned := &fieldpath.Set{}
-	otherOwned := &fieldpath.Set{}
-	applyIndex := -1
-	applyEntries := 0
+	var operatorEntries []metav1.ManagedFieldsEntry
 	for _, entry := range managedFields {
-		if entry.Subresource != "" {
+		if entry.Manager == FieldManager && entry.Subresource == "" {
+			operatorEntries = append(operatorEntries, entry)
+		} else {
 			kept = append(kept, entry)
+		}
+	}
+	if len(operatorEntries) == 0 {
+		return kept, nil
+	}
+
+	// Migration of SolrClouds last written by operators before v0.10, can be removed once upgrades from v0.9 are not supported
+	operatorOwned, err := unionFieldSets(operatorEntries)
+	if err != nil {
+		return nil, err
+	}
+	var ownedLists []fieldpath.Path
+	for _, list := range takenOverLists {
+		if operatorOwned.Has(list) {
+			ownedLists = append(ownedLists, list)
+		}
+	}
+	if len(ownedLists) == 0 {
+		return kept, nil
+	}
+
+	applyIndex := -1
+	var others []metav1.ManagedFieldsEntry
+	for i, entry := range kept {
+		if entry.Subresource != "" {
+			continue
+		}
+		if entry.Operation == metav1.ManagedFieldsOperationApply {
+			if applyIndex >= 0 {
+				return kept, nil
+			}
+			applyIndex = i
+		}
+		others = append(others, entry)
+	}
+	if applyIndex < 0 {
+		return kept, nil
+	}
+	// A list that another client wrote with an Update, e.g. Helm 3 or kubectl client-side apply, would otherwise be
+	// handed to an unrelated applier of a few fields, whose next apply would remove it
+	for _, entry := range others {
+		if entry.Operation == metav1.ManagedFieldsOperationApply || entry.Manager == kept[applyIndex].Manager {
 			continue
 		}
 		fields, err := fieldSet(entry)
 		if err != nil {
 			return nil, err
 		}
-		if entry.Manager == FieldManager {
-			operatorOwned = operatorOwned.Union(fields)
-			continue
+		if !fields.WithPrefix(fieldpath.PathElement{FieldName: &specField}).Empty() {
+			return kept, nil
 		}
-		otherOwned = otherOwned.Union(fields)
-		if entry.Operation == metav1.ManagedFieldsOperationApply {
-			applyIndex = len(kept)
-			applyEntries++
-		}
-		kept = append(kept, entry)
 	}
-	if len(kept) == len(managedFields) || applyEntries != 1 {
-		return kept, nil
+	otherOwned, err := unionFieldSets(others)
+	if err != nil {
+		return nil, err
 	}
-
 	handBack := &fieldpath.Set{}
-	for _, list := range takenOverLists {
-		if operatorOwned.Has(list) && !otherOwned.Has(list) {
+	for _, list := range ownedLists {
+		if !otherOwned.Has(list) {
 			handBack.Insert(list)
 		}
 	}
@@ -131,6 +165,20 @@ func withoutOperatorFieldOwnership(managedFields []metav1.ManagedFieldsEntry) ([
 	}
 	kept[applyIndex].FieldsV1 = &metav1.FieldsV1{Raw: raw}
 	return kept, nil
+}
+
+var specField = "spec"
+
+func unionFieldSets(entries []metav1.ManagedFieldsEntry) (*fieldpath.Set, error) {
+	union := &fieldpath.Set{}
+	for _, entry := range entries {
+		fields, err := fieldSet(entry)
+		if err != nil {
+			return nil, err
+		}
+		union = union.Union(fields)
+	}
+	return union, nil
 }
 
 func fieldSet(entry metav1.ManagedFieldsEntry) (*fieldpath.Set, error) {

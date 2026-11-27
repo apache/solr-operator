@@ -77,6 +77,30 @@ func TestWithoutOperatorFieldOwnership(t *testing.T) {
 			expectedOwned: false,
 		},
 		{
+			name: "nothing is handed back when another client has written the spec with an Update",
+			others: []metav1.ManagedFieldsEntry{
+				managedFieldsEntry("autoscaler", metav1.ManagedFieldsOperationApply, replicasFields),
+				managedFieldsEntry("kubectl-client-side-apply", metav1.ManagedFieldsOperationUpdate, backupRepoFields),
+			},
+			expectedOwned: false,
+		},
+		{
+			name: "an Update by the applier itself, e.g. Helm 3 before Helm 4, does not prevent the hand back",
+			others: []metav1.ManagedFieldsEntry{
+				managedFieldsEntry("helm", metav1.ManagedFieldsOperationApply, replicasFields),
+				managedFieldsEntry("helm", metav1.ManagedFieldsOperationUpdate, backupRepoFields),
+			},
+			expectedOwned: true,
+		},
+		{
+			name: "an Update of only the metadata does not prevent the hand back",
+			others: []metav1.ManagedFieldsEntry{
+				managedFieldsEntry("helm", metav1.ManagedFieldsOperationApply, replicasFields),
+				managedFieldsEntry("kubectl-label", metav1.ManagedFieldsOperationUpdate, `{"f:metadata":{"f:labels":{"f:team":{}}}}`),
+			},
+			expectedOwned: true,
+		},
+		{
 			name:          "nothing is handed back to an Update manager",
 			others:        []metav1.ManagedFieldsEntry{managedFieldsEntry("kubectl-client-side-apply", metav1.ManagedFieldsOperationUpdate, replicasFields)},
 			expectedOwned: false,
@@ -106,6 +130,22 @@ func TestWithoutOperatorFieldOwnership(t *testing.T) {
 				t.Errorf("expected the defaulted fields not to be handed to %s", helm.Manager)
 			}
 		})
+	}
+}
+
+func TestWithoutOperatorFieldOwnershipSkipsParsing(t *testing.T) {
+	unparsable := metav1.ManagedFieldsEntry{Manager: "helm", Operation: metav1.ManagedFieldsOperationApply, FieldsV1: &metav1.FieldsV1{Raw: []byte("{")}}
+	for _, operator := range [][]metav1.ManagedFieldsEntry{
+		nil,
+		{managedFieldsEntry(FieldManager, metav1.ManagedFieldsOperationUpdate, `{"f:spec":{"f:solrImage":{"f:tag":{}}}}`)},
+	} {
+		kept, err := withoutOperatorFieldOwnership(append(operator, unparsable))
+		if err != nil {
+			t.Fatalf("expected the other entries not to be parsed without a taken over list, got %v", err)
+		}
+		if len(kept) != 1 {
+			t.Errorf("expected only the operator's entry to be removed, got %v", kept)
+		}
 	}
 }
 
