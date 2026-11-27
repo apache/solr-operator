@@ -56,12 +56,16 @@ annotations:
   # 'kind' accepts values: "added", "changed", "deprecated", "removed", "fixed" and "security"
   artifacthub.io/changes: |
     - kind: fixed
-      description: The operator no longer keeps ownership of SolrCloud and SolrPrometheusExporter fields, including the ones it defaults such as the image tag, which broke `helm upgrade` with Helm 4's server-side apply
+      description: The operator no longer keeps ownership of SolrCloud and SolrPrometheusExporter fields, including the ones it defaults such as the image tag, which broke `helm upgrade` with Helm 4's server-side apply. The init and sidecar container lists that earlier versions took over are handed back to the applier, so that leaving them out removes them
       links:
         - name: GitHub Issue
           url: https://github.com/apache/solr-operator/issues/872
+        - name: GitHub Issue
+          url: https://github.com/apache/solr-operator/issues/913
         - name: GitHub PR
           url: https://github.com/apache/solr-operator/pull/905
+        - name: GitHub PR
+          url: https://github.com/apache/solr-operator/pull/915
     - kind: fixed
       description: With `solrSecurity.probesRequireAuth`, the Solr pod probes now fail when the request to Solr fails, e.g. with a 401, instead of always succeeding
       links:

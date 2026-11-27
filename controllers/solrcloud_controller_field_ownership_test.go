@@ -93,6 +93,41 @@ var _ = FDescribe("SolrCloud controller - Field ownership", func() {
 		})
 	})
 
+	FIt("hands the lists that operators before v0.10 took over back to the applier", func(ctx context.Context) {
+		By("applying the SolrCloud as another field manager")
+		applyAsHelm(ctx, applied)
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.Spec.SolrImage).ToNot(BeNil(), "The SolrCloud should be defaulted")
+			expectNoOperatorFieldOwnership(g, found)
+		})
+
+		By("taking over the init containers with an Update, as operators before v0.10 did")
+		Eventually(func(g Gomega) {
+			found := &unstructured.Unstructured{}
+			found.SetGroupVersionKind(solrv1beta1.GroupVersion.WithKind("SolrCloud"))
+			g.Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(solrCloud), found)).To(Succeed())
+			containers, _, err := unstructured.NestedSlice(found.Object, initContainersPath...)
+			g.Expect(err).ToNot(HaveOccurred())
+			containers[0].(map[string]interface{})["resources"] = map[string]interface{}{}
+			g.Expect(unstructured.SetNestedSlice(found.Object, containers, initContainersPath...)).To(Succeed())
+			g.Expect(k8sClient.Update(ctx, found, client.FieldOwner(FieldManager))).To(Succeed())
+		}).Should(Succeed())
+
+		By("waiting for the operator to hand the init containers back to the applier")
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			expectNoOperatorFieldOwnership(g, found)
+			g.Expect(found.Spec.CustomSolrKubeOptions.PodOptions.InitContainers).To(HaveLen(1))
+		})
+
+		By("applying the SolrCloud without the init containers")
+		unstructured.RemoveNestedField(applied.Object, initContainersPath...)
+		Expect(unstructured.SetNestedField(applied.Object, "high", "spec", "customSolrKubeOptions", "podOptions", "priorityClassName")).To(Succeed())
+		applyAsHelm(ctx, applied)
+		expectSolrCloudWithChecks(ctx, solrCloud, func(g Gomega, found *solrv1beta1.SolrCloud) {
+			g.Expect(found.Spec.CustomSolrKubeOptions.PodOptions).To(Or(BeNil(), HaveField("InitContainers", BeEmpty())))
+		})
+	})
+
 	FIt("does not keep ownership of the storage finalizer", func(ctx context.Context) {
 		By("applying a SolrCloud whose PVCs are deleted with it")
 		Expect(unstructured.SetNestedField(applied.Object, "5Gi", "spec", "dataStorage", "persistent", "pvcTemplate", "spec", "resources", "requests", "storage")).To(Succeed())
@@ -161,6 +196,8 @@ var _ = FDescribe("SolrPrometheusExporter controller - Field ownership", func() 
 		})
 	})
 })
+
+var initContainersPath = []string{"spec", "customSolrKubeOptions", "podOptions", "initContainers"}
 
 func applyAsHelm(ctx context.Context, obj *unstructured.Unstructured) {
 	ExpectWithOffset(1, k8sClient.Apply(ctx, client.ApplyConfigurationFromUnstructured(obj.DeepCopy()), client.FieldOwner("helm"))).To(Succeed())
